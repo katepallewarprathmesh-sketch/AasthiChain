@@ -136,15 +136,16 @@ export default function TestnetPayment({ assetId, tokenAmount, tokenPrice, onPay
           const initRes = await fetch('/api/testnet/payments/initiate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ assetId, tokenAmount, estimatedEth, txHash: mockTxHash, paymentId: mockPaymentId, from: wallet, to: 'originator1' })
+            body: JSON.stringify({ assetId, tokenAmount, estimatedEth, txHash: mockTxHash, paymentId: mockPaymentId, from: wallet, to: recipient || 'originator1', recipient: recipient || 'investor2' })
           })
           const initData = await initRes.json()
 
-          // Then, backend does Drunix transfer and confirms
+          // Then, backend does Drunix transfer and confirms — use recipient if provided else investor2
+          const toId = recipient || 'investor2'
           const drunixRes = await fetch('/api/transfers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ assetId, toId: 'investor2', amount: parseInt(tokenAmount) })
+            body: JSON.stringify({ assetId, toId, amount: parseInt(tokenAmount) })
           })
           const drunixData = await drunixRes.json()
           
