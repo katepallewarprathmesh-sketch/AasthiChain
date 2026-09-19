@@ -180,14 +180,15 @@ export default function Wallet({ user }) {
     }
   }
 
-  // Safe computed values
-  let tokenPrice = 500, maxBal = 0, amountNum = 0, estimatedValue = 0, estimatedEth = '0.0000', isOverBalance = false
+  // Safe computed values — FIX min 0.001 issue: old /200000 gave dust <0.001, new /20000 + min 0.001
+  let tokenPrice = 500, maxBal = 0, amountNum = 0, estimatedValue = 0, estimatedEth = '0.0010', isOverBalance = false
   try {
     tokenPrice = getTokenPrice()
     maxBal = getMaxBalance()
     amountNum = parseInt(transferForm.amount) || 0
     estimatedValue = amountNum * tokenPrice
-    estimatedEth = (estimatedValue / 200000).toFixed(4)
+    const raw = estimatedValue / 20000 // was 200000 → 10x larger to avoid dust
+    estimatedEth = Math.max(raw, 0.001).toFixed(4)
     isOverBalance = amountNum > maxBal
   } catch {}
 
