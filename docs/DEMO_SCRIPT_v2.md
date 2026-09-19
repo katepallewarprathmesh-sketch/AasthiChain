@@ -1,18 +1,20 @@
-# AasthiChain Demo Script v2 — After Track A Improvements (Production-Ready)
+# AasthiChain Demo Script v2 — After Track A Improvements + Testnet DvP v1.7 (Accurate Language)
 
-**Duration: 5 minutes | Fabric Mode: Toggle live/mock | Key message: Honest scoping = engineering maturity**
+**Duration: 5 minutes | Fabric Mode: Toggle live/mock | Key message: Honest scoping = engineering maturity + Accurate testnet framing: real on-chain testnet transactions demonstrating atomic DvP settlement pattern, not real monetary value**
 
-## 0:00-0:15 — Setup & Framing (Track A6: What's Real vs Mocked BEFORE Judge Asks)
+## 0:00-0:20 — Setup & Framing (Track A6: What's Real vs Mocked BEFORE Judge Asks + Accurate Testnet Language)
 
-> "AasthiChain tokenizes real estate into fractional tokens on a permissioned 4-org Drunix network. Before we dive in — here's what's live and what's deliberately mocked per spec non-goals §1.2, so we're transparent:
+> "AasthiChain tokenizes real estate into fractional tokens on a permissioned 4-org Drunix network with Sepolia testnet escrow demonstrating atomic delivery-vs-payment settlement pattern. Before we dive in — here's what's live and what's deliberately mocked per spec non-goals §1.2, so we're transparent:
 > 
-> **LIVE:** Chaincode 9 functions with full edge-case coverage, API gateway with JWT + MSP + rate limiting + persistent idempotency (file-backed, survives restart), React frontend for 4 roles, Raft 3-node orderer, PostgreSQL SQL state store with 4 indexes.
+> **LIVE:** Chaincode 9 functions with full edge-case coverage, API gateway with JWT + MSP + rate limiting + persistent idempotency (file-backed, survives restart), React frontend for 4 roles, Raft 3-node orderer, PostgreSQL SQL state store with 4 indexes, Sepolia testnet escrow PaymentEscrow.sol demonstrating atomic DvP settlement pattern — real on-chain testnet transactions when faucet ETH available, Etherscan-verifiable, Sepolia test ETH has no monetary value.
 > 
-> **MOCKED (pluggable):** KYC (DigiLocker stub — interface ready for licensed provider), payment settlement (UPI mock — token transfer only after confirmation per spec), land registry (DILRMP stub — hash anchored on-chain).
+> **MOCKED (pluggable):** KYC (DigiLocker stub — interface ready for licensed provider), land registry (DILRMP stub — hash anchored on-chain), payment settlement now live via Sepolia testnet escrow demonstrating settlement pattern (production path UPI/USDC same state machine).
 > 
-> **Toggle:** `FABRIC_MODE=live|mock` env var — same FabricClient interface. Live tries fabric-gateway SDK, falls back to mock if peer unreachable, so demo never breaks on stage. Module split chaincode/ vs api-gateway/ avoids protobuf conflict."
+> **Toggle:** `FABRIC_MODE=live|mock` env var — same FabricClient interface. Live tries fabric-gateway SDK, falls back to mock if peer unreachable, so demo never breaks on stage. Module split chaincode/ vs api-gateway/ avoids protobuf conflict.
+> 
+> **Testnet framing (accurate):** We demonstrate real on-chain testnet transactions demonstrating an atomic delivery-vs-payment settlement pattern — not real monetary value. Sepolia test ETH has no monetary value, from faucet free. Real Sepolia flow stays front and center — actual MetaMask signing, Etherscan-verifiable. Simulated fallback when faucet unavailable is clearly labeled greyed out non-clickable visibly different, no fabricated hash or fake Etherscan link."
 
-This framing reads as maturity, not weakness.
+This framing reads as maturity, not weakness, and uses accurate language per compliance.
 
 ## 0:15-1:30 — Admin Flow (Originator + Registrar) + Track A2
 

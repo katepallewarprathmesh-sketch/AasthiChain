@@ -1,29 +1,29 @@
 # AasthiChain — Fractional Real Estate Tokenization on Drunix
 
 **Drunix Hackathon x Citi — Problem Statement 2 (Real Asset Tokenization)**
-Version 1.2 | Real Money Flow via Sepolia Testnet | Track A Improvements | Production-Ready Release
+Version 1.6 | Sepolia Testnet Escrow — Atomic DvP Settlement Pattern Demo | Track A Improvements | Production-Ready Release
 
 AasthiChain tokenizes real estate assets into fractional, tradeable ownership units on a permissioned multi-organization Drunix (Hyperledger Fabric fork) network.
 
-## 🟢 What's Live vs Mocked (Honest Scoping per Track A6) + Real Money Flow v1.2
+## 🟢 What's Live vs Mocked (Honest Scoping per Track A6) + Testnet DvP v1.6
 
-**LIVE (Demoable) — Now with Real Testnet Money Involvement:**
+**LIVE (Demoable) — Now with On-Chain Testnet Transactions Demonstrating Atomic DvP Settlement Pattern:**
 - Chaincode 9 functions with full §6 edge-case coverage
 - API Gateway with JWT + MSP auth, rate limiting (100/min), **persistent idempotency** (file-backed, survives restart — Track A4)
 - React frontend for 4 roles, **auto SHA-256 hash** via Web Crypto API (Track A2), **pagination via bookmark cursor** (Track A3), **failure-mode demo** (Track A7)
 - 4-org Raft network config (3 orderers, tolerates 1 failure — verified via chaos_test.sh Track A5), PostgreSQL SQL state store with 4 indexes
 - **Live/Mock toggle** via `FABRIC_MODE` env var — same `FabricClient` interface, live tries fabric-gateway SDK with fallback to mock for demo resilience (Track A1)
-- **NEW v1.2 — Real Money Flow via Sepolia Testnet (per user request "involve money, testnet can be used"):**
-  - `contracts/PaymentEscrow.sol` — Solidity 0.8.20 escrow: PENDING→CONFIRMED→RELEASED/REFUNDED, links `drunixTransferId` ↔ testnet `paymentId`, events for Etherscan verification
-  - MetaMask Sepolia integration: connect, switch chain 0xaa36a7, balance, gas, real tx hash with Etherscan link
+- **NEW v1.2-v1.6 — Sepolia Testnet Escrow Demonstrating Atomic DvP Settlement Pattern (per user request "involve money, testnet can be used") — Accurate framing: real on-chain testnet transactions demonstrating an atomic delivery-vs-payment settlement pattern, not real monetary value:**
+  - `contracts/PaymentEscrow.sol` — Solidity 0.8.20 escrow: PENDING→CONFIRMED→RELEASED/REFUNDED, links `drunixTransferId` ↔ testnet `paymentId`, events for Etherscan verification, min 0.001 SepoliaETH enforced to avoid dust
+  - MetaMask Sepolia integration: connect, switch chain 0xaa36a7, balance, gas, real tx hash with Etherscan link when faucet ETH available — real on-chain testnet transactions, Etherscan-verifiable, demonstrating DvP pattern
   - Backend DvP endpoints: `/api/testnet/payments/initiate`, `/confirm`, `/release`, `/api/testnet/config`
-  - Frontend `TestnetPayment.jsx`: 4-step atomic DvP UI — Testnet Payment Initiated → Escrow Locked → Drunix Transfer → Escrow Released
-  - Faucet: https://sepoliafaucet.com/ (0.5 free SepoliaETH = 100+ tx), no real money risk, real blockchain tx with gas
-  - Production path: replace test ETH with mainnet USDC/INR stablecoin + Chainlink oracle, same escrow logic
+  - Frontend `TestnetPayment.jsx`: 4-step atomic DvP UI — Testnet Escrow Initiated → Escrow Locked → Drunix Transfer → Escrow Released — real Sepolia flow stays front and center, simulated fallback clearly labeled greyed out non-clickable visibly different, no fabricated hash or fake Etherscan link
+  - Faucet: https://sepoliafaucet.com/ (0.5 free SepoliaETH = 100+ tx) — Sepolia test ETH has no monetary value, used to demonstrate settlement pattern
+  - Production path: replace test ETH with mainnet USDC/INR stablecoin + Chainlink oracle, same escrow logic — demonstrates atomic DvP settlement pattern applicable to UPI/NPCI
 
 **MOCKED (Pluggable, per spec §1.2 non-goals):**
 - KYC — DigiLocker/Aadhaar stub, interface ready for licensed provider
-- Payment settlement — **NOW LIVE via Sepolia testnet**, production path mainnet USDC/INR stablecoin
+- Payment settlement — **NOW LIVE via Sepolia testnet escrow demonstrating atomic DvP settlement pattern** — Sepolia test ETH has no monetary value, production path mainnet USDC/INR stablecoin or UPI escrow same state machine
 - Land registry — DILRMP/state registrar API stub, only documentHash anchored on-chain
 
 This framing is deliberate — judges respect "we scoped this out and here's why" over overclaiming.

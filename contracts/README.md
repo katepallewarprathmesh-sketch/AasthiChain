@@ -1,32 +1,32 @@
-# Payment Escrow — Sepolia Testnet — Real Money Involvement (Testnet)
+# Payment Escrow — Sepolia Testnet — Atomic DvP Settlement Pattern Demo
 
-**Purpose:** Involve real money flow without real money risk — uses Sepolia test ETH.
+**Purpose:** Demonstrate real on-chain testnet transactions demonstrating an atomic delivery-vs-payment settlement pattern — uses Sepolia test ETH which has no monetary value, not real monetary value.
 
-## Architecture — Hybrid: Drunix (permissioned property tokens) + Sepolia (public payment)
+## Architecture — Hybrid: Drunix (permissioned property tokens) + Sepolia (public escrow) — Settlement Pattern
 
 ```
 Investor (MetaMask on Sepolia)
-   ↓ 1. initiatePayment(assetId, originator, tokenAmount) + test ETH
-PaymentEscrow.sol (Sepolia Testnet) — locks test ETH
-   ↓ 2. Event PaymentInitiated
+   ↓ 1. initiatePayment(assetId, originator, tokenAmount) + Sepolia test ETH (min 0.001, no monetary value)
+PaymentEscrow.sol (Sepolia Testnet) — locks test ETH in escrow, demonstrates DvP pattern
+   ↓ 2. Event PaymentInitiated — real on-chain testnet transaction, Etherscan-verifiable when faucet ETH used
 Backend (API Gateway) listens event
    ↓ 3. Calls Drunix TransferTokens (property tokens move)
-Drunix Ledger — TokenBalance updated, TransferRecord TXN-... created
+Drunix Ledger — TokenBalance updated, TransferRecord TXN-... created — real Drunix ledger
    ↓ 4. Backend calls confirmDrunixTransfer(paymentId, TXN-...)
 PaymentEscrow — status PENDING → CONFIRMED, links Drunix TXN ID
    ↓ 5. Backend calls releasePayment(paymentId)
-PaymentEscrow — transfers test ETH to originator, status → RELEASED
-   ↓ Atomic DvP (Delivery vs Payment) achieved
+PaymentEscrow — transfers Sepolia test ETH to originator, status → RELEASED
+   ↓ Atomic DvP settlement pattern achieved — demonstrates delivery-vs-payment, not real monetary value
 ```
 
-If Drunix transfer fails → `refundPayment` returns test ETH to investor.
+If Drunix transfer fails → `refundPayment` returns Sepolia test ETH to investor.
 
-## Why Testnet?
+## Why Testnet? — Accurate Framing
 
-- **Real money flow** — actual blockchain transaction with gas, hash, confirmations — not mocked UPI
-- **No real money risk** — Sepolia test ETH from faucet, free
-- **Judge credibility** — shows you understand DvP, escrow, and hybrid permissioned + public architecture
-- **Production path:** Replace test ETH with mainnet USDC / INR stablecoin or UPI escrow with same contract logic
+- **Real on-chain testnet transactions** — actual blockchain transactions with gas, hash, confirmations, Etherscan-verifiable when faucet ETH available — demonstrating atomic DvP settlement pattern, not mocked UPI, not real monetary value
+- **Sepolia test ETH has no monetary value** — from faucet, free, used only to demonstrate settlement pattern
+- **Judge credibility** — shows you understand DvP, escrow, and hybrid permissioned + public architecture — real Sepolia flow stays front and center, simulated fallback clearly labeled greyed out non-clickable visibly different, no fabricated hash or fake Etherscan link
+- **Production path:** Replace Sepolia test ETH (no value) with mainnet USDC / INR stablecoin or UPI escrow with same contract logic — same atomic DvP settlement pattern applicable to NPCI
 
 ## Contract: PaymentEscrow.sol
 
@@ -94,33 +94,33 @@ npx hardhat run scripts/deploy.js --network sepolia
 **Fix for "min balance 0.001" error:** Old oracle ₹2L=1ETH gave dust amounts like 0.0005 ETH for small token purchases → MetaMask/Sepolia rejected with "min balance 0.001" (dust protection + gas). Fixed by:
 1. New oracle ₹20k=1ETH (10x larger) — 1 token @ ₹500 = 0.025 ETH (not 0.0025) → always >0.001
 2. Frontend enforces `Math.max(calculated, 0.001)` — min 0.001 ETH
-3. UI shows low-balance warning + faucet links + Mock Mode fallback (simulates real hash + Etherscan, no real ETH needed, still shows real money flow for demo judges)
+3. UI shows low-balance warning + faucet links + Simulated fallback (clearly labeled greyed out non-clickable, no fabricated hash or fake Etherscan link) when faucet unavailable — real Sepolia flow stays front and center, demonstrating real on-chain testnet transactions demonstrating atomic DvP settlement pattern
 
-If faucets rate-limited, use Mock Mode — generates real-looking tx hash `0x...` with Etherscan link `https://sepolia.etherscan.io/tx/0x...`, backend still does atomic DvP, shows real money flow involvement.
+If faucets rate-limited, use Simulated mode — shows "Simulated — faucet unavailable, no real transaction" greyed out non-clickable visibly different from real row, no fabricated 0x... hash or fake Etherscan link, backend still does Drunix leg to demonstrate DvP pattern.
 
 ### Verify on Etherscan
 
 After deploy, verify contract at https://sepolia.etherscan.io/address/YOUR_CONTRACT_ADDRESS
-- Shows all PaymentInitiated events, real testnet transactions with hash, gas, confirmations
-- Share Etherscan link in pitch — proves real money flow
+- Shows all PaymentInitiated events, real on-chain testnet transactions with hash, gas, confirmations when faucet ETH used — demonstrates atomic DvP settlement pattern, Sepolia test ETH has no monetary value
+- Share Etherscan link in pitch — proves real on-chain testnet transactions demonstrating settlement pattern
 
 ## Integration with AasthiChain
 
 ### API Gateway (Go or Node mock)
 
-- Listens to `PaymentInitiated` event via `ethers.js` WebSocket provider
+- Listens to `PaymentInitiated` event via `ethers.js` WebSocket provider (real Sepolia flow)
 - On event, calls Drunix `TransferTokens`
 - On success, calls `confirmDrunixTransfer` + `releasePayment` on Sepolia contract
 - Endpoints:
-  - `POST /api/testnet/payments/initiate` — returns paymentId, expects txHash from frontend
+  - `POST /api/testnet/payments/initiate` — returns paymentId, expects txHash from frontend when real Sepolia tx available, or simulated ID when faucet unavailable (clearly labeled, no fake hash)
   - `GET /api/testnet/payments/:paymentId` — get payment status + linked Drunix TXN
   - `POST /api/testnet/payments/:paymentId/confirm` — registrar confirms Drunix transfer
   - `POST /api/testnet/payments/:paymentId/release` — release escrow
 
 ### Frontend
 
-- `TestnetPayment.jsx` — Connect MetaMask, show Sepolia balance, initiate payment, show tx hash with Etherscan link, show status PENDING → CONFIRMED → RELEASED
-- Wallet page now has 2-step flow: 1) Pay with testnet ETH (escrow) → 2) Token transfer on Drunix (atomic DvP)
+- `TestnetPayment.jsx` — Connect MetaMask, show Sepolia balance, initiate real on-chain testnet transactions with Etherscan link when faucet ETH available, show status PENDING → CONFIRMED → RELEASED — real Sepolia flow front and center, simulated fallback greyed out non-clickable visibly different no fabricated hash
+- Wallet page now has 2-step flow: 1) Pay with Sepolia test ETH escrow demonstrating DvP settlement pattern (no monetary value) → 2) Token transfer on Drunix (atomic DvP)
 
 ## Mapping: Off-chain Identity → On-chain Wallet
 
@@ -132,9 +132,9 @@ This mapping is stored in API gateway `walletMapping` table (Postgres in prod, i
 
 ## Production Path
 
-Replace Sepolia test ETH with:
+Replace Sepolia test ETH (no monetary value, used to demonstrate settlement pattern) with:
 - Mainnet USDC (ERC20) — change contract to use `transferFrom` + `approve`
 - INR stablecoin or CBDC sandbox
-- UPI escrow with same state machine (PENDING → CONFIRMED → RELEASED/REFUNDED)
+- UPI escrow with same state machine (PENDING → CONFIRMED → RELEASED/REFUNDED) — same atomic DvP settlement pattern applicable to NPCI
 
-The escrow logic stays same — only payment rail changes. This shows credible path to real money without building UPI integration for hackathon.
+The escrow logic stays same — only payment rail changes. This demonstrates credible path to settlement pattern applicable to real payments without building UPI integration for hackathon — demonstrates real on-chain testnet transactions demonstrating atomic DvP settlement pattern, not real monetary value.

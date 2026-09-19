@@ -220,7 +220,7 @@ export default function Wallet({ user }) {
               <span style={{background:'var(--registry-navy)', color:'white', fontSize:11, padding:'3px 8px', borderRadius:4, fontWeight:700, letterSpacing:'0.05em'}}>TESTNET MONEY FLOW LIVE</span>
             </h1>
             <p style={{color:'var(--ink-60)', fontSize:13, maxWidth:'80ch'}}>
-              Portfolio from Drunix (property tokens) + Testnet Escrow (Sepolia payments) = atomic DvP · Real money flow via Sepolia test ETH, no real money risk · KYC always visible
+              Portfolio from Drunix (property tokens) + Sepolia testnet escrow demonstrating atomic DvP settlement pattern · Real on-chain testnet transactions when faucet ETH available, Sepolia test ETH has no monetary value · KYC always visible
             </p>
           </div>
           <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
@@ -270,7 +270,7 @@ export default function Wallet({ user }) {
       {testnetConfig && (
         <div style={{background:'var(--registry-navy)', color:'white', borderRadius:8, padding:'12px 16px', marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
           <div style={{fontSize:13}}>
-            <strong>💰 Real Money Flow — Sepolia Testnet</strong> — No real money risk · Faucet: <a href={testnetConfig.faucet} target="_blank" rel="noreferrer" style={{color:'#FFD166', textDecoration:'underline'}}>{testnetConfig.faucet}</a> · Explorer: <a href={testnetConfig.explorer} target="_blank" rel="noreferrer" style={{color:'#FFD166', textDecoration:'underline'}}>{testnetConfig.explorer}</a>
+            <strong>💰 Sepolia Testnet Escrow — Atomic DvP Settlement Pattern</strong> — Real on-chain testnet txs demonstrating DvP pattern, SepoliaETH has no monetary value · Faucet: <a href={testnetConfig.faucet} target="_blank" rel="noreferrer" style={{color:'#FFD166', textDecoration:'underline'}}>{testnetConfig.faucet}</a> · Explorer: <a href={testnetConfig.explorer} target="_blank" rel="noreferrer" style={{color:'#FFD166', textDecoration:'underline'}}>{testnetConfig.explorer}</a>
           </div>
           <div style={{fontSize:11, background:'rgba(255,255,255,0.15)', padding:'4px 8px', borderRadius:4}}>
             {testnetConfig.chainName} {testnetConfig.chainId}
@@ -315,7 +315,7 @@ export default function Wallet({ user }) {
             <h3>Quick Transfer — Choose Mode</h3>
             <div style={{display:'flex', gap:8, marginBottom:12, marginTop:8}}>
               <button onClick={()=>setMode('direct')} style={{flex:1, padding:'8px', borderRadius:6, border: mode==='direct' ? '2px solid var(--registry-navy)' : '1px solid var(--ink-12)', background: mode==='direct' ? 'var(--surface)' : 'var(--paper)', fontWeight:700, fontSize:11, cursor:'pointer'}}>Direct Drunix<br/><span style={{fontWeight:400, fontSize:10}}>No payment rail</span></button>
-              <button onClick={()=>setMode('testnet')} style={{flex:1, padding:'8px', borderRadius:6, border: mode==='testnet' ? '2px solid var(--registry-navy)' : '1px solid var(--ink-12)', background: mode==='testnet' ? 'var(--registry-navy)' : 'var(--paper)', color: mode==='testnet' ? 'white' : 'var(--ink)', fontWeight:700, fontSize:11, cursor:'pointer'}}>🔒 Atomic DvP Testnet<br/><span style={{fontWeight:400, fontSize:10}}>Real money flow</span></button>
+              <button onClick={()=>setMode('testnet')} style={{flex:1, padding:'8px', borderRadius:6, border: mode==='testnet' ? '2px solid var(--registry-navy)' : '1px solid var(--ink-12)', background: mode==='testnet' ? 'var(--registry-navy)' : 'var(--paper)', color: mode==='testnet' ? 'white' : 'var(--ink)', fontWeight:700, fontSize:11, cursor:'pointer'}}>🔒 Atomic DvP Testnet<br/><span style={{fontWeight:400, fontSize:10}}>On-chain testnet txs, DvP pattern</span></button>
             </div>
 
             <form onSubmit={handleTransfer} style={{display:'flex', flexDirection:'column', gap:12}}>
@@ -355,7 +355,7 @@ export default function Wallet({ user }) {
               ) : (
                 <div style={{background:'var(--surface)', border:'1px solid var(--registry-navy)', borderRadius:8, padding:10, fontSize:11}}>
                   <div style={{fontWeight:700, marginBottom:4}}>🔒 Testnet DvP Selected</div>
-                  <div style={{color:'var(--ink-60)', marginBottom:8}}>Will lock {estimatedEth} test ETH in escrow → Drunix transfer → release. No real money risk.</div>
+                  <div style={{color:'var(--ink-60)', marginBottom:8}}>Will lock {estimatedEth} SepoliaETH (no monetary value) in escrow → Drunix transfer → release — demonstrates atomic DvP settlement pattern.</div>
                   <button type="button" className="btn btn-secondary" style={{width:'100%', fontSize:11}} onClick={()=>setActiveTab('transfer')}>Go to Full Escrow UI →</button>
                 </div>
               )}
@@ -384,9 +384,9 @@ export default function Wallet({ user }) {
             <h3>Transfer Mode</h3>
             <div style={{display:'flex', gap:10, marginTop:10}}>
               <button onClick={()=>setMode('direct')} className={mode==='direct' ? 'btn btn-primary' : 'btn btn-secondary'} style={{flex:1, fontSize:12}}>Direct Drunix — no payment rail</button>
-              <button onClick={()=>setMode('testnet')} className={mode==='testnet' ? 'btn btn-primary' : 'btn btn-secondary'} style={{flex:1, fontSize:12, background: mode==='testnet' ? 'var(--registry-navy)' : ''}}>🔒 Atomic DvP — Sepolia Escrow — Real Money Flow</button>
+              <button onClick={()=>setMode('testnet')} className={mode==='testnet' ? 'btn btn-primary' : 'btn btn-secondary'} style={{flex:1, fontSize:12, background: mode==='testnet' ? 'var(--registry-navy)' : ''}}>🔒 Atomic DvP — Sepolia Escrow — On-Chain Testnet Settlement Pattern</button>
             </div>
-            <div style={{marginTop:8, fontSize:11, color:'var(--ink-60)'}}>Direct = only tokens move. Testnet DvP = test ETH locked → Drunix transfer → release. If Drunix fails, refundPayment() refunds. No real money risk.</div>
+            <div style={{marginTop:8, fontSize:11, color:'var(--ink-60)'}}>Direct = only tokens move. Testnet DvP = Sepolia test ETH (no monetary value) locked → Drunix transfer → release — demonstrates atomic DvP settlement pattern. If Drunix fails, refundPayment() refunds.</div>
           </div>
 
           {mode==='direct' ? (
@@ -411,7 +411,7 @@ export default function Wallet({ user }) {
                 try {
                   const pId = typeof pid === 'string' ? pid : pid?.paymentId || String(pid).slice(0,12)
                   const dId = typeof drunixId === 'string' ? drunixId : pid?.drunixTransferId || 'TXN-...'
-                  setMsg(`✅ Atomic DvP complete — testnet ${String(pId).slice(0,12)}... ↔ Drunix ${String(dId).slice(0,16)}... — real money flow`)
+                  setMsg(`✅ Atomic DvP complete — testnet ${String(pId).slice(0,12)}... ↔ Drunix ${String(dId).slice(0,16)}... — real on-chain testnet transactions demonstrating DvP settlement pattern`)
                   fetchWallet()
                   fetchHistory()
                   fetchTestnetPayments()
@@ -428,7 +428,7 @@ export default function Wallet({ user }) {
         <div className="card">
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <div>
-              <h3>Testnet Escrow History — Real Money Flow</h3>
+              <h3>Testnet Escrow History — Atomic DvP Settlement Pattern</h3>
               <p style={{fontSize:11, color:'var(--ink-40)'}}>Sepolia payments linked to Drunix TXN via paymentId ↔ drunixTransferId · Etherscan verifiable</p>
             </div>
             <button className="btn btn-secondary" style={{fontSize:11}} onClick={fetchTestnetPayments}>Refresh</button>
