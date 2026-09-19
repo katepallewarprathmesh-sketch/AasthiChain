@@ -1,0 +1,29 @@
+name: aasthichain-network
+version: "1.0"
+
+organizations:
+  Originator:
+    mspid: OriginatorMSP
+    peers:
+      - peer0.originator.aasthichain.com
+  Registrar:
+    mspid: RegistrarMSP
+    peers:
+      - peer0.registrar.aasthichain.com
+  Investor:
+    mspid: InvestorMSP
+    peers:
+      - peer0.investor.aasthichain.com
+  Regulator:
+    mspid: RegulatorMSP
+    peers:
+      - peer0.regulator.aasthichain.com
+
+channels:
+  property-channel:
+    orderer: orderer.aasthichain.com
+    organizations:
+      - Originator
+      - Registrar
+      - Investor
+      - Regulator
