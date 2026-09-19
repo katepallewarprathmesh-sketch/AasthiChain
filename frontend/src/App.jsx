@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useUser, useAuth, useClerk, UserButton } from '@clerk/clerk-react'
+import { useUser, useAuth, useClerk, UserButton } from '@clerk/react'
 
 import Login from './pages/Login.jsx'
 import Marketplace from './pages/Marketplace.jsx'

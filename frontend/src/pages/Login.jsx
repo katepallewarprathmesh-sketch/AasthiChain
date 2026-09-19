@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { SignIn, useUser, useAuth, SignedIn, SignedOut } from '@clerk/clerk-react'
+import { SignIn, useUser, useAuth, Show } from '@clerk/react'
 
 const isClerkConfigured = (() => {
   const k = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -49,7 +49,6 @@ function ClerkLogin({ onLogin }) {
     doLogin()
   }, [isLoaded, isSignedIn, user])
 
-  // Update role in storage when changed, but don't trigger login until signed in
   useEffect(() => {
     localStorage.setItem('aasthi_clerk_demo_identity', selectedRoleId)
   }, [selectedRoleId])
@@ -61,13 +60,13 @@ function ClerkLogin({ onLogin }) {
         <p style={{color:'var(--ink-60)', fontSize:14, lineHeight:1.5}}>Clerk-secured fractional real estate on Drunix. Registry-office grade.</p>
         <div style={{marginTop:12, display:'inline-flex', alignItems:'center', gap:6, background:'rgba(98,116,142,0.1)', border:'1px solid rgba(98,116,142,0.2)', padding:'4px 8px', borderRadius:6, fontSize:11, color:'var(--registry-navy)', fontWeight:600}}>
           <span style={{width:6, height:6, borderRadius:'50%', background:'var(--verified-green)', display:'inline-block'}}></span>
-          Clerk Auth Enabled
+          Clerk Auth Enabled — @clerk/react v6
         </div>
       </div>
 
       <div className="card" style={{marginBottom:16}}>
         <h3 style={{fontSize:14, fontWeight:600, marginBottom:8}}>Select Fabric Role (demo-only)</h3>
-        <p style={{fontSize:11, color:'var(--ink-60)', marginBottom:12}}>Clerk verifies identity; role controls ledger permissions. Demo mapping per §5.4.</p>
+        <p style={{fontSize:11, color:'var(--ink-60)', marginBottom:12}}>Clerk verifies identity; role controls ledger permissions.</p>
         <div style={{display:'grid', gap:6}}>
           {ROLES.map(p => (
             <button key={p.id} type="button" onClick={() => setSelectedRoleId(p.id)}
@@ -88,17 +87,17 @@ function ClerkLogin({ onLogin }) {
       </div>
 
       <div className="card" style={{display:'flex', justifyContent:'center', padding:'24px'}}>
-        <SignedOut>
+        <Show when="signed-out">
           <SignIn afterSignInUrl="/marketplace" afterSignUpUrl="/marketplace" />
-        </SignedOut>
-        <SignedIn>
+        </Show>
+        <Show when="signed-in">
           <div style={{textAlign:'center', padding:'24px'}}>
-            <div style={{fontSize:14, fontWeight:600, marginBottom:8}}>Signed in as {user?.primaryEmailAddress?.emailAddress || user?.username}</div>
+            <div style={{fontSize:14, fontWeight:600, marginBottom:8}}>Signed in as {user?.primaryEmailAddress?.emailAddress || user?.username || 'user'}</div>
             <div style={{fontSize:12, color:'var(--ink-60)', marginBottom:16}}>Role: {ROLES.find(r=>r.id===selectedRoleId)?.label} — Redirecting...</div>
             <div style={{width:20, height:20, border:'2px solid var(--ink-12)', borderTopColor:'var(--registry-navy)', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           </div>
-        </SignedIn>
+        </Show>
       </div>
     </div>
   )
