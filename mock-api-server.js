@@ -68,17 +68,83 @@ function mockJWT(identityId, mspId, role) {
   return Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
 }
 
+function decodeClerkOrMockToken(token) {
+  // Try mock base64 JSON first
+  try {
+    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
+    if (payload.identityId) return payload;
+  } catch {}
+  // Try JWT (Clerk) — decode without verification for mock server
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = payloadB64 + '='.repeat((4 - payloadB64.length % 4) % 4);
+      const payload = JSON.parse(Buffer.from(padded, 'base64').toString());
+      // Clerk JWT has sub, sid, etc.
+      const identityId = payload.fabricIdentity || payload.identityId || (payload.sub ? 'investor1' : null);
+      // If Clerk token, map to demo identity from header or default
+      // Check for custom claims or use fallback
+      if (payload.sub) {
+        // Clerk user — use demo identity from localStorage mapping or default investor1
+        // For mock, we accept any Clerk token and map to investor1 unless x-fabric-identity header present
+        return {
+          identityId: payload.fabricIdentity || 'investor1',
+          mspId: payload.mspId || 'InvestorMSP',
+          role: payload.role || 'Investor',
+          clerkId: payload.sub,
+          clerk: true
+        };
+      }
+      if (payload.identityId) return payload;
+    }
+  } catch (e) {
+    // console.warn('Token decode failed', e.message)
+  }
+  return null;
+}
+
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
+  const fabricIdentityHeader = req.headers['x-fabric-identity'] || req.headers['x-fabric-role'];
   if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
   try {
     const token = auth.split(' ')[1];
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
-    req.user = payload;
+    let payload = decodeClerkOrMockToken(token);
+    
+    // If token is Clerk JWT and we have fabric identity header, use it
+    if (payload && payload.clerk && fabricIdentityHeader) {
+      const roleMap = {
+        originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
+        registrar1: { identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar' },
+        investor1: { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' },
+        investor2: { identityId: 'investor2', mspId: 'InvestorMSP', role: 'Investor' },
+        regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
+      };
+      const mapped = roleMap[fabricIdentityHeader.toLowerCase()] || roleMap['investor1'];
+      payload = { ...payload, ...mapped };
+    }
+
+    if (payload && payload.identityId) {
+      req.user = payload;
+      return next();
+    }
+
+    // Fallback: try direct base64
+    const fallback = JSON.parse(Buffer.from(token, 'base64').toString());
+    req.user = fallback;
     next();
   } catch {
-    // Allow mock token format from frontend fallback
-    req.user = { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
+    // Allow mock token format from frontend fallback + Clerk placeholder tokens
+    const headerIdentity = fabricIdentityHeader || 'investor1';
+    const roleMap = {
+      originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
+      registrar1: { identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar' },
+      investor1: { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' },
+      investor2: { identityId: 'investor2', mspId: 'InvestorMSP', role: 'Investor' },
+      regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
+    };
+    req.user = roleMap[headerIdentity.toLowerCase()] || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
     next();
   }
 }

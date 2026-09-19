@@ -1,7 +1,28 @@
 # AasthiChain — Fractional Real Estate Tokenization on Drunix
 
 **Drunix Hackathon x Citi — Problem Statement 2 (Real Asset Tokenization)**
-Version 1.6 | Sepolia Testnet Escrow — Atomic DvP Settlement Pattern Demo | Track A Improvements | Production-Ready Release
+Version 1.8 | Clerk Auth + Sepolia Testnet Escrow — Atomic DvP Settlement Pattern Demo | Track A Improvements | Production-Ready Release
+
+## 🆕 v1.8 — Clerk Auth Implemented
+
+**Clerk authentication now live with mock fallback:**
+
+- **With `VITE_CLERK_PUBLISHABLE_KEY` set:** Full Clerk flow — Email, OAuth, MFA, `UserButton`, real JWT for API calls. Role selector maps Clerk identity to Fabric MSP (demo-only per §5.4). Backend Go + Node both accept Clerk JWT + `X-Fabric-Identity` header.
+- **Without key (default):** Mock auth fallback — presets originator1, registrar1, investor1, etc — same as v1.7.
+
+**Quick enable:**
+```bash
+# Get key from https://dashboard.clerk.com → Create App → Copy pk_test_...
+echo "VITE_CLERK_PUBLISHABLE_KEY=pk_test_..." > frontend/.env
+cd frontend && npm run dev
+# Nav shows "Clerk" badge, /login shows Clerk <SignIn /> + role selector
+```
+
+See `docs/CLERK_SETUP.md` for full setup, backend JWKS verification roadmap, and troubleshooting.
+
+**Fixes in v1.7.1:** Top-right Sign in button now uses `<button>` + `useNavigate` + `window.location.href` fallback, zIndex 100+, pointer-events auto — reliably navigates to /login.
+
+---
 
 AasthiChain tokenizes real estate assets into fractional, tradeable ownership units on a permissioned multi-organization Drunix (Hyperledger Fabric fork) network.
 
