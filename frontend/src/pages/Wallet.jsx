@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import FailureModeDemo from '../components/FailureModeDemo.jsx'
+import TestnetPayment from '../components/TestnetPayment.jsx'
 
 export default function Wallet({ user }) {
   const [wallet, setWallet] = useState(null)
@@ -322,6 +323,23 @@ export default function Wallet({ user }) {
           </>
         )}
       </div>
+
+      {/* Real Money Flow — Testnet Escrow — per user request "involve money, testnet can be used" */}
+      {wallet && wallet.balances && wallet.balances.length > 0 && (
+        <div style={{marginTop:24}}>
+          <TestnetPayment 
+            assetId={transferForm.assetId || wallet.balances[0]?.balance?.assetId} 
+            tokenAmount={amountNum || parseInt(transferForm.amount) || 100}
+            tokenPrice={tokenPrice}
+            recipient={transferForm.toId}
+            onPaymentComplete={(paymentId, drunixTxId) => {
+              setMsg(`Atomic DvP complete — testnet ${paymentId.slice(0,10)}... ↔ Drunix ${drunixTxId.slice(0,12)}... — real money flow involved`)
+              fetchWallet()
+              fetchHistory()
+            }}
+          />
+        </div>
+      )}
 
       <FailureModeDemo user={user} />
     </div>
