@@ -26,30 +26,58 @@ export default function TestnetPayment({ assetId, tokenAmount, tokenPrice, onPay
   const estimatedEth = tokenAmount ? (tokenAmount * tokenPrice / 200000).toFixed(4) : '0' // Mock conversion: ₹2L = 1 test ETH for demo — in prod use oracle
 
   useEffect(() => {
-    checkWallet()
+    let mounted = true
+    const init = async () => {
+      if (!mounted) return
+      await checkWallet()
+    }
+    init()
+    const handleAccountsChanged = () => { if (mounted) checkWallet() }
+    const handleChainChanged = () => { if (mounted) checkWallet() }
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', checkWallet)
-      window.ethereum.on('chainChanged', checkWallet)
+      try {
+        if (window.ethereum.on) {
+          window.ethereum.on('accountsChanged', handleAccountsChanged)
+          window.ethereum.on('chainChanged', handleChainChanged)
+        }
+      } catch {}
+    }
+    return () => {
+      mounted = false
+      try {
+        if (window.ethereum && window.ethereum.removeListener) {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged)
+          window.ethereum.removeListener('chainChanged', handleChainChanged)
+        }
+      } catch {}
     }
   }, [])
 
   const checkWallet = async () => {
-    if (!window.ethereum) {
-      setError('MetaMask not found — install from metamask.io to involve real testnet money flow')
-      return
-    }
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-      if (accounts.length > 0) {
+      if (!window.ethereum) {
+        // Don't set error as blocking — just show info, allow mock flow
+        return
+      }
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' }).catch(()=>[])
+      if (accounts && accounts.length > 0) {
         setWallet(accounts[0])
-        const bal = await window.ethereum.request({ method: 'eth_getBalance', params: [accounts[0], 'latest'] })
-        setBalance((parseInt(bal, 16) / 1e18).toFixed(4))
-        const cid = await window.ethereum.request({ method: 'eth_chainId' })
-        setChainId(cid)
+        try {
+          const bal = await window.ethereum.request({ method: 'eth_getBalance', params: [accounts[0], 'latest'] })
+          setBalance((parseInt(bal, 16) / 1e18).toFixed(4))
+        } catch { setBalance('0.0000') }
+        try {
+          const cid = await window.ethereum.request({ method: 'eth_chainId' })
+          setChainId(cid)
+        } catch {}
         setStatus('connected')
+      } else {
+        // No accounts yet, stay idle
+        if (!wallet) setStatus('idle')
       }
     } catch (e) {
-      setError(e.message)
+      console.error('checkWallet', e)
+      // Don't crash UI
     }
   }
 
