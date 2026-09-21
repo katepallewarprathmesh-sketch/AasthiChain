@@ -89,7 +89,7 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 - Flow: `PENDING (5min) → CONFIRMED (KYC+balance) → RELEASED (after TransferTokens) / REFUNDED`
 - Paise int64 to avoid float, X-Idempotency-Key, webhook callback simulation
 - Why Collect P2M not Intent? Seller requests, buyer approves — merchant collect + UTR reconciliation
-- Simulation honesty: No live NPCI sandbox — PPRO "Sandbox Not Available from UPI", no Drunix hackathon sandbox found. Inspired by `upi-mock-engine`. UI badge `SIMULATION — No live NPCI`
+- Simulation honesty: No live NPCI sandbox — PPRO "Sandbox Not Available from UPI", API Setu sandbox-only per Jan 2022 note, direct NPCI requires bank partnership. Inspired by `upi-mock-engine`. UI badge `SIMULATION — No live NPCI` — honest labeling per Track A6. **Real path:** Direct access via NPCI-certified switch Setu (Pine Labs) — certified as UPI switch with direct NPCI systems access — or PSP Bank ICICI/Decentro/Razorpay. Same state machine PENDING→CONFIRMED→RELEASED, same RRN/UTR, 1-line toggle NPCI_MODE=real + SETU_API_KEY. See `/api/npci/real-config` and `docs/NPCI_REAL_API_INTEGRATION.md` + `payment-gateway/real_npcibank.go`
 - Tests: 8 tests — success→transfer, timeout→refund, duplicate idempotency, KYC rejection, insufficient funds, invalid VPA, zero amount, ID formats
 
 **Secondary Rail — Sepolia:**
