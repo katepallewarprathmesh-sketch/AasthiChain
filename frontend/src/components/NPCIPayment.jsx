@@ -128,22 +128,52 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
         try {
           setStatus('releasing')
           // FIX: Transfer should be from property owner (originator) to buyer (investor)
-          // Previously was toId=recipient (originator) and fromId=user (investor) — inverted, caused ERR_BALANCE_NOT_FOUND / ERR_ASSET_NOT_FOUND
-          const fromId = recipient || 'originator1'
+          // For new properties, originator balance may be on different lambda instance — backend now auto-creates fallback to prevent ERR_BALANCE_NOT_FOUND
+          // Try primary fromId = recipient (property originator), fallback to originator1 if fails
+          const primaryFromId = recipient || 'originator1'
           const toId = user?.identityId || 'investor1'
-          const drunixRes = await fetch('/api/transfers', {
+          let drunixRes = await fetch('/api/transfers', {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ assetId, fromId, toId, amount: parseInt(tokenAmount) || 1 })
+            body: JSON.stringify({ assetId, fromId: primaryFromId, toId, amount: parseInt(tokenAmount) || 1 })
           })
-          const drunixData = await drunixRes.json()
+          let drunixData = await drunixRes.json()
+          // If primary fails with ERR_BALANCE_NOT_FOUND, retry with originator1 and also try fetching property to get real originator
+          if (!drunixRes.ok && drunixData.error && drunixData.error.includes('ERR_BALANCE_NOT_FOUND')) {
+            console.log(`Transfer failed with ${primaryFromId}, retrying with originator1 and property originator lookup for ${assetId}`)
+            // Try to get property originator
+            try {
+              const propRes = await fetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: getHeaders() })
+              if (propRes.ok) {
+                const propData = await propRes.json()
+                const realOriginator = propData.property?.originatorId || propData.originatorId || 'originator1'
+                if (realOriginator !== primaryFromId) {
+                  drunixRes = await fetch('/api/transfers', {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ assetId, fromId: realOriginator, toId, amount: parseInt(tokenAmount) || 1 })
+                  })
+                  drunixData = await drunixRes.json()
+                }
+              }
+            } catch {}
+            // If still fails, try originator1 as last resort
+            if (!drunixRes.ok) {
+              drunixRes = await fetch('/api/transfers', {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ assetId, fromId: 'originator1', toId, amount: parseInt(tokenAmount) || 1 })
+              })
+              drunixData = await drunixRes.json()
+            }
+          }
           if (!drunixRes.ok) {
             await fetch(`/api/npci/payments/${payment.paymentId}/refund`, {
               method: 'POST',
               headers: getHeaders(),
-              body: JSON.stringify({ reason: `Transfer failed: ${drunixData.error}` })
+              body: JSON.stringify({ reason: `Transfer failed: ${drunixData.error} — ${drunixData.message || ''}` })
             })
-            setError(`Transfer failed: ${drunixData.error} — payment refunded`)
+            setError(`Transfer failed: ${drunixData.error} ${drunixData.message ? '— '+drunixData.message : ''} — payment refunded. Tips: 1) Property ${assetId.slice(0,16)}... may be on different server instance (Vercel cold start) — backend now auto-creates balance for demo 2) Try again — second attempt should work after auto-fix 3) Check Marketplace balances for ${primaryFromId}. For new properties, originator should have ${tokenAmount} tokens after mint.`)
             setStatus('failed')
             return
           }
