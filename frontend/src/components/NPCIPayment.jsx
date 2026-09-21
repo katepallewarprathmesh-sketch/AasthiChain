@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 
 export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymentComplete, recipient, user }) {
-  const [payerVpa, setPayerVpa] = useState('investor@aasthichain')
+  const [payerVpa, setPayerVpa] = useState('80105301033@axl')
   const [payeeVpa, setPayeeVpa] = useState('originator@aasthichain')
   const [note, setNote] = useState('')
   const [payment, setPayment] = useState(null)
@@ -19,8 +19,15 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
   }, [assetId, tokenAmount])
 
   useEffect(() => {
+    // For testing: use 80105301033@axl as payer VPA per user request
+    // Previously: `${user.identityId}@aasthichain`
     if (user?.identityId) {
-      setPayerVpa(`${user.identityId}@aasthichain`.toLowerCase())
+      // Keep testing VPA 80105301033@axl for investor, else fallback
+      if (user.identityId.startsWith('investor')) {
+        setPayerVpa('80105301033@axl')
+      } else {
+        setPayerVpa(`${user.identityId}@aasthichain`.toLowerCase())
+      }
     }
     if (recipient) {
       setPayeeVpa(`${recipient}@aasthichain`.toLowerCase())

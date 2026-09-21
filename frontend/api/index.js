@@ -43,6 +43,9 @@ function initState() {
         npciBalances['investor2@aasthichain'] = 50000000;
         npciBalances['originator@aasthichain'] = 100000000;
         npciBalances['poor@aasthichain'] = 100;
+        npciBalances['80105301033@axl'] = 100000000; // testing VPA per user request
+        npciBalances['80105301033@okaxis'] = 100000000;
+        npciBalances['80105301033@okhdfcbank'] = 100000000;
         globalThis._aasthi_npci_balances = npciBalances;
       }
       // Ensure other globals are synced to globalThis
@@ -104,6 +107,9 @@ function initState() {
     npciBalances['investor2@aasthichain'] = 50000000;
     npciBalances['originator@aasthichain'] = 100000000;
     npciBalances['poor@aasthichain'] = 100;
+    npciBalances['80105301033@axl'] = 100000000;
+    npciBalances['80105301033@okaxis'] = 100000000;
+    npciBalances['80105301033@okhdfcbank'] = 100000000;
 
     globalThis._aasthi_properties = properties;
     globalThis._aasthi_balances = balances;

@@ -22,6 +22,9 @@ func newTestGateway() *Gateway {
 		"investor@aasthichain":   100000000, // ₹10L
 		"poor@aasthichain":       100,       // ₹1
 		"originator@aasthichain": 100000000, // high
+		"80105301033@axl":        100000000, // testing VPA per user request
+		"80105301033@okaxis":     100000000,
+		"80105301033@okhdfcbank": 100000000,
 	}}
 	return NewGateway(kyc, bal)
 }

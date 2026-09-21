@@ -88,6 +88,10 @@ func (m *MockBalanceProvider) GetBalance(vpa string) (int64, error) {
 		return b, nil
 	}
 	// default high balance: 10L INR = 100,000,000 paise
+	// Also allow 80105301033@axl testing VPA per user request
+	if vpa == \"80105301033@axl\" || vpa == \"80105301033@okaxis\" || vpa == \"80105301033@okhdfcbank\" {
+		return 100000000, nil
+	}
 	return 100000000, nil
 }
 
