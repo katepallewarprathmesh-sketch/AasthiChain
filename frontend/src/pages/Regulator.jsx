@@ -10,7 +10,7 @@ export default function Regulator({ user }) {
 
   useEffect(() => {
     fetchAll()
-  }, [])
+  }, [user?.identityId])
 
   const fetchAll = async (bookmark = '', append = false) => {
     const token = localStorage.getItem('aasthi_token')
@@ -55,7 +55,7 @@ export default function Regulator({ user }) {
 
   useEffect(() => {
     fetchAll()
-  }, [filterAsset])
+  }, [filterAsset, user?.identityId])
 
   const handleFreeze = async (assetId) => {
     const reason = prompt('Freeze action requires typed reason per §3.5 — rare and serious — show warning of exactly what freezing does:\n\nType reason for freezing this asset:')

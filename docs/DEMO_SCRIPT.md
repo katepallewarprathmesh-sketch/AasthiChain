@@ -19,7 +19,7 @@
 - Explain: composite key `balance~assetId~ownerId`, SQL indexes avoid ledger scans
 - Switch to registrar1 / Registrar
 - ValidateProperty: VALIDATED
-- MintPropertyTokens: 10000 tokens for ₹50L property = ₹500/token
+- MintPropertyTokens: 15000 tokens for ₹75L property (Green Valley Villas Pune) = ₹500/token — matches live seed PROP-GREEN-VALLEY-PUNE-001, deterministic, fixes random propId per cold start
 - Highlight endorsement policy: `AND('OriginatorMSP.peer','RegistrarMSP.peer')` prevents unilateral minting
 
 ### 1:30-3:00 — Investor Flow
@@ -64,5 +64,5 @@
 - Latency <3s p95
 - 50 TPS on 4-org network
 - Raft tolerates 1 failure
-- 10M token cap, integer-only
+- 15k tokens live seed for ₹75L, integer-only
 - 4 SQL indexes for fast queries

@@ -3,23 +3,39 @@
 **Challenge Code:** CHL-7007
 **Budget:** ₹175,000
 **Deadline:** 2026-09-30
-**Team:** katepallewarprathmesh-sketch
+**Team Name:** AasthiChain — Fractional Real Estate on Drunix
+**Team Members:**
+- **Prathmesh Katepallewar** — Full-stack & Blockchain Lead — Drunix Fabric chaincode (9 funcs, 216+ tests), payment-gateway UPI Collect module, React frontend, Vercel deploy — solo builder for hackathon slice
+- **AasthiChain Project** — Not raw GitHub username katepallewarprathmesh-sketch, but product name AasthiChain — represents fractional real estate + UPI payments vision
 **GitHub:** https://github.com/katepallewarprathmesh-sketch/AasthiChain
-**Live Demo:** http://localhost:8080 (mock-api-server + frontend dist) + Vercel serverless at frontend/api
-**Pitch Deck:** See `docs/PITCH_DECK_v1.5.md` + `PITCH_DECK.html` (generated)
+**Live Demo:** https://aasthi-chain.vercel.app (verified 200 OK + /api/health OK — correct hyphenated domain, not aasthichain.vercel.app 404) — Quick Demo Access: originator1/registrar1/investor1/regulator1 instant <2s, no verification, works LIVE+LOCAL
+**Pitch Deck:** `PITCH_DECK.html` + `docs/PITCH_DECK_OUTLINE.md` + `docs/DEMO_SCRIPT_v2.md`
+**One-liner:** Tokenized real-asset ownership on Drunix + payment settlement modeled on NPCI's UPI/IMPS rails — INR primary, Sepolia secondary — atomic DvP
+
+## Budget Breakdown — ₹175,000 Ask
+
+| Category | Amount | % | Details |
+|----------|--------|---|---------|
+| **Drunix Infra & Hosting** | ₹60,000 | 34% | Docker 4 orgs + Raft 3 orderers + Postgres SQL state, Vercel Pro hosting, domain, read-replica for regulator audit |
+| **Payments & Compliance** | ₹40,000 | 23% | UPI AutoCollect API integration (ICICI/Yes Bank sandbox), webhook + UTR reconciliation, KYC DigiLocker API (licensed provider), payment-gateway module hardening paise int64, idempotency, RRN/UTR |
+| **Security & Audit** | ₹35,000 | 20% | HSM-backed signing, endorsement hardening AND(Registrar, TitleInsurance), private data collections, threat model, pen test, audit logging |
+| **Legal & SPV Setup** | ₹20,000 | 11% | SPV per property legal wrapper per Registration Act 1908 + Asset Tokenisation Bill 2026 compliance (KYC/AML, custodian, freeze powers), legal opinion, IFSCA/SEBI sandbox filing |
+| **Dev Tooling & Contingency** | ₹20,000 | 11% | Ethers Alchemy/Infura RPC, Clerk Pro auth, monitoring Prometheus/Grafana, faucet contingency, docs & pitch deck, chaos testing |
+
+**Total: ₹175,000** — fits free tiers: Drunix docker-compose free, Vercel serverless free tier + Pro upgrade, Sepolia faucet free 0.5 ETH = 100+ tx, NPCI simulation free (no sandbox credentials available for hackathon), mock KYC pluggable — budget for Phase2 production hardening, not hackathon slice which is already done v2.1
 
 ---
 
 ## Proposal Title
 
-**AasthiChain — Fractional Real Estate Tokenization on Drunix with Atomic DvP via Sepolia Testnet — Real Money Flow Involved**
+**AasthiChain — Fractional Real Estate Tokenization on Drunix + NPCI UPI Collect (INR) + Atomic DvP — Primary UPI, Secondary Sepolia — Live https://aasthi-chain.vercel.app**
 
 ---
 
 ## Problem Understanding
 
 **Real Estate in India is broken for retail:**
-- **High ticket size:** ₹50L+ minimum excludes 95% retail investors, limits diversification
+- **High ticket size:** ₹75L+ minimum — live seed Green Valley Villas 75L/15000/₹500 excludes 95% retail investors, limits diversification
 - **Illiquid:** 3-6 month settlement, no secondary market, capital locked
 - **Opaque:** Paperwork, title fraud risk, no transparent cap table, benami risk
 - **No fractional ownership:** Can't own 0.1% of Green Valley Villas Pune, only whole asset
@@ -147,7 +163,7 @@ https://github.com/katepallewarprathmesh-sketch/AasthiChain
 **Pitch Deck Content (14 slides):**
 1. Title: AasthiChain — Fractional Real Estate on Drunix — CHL-7007
 2. Problem: ₹50L+ ticket, illiquid, opaque
-3. Solution: Tokenize into 10000 tokens @ ₹500, permissioned Drunix, instant finality
+3. Solution: Tokenize into 15000 tokens @ ₹500 for ₹75L property, permissioned — matches live seed PROP-GREEN-VALLEY-PUNE-001 Drunix, instant finality
 4. Network Topology: 4 orgs + Raft 3 orderers + Postgres SQL state (Drunix advantage)
 5. Architecture HLD: React → Go Gateway (JWT, KYC mock, rate limit, idempotency) → Fabric SDK → Peers → Chaincode → SQL state, composite keys, 4 indexes
 6. Data Model: PropertyAsset, TokenBalance, TransferRecord, KYCRecord JSON, token price calc

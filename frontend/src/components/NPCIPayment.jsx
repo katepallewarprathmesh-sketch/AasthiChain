@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 
 export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymentComplete, recipient, user }) {
-  const [payerVpa, setPayerVpa] = useState('80105301033@axl')
+  const [payerVpa, setPayerVpa] = useState('demo.investor@aasthichain')
   const [payeeVpa, setPayeeVpa] = useState('originator@aasthichain')
   const [note, setNote] = useState('')
   const [payment, setPayment] = useState(null)
@@ -19,12 +19,12 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
   }, [assetId, tokenAmount])
 
   useEffect(() => {
-    // For testing: use 80105301033@axl as payer VPA per user request
+    // For testing: use demo.investor@aasthichain as payer VPA per user request
     // Previously: `${user.identityId}@aasthichain`
     if (user?.identityId) {
-      // Keep testing VPA 80105301033@axl for investor, else fallback
+      // Keep testing VPA demo.investor@aasthichain for investor, else fallback
       if (user.identityId.startsWith('investor')) {
-        setPayerVpa('80105301033@axl')
+        setPayerVpa('demo.investor@aasthichain')
       } else {
         setPayerVpa(`${user.identityId}@aasthichain`.toLowerCase())
       }
@@ -236,12 +236,25 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           <div style={{display:'flex', flexDirection:'column', gap:10}}>
             <div>
               <label style={{fontSize:10, fontWeight:600, color:'#475569', textTransform:'uppercase'}}>Your UPI ID</label>
-              <input className="input" value={payerVpa} onChange={e=>setPayerVpa(e.target.value)} placeholder="yourname@aasthichain" style={{marginTop:4, fontSize:12}} />
+              <input className="input" value={payerVpa} onChange={e=>setPayerVpa(e.target.value)} placeholder="demo.investor@aasthichain" style={{marginTop:4, fontSize:12}} />
+              <div style={{fontSize:9, color:'#64748B', marginTop:2}}>Fictitious test handle — e.g., demo.investor@aasthichain (NOT real mobile)</div>
             </div>
             <div>
-              <label style={{fontSize:10, fontWeight:600, color:'#475569', textTransform:'uppercase'}}>Pay to</label>
-              <input className="input" value={payeeVpa} onChange={e=>setPayeeVpa(e.target.value)} placeholder="owner@aasthichain or 80105301033@axl" style={{marginTop:4, fontSize:12}} />
-              <div style={{fontSize:9, color:'#059669', marginTop:2}}>✓ Property owner — verified (editable for testing)</div>
+              <label style={{fontSize:10, fontWeight:600, color:'#475569', textTransform:'uppercase', display:'flex', alignItems:'center', gap:6}}>
+                Pay to
+                <span style={{fontSize:8, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'2px 6px', borderRadius:10}}>Verified owner — Collect P2M locked</span>
+              </label>
+              {!showDev ? (
+                <div style={{marginTop:4, background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:'10px 12px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <span style={{fontSize:12, fontWeight:600}}>{payeeVpa}</span>
+                  <span style={{fontSize:9, color:'#059669'}}>✓ Locked — seller-initiated Collect, buyer cannot redirect (P2M security)</span>
+                </div>
+              ) : (
+                <input className="input" value={payeeVpa} onChange={e=>setPayeeVpa(e.target.value)} placeholder="owner@aasthichain" style={{marginTop:4, fontSize:12}} />
+              )}
+              <div style={{fontSize:9, color: showDev ? '#D97706' : '#059669', marginTop:2}}>
+                {showDev ? '⚠️ Dev mode: editable for testing — in production Collect P2M payee is fixed, buyer cannot redirect payment' : '🔒 Collect P2M: seller requests, buyer approves — payee fixed to verified property owner, cannot be changed — why Collect chosen over Intent'}
+              </div>
             </div>
 
             <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10, marginTop:4}}>

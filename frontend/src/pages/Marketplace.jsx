@@ -11,7 +11,7 @@ export default function Marketplace({ user }) {
 
   useEffect(() => {
     fetchProperties()
-  }, [filter])
+  }, [filter, user?.identityId])
 
   const fetchProperties = async () => {
     try {

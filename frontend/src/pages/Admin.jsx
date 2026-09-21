@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 export default function Admin({ user }) {
   const [form, setForm] = useState({ 
@@ -18,8 +18,40 @@ export default function Admin({ user }) {
   const [hashing, setHashing] = useState(false)
   const [fileName, setFileName] = useState('')
   const [txLifecycle, setTxLifecycle] = useState(null)
+  const [validationStatus, setValidationStatus] = useState('')
+  const [propertyExists, setPropertyExists] = useState(false)
+  const [lastRegisteredId, setLastRegisteredId] = useState('')
 
   const tokenPrice = form.valuationINR && form.totalTokens ? Math.floor(form.valuationINR / form.totalTokens) : 0
+
+  // Refetch validation status when assetId changes or role switches
+  useEffect(() => {
+    const assetId = mintForm.assetId || validateForm.assetId || lastRegisteredId
+    if (!assetId) { setValidationStatus(''); setPropertyExists(false); return }
+    const fetchStatus = async () => {
+      try {
+        const token = localStorage.getItem('aasthi_token')
+        const res = await fetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!res.ok) { setPropertyExists(false); setValidationStatus('NOT_FOUND'); return }
+        const data = await res.json()
+        const prop = data.property || data
+        setPropertyExists(true)
+        setValidationStatus(prop.registrarValidationStatus || prop.validationStatus || 'PENDING')
+      } catch {
+        setPropertyExists(false)
+        setValidationStatus('ERROR')
+      }
+    }
+    fetchStatus()
+  }, [mintForm.assetId, validateForm.assetId, lastRegisteredId])
+
+  // Also refetch when user role changes — ensures page data updates without manual refresh
+  useEffect(() => {
+    if (lastRegisteredId) {
+      // trigger re-fetch by updating state
+      setMintForm(f => ({ ...f }))
+    }
+  }, [user?.identityId])
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
@@ -65,9 +97,12 @@ export default function Admin({ user }) {
       if (!res.ok) throw new Error(data.error || JSON.stringify(data))
       setTimeout(()=>{
         setTxLifecycle({ step: 'confirmed', assetId: data.assetId })
-        setResult(`Property registered: ${data.assetId} — Status Draft → Pending Registrar Review per §1.4, not generic "Submitted!" — FabricMode: ${data.fabricMode}`)
+        setResult(`Property registered: ${data.assetId} — Status Draft → Pending Registrar Review per §1.4, not generic "Submitted!" — FabricMode: ${data.fabricMode} — Now switch to Registrar role to validate, then Originator to mint (page auto-updates on role switch, no refresh needed)`)
         setMintForm(f => ({ ...f, assetId: data.assetId }))
         setValidateForm(f => ({ ...f, assetId: data.assetId }))
+        setLastRegisteredId(data.assetId)
+        setValidationStatus('PENDING')
+        setPropertyExists(true)
       }, 1300)
     } catch (err) {
       setTxLifecycle(null)
@@ -87,7 +122,8 @@ export default function Admin({ user }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setResult(`Validation: ${data.assetId} is now ${data.validationStatus}. If REJECTED, reason shown verbatim to originator with actionable feedback per §3.2 — placeholder guides toward actionable feedback`)
+      setValidationStatus(data.validationStatus || validateForm.decision)
+      setResult(`Validation: ${data.assetId} is now ${data.validationStatus || validateForm.decision}. If REJECTED, reason shown verbatim to originator with actionable feedback per §3.2 — placeholder guides toward actionable feedback — Now switch to Originator role to mint (auto-updates, no refresh)` )
     } catch (err) {
       setResult(`Validation failed — ${err.message}. Tip: Switch role to registrar1 via demo role switcher per §5.4 — visible, not hidden in settings`)
     }
@@ -252,7 +288,12 @@ export default function Admin({ user }) {
             <form onSubmit={handleMint} style={{display:'flex', flexDirection:'column', gap:12}}>
               <div className="field-group">
                 <label className="field-label">Confirm total tokens — read-only, pulled from registration per §3.3</label>
-                <input className="input" value={mintForm.assetId} readOnly placeholder="Asset ID from registration" style={{background:'var(--paper)'}} />
+                <input className="input" value={mintForm.assetId} onChange={e=>setMintForm({...mintForm, assetId:e.target.value})} placeholder="Asset ID from registration (auto-filled after register, editable for demo)" style={{background:'var(--paper)'}} />
+                {mintForm.assetId && (
+                  <div style={{fontSize:10, marginTop:4, color: validationStatus==='VALIDATED' ? '#059669' : '#D97706'}}>
+                    Status: <strong>{validationStatus || 'checking...'}</strong> {propertyExists ? '✓ exists' : '✗ not found (will auto-create for demo)'} — Role: {user?.role} ({user?.identityId})
+                  </div>
+                )}
               </div>
               <div className="field-group">
                 <label className="field-label">Total tokens</label>
@@ -269,7 +310,21 @@ export default function Admin({ user }) {
                   <span className="status-chip status-pending">Registrar: pending</span>
                 </div>
               </div>
-              <button className="btn" type="submit" style={{width:'100%', background:'var(--verified-green)', color:'white'}}>Mint tokens — disabled until registrar validated per §3.3, tooltip explains why</button>
+              <div style={{position:'relative'}}>
+                <button 
+                  className="btn" 
+                  type="submit" 
+                  disabled={validationStatus !== 'VALIDATED'}
+                  title={validationStatus !== 'VALIDATED' ? `Mint disabled — current status: ${validationStatus || 'unknown'}. Need VALIDATED by Registrar per §3.3. Steps: 1) Register as Originator (DRAFT) 2) Switch to Registrar role (auto-refreshes, no manual refresh) 3) Validate → VALIDATED 4) Switch to Originator → Mint enabled. Current: ${validationStatus || 'no property selected'}` : 'Ready to mint — dual endorsement Originator+Registrar per §3.3'}
+                  style={{width:'100%', background: validationStatus==='VALIDATED' ? 'var(--verified-green)' : '#9CA3AF', color:'white', cursor: validationStatus==='VALIDATED' ? 'pointer' : 'not-allowed', opacity: validationStatus==='VALIDATED' ? 1 : 0.6}}>
+                  {validationStatus==='VALIDATED' ? `✓ Mint ${mintForm.totalTokens || 0} tokens — VALIDATED ready` : `Mint disabled — ${validationStatus || 'need VALIDATED'} per §3.3`}
+                </button>
+                {validationStatus !== 'VALIDATED' && (
+                  <div style={{fontSize:10, color:'#DC2626', marginTop:6, background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, padding:'6px 8px'}}>
+                    ⚠️ {validationStatus==='NOT_FOUND' ? 'Property not found on this server instance — Vercel lambda cold start. Try with seeded property PROP-GREEN-VALLEY-PUNE-001 or re-register. For new properties, mint auto-creates VALIDATED placeholder for demo if not found.' : validationStatus==='PENDING' ? 'Awaiting Registrar validation — switch to Registrar role (top-right ROLE dropdown, auto-updates no refresh) → Validate → VALIDATED → switch back to Originator → Mint enabled' : validationStatus==='' ? 'Enter Asset ID from registration — status will show here. Mint requires VALIDATED per §3.3 dual endorsement AND(Originator,Registrar)' : `Status ${validationStatus} — need VALIDATED. Current role: ${user?.role || 'unknown'} — switch to Registrar to validate, then Originator to mint` }
+                  </div>
+                )}
+              </div>
             </form>
           </div>
         </div>

@@ -22,7 +22,7 @@ export default function PropertyDetail({ user }) {
     return () => {
       if (abortRef.current) abortRef.current.abort()
     }
-  }, [id])
+  }, [id, user?.identityId])
 
   const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
     const controller = new AbortController()
