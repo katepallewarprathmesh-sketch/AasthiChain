@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useUser, useAuth, useClerk, UserButton } from '@clerk/react'
+import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
 import Login from './pages/Login.jsx'
 import Marketplace from './pages/Marketplace.jsx'
@@ -33,13 +33,27 @@ function Footer() {
     <footer style={{borderTop:'1px solid var(--ink-8)', background:'var(--surface)', padding:'24px 0'}}>
       <div className="container" style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
         <div style={{fontSize:12, color:'var(--ink-40)'}}>
-          <span style={{fontFamily:'Fraunces', fontWeight:600, color:'var(--ink)'}}>AasthiChain</span> v1.8 · Clerk Auth · Production-Ready · {isClerkConfigured ? 'Clerk enabled' : 'Mock fallback — set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk'}
+          <span style={{fontFamily:'Fraunces', fontWeight:600, color:'var(--ink)'}}>AasthiChain</span> v1.9 · Clerk Auth · {isClerkConfigured ? 'Clerk enabled' : 'Mock fallback'} · Instant modal + demo bypass
         </div>
         <div style={{fontSize:11, color:'var(--ink-40)', maxWidth:'60ch', textAlign:'right'}}>
           On-chain token ≠ Registration Act, 1908 · KYC/Payment pluggable · SPV · Sepolia test ETH no monetary value
         </div>
       </div>
     </footer>
+  )
+}
+
+function NavLoadingSkeleton() {
+  return (
+    <nav style={{background:'var(--surface)', borderBottom:'1px solid var(--ink-8)', height:64}}>
+      <div className="container" style={{display:'flex', justifyContent:'space-between', alignItems:'center', height:64}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <div style={{width:32, height:32, background:'var(--ink-8)', borderRadius:6, animation:'pulse 1.5s infinite'}}></div>
+          <div style={{width:100, height:16, background:'var(--ink-8)', borderRadius:4, animation:'pulse 1.5s infinite'}}></div>
+        </div>
+        <div style={{width:80, height:32, background:'var(--ink-8)', borderRadius:6, animation:'pulse 1.5s infinite'}}></div>
+      </div>
+    </nav>
   )
 }
 
@@ -50,9 +64,18 @@ function NavLegacy({ user, onLogout, onRoleSwitch }) {
   const isActive = (p) => location.pathname === p || location.pathname.startsWith(p)
 
   const handleSignIn = (e) => {
-    e?.preventDefault()
-    try { navigate('/login') } catch { window.location.href='/login' }
-    setTimeout(()=>{ if(window.location.pathname!=='/login') window.location.href='/login' },100)
+    try {
+      e?.preventDefault()
+      console.log('[Auth] Sign in clicked — navigating to /login (mock fallback)')
+      navigate('/login')
+      setTimeout(()=>{ if(window.location.pathname!=='/login') {
+        console.log('[Auth] Fallback redirect to /login via window.location')
+        window.location.href='/login'
+      }},100)
+    } catch (err) {
+      console.error('[Auth] Sign in navigation failed:', err)
+      window.location.href='/login'
+    }
   }
   const handleLogo = (e) => {
     e.preventDefault()
@@ -145,10 +168,16 @@ function AppContentLegacy({ user, setUser }) {
   )
 }
 
-// ================= CLERK NAV =================
+// ================= CLERK NAV — FIXED SIGN IN BUTTON =================
 function NavClerk({ internalUser, clerkUser, onLogout, onRoleSwitch }) {
   const location = useLocation()
   const isActive = (p) => location.pathname === p || location.pathname.startsWith(p)
+
+  const handleSignInError = (err) => {
+    console.error('[Clerk] SignInButton error:', err)
+    // Fallback to /login page if modal fails
+    window.location.href = '/login'
+  }
 
   return (
     <nav style={{background:'var(--surface)', borderBottom:'1px solid var(--ink-8)', position:'sticky', top:0, zIndex:100}}>
@@ -191,7 +220,27 @@ function NavClerk({ internalUser, clerkUser, onLogout, onRoleSwitch }) {
               <button className="btn btn-secondary" style={{padding:'8px 12px', fontSize:12}} onClick={onLogout}>Sign out</button>
             </>
           ) : (
-            <Link to="/login" className="btn btn-primary" style={{textDecoration:'none', fontSize:13}}>Sign in</Link>
+            <>
+              <ClerkLoading>
+                <button className="btn btn-primary" style={{fontSize:13, opacity:0.6, cursor:'wait'}} disabled>
+                  <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
+                    <span style={{width:12, height:12, border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'white', borderRadius:'50%', animation:'spin 0.8s linear infinite', display:'inline-block'}}></span>
+                    Loading...
+                  </span>
+                </button>
+              </ClerkLoading>
+              <ClerkLoaded>
+                <SignInButton mode="modal" fallbackRedirectUrl="/marketplace" signUpFallbackRedirectUrl="/marketplace">
+                  <button 
+                    className="btn btn-primary" 
+                    style={{fontSize:13, cursor:'pointer', position:'relative'}}
+                    onClick={() => console.log('[Clerk] Sign in button clicked — opening modal (should open in 1-2s)')}
+                  >
+                    Sign in
+                  </button>
+                </SignInButton>
+              </ClerkLoaded>
+            </>
           )}
         </div>
       </div>
@@ -203,7 +252,6 @@ function AppContentClerk({ setLegacyUser }) {
   const { isLoaded, isSignedIn, user: clerkUser } = useUser()
   const { getToken } = useAuth()
   const { signOut } = useClerk()
-  const location = useLocation()
 
   const [internalUser, setInternalUser] = useState(() => {
     try { const s=localStorage.getItem('aasthi_user'); return s?JSON.parse(s):null } catch { return null }
@@ -224,7 +272,9 @@ function AppContentClerk({ setLegacyUser }) {
       try {
         const t = await getToken()
         if (t) { setClerkToken(t); localStorage.setItem('aasthi_token', t) }
-      } catch {}
+      } catch (e) {
+        console.error('[Clerk] getToken failed:', e)
+      }
     }
     fetchToken()
 
@@ -256,12 +306,16 @@ function AppContentClerk({ setLegacyUser }) {
 
   const handleLogout = async () => {
     try {
+      console.log('[Clerk] Signing out...')
       localStorage.removeItem('aasthi_user')
       localStorage.removeItem('aasthi_token')
       setInternalUser(null)
       setLegacyUser(null)
       await signOut()
-    } catch { window.location.href='/login' }
+    } catch (e) {
+      console.error('[Clerk] signOut failed:', e)
+      window.location.href='/login'
+    }
   }
 
   const handleRoleSwitch = (roleData) => {
@@ -274,7 +328,15 @@ function AppContentClerk({ setLegacyUser }) {
   }
 
   if (!isLoaded) {
-    return <div className="container" style={{paddingTop:64, textAlign:'center', color:'var(--ink-60)'}}>Loading Clerk...</div>
+    return (
+      <>
+        <NavLoadingSkeleton />
+        <div className="container" style={{paddingTop:64, textAlign:'center'}}>
+          <div style={{width:32, height:32, border:'3px solid var(--ink-8)', borderTopColor:'var(--registry-navy)', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
+          <div style={{fontSize:14, color:'var(--ink-60)', marginTop:12}}>Loading Clerk...</div>
+        </div>
+      </>
+    )
   }
 
   return (
