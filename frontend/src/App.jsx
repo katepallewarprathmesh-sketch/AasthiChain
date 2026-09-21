@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
+import Landing from './pages/Landing.jsx'
 import Login from './pages/Login.jsx'
 import Marketplace from './pages/Marketplace.jsx'
 import Wallet from './pages/Wallet.jsx'
@@ -19,7 +20,7 @@ export const isClerkConfigured = clerkPubKey &&
 const ROLES = [
   { id: 'originator1', role: 'Originator', label: 'Originator', mspId: 'OriginatorMSP' },
   { id: 'registrar1', role: 'Registrar', label: 'Registrar', mspId: 'RegistrarMSP' },
-  { id: 'investor1', role: 'Investor', label: 'Investor 1', mspId: 'InvestorMSP' },
+  { id: 'investor1', role: 'Investor', label: 'Investor', mspId: 'InvestorMSP' },
   { id: 'investor2', role: 'Investor', label: 'Investor 2', mspId: 'InvestorMSP' },
   { id: 'regulator1', role: 'Regulator', label: 'Regulator', mspId: 'RegulatorMSP' },
 ]
@@ -33,9 +34,9 @@ function Footer() {
     <footer style={{borderTop:'1px solid #E5E7EB', background:'white', padding:'20px 0', marginTop:40}}>
       <div className="container" style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
         <div style={{fontSize:12, color:'#6B7280'}}>
-          <span style={{fontFamily:'Fraunces', fontWeight:600, color:'#111827'}}>AasthiChain</span> v2.0 · One easy auth for all · {isClerkConfigured ? 'Clerk + Demo' : 'Demo auth'}
+          <span style={{fontFamily:'Fraunces', fontWeight:600, color:'#111827'}}>AasthiChain</span> v2.1 · One easy auth · Landing intro · {isClerkConfigured ? 'Clerk' : 'Demo auth'}
         </div>
-        <div style={{fontSize:11, color:'#9CA3AF'}}>No email verification friction · One-click roles</div>
+        <div style={{fontSize:11, color:'#9CA3AF'}}>Fractional real estate on Drunix · No friction</div>
       </div>
     </footer>
   )
@@ -44,9 +45,10 @@ function Footer() {
 function Nav({ user, onLogout, onRoleSwitch }) {
   const location = useLocation()
   const isActive = (p) => location.pathname === p || location.pathname.startsWith(p)
+  const isLanding = location.pathname === '/'
 
   return (
-    <nav style={{background:'white', borderBottom:'1px solid #E5E7EB', position:'sticky', top:0, zIndex:100, backdropFilter:'blur(8px)'}}>
+    <nav style={{background:'white', borderBottom:'1px solid #E5E7EB', position:'sticky', top:0, zIndex:100}}>
       <div className="container" style={{display:'flex', justifyContent:'space-between', alignItems:'center', height:64, gap:24}}>
         <div style={{display:'flex', alignItems:'center', gap:24}}>
           <Link to="/" style={{textDecoration:'none', display:'flex', alignItems:'center', gap:10}}>
@@ -65,6 +67,11 @@ function Nav({ user, onLogout, onRoleSwitch }) {
               ))}
             </div>
           )}
+          {!user && !isLanding && (
+            <div style={{display:'flex', gap:2}}>
+              <Link to="/" style={{textDecoration:'none', fontSize:13, fontWeight:500, padding:'8px 12px', borderRadius:8, color: isActive('/') ? '#1E3A5F' : '#6B7280', background: isActive('/') ? '#F1F5F9' : 'transparent'}}>Home</Link>
+            </div>
+          )}
         </div>
 
         <div style={{display:'flex', alignItems:'center', gap:10}}>
@@ -76,14 +83,10 @@ function Nav({ user, onLogout, onRoleSwitch }) {
                   {ROLES.map(r=> <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>
               </div>
-              <div style={{textAlign:'right', lineHeight:1.2, display:'none'}}>
-                <div style={{fontSize:12, fontWeight:600}}>{user.identityId}</div>
-                <div style={{fontSize:10, color:'#6B7280'}}>{user.role}</div>
-              </div>
               {isClerkConfigured && (
                 <>
                   <ClerkLoading><div style={{width:28, height:28, background:'#F3F4F6', borderRadius:'50%'}}></div></ClerkLoading>
-                  <ClerkLoaded><UserButton afterSignOutUrl="/login" /></ClerkLoaded>
+                  <ClerkLoaded><UserButton afterSignOutUrl="/" /></ClerkLoaded>
                 </>
               )}
               <button className="btn btn-secondary" style={{padding:'8px 12px', fontSize:12}} onClick={onLogout}>Sign out</button>
@@ -91,19 +94,19 @@ function Nav({ user, onLogout, onRoleSwitch }) {
           ) : (
             <>
               <ClerkLoading>
-                <button className="btn btn-primary" style={{fontSize:13, opacity:0.6}} disabled>Loading...</button>
+                <button className="btn btn-primary" style={{fontSize:13, opacity:0.6}} disabled>Sign in</button>
               </ClerkLoading>
               <ClerkLoaded>
                 {isClerkConfigured ? (
                   <SignInButton mode="modal" fallbackRedirectUrl="/marketplace">
-                    <button className="btn btn-primary" style={{fontSize:13}} onClick={() => console.log('[Auth] Sign in modal clicked — should open in 1-2s')}>Sign in</button>
+                    <button className="btn btn-primary" style={{fontSize:13, fontWeight:600, padding:'8px 16px'}}>Sign in</button>
                   </SignInButton>
                 ) : (
-                  <Link to="/login" className="btn btn-primary" style={{fontSize:13, textDecoration:'none'}}>Sign in</Link>
+                  <Link to="/login" className="btn btn-primary" style={{fontSize:13, fontWeight:600, padding:'8px 16px', textDecoration:'none'}}>Sign in</Link>
                 )}
               </ClerkLoaded>
               {!isClerkConfigured && (
-                <Link to="/login" className="btn btn-primary" style={{fontSize:13, textDecoration:'none'}}>Sign in</Link>
+                <Link to="/login" className="btn btn-primary" style={{fontSize:13, fontWeight:600, padding:'8px 16px', textDecoration:'none'}}>Sign in</Link>
               )}
             </>
           )}
@@ -126,7 +129,6 @@ function AppContent({ user, setUser }) {
     if (!isClerkConfigured) return
     if (!isLoaded) return
 
-    // Allow demo bypass to persist even when Clerk is configured — one easy auth for all
     const stored = getStoredUser()
     if (stored && stored.isDemo) {
       setInternalUser(stored)
@@ -135,7 +137,6 @@ function AppContent({ user, setUser }) {
     }
 
     if (!isSignedIn || !clerkUser) {
-      // If we have a demo user, don't clear it — keep one easy auth
       const current = getStoredUser()
       if (current && current.isDemo) return
       setInternalUser(null)
@@ -147,7 +148,7 @@ function AppContent({ user, setUser }) {
       try {
         const t = await getToken()
         if (t) localStorage.setItem('aasthi_token', t)
-      } catch (e) { console.error('[Clerk] getToken failed', e) }
+      } catch {}
     }
     fetchToken()
 
@@ -177,8 +178,9 @@ function AppContent({ user, setUser }) {
       if (isClerkConfigured && clerk) {
         await clerk.signOut()
       }
+      window.location.href = '/'
     } catch {
-      window.location.href='/login'
+      window.location.href='/'
     }
   }
 
@@ -202,7 +204,7 @@ function AppContent({ user, setUser }) {
       <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>
         <div style={{textAlign:'center'}}>
           <div style={{width:32, height:32, border:'3px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
-          <div style={{fontSize:13, color:'#6B7280', marginTop:12}}>Loading authentication...</div>
+          <div style={{fontSize:13, color:'#6B7280', marginTop:12}}>Loading...</div>
         </div>
       </div>
     )
@@ -211,10 +213,10 @@ function AppContent({ user, setUser }) {
   return (
     <>
       <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
-      <main className="container" style={{paddingTop:24, paddingBottom:48}}>
+      <main className="container" style={{paddingTop:0, paddingBottom:0}}>
         <Routes>
+          <Route path="/" element={<Landing user={effectiveUser} />} />
           <Route path="/login" element={<Login onLogin={setUser} />} />
-          <Route path="/" element={effectiveUser ? <Navigate to="/marketplace" /> : <Navigate to="/login" />} />
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
