@@ -14,6 +14,7 @@ export default function PropertyDetail({ user }) {
   const [buyAmount, setBuyAmount] = useState(100)
   const [showPayment, setShowPayment] = useState(false)
   const [showExperimental, setShowExperimental] = useState(false)
+  const [showDev, setShowDev] = useState(false)
   const abortRef = useRef(null)
 
   useEffect(() => {
@@ -49,9 +50,6 @@ export default function PropertyDetail({ user }) {
       'X-Fabric-Identity': identityId,
       'Content-Type': 'application/json'
     }
-
-    const controller = new AbortController()
-    abortRef.current = controller
 
     try {
       const [propRes, histRes] = await Promise.all([
@@ -130,14 +128,10 @@ export default function PropertyDetail({ user }) {
 
   if (loading && !property) {
     return (
-      <div style={{padding:24}}>
-        <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:16}}>
-          <div style={{width:20, height:20, border:'2px solid var(--ink-12)', borderTopColor:'var(--registry-navy)', borderRadius:'50%', animation:'spin 0.8s linear infinite'}}></div>
-          <p style={{color:'var(--ink-60)'}}>Loading property...</p>
-        </div>
+      <div style={{padding:40, textAlign:'center'}}>
+        <div style={{width:24, height:24, border:'3px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
+        <p style={{color:'#6B7280', fontSize:13, marginTop:12}}>Loading property...</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-        <div className="card" style={{height:200, background:'var(--paper)', animation:'pulse 1.5s infinite'}}></div>
-        <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }`}</style>
       </div>
     )
   }
@@ -145,11 +139,10 @@ export default function PropertyDetail({ user }) {
   if (error && !property) {
     return (
       <div style={{padding:24}}>
-        <Link to="/marketplace" style={{fontSize:13, color:'var(--registry-navy)', textDecoration:'none'}}>← Back to Marketplace</Link>
+        <Link to="/marketplace" style={{fontSize:13, color:'#1E3A5F', textDecoration:'none'}}>← Back to Marketplace</Link>
         <div className="card" style={{marginTop:16}}>
           <h3>Unable to load property</h3>
-          <p style={{fontSize:13, color:'var(--ink-60)', marginTop:8}}>{error}</p>
-          <p style={{fontSize:11, color:'var(--ink-40)', marginTop:8}}>Asset ID: {id}</p>
+          <p style={{fontSize:13, color:'#6B7280', marginTop:8}}>{error}</p>
           <button className="btn btn-primary" style={{marginTop:12}} onClick={fetchDetails}>Retry</button>
         </div>
       </div>
@@ -163,78 +156,91 @@ export default function PropertyDetail({ user }) {
 
   return (
     <div>
-      <Link to="/marketplace" style={{fontSize:13, color:'var(--registry-navy)', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6, marginBottom:20, fontWeight:500}}>
-        ← Back to Marketplace
-      </Link>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
+        <Link to="/marketplace" style={{fontSize:13, color:'#1E3A5F', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6, fontWeight:500}}>
+          ← Back to Marketplace
+        </Link>
+        <button onClick={()=>setShowDev(!showDev)} style={{fontSize:10, background:'white', border:'1px dashed #CBD5E1', padding:'6px 10px', borderRadius:20, color:'#64748B', cursor:'pointer'}}>
+          {showDev ? 'Hide' : 'Developer'} details
+        </button>
+      </div>
       
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:16, flexWrap:'wrap'}}>
         <div>
           <h1 style={{fontSize:28, fontFamily:'Fraunces', fontWeight:700}}>{property.title}</h1>
-          <p style={{color:'var(--ink-60)', fontSize:12, marginTop:6}}>{property.assetId} · Version {property.version || 1} · {property.createdAt ? new Date(property.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : ''}</p>
+          <p style={{color:'#6B7280', fontSize:13, marginTop:6}}>{property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} · {property.location?.pincode || '411045'}</p>
         </div>
         <span className={`status-chip ${property.status==='TOKENIZED' ? 'status-tokenized' : property.status==='FROZEN' ? 'status-frozen' : 'status-draft'}`}>{property.status}</span>
       </div>
 
       <div className="grid grid-2" style={{marginTop:24}}>
         <div className="card">
-          <h3 style={{fontSize:16, fontWeight:600}}>Valuation</h3>
+          <h3 style={{fontSize:16, fontWeight:600}}>Investment Details</h3>
           <div style={{marginTop:16}}>
-            <div className="tabular" style={{fontSize:36, fontFamily:'Fraunces', fontWeight:700, lineHeight:1}}>₹{property.valuationINR.toLocaleString('en-IN')}</div>
-            <div style={{fontSize:12, color:'var(--ink-40)', marginTop:4}}>₹{(property.valuationINR/100000).toFixed(1)}L</div>
+            <div style={{fontSize:36, fontFamily:'Fraunces', fontWeight:700, lineHeight:1}}>₹{property.valuationINR.toLocaleString('en-IN')}</div>
+            <div style={{fontSize:12, color:'#9CA3AF', marginTop:4}}>Property value · ₹{(property.valuationINR/100000).toFixed(1)}L</div>
             
-            <div className="divider" style={{margin:'16px 0', height:1, background:'var(--ink-8)'}}></div>
+            <div style={{height:1, background:'#E5E7EB', margin:'16px 0'}}></div>
             
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, fontSize:13}}>
               <div>
-                <div style={{fontSize:11, color:'var(--ink-40)', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:700}}>Total tokens</div>
-                <div className="tabular" style={{fontSize:18, fontWeight:700, marginTop:4}}>{property.totalTokens?.toLocaleString('en-IN')}</div>
-                <div style={{fontSize:11, color:'var(--ink-40)'}}>Fixed supply</div>
+                <div style={{fontSize:11, color:'#9CA3AF', textTransform:'uppercase', fontWeight:600}}>Total tokens</div>
+                <div style={{fontSize:18, fontWeight:700, marginTop:4}}>{property.totalTokens?.toLocaleString('en-IN')}</div>
+                <div style={{fontSize:11, color:'#9CA3AF'}}>Fixed supply — no inflation</div>
               </div>
               <div>
-                <div style={{fontSize:11, color:'var(--ink-40)', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:700}}>Price per token</div>
-                <div className="tabular" style={{fontSize:18, fontWeight:700, marginTop:4}}>₹{tokenPrice.toLocaleString('en-IN')}</div>
-                <div style={{fontSize:11, color:'var(--ink-40)'}}>Integer tokens</div>
+                <div style={{fontSize:11, color:'#9CA3AF', textTransform:'uppercase', fontWeight:600}}>Price per token</div>
+                <div style={{fontSize:18, fontWeight:700, marginTop:4}}>₹{tokenPrice.toLocaleString('en-IN')}</div>
+                <div style={{fontSize:11, color:'#9CA3AF'}}>Own from ₹500</div>
               </div>
             </div>
 
-            <div style={{marginTop:20, background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:10, padding:12}}>
-              <div style={{fontSize:11, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8}}>Buy Tokens — NPCI UPI Rail (Primary)</div>
+            <div style={{marginTop:20, background:'#F9FAFB', border:'1px solid #E5E7EB', borderRadius:10, padding:14}}>
+              <div style={{fontSize:11, fontWeight:600, color:'#374151', textTransform:'uppercase', marginBottom:10}}>Buy Tokens — Instant UPI Settlement</div>
               <div style={{display:'flex', gap:8, alignItems:'center'}}>
                 <input type="number" min="1" max={property.totalTokens} value={buyAmount} onChange={e=>setBuyAmount(parseInt(e.target.value)||1)} className="input" style={{width:100, fontSize:13}} />
-                <span style={{fontSize:12, color:'#64748B'}}>tokens = ₹{(buyAmount*tokenPrice).toLocaleString('en-IN')}</span>
+                <span style={{fontSize:12, color:'#6B7280'}}>tokens = ₹{(buyAmount*tokenPrice).toLocaleString('en-IN')}</span>
               </div>
               <button className="btn btn-primary" style={{width:'100%', padding:'12px', fontSize:13, fontWeight:600, marginTop:10}} onClick={()=>setShowPayment(!showPayment)}>
-                {showPayment ? 'Hide Payment' : `Buy ${buyAmount} tokens — UPI Collect ₹${(buyAmount*tokenPrice).toLocaleString('en-IN')} →`}
+                {showPayment ? 'Hide Payment' : `Buy ${buyAmount} tokens — Pay ₹${(buyAmount*tokenPrice).toLocaleString('en-IN')} →`}
               </button>
-              <div style={{fontSize:9, color:'#94A3B8', marginTop:6, textAlign:'center'}}>Primary rail: UPI Collect (INR) + Drunix atomic DvP · Secondary: Sepolia experimental</div>
+              <div style={{fontSize:10, color:'#9CA3AF', marginTop:8, textAlign:'center'}}>Secure UPI payment · Instant token transfer · No paperwork</div>
             </div>
 
-            <div className="divider" style={{margin:'16px 0', height:1, background:'var(--ink-8)'}}></div>
+            <div style={{height:1, background:'#E5E7EB', margin:'16px 0'}}></div>
 
-            <div style={{fontSize:12, lineHeight:1.8, color:'var(--ink-60)'}}>
-              <div>📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} — {property.location?.pincode || '411045'}</div>
-              <div>👤 Originator: {property.originatorId}</div>
-              <div>🕒 Created: {property.createdAt ? new Date(property.createdAt).toLocaleDateString() : '—'}</div>
+            <div style={{fontSize:12, lineHeight:1.8, color:'#6B7280'}}>
+              <div>📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'}</div>
+              <div>👤 Listed by {property.originatorId}</div>
+              <div>✅ Verified by Registrar</div>
               <div>📋 Status: <span className={`status-chip ${property.registrarValidationStatus==='VALIDATED' ? 'status-validated' : 'status-pending'}`} style={{fontSize:10}}>{property.registrarValidationStatus}</span></div>
             </div>
 
-            <div className="hash-display" style={{marginTop:16, display:'flex', justifyContent:'space-between', alignItems:'center', background:'var(--paper)', border:'1px solid var(--ink-8)', borderRadius:8, padding:'10px 12px'}}>
-              <div>
-                <div style={{fontSize:11, fontWeight:600}}>Documents Verified ✓</div>
-                <div style={{fontSize:11, color:'var(--ink-40)', fontFamily:'ui-monospace, monospace', marginTop:2}}>{property.documentHash?.slice(0,8) || 'a3f5c1e8'}...{property.documentHash?.slice(-4) || 'f0a1'}</div>
+            {showDev ? (
+              <div style={{marginTop:16, background:'#F8FAFC', border:'1px dashed #CBD5E1', borderRadius:8, padding:'10px 12px'}}>
+                <div style={{fontSize:10, fontWeight:700, color:'#64748B', textTransform:'uppercase'}}>Developer — Document Hash & Version</div>
+                <div style={{fontSize:11, color:'#64748B', fontFamily:'monospace', marginTop:4}}>{property.documentHash?.slice(0,16)}...{property.documentHash?.slice(-8)}</div>
+                <div style={{fontSize:10, color:'#94A3B8', marginTop:4}}>Asset ID: {property.assetId} · Version {property.version || 1} · Created {property.createdAt ? new Date(property.createdAt).toLocaleDateString() : '—'}</div>
               </div>
-              <span className="status-chip status-tokenized" style={{fontSize:10}}>Verified</span>
-            </div>
+            ) : (
+              <div style={{marginTop:16, display:'flex', justifyContent:'space-between', alignItems:'center', background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:8, padding:'10px 12px'}}>
+                <div>
+                  <div style={{fontSize:11, fontWeight:600, color:'#065F46'}}>Documents Verified ✓</div>
+                  <div style={{fontSize:11, color:'#6B7280', marginTop:2}}>Legal title verified by Registrar</div>
+                </div>
+                <span className="status-chip" style={{fontSize:10, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0'}}>Verified</span>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="card">
           <h3 style={{fontSize:16, fontWeight:600}}>Ownership</h3>
-          <p style={{fontSize:11, color:'var(--ink-40)', marginTop:4, marginBottom:12}}>Cap table by ownership percentage</p>
+          <p style={{fontSize:11, color:'#9CA3AF', marginTop:4, marginBottom:12}}>Who owns this property</p>
           {balances.length === 0 ? (
-            <div className="empty-state" style={{textAlign:'center', padding:'24px 0', color:'var(--ink-60)'}}>
-              <p style={{fontSize:13}}>No holders yet</p>
-              <p style={{fontSize:11, marginTop:4}}>Originator holds full supply after mint</p>
+            <div style={{textAlign:'center', padding:'24px 0', color:'#6B7280'}}>
+              <p style={{fontSize:13}}>No investors yet</p>
+              <p style={{fontSize:11, marginTop:4, color:'#9CA3AF'}}>Be the first to invest</p>
               <button className="btn btn-secondary" style={{marginTop:12, fontSize:12}} onClick={fetchDetails}>Refresh</button>
             </div>
           ) : (
@@ -242,24 +248,29 @@ export default function PropertyDetail({ user }) {
               {balances.map(b => {
                 const pct = property.totalTokens ? ((b.balance / property.totalTokens)*100).toFixed(1) : 0
                 return (
-                  <div key={b.ownerId} style={{background:'var(--paper)', border:'1px solid var(--ink-8)', borderRadius:8, padding:12, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div key={b.ownerId} style={{background:'#F9FAFB', border:'1px solid #E5E7EB', borderRadius:8, padding:12, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
                       <div style={{fontSize:13, fontWeight:600}}>{b.ownerId}</div>
-                      <div className="tabular" style={{fontSize:11, color:'var(--ink-60)'}}>{b.balance.toLocaleString('en-IN')} tokens</div>
+                      <div style={{fontSize:11, color:'#6B7280'}}>{b.balance.toLocaleString('en-IN')} tokens</div>
                     </div>
                     <div style={{textAlign:'right'}}>
-                      <div className="tabular" style={{fontSize:14, fontWeight:700}}>{pct}%</div>
-                      <div className="tabular" style={{fontSize:11, color:'var(--ink-60)'}}>₹{(b.balance * tokenPrice).toLocaleString('en-IN')}</div>
+                      <div style={{fontSize:14, fontWeight:700}}>{pct}%</div>
+                      <div style={{fontSize:11, color:'#6B7280'}}>₹{(b.balance * tokenPrice).toLocaleString('en-IN')}</div>
                     </div>
                   </div>
                 )
               })}
-              <div style={{fontSize:11, color:'var(--ink-40)', marginTop:8, paddingTop:12, borderTop:'1px solid var(--ink-8)'}}>
-                Total: <span className="tabular" style={{fontWeight:600}}>{totalHeld.toLocaleString('en-IN')}</span> / {property.totalTokens?.toLocaleString('en-IN')} tokens · {((totalHeld/property.totalTokens)*100).toFixed(1)}% sold
+              <div style={{fontSize:11, color:'#9CA3AF', marginTop:8, paddingTop:12, borderTop:'1px solid #E5E7EB'}}>
+                Total owned: <span style={{fontWeight:600}}>{totalHeld.toLocaleString('en-IN')}</span> / {property.totalTokens?.toLocaleString('en-IN')} tokens · {((totalHeld/property.totalTokens)*100).toFixed(1)}% sold
               </div>
-              <div className="progress-bar" style={{marginTop:8, height:6, background:'var(--ink-8)', borderRadius:4, overflow:'hidden'}}>
-                <div className="progress-fill" style={{width:`${(totalHeld/property.totalTokens)*100}%`, height:'100%', background:'var(--registry-navy)'}}></div>
+              <div style={{marginTop:8, height:6, background:'#E5E7EB', borderRadius:4, overflow:'hidden'}}>
+                <div style={{width:`${(totalHeld/property.totalTokens)*100}%`, height:'100%', background:'#1E3A5F'}}></div>
               </div>
+            </div>
+          )}
+          {showDev && (
+            <div style={{marginTop:12, fontSize:10, color:'#94A3B8', background:'#F8FAFC', border:'1px dashed #E2E8F0', borderRadius:6, padding:8}}>
+              Dev: idx_balance_asset, idx_transfer_asset_time, composite key balance~asset~owner, MVCC, block timestamp from orderer
             </div>
           )}
         </div>
@@ -274,24 +285,28 @@ export default function PropertyDetail({ user }) {
             tokenPrice={tokenPrice} 
             recipient={property.originatorId}
             user={user}
-            onPaymentComplete={(paymentId, drunixTxId) => {
-              // refresh balances after successful DvP
+            onPaymentComplete={() => {
               setTimeout(()=>fetchDetails(), 1000)
             }}
           />
-          <NPCIFailureModeDemo />
+          {showDev ? <NPCIFailureModeDemo /> : (
+            <div style={{marginTop:12, textAlign:'center'}}>
+              <button onClick={()=>setShowDev(true)} style={{fontSize:10, background:'white', border:'1px dashed #CBD5E1', padding:'6px 12px', borderRadius:20, color:'#64748B', cursor:'pointer'}}>
+                Show payment failure tests (developer)
+              </button>
+            </div>
+          )}
 
-          {/* Secondary: Sepolia experimental toggle */}
           <div style={{marginTop:16, textAlign:'center'}}>
             <button onClick={()=>setShowExperimental(!showExperimental)} style={{fontSize:11, background:'white', border:'1px dashed #CBD5E1', padding:'6px 12px', borderRadius:20, color:'#64748B', cursor:'pointer'}}>
-              {showExperimental ? 'Hide' : 'Show'} Advanced / Experimental — Sepolia cross-chain settlement pattern (secondary)
+              {showExperimental ? 'Hide' : 'Show'} Advanced — Sepolia experimental (secondary)
             </button>
           </div>
           {showExperimental && (
             <div style={{marginTop:12, opacity:0.9, border:'1px dashed #E2E8F0', borderRadius:12, padding:12, background:'#FAFAF9'}}>
-              <div style={{fontSize:10, fontWeight:700, color:'#78716C', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8, display:'flex', alignItems:'center', gap:6}}>
+              <div style={{fontSize:10, fontWeight:700, color:'#78716C', textTransform:'uppercase', marginBottom:8, display:'flex', alignItems:'center', gap:6}}>
                 <span style={{background:'#E7E5E4', padding:'2px 6px', borderRadius:4}}>SECONDARY</span>
-                Sepolia PaymentEscrow.sol — Cross-chain settlement pattern demo (experimental, not primary DvP)
+                Sepolia PaymentEscrow.sol — Experimental cross-chain pattern
               </div>
               <TestnetPayment 
                 assetId={property.assetId} 
@@ -300,8 +315,8 @@ export default function PropertyDetail({ user }) {
                 recipient={property.originatorId}
                 onPaymentComplete={() => { setTimeout(()=>fetchDetails(), 1000) }}
               />
-              <div style={{fontSize:9, color:'#A8A29E', marginTop:8, lineHeight:1.5}}>
-                Kept as bonus / future extensibility: could bridge to tokenized deposits or stablecoin rails later. Primary is NPCI UPI simulation (INR). Sepolia test ETH has no monetary value, faucet-based.
+              <div style={{fontSize:9, color:'#A8A29E', marginTop:8}}>
+                Bonus future extensibility — could bridge to tokenized deposits/stablecoin rails later. Primary is UPI simulation (INR).
               </div>
             </div>
           )}
@@ -309,33 +324,36 @@ export default function PropertyDetail({ user }) {
       )}
 
       <div className="card" style={{marginTop:20}}>
-        <h3 style={{fontSize:16, fontWeight:600}}>Transfer History</h3>
+        <h3 style={{fontSize:16, fontWeight:600}}>Recent Transfers</h3>
         {history.length === 0 ? (
-          <div className="empty-state" style={{textAlign:'center', padding:'24px 0', color:'var(--ink-60)'}}>
+          <div style={{textAlign:'center', padding:'24px 0', color:'#6B7280'}}>
             <p style={{fontSize:13}}>No transfers yet</p>
           </div>
         ) : (
           <div style={{overflowX:'auto', marginTop:12}}>
             <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
               <thead>
-                <tr style={{color:'var(--ink-40)', textAlign:'left', borderBottom:'1px solid var(--ink-12)', fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase'}}>
+                <tr style={{color:'#9CA3AF', textAlign:'left', borderBottom:'1px solid #E5E7EB', fontSize:10, fontWeight:700, textTransform:'uppercase'}}>
                   <th style={{padding:'10px 8px'}}>From → To</th>
-                  <th style={{padding:'10px 8px'}}>Amount</th>
-                  <th style={{padding:'10px 8px'}}>Time</th>
-                  <th style={{padding:'10px 8px'}}>TXN</th>
+                  <th style={{padding:'10px 8px'}}>Tokens</th>
+                  <th style={{padding:'10px 8px'}}>Date</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map(h => (
-                  <tr key={h.transferId} style={{borderBottom:'1px solid var(--ink-8)'}}>
-                    <td style={{padding:'10px 8px'}}>{h.fromId} → {h.toId}</td>
-                    <td className="tabular" style={{padding:'10px 8px', fontWeight:700}}>{h.amount}</td>
-                    <td className="tabular" style={{padding:'10px 8px', color:'var(--ink-60)', fontSize:11}}>{new Date(h.txTimestamp).toLocaleDateString()}</td>
-                    <td style={{padding:'10px 8px', fontFamily:'ui-monospace, monospace', fontSize:10, color:'var(--ink-40)'}}>{h.transferId.slice(0,12)}...</td>
+                  <tr key={h.transferId} style={{borderBottom:'1px solid #F3F4F6'}}>
+                    <td style={{padding:'10px 8px', fontSize:11}}>{h.fromId} → {h.toId}</td>
+                    <td style={{padding:'10px 8px', fontWeight:600}}>{h.amount}</td>
+                    <td style={{padding:'10px 8px', color:'#6B7280', fontSize:11}}>{new Date(h.txTimestamp).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {showDev && (
+          <div style={{marginTop:10, fontSize:10, color:'#94A3B8', background:'#F8FAFC', border:'1px dashed #E2E8F0', borderRadius:6, padding:8, fontFamily:'monospace'}}>
+            Dev: TransferID {history[0]?.transferId?.slice(0,20) || 'TXN-...'}... · idx_transfer_asset_time · bookmark pagination · Fabric MVCC
           </div>
         )}
       </div>
