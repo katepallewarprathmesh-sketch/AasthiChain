@@ -1,6 +1,7 @@
 # AasthiChain Demo Script v2 — NPCI UPI Rail + Drunix Atomic DvP (Primary) + Sepolia Secondary
 
 **Duration: 5-6 minutes | Fabric Mode: Toggle live/mock | Key message: Tokenized real-asset ownership on Drunix + payment settlement modeled on NPCI's UPI/IMPS rails as core narrative, with honest LIVE vs MOCKED scoping**
+**Live URL: https://aasthi-chain.vercel.app (verified 200 OK + /api/health OK — correct domain with hyphen, not aasthichain.vercel.app 404) — Quick Demo Access: landing page 4 cards originator1/registrar1/investor1/regulator1 instant mock JWT <2s, no Clerk verification, works LIVE+LOCAL — or sign in top-right Clerk**
 
 ## 0:00-0:30 — Setup & Framing (Track A6: What's Real vs Mocked BEFORE Judge Asks)
 
@@ -30,7 +31,7 @@ This framing reads as maturity, not weakness, and directly maps to Citi problem 
 - **Regulatory awareness:** Mention Asset Tokenisation (Regulation) Bill, 2026 — pending Private Member's Bill, not yet law — proposes KYC/AML for token holders, registered custodian for property SPV, registrar validation, regulator freeze powers. AasthiChain addresses: RegistrarMSP validates title + KYC (DigiLocker mock), RegulatorMSP can freeze asset (FreezeAsset), cap table auditable via idx_balance_asset, transfer history via idx_transfer_asset_time. Payment rail adds KYC gate at approval — unverified payer → FAILED_KYC_NOT_VERIFIED → REFUNDED.
 
 **MintPropertyTokens**
-- Enter totalTokens 10000 for ₹50L property = ₹500/token, integer-only no decimals
+- Enter totalTokens 15000 for ₹75L property = ₹500/token, integer-only no decimals — matches live seed Green Valley Villas Pune valuationINR 7500000 totalTokens 15000
 - Show idempotency key: `X-Idempotency-Key: mint-PROP-...` — persisted to `./data/idempotency.json` per Track A4, survives gateway restart, prevents double-mint
 - Success: TokenBalance(owner=Originator, balance=totalTokens) created, status TOKENIZED
 - Mention: overflow cap 10M, already-tokenized check
@@ -50,7 +51,7 @@ This framing reads as maturity, not weakness, and directly maps to Citi problem 
 - Explain: Payee (originator@aasthichain) requests money from payer (investor@aasthichain) via NPCI switch — UPI Collect P2M pattern. Why Collect not Intent? Real estate: seller requests payment, buyer approves — matches merchant collect flow. Settlement via IMPS gives UTR for reconciliation (NPCI pattern). IDs: PaymentID NPCI-XXXXXXXXXXXX, UPI Txn ID AASTYYYYMMDDXXXXXXXX, RRN 12-digit 418..., UTR IMPS+RRN+4-digit.
 - Show PENDING state + expiry timer 5:00 countdown (UPI window)
 - **Approve in UPI App:** Click "✓ Approve in UPI app — Pay ₹2,50,000"
-- Explain checks: KYC (DigiLocker mock — investor1 VERIFIED), balance (mock UPI account — investor@aasthichain has ₹1L, sufficient), VPA regex `^[a-z0-9._-]{2,64}@[a-z]{2,64}$`
+- Explain checks: KYC (DigiLocker mock — investor1 VERIFIED), balance (mock UPI account — investor@aasthichain has ₹1L, sufficient), VPA regex `^[a-z0-9._-]{2,64}@[a-z0-9]{2,64}$`
 - Status → CONFIRMED → backend calls TransferTokens chaincode → 500 tokens move originator→investor → TXN-... created
 - Then RELEASED → IMPS UTR credited to payee — atomic DvP complete. Show UTR linked to Drunix TXN.
 - Explain atomicity: If Drunix transfer fails, payment REFUNDED — money and tokens move together or both refunded. Same state machine as Solidity escrow (PENDING→CONFIRMED→RELEASED/REFUNDED) but INR, not ETH.

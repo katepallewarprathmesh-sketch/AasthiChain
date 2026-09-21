@@ -40,7 +40,7 @@ vercel --prod
    - Output Directory: `dist`
    - Install Command: `npm install`
 5. Click Deploy
-6. Your live URL: `https://aasthichain.vercel.app` (or similar)
+6. Your live URL: `https://aasthi-chain.vercel.app` (or similar)
 
 ## What Gets Deployed
 

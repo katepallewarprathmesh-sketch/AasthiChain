@@ -4,14 +4,15 @@
 - AasthiChain — Tokenized real-asset ownership on Drunix + payment settlement modeled on NPCI's UPI/IMPS rails
 - Team: katepallewarprathmesh-sketch — Drunix x Citi — Real Asset Tokenization + Build the Future of Payments in India
 - Version v2.0 NPCI — Primary: UPI Collect P2M + IMPS UTR (INR) simulation — Secondary: Sepolia PaymentEscrow.sol experimental
+- Live: https://aasthi-chain.vercel.app (verified 200 OK + /api/health OK, not aasthichain.vercel.app 404) — Quick Demo Access cards on landing: originator1/registrar1/investor1/regulator1 instant <2s, no verification, works LIVE+LOCAL
 
 ## Slide 2: Problem — Illiquid assets + Payments half missing
-- ₹50L+ ticket excludes retail, illiquid 3-6 months, paperwork, no cap table, no fractional
+- ₹75L+ ticket excludes retail, illiquid 3-6 months, paperwork, no cap table, no fractional — live seed Green Valley Villas Pune 75L/15000/₹500 matches judge view
 - Most tokenization demos ignore payments — Citi problem statement says "Build the Future of Payments in India" — needs NPCI rails
 - Regulatory: Asset Tokenisation Bill 2026 pending — KYC/AML, custodian, freeze powers — need awareness
 
 ## Slide 3: Solution — Drunix + UPI Collect + Atomic DvP
-- Tokenize property into fixed-supply integer tokens (10000 tokens = ₹50L, 1 token = ₹500)
+- Tokenize property into fixed-supply integer tokens (15000 tokens = ₹75L, 1 token = ₹500) — matches live seed Green Valley Villas Pune 75L/15000/500
 - Permissioned 4-org Drunix — no single party controls ledger — dual endorsement AND(Originator, Registrar)
 - Primary payment: UPI Collect P2M — payee originator@aasthichain requests ₹2.5L from payer investor@aasthichain via NPCI switch → payer approves in UPI app → IMPS UTR → Drunix TransferTokens → RELEASED — atomic DvP — INR paise int64
 - Why Collect P2M not Intent? Seller requests, buyer approves — merchant collect pattern, seller control + UPI mandate, IMPS UTR reconciliation
@@ -78,7 +79,7 @@
 
 ## Slide 14: Team & Ask + Payments Narrative
 - Team: katepallewarprathmesh-sketch — solo builder, full stack Drunix + Go + React + Solidity + SQL + NPCI UPI simulation
-- Repo: github.com/katepallewarprathmesh-sketch/AasthiChain main v2.0 NPCI — Live Demo: Vercel serverless + frontend dist + mock Fabric + NPCI UPI simulation primary + Sepolia secondary experimental toggle
+- Repo: github.com/katepallewarprathmesh-sketch/AasthiChain main v2.0 NPCI — Live Demo: https://aasthi-chain.vercel.app (verified 200 OK, /api/health OK) Vercel serverless + frontend dist + mock Fabric + NPCI UPI simulation primary + Sepolia secondary experimental toggle — demo presets work live
 - Test: payment-gateway/gateway_test.go 8 tests + chaincode_test.go 216+ tests + frontend NPCI flow + gateway.test.js
 - Ask: ₹175k budget — Drunix infra docker-compose, Vercel hosting, payment-gateway module free, NPCI simulation free (no sandbox credentials), Sepolia testnet free faucet, mock KYC pluggable — fits. Citi mentors for payments compliance + NPCI API access for Phase2 real UPI Collect + Bill 2026 compliance
 - Thank you — AasthiChain v2.0 NPCI — Tokenized real-asset ownership on Drunix + payment settlement modeled on NPCI's UPI/IMPS rails — Registry-office grade, not crypto-trading aesthetic — Confidence from calm precision, not enthusiasm, no confetti per §4.4

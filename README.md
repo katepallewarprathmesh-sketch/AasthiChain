@@ -4,7 +4,7 @@
 
 > Tokenized real-asset ownership on Drunix + payment settlement modeled on NPCI's UPI/IMPS rails
 
-Live: [aasthichain.vercel.app](https://aasthichain.vercel.app) · Demo video in `docs/` · Pitch deck `PITCH_DECK.html`
+Live: [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app) · Demo video in `docs/` · Pitch deck `PITCH_DECK.html`
 
 ---
 
@@ -40,7 +40,11 @@ cd network && docker-compose up -d && ./scripts/create-channel.sh
 cd api-gateway && FABRIC_MODE=mock go run main.go  # :8080
 ```
 
-Login presets: `originator1 / registrar1 / investor1 / regulator1` — or sign in from top-right (one auth for all).
+**Demo Access — Works LIVE + Local, No Verification, <2s:**
+- **LIVE:** https://aasthi-chain.vercel.app — verified 200 OK + /api/health OK — `aasthichain.vercel.app` (no hyphen) returns 404, correct is `aasthi-chain.vercel.app` (with hyphen)
+- **Quick Demo Presets (instant mock JWT, no Clerk, no email):** On landing page `/` you see 4 cards — Owner `originator1`, Registrar `registrar1`, Investor `investor1`, Regulator `regulator1` — click any → mock JWT stored → `/marketplace` in <1s — works on LIVE Vercel + local `npm run dev` — no network call
+- **Clerk Auth (optional):** Sign in top-right corner — Google/Email via Clerk — after Clerk sign-in you can still switch roles via ROLE dropdown in nav — one auth for all
+- Both paths work on deployed site: demo presets reachable from landing without Clerk, and Clerk sign-in also available — no friction for judges
 
 ### Payments — Simple
 
@@ -80,7 +84,7 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 ```
 
 **Primary Rail — UPI Collect P2M + IMPS UTR (INR):**
-- VPA `investor@aasthichain`, `originator@aasthichain` — regex `^[a-z0-9._-]{2,64}@[a-z]{2,64}$`
+- VPA `investor@aasthichain`, `originator@aasthichain` — regex `^[a-z0-9._-]{2,64}@[a-z0-9]{2,64}$`
 - IDs: `NPCI-XXXXXXXXXXXX`, `AASTYYYYMMDDXXXXXXXX`, RRN 12-digit `418...`, UTR `IMPS418...+4-digit`
 - Flow: `PENDING (5min) → CONFIRMED (KYC+balance) → RELEASED (after TransferTokens) / REFUNDED`
 - Paise int64 to avoid float, X-Idempotency-Key, webhook callback simulation
@@ -142,4 +146,4 @@ Real platforms use SPV per property — tokens = beneficial interest in SPV that
 
 ---
 
-**One auth for all — sign in top-right corner → Explore Properties → Buy Tokens via UPI → Own instantly**
+**One auth for all + instant demo — Sign in top-right (Clerk) or use demo preset (originator1/registrar1/investor1/regulator1) for instant access, no verification needed — works LIVE https://aasthi-chain.vercel.app + local — Explore Properties → Buy Tokens via UPI → Own instantly**

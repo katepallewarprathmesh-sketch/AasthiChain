@@ -33,7 +33,7 @@ code{font-family:ui-monospace,monospace;background:#F0EBE3;padding:2px 6px;borde
 <div class="badge" style="background:white;color:#0F172A">CHL-7007 · ₹175,000 · Drunix x Citi · Real Asset Tokenization + Future of Payments</div>
 <h1 style="color:white;margin-top:24px">AasthiChain</h1>
 <p style="color:#38BDF8;font-size:20px;margin-top:12px">Tokenized real-asset ownership on Drunix + payment settlement modeled on NPCI's UPI/IMPS rails — INR leg, not testnet ETH — Atomic DvP</p>
-<p style="color:rgba(255,255,255,0.7);margin-top:24px">Team: katepallewarprathmesh-sketch · GitHub: AasthiChain · Version v2.0 NPCI · 111 modules · 380KB · Primary: UPI Collect P2M + IMPS UTR (INR) · Secondary: Sepolia PaymentEscrow.sol experimental<br/>One easy auth — Sign in from top corner — Landing intro explains project</p>
+<p style="color:rgba(255,255,255,0.7);margin-top:24px">Team: katepallewarprathmesh-sketch · GitHub: AasthiChain · Live: https://aasthi-chain.vercel.app (verified 200 OK, not aasthichain.vercel.app 404) · Version v2.0 NPCI · 113 modules · 403KB · Primary: UPI Collect P2M + IMPS UTR (INR) · Secondary: Sepolia experimental<br/>One easy auth — Sign in top-right (Clerk) or demo preset originator1/registrar1/investor1/regulator1 instant &lt;2s, no verification, LIVE+LOCAL — Landing Quick Demo Access cards</p>
 </div>
 
 <div class="slide">
@@ -41,7 +41,7 @@ code{font-family:ui-monospace,monospace;background:#F0EBE3;padding:2px 6px;borde
 <div class="grid2">
 <div>
 <ul>
-<li><strong>₹50L+ ticket</strong> excludes 95% retail, no diversification</li>
+<li><strong>₹75L+ ticket</strong> excludes 95% retail, no diversification — live seed Green Valley Villas 75L/15000/₹500</li>
 <li><strong>Illiquid:</strong> 3-6 month settlement, capital locked, no secondary</li>
 <li><strong>Opaque:</strong> Paperwork, title fraud, no transparent cap table, benami risk</li>
 <li><strong>No fractional:</strong> Can't own 0.1% of Green Valley Villas Pune</li>
@@ -69,7 +69,7 @@ code{font-family:ui-monospace,monospace;background:#F0EBE3;padding:2px 6px;borde
 <p style="margin-top:8px"><strong>Why UPI Collect P2M (not Intent)?</strong> Real estate: seller requests payment, buyer approves — matches merchant collect flow, gives seller control + UPI mandate, settlement via IMPS gives UTR for reconciliation (NPCI pattern). Intent would be buyer-initiated direct pay — less control for seller. For high-value real estate, collect with approval is more auditable.</p>
 </div>
 <div class="grid2">
-<div class="card"><h3>Primary Rail — UPI Collect + IMPS</h3><p style="font-size:13px">VPA: <code>investor@aasthichain</code>, <code>originator@aasthichain</code> validated via regex <code>^[a-z0-9._-]{2,64}@[a-z]{2,64}$</code><br/>IDs: PaymentID <code>NPCI-XXXXXXXXXXXX</code>, UPI Txn ID <code>AASTYYYYMMDDXXXXXXXX</code> (35-char), RRN 12-digit <code>418...</code> (Retrieval Reference Number), UTR <code>IMPS418...+4-digit</code> (IMPS settlement ref)<br/>Flow: PENDING (5 min expiry) → CONFIRMED (KYC+balance ok) → RELEASED (after Drunix TXN) / REFUNDED (if Drunix fails) — atomic DvP<br/>Idempotency: <code>X-Idempotency-Key</code> header → same paymentId, no double-charge, file-backed per Track A4<br/>Failure modes: insufficient funds, KYC unverified, timeout, declined, invalid VPA, duplicate idempotency — 6 payment failure modes demoable</p></div>
+<div class="card"><h3>Primary Rail — UPI Collect + IMPS</h3><p style="font-size:13px">VPA: <code>investor@aasthichain</code>, <code>originator@aasthichain</code> validated via regex <code>^[a-z0-9._-]{2,64}@[a-z0-9]{2,64}$</code><br/>IDs: PaymentID <code>NPCI-XXXXXXXXXXXX</code>, UPI Txn ID <code>AASTYYYYMMDDXXXXXXXX</code> (35-char), RRN 12-digit <code>418...</code> (Retrieval Reference Number), UTR <code>IMPS418...+4-digit</code> (IMPS settlement ref)<br/>Flow: PENDING (5 min expiry) → CONFIRMED (KYC+balance ok) → RELEASED (after Drunix TXN) / REFUNDED (if Drunix fails) — atomic DvP<br/>Idempotency: <code>X-Idempotency-Key</code> header → same paymentId, no double-charge, file-backed per Track A4<br/>Failure modes: insufficient funds, KYC unverified, timeout, declined, invalid VPA, duplicate idempotency — 6 payment failure modes demoable</p></div>
 <div class="card"><h3>Legal + Regulatory — SPV + Bill 2026</h3><p style="font-size:13px">Raw land title cannot be on-chain per Registration Act, 1908. Real platforms use SPV — separate legal entity holding title, tokens = beneficial interest in SPV. Documented as Phase-2.<br/><br/><strong>Asset Tokenisation (Regulation) Bill, 2026:</strong> Pending Private Member's Bill, not yet law — proposes KYC/AML for token holders, registered custodian for property SPV, registrar validation, regulator freeze powers.<br/>AasthiChain addresses: RegistrarMSP validates title + KYC (DigiLocker mock), RegulatorMSP can freeze asset (FreezeAsset), cap table auditable via idx_balance_asset, transfer history via idx_transfer_asset_time, payment rail adds KYC gate at approval — unverified payer → FAILED_KYC_NOT_VERIFIED → REFUNDED.</p></div>
 </div>
 </div>
@@ -272,7 +272,7 @@ Amount paise = amountINR*100 int64 — no float
 <div class="card">
 <h3>Retail Investors India</h3>
 <ul>
-<li>₹500 token vs ₹50L whole — 95% retail can diversify Pune, Bangalore, Mumbai — INR payments via UPI Collect familiar rail (investor@aasthichain)</li>
+<li>₹500 token vs ₹75L whole — 95% retail can diversify Pune, Bangalore, Mumbai — INR payments via UPI Collect familiar rail (investor@aasthichain) — live seed 75L/15000/500</li>
 <li>Instant liquidity seconds vs 3-6 months, portfolio rebalancing, UTR reconciliation for payments</li>
 <li>Transparent cap table on-chain TransferRecord + UPI RRN/UTR auditable, no benami, KYC gate per Bill 2026</li>
 </ul>

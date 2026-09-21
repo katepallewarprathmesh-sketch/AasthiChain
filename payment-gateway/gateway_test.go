@@ -333,6 +333,38 @@ func TestFullDvPHappyPath(t *testing.T) {
 	assert.Equal(t, StatusReleased, got.Status)
 }
 
+// Test VPA with numeric PSP — realistic UPI handles like investor1@aastbank123, ensures regex ^[a-z0-9._-]{2,64}@[a-z0-9]{2,64}$ matches numbers in PSP
+func TestVPAWithNumericPSP(t *testing.T) {
+	gw := newTestGateway()
+	validVPAs := []string{
+		"investor1@aastbank123",
+		"investor1@okaxis123",
+		"originator@aastbank",
+		"investor@aasthichain",
+		"investor1@aasthichain",
+		"investor_1@okhdfcbank",
+		"investor.1@okicici",
+	}
+	for _, vpa := range validVPAs {
+		err := ValidateVPA(vpa)
+		assert.NoError(t, err, "should accept valid VPA %s with current regex ^[a-z0-9._-]{2,64}@[a-z0-9]{2,64}$", vpa)
+	}
+	// Test full collect with numeric PSP
+	req := CollectRequest{
+		AssetID:     "PROP-123",
+		TokenAmount: 100,
+		AmountINR:   50000,
+		PayerVPA:    "investor1@aastbank123",
+		PayeeVPA:    "originator@aastbank123",
+		PayerID:     "investor1",
+		PayeeID:     "originator1",
+	}
+	p, err := gw.InitiateCollect(req)
+	require.NoError(t, err, "collect with numeric PSP VPA should succeed — regex must allow a-z0-9 in PSP")
+	assert.Equal(t, StatusPending, p.Status)
+	assert.Equal(t, "investor1@aastbank123", p.PayerVPA)
+}
+
 // Test decline
 func TestDeclineFlow(t *testing.T) {
 	gw := newTestGateway()

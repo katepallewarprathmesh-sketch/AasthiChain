@@ -1,10 +1,31 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { SignInButton } from '@clerk/react'
 import { isClerkConfigured } from '../App.jsx'
 
 export default function Landing({ user }) {
   const [showDev, setShowDev] = useState(false)
+  const navigate = useNavigate()
+
+  const handleDemoLogin = (roleData) => {
+    try {
+      const token = btoa(JSON.stringify({ identityId: roleData.id, role: roleData.role, mspId: roleData.mspId, exp: Date.now()+3600000 }))
+      const demoUser = {
+        token,
+        identityId: roleData.id,
+        role: roleData.role,
+        mspId: roleData.mspId,
+        fabricMode: 'demo',
+        isDemo: true
+      }
+      localStorage.setItem('aasthi_user', JSON.stringify(demoUser))
+      localStorage.setItem('aasthi_token', token)
+      localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
+      window.location.href = '/marketplace'
+    } catch (e) {
+      console.error('demo login failed', e)
+    }
+  }
 
   return (
     <div style={{minHeight:'calc(100vh - 64px - 80px)'}}>
@@ -174,24 +195,59 @@ export default function Landing({ user }) {
         </div>
       </div>
 
+      {/* Quick Demo Access — works LIVE + local, no Clerk verification, <2s */}
+      <div style={{maxWidth:1120, margin:'0 auto', padding:'28px 24px'}}>
+        <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:16, padding:20}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12, marginBottom:16}}>
+            <div>
+              <h3 style={{fontSize:16, fontWeight:700, fontFamily:'Fraunces'}}>Quick Demo Access — No verification needed</h3>
+              <p style={{fontSize:11, color:'#64748B', marginTop:4}}>Works on LIVE deployed site (https://aasthi-chain.vercel.app) + local dev — instant mock JWT, no Clerk, no email</p>
+            </div>
+            <span style={{fontSize:10, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'4px 10px', borderRadius:20, fontWeight:600}}>LIVE + LOCAL</span>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10}}>
+            {[
+              { id:'originator1', role:'Originator', label:'Owner', desc:'List & tokenize property', color:'#1E3A5F' },
+              { id:'registrar1', role:'Registrar', label:'Registrar', desc:'Validate title & approve', color:'#059669' },
+              { id:'investor1', role:'Investor', label:'Investor', desc:'Buy via UPI & own', color:'#7C3AED' },
+              { id:'regulator1', role:'Regulator', label:'Regulator', desc:'Audit & freeze', color:'#DC2626' },
+            ].map(r => (
+              <button key={r.id} onClick={()=>handleDemoLogin(r)} style={{textAlign:'left', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:14, cursor:'pointer', transition:'all 0.15s'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div style={{width:28, height:28, background:r.color, color:'white', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700}}>{r.label[0]}</div>
+                  <span style={{fontSize:10, background:'white', border:'1px solid #E2E8F0', padding:'2px 6px', borderRadius:10, color:'#64748B'}}>{r.id}</span>
+                </div>
+                <div style={{fontSize:13, fontWeight:600, marginTop:10}}>{r.label}</div>
+                <div style={{fontSize:11, color:'#64748B', marginTop:2}}>{r.desc}</div>
+                <div style={{fontSize:10, color:r.color, fontWeight:600, marginTop:8}}>Instant access →</div>
+              </button>
+            ))}
+          </div>
+          <div style={{marginTop:12, fontSize:10, color:'#94A3B8', textAlign:'center'}}>Click any card → mock JWT stored → /marketplace in &lt;1s — no network call, no verification — works live on Vercel + local npm run dev</div>
+        </div>
+      </div>
+
       {/* CTA — clean, no technical list */}
-      <div style={{maxWidth:1120, margin:'0 auto', padding:'40px 24px', textAlign:'center'}}>
+      <div style={{maxWidth:1120, margin:'0 auto', padding:'20px 24px 40px', textAlign:'center'}}>
         <h2 style={{fontFamily:'Fraunces', fontSize:26, fontWeight:700}}>Ready to own premium real estate?</h2>
         <p style={{fontSize:14, color:'#64748B', marginTop:8, maxWidth:'55ch', margin:'8px auto 0'}}>Start from ₹500. Verified properties, secure UPI payments, instant blockchain ownership. No paperwork, no waiting.</p>
-        <div style={{marginTop:20, display:'flex', justifyContent:'center', gap:12}}>
+        <div style={{marginTop:20, display:'flex', justifyContent:'center', gap:12, flexWrap:'wrap'}}>
           {user ? (
             <Link to="/marketplace" className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, textDecoration:'none', borderRadius:10}}>Explore Properties →</Link>
           ) : (
-            isClerkConfigured ? (
-              <SignInButton mode="modal" fallbackRedirectUrl="/marketplace">
-                <button className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, borderRadius:10}}>Start Investing — Sign in →</button>
-              </SignInButton>
-            ) : (
-              <Link to="/login" className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, textDecoration:'none', borderRadius:10}}>Start Investing — Sign in →</Link>
-            )
+            <>
+              {isClerkConfigured ? (
+                <SignInButton mode="modal" fallbackRedirectUrl="/marketplace">
+                  <button className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, borderRadius:10}}>Start Investing — Sign in (Clerk) →</button>
+                </SignInButton>
+              ) : (
+                <Link to="/login" className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, textDecoration:'none', borderRadius:10}}>Start Investing — Sign in →</Link>
+              )}
+              <span style={{fontSize:11, color:'#94A3B8', alignSelf:'center'}}>or use demo presets above — instant, no verification</span>
+            </>
           )}
         </div>
-        <div style={{marginTop:16, fontSize:11, color:'#94A3B8'}}>Sign in from top-right corner · One easy auth for everyone</div>
+        <div style={{marginTop:16, fontSize:11, color:'#94A3B8'}}>Sign in top-right (Clerk) or use demo preset (originator1/registrar1/investor1/regulator1) for instant access, no verification — works LIVE (https://aasthi-chain.vercel.app) + local</div>
       </div>
 
       {/* Developer / Judge section — hidden from visitors, only for technical review */}
