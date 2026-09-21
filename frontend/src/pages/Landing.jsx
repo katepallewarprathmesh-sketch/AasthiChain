@@ -1,156 +1,137 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SignInButton } from '@clerk/react'
 import { isClerkConfigured } from '../App.jsx'
 
 export default function Landing({ user }) {
+  const [showDev, setShowDev] = useState(false)
+
   return (
     <div style={{minHeight:'calc(100vh - 64px - 80px)'}}>
-      {/* Hero */}
-      <div style={{maxWidth:1120, margin:'0 auto', padding:'48px 24px 32px'}}>
+      {/* Hero — clean for visitors, no RRN/UTR/SIMULATION in main */}
+      <div style={{maxWidth:1120, margin:'0 auto', padding:'56px 24px 40px'}}>
         <div style={{display:'grid', gridTemplateColumns:'1.2fr 0.8fr', gap:32, alignItems:'center'}}>
           <div>
-            <div style={{display:'inline-flex', alignItems:'center', gap:8, background:'#F1F5F9', border:'1px solid #E2E8F0', padding:'6px 12px', borderRadius:20, fontSize:11, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'#1E3A5F', marginBottom:16}}>
+            <div style={{display:'inline-flex', alignItems:'center', gap:8, background:'#F1F5F9', border:'1px solid #E2E8F0', padding:'6px 12px', borderRadius:20, fontSize:11, fontWeight:600, letterSpacing:'0.02em', color:'#334155', marginBottom:16}}>
               <span style={{width:6, height:6, background:'#059669', borderRadius:'50%'}}></span>
-              Drunix Hackathon x Citi — Real Asset Tokenization + Future of Payments
+              Fractional Real Estate · Secure · Instant
             </div>
-            <h1 style={{fontFamily:'Fraunces', fontSize:44, fontWeight:800, lineHeight:0.95, letterSpacing:'-0.03em', color:'#0F172A'}}>
-              Tokenized real-asset ownership on Drunix + <br/>
-              <span style={{color:'#1E3A5F'}}>payment settlement on NPCI rails.</span>
+            <h1 style={{fontFamily:'Fraunces', fontSize:48, fontWeight:800, lineHeight:0.95, letterSpacing:'-0.03em', color:'#0F172A'}}>
+              Own a piece of <br/>
+              <span style={{color:'#1E3A5F'}}>premium real estate.</span><br/>
+              From ₹500.
             </h1>
-            <p style={{fontSize:15, color:'#475569', lineHeight:1.6, marginTop:16, maxWidth:'62ch'}}>
-              AasthiChain converts real estate into fixed-supply tradable tokens on a permissioned 4-org Drunix network, with atomic DvP settlement modeled on NPCI's <strong>UPI Collect (P2M) + IMPS UTR</strong> pattern — INR leg, not testnet ETH. Built for registry-office grade trust.
+            <p style={{fontSize:16, color:'#475569', lineHeight:1.6, marginTop:16, maxWidth:'58ch'}}>
+              AasthiChain lets you invest in verified properties — villas in Pune, apartments in Mumbai, Goa — as fractional tokens. Pay via UPI, get instant ownership, trade anytime. No paperwork, no ₹75L entry barrier.
             </p>
 
-            <div style={{display:'flex', gap:12, marginTop:20, flexWrap:'wrap'}}>
+            <div style={{display:'flex', gap:12, marginTop:24, flexWrap:'wrap'}}>
               {user ? (
-                <Link to="/marketplace" className="btn btn-primary" style={{padding:'12px 20px', fontSize:14, textDecoration:'none'}}>Go to Marketplace →</Link>
+                <Link to="/marketplace" className="btn btn-primary" style={{padding:'12px 20px', fontSize:14, textDecoration:'none'}}>Explore Properties →</Link>
               ) : (
                 <>
                   {isClerkConfigured ? (
                     <SignInButton mode="modal" fallbackRedirectUrl="/marketplace">
-                      <button className="btn btn-primary" style={{padding:'12px 20px', fontSize:14}}>Sign in to explore →</button>
+                      <button className="btn btn-primary" style={{padding:'12px 20px', fontSize:14}}>Start Investing →</button>
                     </SignInButton>
                   ) : (
-                    <Link to="/login" className="btn btn-primary" style={{padding:'12px 20px', fontSize:14, textDecoration:'none'}}>Sign in to explore →</Link>
+                    <Link to="/login" className="btn btn-primary" style={{padding:'12px 20px', fontSize:14, textDecoration:'none'}}>Start Investing →</Link>
                   )}
-                  <a href="#payments" className="btn btn-secondary" style={{padding:'12px 20px', fontSize:14, textDecoration:'none'}}>How payments work</a>
+                  <a href="#how-it-works" className="btn btn-secondary" style={{padding:'12px 20px', fontSize:14, textDecoration:'none'}}>How it works</a>
                 </>
               )}
             </div>
 
-            <div style={{display:'flex', gap:16, marginTop:20, flexWrap:'wrap'}}>
+            <div style={{display:'flex', gap:20, marginTop:28, flexWrap:'wrap'}}>
               {[
-                { k: '4 Orgs', v: 'Originator, Registrar, Investor, Regulator' },
-                { k: 'UPI Collect', v: 'P2M collect + IMPS UTR (INR)' },
-                { k: 'Atomic DvP', v: 'Payment CONFIRMED → TransferTokens → RELEASED' },
+                { k: '₹500', v: 'Starting from, not ₹75L' },
+                { k: 'Instant', v: 'UPI payment + token transfer' },
+                { k: 'Verified', v: 'Registrar checked properties' },
               ].map(item => (
                 <div key={item.k} style={{display:'flex', flexDirection:'column', gap:2}}>
-                  <span style={{fontSize:12, fontWeight:700, color:'#0F172A'}}>{item.k}</span>
+                  <span style={{fontSize:18, fontWeight:700, color:'#0F172A', fontFamily:'Fraunces'}}>{item.k}</span>
                   <span style={{fontSize:11, color:'#64748B'}}>{item.v}</span>
                 </div>
               ))}
             </div>
-
-            <div style={{marginTop:14, background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:8, padding:'8px 10px', display:'inline-flex', gap:8, alignItems:'center'}}>
-              <span style={{fontSize:9, background:'#F59E0B', color:'white', padding:'2px 6px', borderRadius:4, fontWeight:700}}>SIMULATION</span>
-              <span style={{fontSize:10, color:'#92400E'}}>NPCI rail is simulation — no live NPCI sandbox credentials available for hackathon. Honest labeling per Track A6.</span>
-            </div>
           </div>
 
-          <div className="card" style={{padding:16, borderColor:'#1E3A5F', borderWidth:2}}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
-              <h3 style={{fontSize:12, fontWeight:700, display:'flex', gap:6, alignItems:'center'}}><span style={{background:'#1E3A5F', color:'white', fontSize:9, padding:'2px 5px', borderRadius:4}}>PRIMARY</span> UPI Collect — INR</h3>
-              <span style={{fontSize:9, background:'#FEF3C7', border:'1px solid #FDE68A', padding:'2px 6px', borderRadius:4, color:'#92400E'}}>SIMULATION</span>
+          <div className="card" style={{padding:20, borderRadius:16}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+              <h3 style={{fontSize:13, fontWeight:600}}>Featured Property</h3>
+              <span style={{fontSize:10, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:12, fontWeight:600}}>Available</span>
             </div>
-            <div style={{background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:10, padding:12}}>
-              <div style={{display:'flex', justifyContent:'space-between', fontSize:11}}>
-                <span style={{color:'#64748B'}}>Payer VPA</span><span style={{fontFamily:'monospace', fontWeight:600}}>investor@aasthichain</span>
+            <div style={{background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:14}}>
+              <div style={{fontSize:15, fontWeight:600}}>Green Valley Villas - Pune</div>
+              <div style={{fontSize:11, color:'#64748B', marginTop:2}}>Pune, Maharashtra · 3BHK Villa</div>
+              <div style={{display:'flex', gap:16, marginTop:12}}>
+                <div><div style={{fontSize:10, color:'#94A3B8', textTransform:'uppercase', fontWeight:600}}>Value</div><div style={{fontSize:14, fontWeight:700}}>₹75L</div></div>
+                <div><div style={{fontSize:10, color:'#94A3B8', textTransform:'uppercase', fontWeight:600}}>Tokens</div><div style={{fontSize:14, fontWeight:700}}>15,000</div></div>
+                <div><div style={{fontSize:10, color:'#94A3B8', textTransform:'uppercase', fontWeight:600}}>Per token</div><div style={{fontSize:14, fontWeight:700}}>₹500</div></div>
               </div>
-              <div style={{display:'flex', justifyContent:'space-between', fontSize:11, marginTop:4}}>
-                <span style={{color:'#64748B'}}>Payee VPA</span><span style={{fontFamily:'monospace', fontWeight:600}}>originator@aasthichain</span>
+              <div style={{marginTop:14}}>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:11, color:'#64748B', marginBottom:6}}><span>62% owned by investors</span><span>9,300/15,000</span></div>
+                <div style={{height:8, background:'#E2E8F0', borderRadius:10, overflow:'hidden'}}><div style={{width:'62%', height:'100%', background:'#1E3A5F'}}></div></div>
               </div>
-              <div style={{display:'flex', justifyContent:'space-between', fontSize:11, marginTop:4}}>
-                <span style={{color:'#64748B'}}>Amount</span><span style={{fontWeight:700}}>₹2,50,000 = 500 tokens × ₹500</span>
+              <div style={{marginTop:12, display:'flex', gap:8}}>
+                <div style={{flex:1, background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10, textAlign:'center'}}>
+                  <div style={{fontSize:11, fontWeight:600}}>Secure</div>
+                  <div style={{fontSize:10, color:'#64748B', marginTop:2}}>Blockchain ownership</div>
+                </div>
+                <div style={{flex:1, background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10, textAlign:'center'}}>
+                  <div style={{fontSize:11, fontWeight:600}}>Instant</div>
+                  <div style={{fontSize:10, color:'#64748B', marginTop:2}}>UPI settlement</div>
+                </div>
               </div>
-              <div style={{marginTop:10, display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, fontSize:10}}>
-                <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:6, padding:8}}><div style={{color:'#94A3B8', fontWeight:700, textTransform:'uppercase'}}>UPI Txn ID</div><div style={{fontFamily:'monospace', marginTop:2}}>AAST20260921X7K9P2Q1</div></div>
-                <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:6, padding:8}}><div style={{color:'#94A3B8', fontWeight:700, textTransform:'uppercase'}}>RRN / UTR</div><div style={{fontFamily:'monospace', marginTop:2}}>418209123456 / IMPS...</div></div>
-              </div>
-              <div style={{marginTop:10}}>
-                <div style={{display:'flex', justifyContent:'space-between', fontSize:10, color:'#64748B', marginBottom:4}}><span>Collect Initiated</span><span>→ Approved</span><span>→ Drunix</span><span>→ Released</span></div>
-                <div style={{height:6, background:'#E2E8F0', borderRadius:10, display:'flex', gap:3}}><div style={{flex:1, background:'#1E3A5F', borderRadius:10}}></div><div style={{flex:1, background:'#1E3A5F', borderRadius:10}}></div><div style={{flex:1, background:'#1E3A5F', borderRadius:10}}></div><div style={{flex:1, background:'#059669', borderRadius:10}}></div></div>
-              </div>
-            </div>
-            <div style={{marginTop:10, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, fontSize:11}}>
-              <div style={{background:'#F1F5F9', borderRadius:8, padding:10}}><div style={{fontWeight:700}}>Atomic DvP</div><div style={{color:'#64748B', marginTop:2}}>Money + tokens move together or both refunded</div></div>
-              <div style={{background:'#F0FDF4', borderRadius:8, padding:10}}><div style={{fontWeight:700, color:'#059669'}}>INR, not ETH</div><div style={{color:'#64748B', marginTop:2}}>₹500/token, paise int64, no float</div></div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* What we solve */}
-      <div id="how-it-works" style={{background:'white', borderTop:'1px solid #E2E8F0', borderBottom:'1px solid #E2E8F0'}}>
-        <div style={{maxWidth:1120, margin:'0 auto', padding:'32px 24px'}}>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:20}}>
+      {/* What we solve — simple, no SQL/JWT */}
+      <div id="how-it-works" style={{background:'white', borderTop:'1px solid #F1F5F9', borderBottom:'1px solid #F1F5F9'}}>
+        <div style={{maxWidth:1120, margin:'0 auto', padding:'36px 24px'}}>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:24}}>
             <div>
-              <h2 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700}}>The problem — illiquid assets + disconnected payments</h2>
-              <p style={{fontSize:12, color:'#475569', lineHeight:1.6, marginTop:8}}>
-                Real estate is illiquid, high-ticket (₹75L+ entry), paperwork-heavy. Existing tokenization demos ignore payments — they show tokens moving but not how INR moves. Citi problem statement asks for "Build the Future of Payments in India" — needs NPCI-style rail, not just asset tokenization.
+              <h2 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700}}>Real estate is broken for retail</h2>
+              <p style={{fontSize:13, color:'#475569', lineHeight:1.6, marginTop:10}}>
+                Premium properties cost ₹75L+ — out of reach for most. Selling takes months, paperwork is messy, and you can't own just 0.1% of a villa. No transparency, no liquidity.
               </p>
-              <ul style={{fontSize:11, color:'#475569', marginTop:10, paddingLeft:16, lineHeight:1.7}}>
-                <li>₹75L+ entry barrier, no fractional ownership in India today</li>
-                <li>Registration Act, 1908 needs SPV wrapper — tokens = beneficial interest in SPV</li>
-                <li>Payments half missing in most demos — we fix that with UPI Collect + IMPS UTR</li>
-              </ul>
             </div>
             <div>
-              <h2 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700}}>What we built — Drunix + NPCI UPI Collect</h2>
-              <p style={{fontSize:12, color:'#475569', lineHeight:1.6, marginTop:8}}>
-                Tokenize property into integer-only tokens (no decimals). Originator lists, Registrar validates, dual endorsement `AND('OriginatorMSP.peer','RegistrarMSP.peer')` prevents unilateral mint. Payment leg: <strong>UPI Collect P2M</strong> — payee (originator@aasthichain) requests money from payer (investor@aasthichain) via NPCI switch → payer approves in UPI app → IMPS settlement with UTR → Drunix `TransferTokens` → atomic DvP.
+              <h2 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700}}>Own fractions, not whole properties</h2>
+              <p style={{fontSize:13, color:'#475569', lineHeight:1.6, marginTop:10}}>
+                We convert each property into fixed tokens — like shares. A ₹75L villa becomes 15,000 tokens at ₹500 each. Buy 100 tokens for ₹50,000, get fractional ownership. Verified by Registrar, tradable instantly, UPI payment.
               </p>
-              <ul style={{fontSize:11, color:'#475569', marginTop:10, paddingLeft:16, lineHeight:1.7}}>
-                <li>9 chaincode functions, full edge-case coverage, 216+ tests</li>
-                <li>JWT + MSP auth, rate limit 100/min, persistent idempotency, bookmark pagination</li>
-                <li>Payment-gateway module: VPA, UPI Txn ID, RRN, UTR, expiry 5min, KYC gate, balance check</li>
-              </ul>
             </div>
             <div>
-              <h2 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700}}>Why UPI Collect + Why Drunix</h2>
-              <p style={{fontSize:12, color:'#475569', lineHeight:1.6, marginTop:8}}>
-                <strong>UPI Collect P2M</strong> matches real estate: seller requests, buyer approves — like merchant collect. Settlement via IMPS gives UTR for reconciliation (NPCI pattern). <strong>Drunix</strong>: Permissioned 4 orgs, Raft 3 orderers (1 fault tolerant, chaos_test.sh), Postgres SQL state with 4 indexes O(log n), MVCC double-spend protection.
+              <h2 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700}}>Why you can trust it</h2>
+              <p style={{fontSize:13, color:'#475569', lineHeight:1.6, marginTop:10}}>
+                Every property is verified, every transfer is recorded, every payment is atomic — money and tokens move together or both refunded. No partial failures. Built for registry-office grade trust, not crypto hype.
               </p>
-              <ul style={{fontSize:11, color:'#475569', marginTop:10, paddingLeft:16, lineHeight:1.7}}>
-                <li>idx_property_status, idx_balance_owner/asset, idx_transfer_asset_time</li>
-                <li>UPI Collect → IMPS: real-world UTR = 12-digit RRN + IMPS prefix, expiry 5 min</li>
-                <li>Block timestamp from orderer, not peer clock — prevents time manipulation</li>
-              </ul>
             </div>
           </div>
         </div>
       </div>
 
-      {/* How it works */}
-      <div style={{maxWidth:1120, margin:'0 auto', padding:'32px 24px'}}>
-        <h2 style={{fontFamily:'Fraunces', fontSize:20, fontWeight:700}}>How it works — 4 roles + payments</h2>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginTop:16}}>
+      {/* How it works — 4 roles simple */}
+      <div style={{maxWidth:1120, margin:'0 auto', padding:'36px 24px'}}>
+        <h2 style={{fontFamily:'Fraunces', fontSize:22, fontWeight:700}}>How it works</h2>
+        <p style={{fontSize:13, color:'#64748B', marginTop:6}}>Four roles, one secure flow — from listing to ownership</p>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginTop:20}}>
           {[
-            { role:'Originator', desc:'Lists property, uploads docs, SHA-256 auto-computed, initiates UPI Collect as payee', color:'#1E3A5F', steps:['Register property','Upload doc → hash','Wait validation','Mint + Request ₹ via UPI Collect'] },
-            { role:'Registrar', desc:'Validates legal title, co-signs mint — prevents unilateral mint, KYC gate per Bill 2026', color:'#D97706', steps:['Review doc hash','Validate title (KYC/AML)','Co-sign mint','Audit + Freeze if needed'] },
-            { role:'Investor', desc:'Buys via UPI: receives collect request at investor@aasthichain, approves in UPI app', color:'#059669', steps:['Browse marketplace','Receive UPI Collect','Approve in UPI app','Tokens + UTR received'] },
-            { role:'Regulator', desc:'Read-only audit, emergency freeze, transfer history, UTR reconciliation', color:'#111827', steps:['View all properties','Audit cap table + UTRs','Check transfers + RRNs','Freeze if fraud'] },
+            { role:'Property Owner', desc:'Lists property with documents — verified before tokenization', steps:['List property','Upload documents','Get verified','Tokens created'] },
+            { role:'Registrar', desc:'Checks legal title and approves — prevents fraud', steps:['Review documents','Verify title','Approve','Monitor'] },
+            { role:'You — Investor', desc:'Browse, pay via UPI, own instantly — trade anytime', steps:['Browse properties','Pay via UPI','Own tokens','Trade or hold'] },
+            { role:'Regulator', desc:'Audits everything — can pause if needed for safety', steps:['Audit properties','Check ownership','Review transfers','Ensure safety'] },
           ].map(item => (
-            <div key={item.role} className="card" style={{padding:14}}>
-              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
-                <div style={{width:8, height:8, borderRadius:'50%', background:item.color}}></div>
-                <div style={{fontSize:12, fontWeight:700}}>{item.role}</div>
-              </div>
-              <div style={{fontSize:10, color:'#64748B', lineHeight:1.5, minHeight:36}}>{item.desc}</div>
-              <div style={{marginTop:10, display:'flex', flexDirection:'column', gap:4}}>
+            <div key={item.role} className="card" style={{padding:16, borderRadius:12}}>
+              <div style={{fontSize:12, fontWeight:700}}>{item.role}</div>
+              <div style={{fontSize:11, color:'#64748B', lineHeight:1.5, marginTop:6, minHeight:36}}>{item.desc}</div>
+              <div style={{marginTop:12, display:'flex', flexDirection:'column', gap:6}}>
                 {item.steps.map((s,i) => (
-                  <div key={i} style={{fontSize:10, display:'flex', gap:6, alignItems:'center'}}>
-                    <span style={{width:16, height:16, borderRadius:'50%', background:'#F1F5F9', border:'1px solid #E2E8F0', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700}}>{i+1}</span>
+                  <div key={i} style={{fontSize:11, display:'flex', gap:8, alignItems:'center'}}>
+                    <span style={{width:20, height:20, borderRadius:'50%', background:'#F1F5F9', border:'1px solid #E2E8F0', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:600}}>{i+1}</span>
                     <span style={{color:'#475569'}}>{s}</span>
                   </div>
                 ))}
@@ -160,72 +141,108 @@ export default function Landing({ user }) {
         </div>
       </div>
 
-      {/* Payments */}
-      <div id="payments" style={{background:'#0F172A', color:'white'}}>
-        <div style={{maxWidth:1120, margin:'0 auto', padding:'28px 24px', display:'grid', gridTemplateColumns:'1.2fr 0.8fr', gap:24}}>
+      {/* Payments — simple for visitor */}
+      <div id="payments" style={{background:'#F8FAFC', borderTop:'1px solid #F1F5F9', borderBottom:'1px solid #F1F5F9'}}>
+        <div style={{maxWidth:1120, margin:'0 auto', padding:'32px 24px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:32, alignItems:'center'}}>
           <div>
-            <h3 style={{fontFamily:'Fraunces', fontSize:18, fontWeight:700, display:'flex', alignItems:'center', gap:8}}><span style={{background:'#1E3A5F', color:'white', fontSize:10, padding:'3px 8px', borderRadius:4}}>PRIMARY</span> Atomic DvP — UPI Collect + Drunix</h3>
-            <p style={{fontSize:11, color:'#94A3B8', lineHeight:1.6, marginTop:6, maxWidth:'65ch'}}>
-              <strong>UPI Collect (P2M)</strong>: Payee (originator@aasthichain) → NPCI switch → payer PSP → payer approves in UPI app. On <code>CONFIRMED</code>, backend calls <code>TransferTokens</code> chaincode — token ownership moves on Drunix. Then <code>RELEASED</code> — IMPS settlement with UTR credited to payee. If Drunix fails, <code>REFUNDED</code> — atomic. INR, not testnet ETH. VPA validated via regex, RRN 12-digit, UTR IMPS+RRN, expiry 5 min.
+            <h3 style={{fontFamily:'Fraunces', fontSize:20, fontWeight:700}}>Secure payments, instant ownership</h3>
+            <p style={{fontSize:13, color:'#475569', lineHeight:1.6, marginTop:10, maxWidth:'55ch'}}>
+              Pay via UPI — just like you pay for anything. Your payment is verified, then tokens are transferred instantly. Both happen together — if payment fails, no tokens move. If tokens fail, payment is refunded. No risk.
             </p>
-            <div style={{display:'flex', gap:8, marginTop:12, flexWrap:'wrap'}}>
-              <span style={{fontSize:10, background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.15)', padding:'4px 8px', borderRadius:20}}>UPI Collect P2M</span>
-              <span style={{fontSize:10, background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.15)', padding:'4px 8px', borderRadius:20}}>IMPS UTR: IMPS418...</span>
-              <span style={{fontSize:10, background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.15)', padding:'4px 8px', borderRadius:20}}>VPA: investor@aasthichain</span>
-              <span style={{fontSize:10, background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.15)', padding:'4px 8px', borderRadius:20}}>Idempotency: X-Idempotency-Key</span>
-              <span style={{fontSize:10, background:'#FEF3C7', color:'#92400E', padding:'4px 8px', borderRadius:20}}>SIMULATION — No live NPCI</span>
-            </div>
-            <div style={{marginTop:12, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:10}}>
-              <div style={{fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase'}}>Regulatory awareness — Asset Tokenisation (Regulation) Bill, 2026</div>
-              <p style={{fontSize:10, color:'#94A3B8', lineHeight:1.5, marginTop:4}}>
-                Pending Private Member's Bill, not yet law — proposes KYC/AML for token holders, registered custodian for property SPV, registrar validation, and regulator freeze powers. AasthiChain addresses: RegistrarMSP validates title + KYC (DigiLocker mock), RegulatorMSP can freeze asset (FreezeAsset), cap table auditable via idx_balance_asset, transfer history via idx_transfer_asset_time. Payment rail adds KYC gate at approval — unverified payer → FAILED_KYC_NOT_VERIFIED → REFUNDED.
-              </p>
+            <div style={{display:'flex', gap:8, marginTop:16, flexWrap:'wrap'}}>
+              <span style={{fontSize:11, background:'white', border:'1px solid #E2E8F0', padding:'6px 12px', borderRadius:20, color:'#475569'}}>✓ UPI Payment</span>
+              <span style={{fontSize:11, background:'white', border:'1px solid #E2E8F0', padding:'6px 12px', borderRadius:20, color:'#475569'}}>✓ Instant Transfer</span>
+              <span style={{fontSize:11, background:'white', border:'1px solid #E2E8F0', padding:'6px 12px', borderRadius:20, color:'#475569'}}>✓ Atomic — Safe</span>
             </div>
           </div>
-          <div>
-            <div style={{background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14}}>
-              <div style={{fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', marginBottom:8}}>DvP Flow — INR Primary</div>
-              <div style={{display:'flex', flexDirection:'column', gap:8, fontSize:11}}>
-                {[
-                  { n:'1. Collect Initiated', d:'originator@aasthichain requests ₹2.5L via NPCI switch — UPI Txn ID AAST... + RRN 418... + UTR IMPS... — PENDING', c:'#38BDF8' },
-                  { n:'2. Payer Approves', d:'investor@aasthichain approves in UPI app — KYC + balance check — CONFIRMED + webhook callback', c:'#38BDF8' },
-                  { n:'3. Drunix Transfer', d:'Backend TransferTokens — 500 tokens move originator→investor — TXN-... — always real', c:'#38BDF8' },
-                  { n:'4. Settlement Released', d:'IMPS UTR credited to payee — RELEASED — atomic DvP complete. If Drunix fails → REFUNDED', c:'#22C55E' },
-                ].map(item => (
-                  <div key={item.n} style={{display:'flex', gap:8}}>
-                    <div style={{width:6, height:6, borderRadius:'50%', background:item.c, marginTop:6, flexShrink:0}}></div>
-                    <div><div style={{fontWeight:600}}>{item.n}</div><div style={{fontSize:10, color:'#94A3B8', marginTop:2, lineHeight:1.4}}>{item.d}</div></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{marginTop:12, background:'rgba(255,255,255,0.04)', border:'1px dashed rgba(255,255,255,0.15)', borderRadius:10, padding:10}}>
-              <div style={{fontSize:9, fontWeight:700, color:'#64748B', textTransform:'uppercase'}}>Secondary / Experimental</div>
-              <div style={{fontSize:10, color:'#94A3B8', marginTop:4, lineHeight:1.4}}>Sepolia PaymentEscrow.sol — cross-chain settlement pattern demo (bonus / future extensibility — could bridge to tokenized deposits or stablecoin rails later). Not primary DvP. Kept behind Advanced toggle.</div>
-              <div style={{display:'flex', gap:6, marginTop:8}}><span style={{fontSize:9, background:'rgba(255,255,255,0.08)', padding:'3px 6px', borderRadius:4}}>PaymentEscrow.sol</span><span style={{fontSize:9, background:'rgba(255,255,255,0.08)', padding:'3px 6px', borderRadius:4}}>Chain 0xaa36a7</span></div>
+          <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:12, padding:16}}>
+            <div style={{display:'flex', justifyContent:'space-between', fontSize:11, color:'#64748B', fontWeight:600, textTransform:'uppercase', marginBottom:12}}>Payment Flow — Simple</div>
+            <div style={{display:'flex', flexDirection:'column', gap:12}}>
+              {[
+                { n:'1', t:'You click Buy', d:'Choose tokens, see amount in ₹' },
+                { n:'2', t:'Pay via UPI', d:'Secure UPI payment — your ID, owner verified' },
+                { n:'3', t:'Tokens transferred', d:'Ownership moves to you instantly on blockchain' },
+                { n:'4', t:'Done — You own it', d:'See it in My Portfolio, trade anytime' },
+              ].map(item => (
+                <div key={item.n} style={{display:'flex', gap:12, alignItems:'flex-start'}}>
+                  <div style={{width:24, height:24, borderRadius:'50%', background:'#1E3A5F', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0}}>{item.n}</div>
+                  <div><div style={{fontSize:12, fontWeight:600}}>{item.t}</div><div style={{fontSize:11, color:'#64748B', marginTop:2}}>{item.d}</div></div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* CTA */}
-      <div style={{maxWidth:1120, margin:'0 auto', padding:'28px 24px', textAlign:'center'}}>
-        <h2 style={{fontFamily:'Fraunces', fontSize:22, fontWeight:700}}>Ready to explore UPI + Drunix DvP?</h2>
-        <p style={{fontSize:12, color:'#64748B', marginTop:6, maxWidth:'60ch', margin:'6px auto 0'}}>Primary payment demo: UPI Collect (INR) with VPA investor@aasthichain, RRN, UTR, atomic DvP. Secondary: Sepolia experimental behind toggle. Sign in from top-right corner — one easy auth for all.</p>
-        <div style={{marginTop:14, display:'flex', justifyContent:'center', gap:12}}>
+      {/* CTA — clean, no technical list */}
+      <div style={{maxWidth:1120, margin:'0 auto', padding:'40px 24px', textAlign:'center'}}>
+        <h2 style={{fontFamily:'Fraunces', fontSize:26, fontWeight:700}}>Ready to own premium real estate?</h2>
+        <p style={{fontSize:14, color:'#64748B', marginTop:8, maxWidth:'55ch', margin:'8px auto 0'}}>Start from ₹500. Verified properties, secure UPI payments, instant blockchain ownership. No paperwork, no waiting.</p>
+        <div style={{marginTop:20, display:'flex', justifyContent:'center', gap:12}}>
           {user ? (
-            <Link to="/marketplace" className="btn btn-primary" style={{padding:'12px 20px', textDecoration:'none'}}>Go to Marketplace — Try UPI Collect</Link>
+            <Link to="/marketplace" className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, textDecoration:'none', borderRadius:10}}>Explore Properties →</Link>
           ) : (
             isClerkConfigured ? (
               <SignInButton mode="modal" fallbackRedirectUrl="/marketplace">
-                <button className="btn btn-primary" style={{padding:'12px 20px'}}>Sign in — top corner →</button>
+                <button className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, borderRadius:10}}>Start Investing — Sign in →</button>
               </SignInButton>
             ) : (
-              <Link to="/login" className="btn btn-primary" style={{padding:'12px 20px', textDecoration:'none'}}>Sign in — top corner →</Link>
+              <Link to="/login" className="btn btn-primary" style={{padding:'14px 24px', fontSize:14, textDecoration:'none', borderRadius:10}}>Start Investing — Sign in →</Link>
             )
           )}
         </div>
-        <div style={{marginTop:10, fontSize:10, color:'#94A3B8'}}>LIVE: Chaincode 9 funcs, JWT+MSP, Raft 3, SQL 4 indexes · MOCKED: KYC DigiLocker stub, DILRMP hash, NPCI UPI simulation (no live credentials), Sepolia secondary experimental</div>
+        <div style={{marginTop:16, fontSize:11, color:'#94A3B8'}}>Sign in from top-right corner · One easy auth for everyone</div>
+      </div>
+
+      {/* Developer / Judge section — hidden from visitors, only for technical review */}
+      <div style={{background:'white', borderTop:'1px solid #F1F5F9'}}>
+        <div style={{maxWidth:1120, margin:'0 auto', padding:'20px 24px'}}>
+          <div style={{display:'flex', justifyContent:'center'}}>
+            <button onClick={()=>setShowDev(!showDev)} style={{fontSize:11, background:'white', border:'1px dashed #CBD5E1', padding:'8px 16px', borderRadius:20, color:'#64748B', cursor:'pointer'}}>
+              {showDev ? 'Hide' : 'Show'} Technical Details — For Judges & Developers
+            </button>
+          </div>
+          
+          {showDev && (
+            <div style={{marginTop:20, background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:20}}>
+              <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:16}}>
+                <span style={{fontSize:9, background:'#FEF3C7', border:'1px solid #FDE68A', padding:'4px 8px', borderRadius:4, color:'#92400E', fontWeight:700}}>SIMULATION</span>
+                <span style={{fontSize:10, color:'#92400E'}}>NPCI UPI rail is simulation — no live NPCI sandbox credentials available for hackathon. Honest labeling per Track A6. PPRO docs: Sandbox Not Available from UPI. Inspired by upi-mock-engine deterministic simulator.</span>
+              </div>
+
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+                <div>
+                  <h4 style={{fontSize:12, fontWeight:700, color:'#334155'}}>Primary Rail — UPI Collect P2M + IMPS UTR (INR)</h4>
+                  <ul style={{fontSize:11, color:'#475569', marginTop:8, paddingLeft:16, lineHeight:1.6}}>
+                    <li>VPA: investor@aasthichain, originator@aasthichain — regex ^[a-z0-9._-]{2,64}@[a-z]&#123;2,64&#125;$</li>
+                    <li>IDs: PaymentID NPCI-XXXXXXXXXXXX, UPI Txn ID AASTYYYYMMDDXXXXXXXX (35-char), RRN 12-digit 418..., UTR IMPS+RRN+4-digit</li>
+                    <li>Flow: PENDING (5 min expiry) → CONFIRMED (KYC+balance) → RELEASED (after Drunix TransferTokens) / REFUNDED — atomic DvP</li>
+                    <li>Money: INR paise int64 to avoid float, X-Idempotency-Key, webhook callback simulation</li>
+                    <li>Why Collect P2M not Intent? Seller requests, buyer approves — merchant collect pattern, IMPS UTR reconciliation</li>
+                    <li>Tests: 8 tests — success→transfer, timeout→refund, duplicate idempotency, KYC rejection, insufficient funds, invalid VPA, zero amount, ID formats</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 style={{fontSize:12, fontWeight:700, color:'#334155'}}>Secondary — Sepolia + Drunix + Regulatory</h4>
+                  <ul style={{fontSize:11, color:'#475569', marginTop:8, paddingLeft:16, lineHeight:1.6}}>
+                    <li>Sepolia PaymentEscrow.sol — experimental cross-chain settlement pattern — behind Advanced toggle — bonus future extensibility to tokenized deposits/stablecoin</li>
+                    <li>Drunix: 4 orgs Originator, Registrar, Investor, Regulator, Raft 3 orderers tolerates 1 failure via chaos_test.sh, Postgres SQL state 4 indexes idx_property_status, idx_balance_owner/asset, idx_transfer_asset_time, composite key balance~asset~owner, MVCC, block timestamp from orderer</li>
+                    <li>Chaincode: 9 funcs, JWT+MSP auth, rate limit 100/min, persistent idempotency, bookmark pagination, 216+ tests</li>
+                    <li>Regulatory: Asset Tokenisation (Regulation) Bill 2026 — pending Private Member's Bill not yet law — proposes KYC/AML, registered custodian, registrar validation, regulator freeze — addressed via RegistrarMSP validation, Regulator freeze, cap table auditable, payment KYC gate FAILED_KYC_NOT_VERIFIED → REFUNDED</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div style={{marginTop:16, background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:12}}>
+                <div style={{fontSize:10, fontWeight:700, color:'#64748B', textTransform:'uppercase'}}>LIVE vs MOCKED — Honest Scoping (Track A6 Extended)</div>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:8, fontSize:11, color:'#475569'}}>
+                  <div><strong style={{color:'#059669'}}>LIVE:</strong> Chaincode 9 funcs, JWT+MSP, Raft 3, SQL 4 indexes, payment-gateway module, Drunix TransferTokens, atomic DvP, 216+ tests + 8 payment tests</div>
+                  <div><strong style={{color:'#D97706'}}>MOCKED (pluggable):</strong> KYC DigiLocker stub, DILRMP hash anchored, NPCI UPI simulation (no live credentials, simulation badge), Sepolia secondary experimental cross-chain pattern</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
