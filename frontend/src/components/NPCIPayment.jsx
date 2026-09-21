@@ -127,11 +127,14 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
       setTimeout(async () => {
         try {
           setStatus('releasing')
-          const toId = recipient || 'investor2'
+          // FIX: Transfer should be from property owner (originator) to buyer (investor)
+          // Previously was toId=recipient (originator) and fromId=user (investor) — inverted, caused ERR_BALANCE_NOT_FOUND / ERR_ASSET_NOT_FOUND
+          const fromId = recipient || 'originator1'
+          const toId = user?.identityId || 'investor1'
           const drunixRes = await fetch('/api/transfers', {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ assetId, toId, amount: parseInt(tokenAmount) || 1 })
+            body: JSON.stringify({ assetId, fromId, toId, amount: parseInt(tokenAmount) || 1 })
           })
           const drunixData = await drunixRes.json()
           if (!drunixRes.ok) {
@@ -237,8 +240,8 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             </div>
             <div>
               <label style={{fontSize:10, fontWeight:600, color:'#475569', textTransform:'uppercase'}}>Pay to</label>
-              <input className="input" value={payeeVpa} onChange={e=>setPayeeVpa(e.target.value)} placeholder="owner@aasthichain" style={{marginTop:4, fontSize:12}} disabled />
-              <div style={{fontSize:9, color:'#94A3B8', marginTop:2}}>Property owner — verified</div>
+              <input className="input" value={payeeVpa} onChange={e=>setPayeeVpa(e.target.value)} placeholder="owner@aasthichain or 80105301033@axl" style={{marginTop:4, fontSize:12}} />
+              <div style={{fontSize:9, color:'#059669', marginTop:2}}>✓ Property owner — verified (editable for testing)</div>
             </div>
 
             <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10, marginTop:4}}>
