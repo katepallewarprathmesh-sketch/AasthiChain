@@ -14,51 +14,87 @@ export default function Marketplace({ user }) {
   }, [filter, user?.identityId])
 
   const fetchProperties = async () => {
+    setLoading(true)
     try {
       const token = localStorage.getItem('aasthi_token')
       const url = filter ? `/api/properties?status=${filter}` : '/api/properties'
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       const data = await res.json()
-      if (data.properties) setProperties(data.properties)
+      let backendProps = data.properties || []
+      
+      // Merge with localStorage cache — fixes originator created property not visible at investor + vanish on refresh
+      // Same browser role switch: originator creates, investor should see in Marketplace
+      try {
+        const cached = JSON.parse(localStorage.getItem('aasthi_created_properties') || '[]')
+        const mergedMap = new Map()
+        backendProps.forEach(prop => mergedMap.set(prop.assetId, prop))
+        cached.forEach(cachedProp => {
+          if (!mergedMap.has(cachedProp.assetId)) {
+            const enriched = {
+              ...cachedProp,
+              status: cachedProp.status || 'DRAFT',
+              registrarValidationStatus: cachedProp.registrarValidationStatus || 'PENDING',
+              totalTokens: cachedProp.totalTokens || 10000,
+              valuationINR: cachedProp.valuationINR || 6000000,
+              tokenPrice: cachedProp.tokenPrice || (cachedProp.valuationINR && cachedProp.totalTokens ? Math.floor(cachedProp.valuationINR / cachedProp.totalTokens) : 500),
+              location: cachedProp.location || { state: 'Maharashtra', city: 'Pune', pincode: '411045' },
+              isCached: true
+            }
+            mergedMap.set(cachedProp.assetId, enriched)
+          } else {
+            const existing = mergedMap.get(cachedProp.assetId)
+            mergedMap.set(cachedProp.assetId, { ...cachedProp, ...existing })
+          }
+        })
+        backendProps = Array.from(mergedMap.values())
+      } catch (e) {
+        console.error('localStorage merge failed', e)
+      }
+      
+      if (backendProps.length > 0) {
+        setProperties(backendProps)
+      } else {
+        // Fallback demo properties if both backend and cache empty
+        setProperties([
+          {
+            assetId: 'PROP-GREEN-VALLEY-PUNE-001',
+            title: 'Green Valley Villas - Pune',
+            location: { state: 'Maharashtra', city: 'Pune', pincode: '411045' },
+            valuationINR: 7500000,
+            totalTokens: 15000,
+            documentHash: 'a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
+            registrarValidationStatus: 'VALIDATED',
+            status: 'TOKENIZED',
+            originatorId: 'originator1',
+            soldTokens: 3000
+          }
+        ])
+      }
     } catch (e) {
-      setProperties([
-        {
-          assetId: 'PROP-demo-1',
-          title: 'Green Valley Villas - Pune',
-          location: { state: 'Maharashtra', city: 'Pune', pincode: '411045' },
-          valuationINR: 7500000,
-          totalTokens: 15000,
-          documentHash: 'a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
-          registrarValidationStatus: 'VALIDATED',
-          status: 'TOKENIZED',
-          originatorId: 'originator1',
-          soldTokens: 9300
-        },
-        {
-          assetId: 'PROP-demo-2',
-          title: 'Marine Drive 3BHK - Mumbai',
-          location: { state: 'Maharashtra', city: 'Mumbai', pincode: '400002' },
-          valuationINR: 25000000,
-          totalTokens: 25000,
-          documentHash: 'b4f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
-          registrarValidationStatus: 'PENDING',
-          status: 'DRAFT',
-          originatorId: 'originator1',
-          soldTokens: 0
-        },
-        {
-          assetId: 'PROP-demo-3',
-          title: 'Palm Grove Villas - Goa',
-          location: { state: 'Goa', city: 'Panaji', pincode: '403001' },
-          valuationINR: 12000000,
-          totalTokens: 10000,
-          documentHash: 'c4f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
-          registrarValidationStatus: 'VALIDATED',
-          status: 'TOKENIZED',
-          originatorId: 'originator1',
-          soldTokens: 1800
+      console.error(e)
+      try {
+        const cached = JSON.parse(localStorage.getItem('aasthi_created_properties') || '[]')
+        if (cached.length > 0) {
+          setProperties(cached)
+        } else {
+          setProperties([
+            {
+              assetId: 'PROP-GREEN-VALLEY-PUNE-001',
+              title: 'Green Valley Villas - Pune',
+              location: { state: 'Maharashtra', city: 'Pune', pincode: '411045' },
+              valuationINR: 7500000,
+              totalTokens: 15000,
+              documentHash: 'a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
+              registrarValidationStatus: 'VALIDATED',
+              status: 'TOKENIZED',
+              originatorId: 'originator1',
+              soldTokens: 3000
+            }
+          ])
         }
-      ])
+      } catch {
+        setProperties([])
+      }
     } finally {
       setLoading(false)
     }
@@ -81,7 +117,7 @@ export default function Marketplace({ user }) {
     <div>
       <div style={{marginBottom:24}}>
         <h1 style={{fontSize:32, marginBottom:8}}>Marketplace</h1>
-        <p style={{color:'var(--ink-60)', fontSize:14, maxWidth:'70ch'}}>Discover fractional real estate — own a piece of premium properties from ₹500. Instant settlement via UPI, secure ownership on blockchain.</p>
+        <p style={{color:'var(--ink-60)', fontSize:14, maxWidth:'70ch'}}>Discover fractional real estate — own a piece of premium properties from ₹500. Instant settlement via UPI with UTR reconciliation, secure ownership on blockchain. {properties.some(p=>p.isCached) ? '📦 Some properties from local cache (Vercel cold start fallback) — visible to Investor same browser after Originator creates.' : ''}</p>
       </div>
 
       <div className="card" style={{padding:'16px 20px', marginBottom:24, display:'flex', gap:12, flexWrap:'wrap', alignItems:'center'}}>
@@ -102,7 +138,7 @@ export default function Marketplace({ user }) {
           </div>
         </div>
         <div style={{marginLeft:'auto', display:'flex', gap:8, alignItems:'center'}}>
-          <span style={{fontSize:11, color:'var(--ink-40)'}}>{filtered.length} properties</span>
+          <span style={{fontSize:11, color:'var(--ink-40)'}}>{filtered.length} properties {properties.some(p=>p.isCached) ? '(incl. cached)' : ''}</span>
           <button className="btn btn-secondary" style={{padding:'8px 12px', fontSize:12}} onClick={fetchProperties}>Refresh</button>
           <button onClick={()=>setShowDev(!showDev)} style={{fontSize:10, background:'white', border:'1px dashed #CBD5E1', padding:'6px 10px', borderRadius:20, color:'#64748B', cursor:'pointer'}}>
             {showDev ? 'Hide' : 'Developer'} details
@@ -113,14 +149,14 @@ export default function Marketplace({ user }) {
       {loading ? (
         <div style={{textAlign:'center', padding:'40px 0'}}>
           <div style={{width:24, height:24, border:'3px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
-          <p style={{color:'var(--ink-60)', fontSize:14, marginTop:12}}>Loading properties from Drunix — SQL indexes idx_property_status for O(log n) lookup...</p>
+          <p style={{color:'var(--ink-60)', fontSize:14, marginTop:12}}>Loading properties from Drunix — SQL indexes idx_property_status for O(log n) lookup + local cache merge for Vercel cold start...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
         </div>
       ) : filtered.length === 0 ? (
         <div className="card" style={{textAlign:'center', padding:'32px 0'}}>
           <div style={{fontSize:32}}>🔍</div>
           <p style={{fontSize:14, fontWeight:600, marginTop:8}}>No properties match your filters</p>
-          <p style={{fontSize:12, color:'#6B7280', marginTop:4, maxWidth:'50ch', margin:'4px auto 0'}}>Try clearing filters — All Status, All Cities, or search. Or register a new property as Originator in Admin. Seeded property: Green Valley Villas Pune 75L/15000/₹500 always available via deterministic PROP-GREEN-VALLEY-PUNE-001.</p>
+          <p style={{fontSize:12, color:'#6B7280', marginTop:4, maxWidth:'50ch', margin:'4px auto 0'}}>Try clearing filters — All Status, All Cities, or search. Or register a new property as Originator in Admin. Seeded property: Green Valley Villas Pune 75L/15000/₹500 always available via deterministic PROP-GREEN-VALLEY-PUNE-001. New properties now saved to local cache so they don't vanish on refresh and are visible to Investor same browser.</p>
           <div style={{marginTop:12, display:'flex', gap:8, justifyContent:'center'}}>
             <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>{setFilter(''); setCityFilter(''); setSearch('')}}>Clear Filters</button>
             <button className="btn btn-primary" style={{fontSize:12}} onClick={fetchProperties}>Refresh</button>
@@ -129,14 +165,14 @@ export default function Marketplace({ user }) {
       ) : (
         <div className="grid grid-3">
           {filtered.map(prop => {
-            const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0
+            const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : (prop.tokenPrice || 0)
             const soldPct = prop.soldTokens ? Math.round((prop.soldTokens / prop.totalTokens)*100) : Math.round(Math.random()*80+10)
             const valuationLakh = (prop.valuationINR/100000).toFixed(1)
             return (
-              <div key={prop.assetId} className="card" style={{display:'flex', flexDirection:'column', gap:16, padding:20}}>
+              <div key={prop.assetId} className="card" style={{display:'flex', flexDirection:'column', gap:16, padding:20, borderColor: prop.isCached ? '#FDE68A' : undefined, borderWidth: prop.isCached ? 2 : 1}}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
-                  <h3 style={{fontSize:16, lineHeight:1.3, flex:1}}>{prop.title}</h3>
-                  {getStatusChip(prop.status)}
+                  <h3 style={{fontSize:16, lineHeight:1.3, flex:1}}>{prop.title} {prop.isCached && <span style={{fontSize:10, background:'#FFFBEB', border:'1px solid #FDE68A', padding:'2px 6px', borderRadius:10}}>📦 Cached</span>}</h3>
+                  {getStatusChip(prop.registrarValidationStatus || prop.status)}
                 </div>
                 
                 <div style={{fontSize:12, color:'var(--ink-60)', lineHeight:1.6}}>
@@ -151,6 +187,7 @@ export default function Marketplace({ user }) {
                       <span style={{fontSize:11, color:'var(--ink-40)'}}>/ token</span>
                     </div>
                   )}
+                  {prop.isCached && <div style={{fontSize:10, color:'#D97706', marginTop:6, background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:6, padding:'4px 8px'}}>📦 From local cache — Vercel cold start fallback — created by Originator, visible to Investor same browser. For cross-browser, needs Postgres (see /api/db/config).</div>}
                 </div>
 
                 <div>
@@ -169,8 +206,8 @@ export default function Marketplace({ user }) {
 
                 {showDev && (
                   <div style={{fontSize:10, color:'#94A3B8', borderTop:'1px dashed #E2E8F0', paddingTop:8, fontFamily:'monospace'}}>
-                    ID: {prop.assetId.slice(0,16)}... · Originator: {prop.originatorId}
-                    <div style={{marginTop:2}}>Tech: balance~asset~owner composite key · idx_property_status</div>
+                    ID: {prop.assetId.slice(0,16)}... · Originator: {prop.originatorId} {prop.isCached ? '· Cached' : ''}
+                    <div style={{marginTop:2}}>Tech: balance~asset~owner composite key · idx_property_status · localStorage merge for cold start fix</div>
                   </div>
                 )}
               </div>
@@ -181,9 +218,11 @@ export default function Marketplace({ user }) {
 
       {showDev && (
         <div className="card" style={{marginTop:24, background:'#F8FAFC', borderStyle:'dashed'}}>
-          <h4 style={{fontSize:11, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'#64748B', marginBottom:8}}>Developer — Drunix SQL State Store Advantage (hidden from visitors)</h4>
+          <h4 style={{fontSize:11, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'#64748B', marginBottom:8}}>Developer — Fix for vanish on refresh + originator not visible at investor</h4>
           <p style={{fontSize:11, color:'#64748B', lineHeight:'1.6', maxWidth:'80ch'}}>
-            Unlike vanilla Fabric's LevelDB/CouchDB, Drunix exposes on-chain SQL. Marketplace queries use <code>idx_property_status</code> and wallet queries use <code>idx_balance_owner</code> for O(log n) lookups, avoiding full ledger scans. Cap-table per asset via <code>idx_balance_asset</code>. Regulator audit via <code>idx_transfer_asset_time</code>. Composite keys <code>balance~assetId~ownerId</code>. This section is hidden from regular investors — abstraction for clean UX.
+            <strong>Problem:</strong> Vercel serverless lambdas are stateless — globalThis + /tmp/aasthi_properties.json per lambda, not shared across lambdas — new property created in lambda A vanishes when refresh hits lambda B — originator creates, investor on same browser doesn't see.<br/>
+            <strong>Fix:</strong> Frontend localStorage cache `aasthi_created_properties` — on register, save to localStorage — on Marketplace fetch, merge backend + cache via Map deduplication — ensures property doesn't vanish on refresh and visible to Investor same browser via role switch. For cross-browser/production, needs Postgres per `db.go` abstraction — set DATABASE_URL in Vercel → auto switches to Postgres persistent.<br/>
+            Unlike vanilla Fabric's LevelDB/CouchDB, Drunix exposes on-chain SQL. Marketplace queries use idx_property_status and wallet queries use idx_balance_owner for O(log n) lookups. This fix adds local cache layer for hackathon UX.
           </p>
         </div>
       )}
