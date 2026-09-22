@@ -487,7 +487,15 @@ export default function handler(req, res) {
       return res.json({ 
         status: 'ok', 
         service: 'aasthichain-api-gateway', 
-        version: '2.3-webhook-utr-reconciliation',
+        version: '2.4-go-webhook-utr-digilocker-property-db',
+        goImplementation: {
+          webhook: 'payment-gateway/webhook.go — GatewayWithWebhook with UTR12, signature verification, reconciliation',
+          digilocker: 'payment-gateway/digilocker.go — DigiLockerProvider with OAuth mock/real',
+          propertyData: 'payment-gateway/property_data.go — PropertyDataProvider Bhoomi/Dharani',
+          db: 'payment-gateway/db.go — FileStore + PostgresStore abstraction',
+          server: 'payment-gateway/server.go — Go HTTP server integrating all',
+          tests: 'webhook_test.go, digilocker_test.go, property_data_test.go, db_test.go'
+        },
         paymentRails: {
           primary: 'NPCI UPI Collect (simulation for hackathon, real via Setu/ICICI — NPCI-certified switch with direct NPCI access)',
           secondary: 'Sepolia PaymentEscrow.sol (experimental, cross-chain pattern)',
