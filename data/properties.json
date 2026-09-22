@@ -1,0 +1,14 @@
+{
+  "PROP-GREEN-VALLEY-PUNE-001": {
+    "assetId": "PROP-GREEN-VALLEY-PUNE-001",
+    "title": "Green Valley Villas - Pune",
+    "location": {
+      "state": "Maharashtra",
+      "city": "Pune",
+      "pincode": "411045"
+    },
+    "valuationINR": 7500000,
+    "totalTokens": 15000,
+    "status": "TOKENIZED"
+  }
+}
