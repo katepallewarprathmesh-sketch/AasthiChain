@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import DigiLockerKYC from '../components/DigiLockerKYC.jsx'
 import FailureModeDemo from '../components/FailureModeDemo.jsx'
 import NPCIFailureModeDemo from '../components/NPCIFailureModeDemo.jsx'
 

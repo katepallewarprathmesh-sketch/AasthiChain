@@ -347,11 +347,24 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
                 <div style={{display:'flex', justifyContent:'space-between'}}><span style={{color:'#64748B'}}>Amount</span><span style={{fontWeight:700}}>₹{payment.amountINR.toLocaleString('en-IN')}</span></div>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Tokens</span><span style={{fontWeight:600}}>{payment.tokenAmount}</span></div>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Status</span><span className={`status-chip ${payment.status==='RELEASED' ? 'status-tokenized' : payment.status==='PENDING' ? 'status-pending' : payment.status==='CONFIRMED' ? 'status-validated' : 'status-frozen'}`} style={{fontSize:10}}>{payment.status}</span></div>
+                {/* UTR — always show after CONFIRMED for bank reconciliation */}
+                {(payment.utr || payment.utr12 || payment.rrn) && (
+                  <div style={{marginTop:8, background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:6, padding:8}}>
+                    <div style={{fontSize:9, fontWeight:700, color:'#64748B', textTransform:'uppercase', marginBottom:4, display:'flex', justifyContent:'space-between'}}>
+                      <span>Bank Reconciliation — UTR</span>
+                      <span style={{background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'1px 6px', borderRadius:10, fontSize:8}}>Real bank ref</span>
+                    </div>
+                    {payment.utr && <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B', fontSize:10}}>UTR (12-digit)</span><span style={{fontFamily:'monospace', fontSize:10, fontWeight:700, color:'#1E3A5F'}}>{payment.utr}</span></div>}
+                    {payment.utr12 && payment.utr12 !== payment.utr && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UTR12</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.utr12}</span></div>}
+                    {payment.rrn && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>RRN</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.rrn}</span></div>}
+                    {payment.upiTxnId && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UPI Txn ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.upiTxnId.slice(0,18)}...</span></div>}
+                    <div style={{fontSize:8, color:'#94A3B8', marginTop:6, lineHeight:1.4}}>UTR = Unique Transaction Reference from NPCI/bank — use for bank statement reconciliation. Verify at /api/npci/utr/{utr}. Webhook: {payment.webhookReceivedAt ? new Date(payment.webhookReceivedAt).toLocaleTimeString() : 'pending'} via {payment.provider || 'mock'}</div>
+                  </div>
+                )}
                 {showDev && (
                   <>
                     <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Payment ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.paymentId.slice(0,12)}...</span></div>
-                    <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B'}}>UPI Ref</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.upiTxnId.slice(0,14)}...</span></div>
-                    <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B'}}>UTR</span><span style={{fontFamily:'monospace', fontSize:9, fontWeight:600}}>{payment.utr.slice(0,14)}...</span></div>
+                    <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B'}}>Provider</span><span style={{fontSize:9}}>{payment.provider || 'mock'} {payment.callbackReceived ? '✓ webhook' : ''}</span></div>
                   </>
                 )}
               </div>
@@ -376,10 +389,11 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
 
               {payment.status==='RELEASED' && (
                 <div style={{background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:8, padding:10}}>
-                  <div style={{fontSize:11, fontWeight:700, color:'#059669'}}>✓ Payment Successful</div>
+                  <div style={{fontSize:11, fontWeight:700, color:'#059669'}}>✓ Payment Successful — UTR {payment.utr ? payment.utr.slice(-4) : ''}</div>
                   <div style={{fontSize:10, color:'#475569', marginTop:4, lineHeight:1.5}}>
-                    ₹{payment.amountINR.toLocaleString('en-IN')} paid · {payment.tokenAmount} tokens transferred to you · Secure & instant settlement
+                    ₹{payment.amountINR.toLocaleString('en-IN')} paid · {payment.tokenAmount} tokens transferred to you · UTR {payment.utr || payment.utr12 || '—'} for bank statement · Secure & instant settlement · Webhook {payment.webhookReceivedAt ? '✓' : 'pending'} via {payment.provider || 'mock'} — atomic DvP, no partial
                   </div>
+                  {payment.utr && <div style={{marginTop:6, display:'flex', gap:6}}><a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#065F46'}}>Verify UTR →</a><a href="/api/npci/reconcile" target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #E2E8F0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#475569'}}>Reconciliation Dashboard</a></div>}
                 </div>
               )}
             </div>

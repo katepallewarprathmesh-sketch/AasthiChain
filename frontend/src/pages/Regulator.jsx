@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import UTRReconciliation from '../components/UTRReconciliation.jsx'
 
 export default function Regulator({ user }) {
   const [transfers, setTransfers] = useState([])
@@ -184,10 +185,14 @@ export default function Regulator({ user }) {
         )}
       </div>
 
+      <div style={{marginTop:24}}>
+        <UTRReconciliation />
+      </div>
+
       <div className="card" style={{marginTop:20, background:'var(--paper)', borderLeft:'3px solid var(--error-rust)'}}>
         <h4 style={{fontSize:11, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--error-rust)'}}>Legal / Regulatory — Explicitly Flagged (§9.4) + SPV Structure</h4>
         <p style={{fontSize:12, color:'var(--ink-60)', marginTop:8, lineHeight:'1.6', maxWidth:'80ch'}}>
-          On-chain token ownership is <strong>NOT</strong> a substitute for registration under Registration Act, 1908. Production must reflect registered ownership via DILRMP integration or operate under IFSCA/SEBI sandbox. Real fractional platforms use <strong>SPV per property</strong> — SPV holds legal title, tokens = beneficial interest in SPV. This is the credible answer for judge Q&A. KYC must integrate with licensed provider (DigiLocker/Aadhaar), not mocked. Judges respect honest scoping over overclaim per improvement roadmap.
+          On-chain token ownership is <strong>NOT</strong> a substitute for registration under Registration Act, 1908. Production must reflect registered ownership via DILRMP integration or operate under IFSCA/SEBI sandbox. Real fractional platforms use <strong>SPV per property</strong> — SPV holds legal title, tokens = beneficial interest in SPV. This is the credible answer for judge Q&A. KYC must integrate with licensed provider (DigiLocker/Aadhaar), not mocked. Judges respect honest scoping over overclaim per improvement roadmap. New: UTR reconciliation ensures bank statement matches ledger — Regulator can verify UTR at /api/npci/utr/:utr, check /api/npci/reconcile for mismatches.
         </p>
       </div>
     </div>
