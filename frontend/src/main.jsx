@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { ClerkProvider, ClerkLoading, ClerkLoaded, ClerkFailed } from '@clerk/react'
+import { Analytics } from '@vercel/analytics/react'
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -148,6 +149,7 @@ function Root() {
           </ClerkFailed>
           <ClerkLoaded>
             <App />
+            <Analytics />
           </ClerkLoaded>
         </ClerkProvider>
       </React.StrictMode>
@@ -156,6 +158,7 @@ function Root() {
   return (
     <React.StrictMode>
       <App />
+      <Analytics />
     </React.StrictMode>
   )
 }
