@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { realDB } from './lib/db_real.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -110,6 +111,31 @@ function saveAllPersisted() {
     saveToFile(PERSIST_FILES.npci, { payments: npciPayments, idem: npciIdem, balances: npciBalances, utrIndex });
     saveToFile(PERSIST_FILES.utrIndex, utrIndex);
     saveToFile(PERSIST_FILES.webhooks, npciWebhooks);
+    
+    // Also save to real DB if available — fire and forget for performance
+    try {
+      const mode = realDB.getMode()
+      if (mode === 'postgres' || mode === 'vercel-kv') {
+        // Save properties that are not deterministic
+        Object.keys(properties).forEach(async (assetId) => {
+          try {
+            await realDB.saveProperty(assetId, properties[assetId])
+          } catch {}
+        })
+        Object.keys(balances).forEach(async (key) => {
+          try {
+            await realDB.saveBalance(key, balances[key])
+          } catch {}
+        })
+        Object.keys(transfers).forEach(async (txId) => {
+          try {
+            await realDB.saveTransfer(txId, transfers[txId])
+          } catch {}
+        })
+      }
+    } catch (e) {
+      console.error('saveAllPersisted realDB failed', e.message)
+    }
   } catch (e) {
     console.error('saveAllPersisted failed', e.message);
   }
@@ -139,9 +165,37 @@ function safeUUID() {
   }
 }
 
-function initState() {
+async function initState() {
   try {
-    // Load from file first for persistence across warm instances (improves cold start for new properties)
+    // Try real DB first — Postgres or Vercel KV — persistent across lambdas
+    // This fixes property vanishes on refresh + originator not visible at investor
+    try {
+      await realDB.init()
+      const mode = realDB.getMode()
+      if (mode === 'postgres' || mode === 'vercel-kv') {
+        console.log(`[DB] Using real DB mode: ${mode} — persistent across lambdas`)
+        // Load from real DB
+        const realProps = await realDB.getProperties()
+        if (realProps && Object.keys(realProps).length > 0) {
+          properties = realProps
+          globalThis._aasthi_properties = realProps
+        }
+        const realBals = await realDB.getBalances()
+        if (realBals && Object.keys(realBals).length > 0) {
+          balances = realBals
+          globalThis._aasthi_balances = realBals
+        }
+        const realTrans = await realDB.getTransfers()
+        if (realTrans && Object.keys(realTrans).length > 0) {
+          transfers = realTrans
+          globalThis._aasthi_transfers = realTrans
+        }
+      }
+    } catch (e) {
+      console.error('[DB] Real DB init failed, fallback to file', e.message)
+    }
+
+    // Load from file for persistence across warm instances (improves cold start for new properties)
     loadAllPersisted();
     // Ensure globals are objects
     if (!properties || typeof properties !== 'object') properties = {};
@@ -462,9 +516,9 @@ function getUser(req) {
   }
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   try {
-    initState();
+    await initState();
   } catch (e) {
     console.error('initState outer failed', e);
   }
@@ -1411,6 +1465,13 @@ export default function handler(req, res) {
         if (idemKey) idempotency[idemKey] = resp;
         globalThis._aasthi_properties = properties;
         saveAllPersisted();
+        // Save to real DB — persistent across lambdas, fixes vanish on refresh
+        try {
+          await realDB.saveProperty(assetId, properties[assetId])
+          console.log(`[DB] Saved new property ${assetId} to real DB mode ${realDB.getMode()}`)
+        } catch (e) {
+          console.error('[DB] saveProperty failed', e.message)
+        }
         return res.status(201).json(resp);
       } catch (e) {
         return res.status(500).json({ error: e.message });
