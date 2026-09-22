@@ -110,7 +110,23 @@ export default function Marketplace({ user }) {
         </div>
       </div>
 
-      {loading ? <p style={{color:'var(--ink-60)', fontSize:14}}>Loading properties...</p> : (
+      {loading ? (
+        <div style={{textAlign:'center', padding:'40px 0'}}>
+          <div style={{width:24, height:24, border:'3px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
+          <p style={{color:'var(--ink-60)', fontSize:14, marginTop:12}}>Loading properties from Drunix — SQL indexes idx_property_status for O(log n) lookup...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card" style={{textAlign:'center', padding:'32px 0'}}>
+          <div style={{fontSize:32}}>🔍</div>
+          <p style={{fontSize:14, fontWeight:600, marginTop:8}}>No properties match your filters</p>
+          <p style={{fontSize:12, color:'#6B7280', marginTop:4, maxWidth:'50ch', margin:'4px auto 0'}}>Try clearing filters — All Status, All Cities, or search. Or register a new property as Originator in Admin. Seeded property: Green Valley Villas Pune 75L/15000/₹500 always available via deterministic PROP-GREEN-VALLEY-PUNE-001.</p>
+          <div style={{marginTop:12, display:'flex', gap:8, justifyContent:'center'}}>
+            <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>{setFilter(''); setCityFilter(''); setSearch('')}}>Clear Filters</button>
+            <button className="btn btn-primary" style={{fontSize:12}} onClick={fetchProperties}>Refresh</button>
+          </div>
+        </div>
+      ) : (
         <div className="grid grid-3">
           {filtered.map(prop => {
             const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0

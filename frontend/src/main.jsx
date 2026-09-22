@@ -12,14 +12,17 @@ const isClerkConfigured = clerkPubKey &&
   !clerkPubKey.includes('your-key-here') &&
   clerkPubKey.length > 20
 
-if (isClerkConfigured) {
-  console.log('[Clerk] Enabled — key:', clerkPubKey.slice(0, 20) + '... — domain:', window.location.hostname)
-  // Check allowed origins - common cause of sign-in button doing nothing
-  if (window.location.hostname.includes('vercel.app')) {
-    console.log('[Clerk] Production Vercel domain detected:', window.location.hostname, '— ensure this domain is in Clerk Dashboard → Domains → Allowed Origins')
+// Only log in dev mode — reduces production bundle noise and avoids exposing key prefix in prod console per security best practice
+const isDev = import.meta.env.DEV
+if (isDev) {
+  if (isClerkConfigured) {
+    console.log('[Clerk] Enabled — key:', clerkPubKey.slice(0, 20) + '... — domain:', window.location.hostname)
+    if (window.location.hostname.includes('vercel.app')) {
+      console.log('[Clerk] Production Vercel domain detected:', window.location.hostname, '— ensure this domain is in Clerk Dashboard → Domains → Allowed Origins')
+    }
+  } else {
+    console.log('[Clerk] Not configured — using mock auth fallback. Set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk.')
   }
-} else {
-  console.log('[Clerk] Not configured — using mock auth fallback. Set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk.')
 }
 
 // Global fetch interceptor to add X-Fabric-Identity header for Clerk + mock compatibility
@@ -50,7 +53,7 @@ window.fetch = async (input, init = {}) => {
       }
     }
   } catch (e) {
-    console.warn('[fetch interceptor] failed', e)
+    if (import.meta.env.DEV) console.warn('[fetch interceptor] failed', e)
   }
   return originalFetch(input, init)
 }
@@ -79,7 +82,7 @@ function ClerkLoadingSkeleton() {
 }
 
 function ClerkFailedState({ error }) {
-  console.error('[Clerk] Failed to load:', error)
+  if (import.meta.env.DEV) console.error('[Clerk] Failed to load:', error)
   return (
     <div style={{minHeight:'100vh', background:'var(--paper)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
       <div className="card" style={{maxWidth:480, borderColor:'rgba(161,61,46,0.2)'}}>

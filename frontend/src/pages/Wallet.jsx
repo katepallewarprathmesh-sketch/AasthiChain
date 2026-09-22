@@ -172,6 +172,22 @@ export default function Wallet({ user }) {
     isOverBalance = amountNum > maxBal
   } catch {}
 
+  // Human-friendly error messages per §1.4 voice — trust-critical moment, no "Oops!"
+  const getFriendlyError = (msg) => {
+    if (!msg) return ''
+    if (msg.includes('ERR_INSUFFICIENT_BALANCE')) {
+      const match = msg.match(/have (\d+) need (\d+)/)
+      if (match) return `You hold ${match[1]} tokens, this transfer requires ${match[2]}. Reduce amount or buy more from Marketplace.`
+      return 'Insufficient tokens — you cannot transfer more than you own. No partial transfers per atomic design.'
+    }
+    if (msg.includes('ERR_INVALID_TRANSFER')) return 'Self-transfer not allowed — you cannot send tokens to yourself.'
+    if (msg.includes('ERR_KYC_NOT_VERIFIED')) return 'Receiver KYC not verified — per Asset Tokenisation Bill 2026, receiver must be VERIFIED. Ask them to complete KYC.'
+    if (msg.includes('ERR_ASSET_FROZEN')) return 'Asset frozen by Regulator — no transfers possible until unfrozen. Safety action per §3.5.'
+    if (msg.includes('ERR_BALANCE_NOT_FOUND')) return 'Balance not found — property may be on different server instance due to Vercel cold start. Backend auto-creates balance for demo — try again, second attempt should work. Or check Marketplace balances.'
+    return msg
+  }
+
+
   if (loadingWallet && !wallet) {
     return (
       <div style={{padding:40, textAlign:'center'}}>
@@ -257,8 +273,12 @@ export default function Wallet({ user }) {
             {!wallet || !wallet.balances || wallet.balances.length===0 ? (
               <div style={{textAlign:'center', padding:'32px 0', color:'#6B7280'}}>
                 <div style={{fontSize:32}}>🏠</div>
-                <p style={{fontSize:13, marginTop:8}}>No properties yet</p>
-                <p style={{fontSize:11, marginTop:4, color:'#9CA3AF'}}>Buy tokens from Marketplace to get started</p>
+                <p style={{fontSize:13, marginTop:8, fontWeight:600}}>No properties yet — start investing from ₹500</p>
+                <p style={{fontSize:11, marginTop:4, color:'#9CA3AF', maxWidth:'40ch', margin:'4px auto 0', lineHeight:1.5}}>Your portfolio is empty. Browse Marketplace → Green Valley Villas Pune (₹75L, 15k tokens @ ₹500) → Buy 100 tokens for ₹50k via UPI Collect P2M. Payment and tokens move together atomically — no risk. Try Quick Demo Access on landing if you haven't logged in.</p>
+                <div style={{marginTop:12, display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap'}}>
+                  <a href="/marketplace" className="btn btn-primary" style={{fontSize:12, padding:'8px 14px', textDecoration:'none'}}>Explore Marketplace →</a>
+                  <button className="btn btn-secondary" style={{fontSize:11, padding:'8px 12px'}} onClick={fetchWallet}>Refresh Portfolio</button>
+                </div>
               </div>
             ) : (
               <div style={{display:'flex', flexDirection:'column', gap:10}}>
@@ -333,7 +353,7 @@ export default function Wallet({ user }) {
                 ))}
               </div>
             )}
-            {msg && <div style={{marginTop:10, padding:'8px 10px', borderRadius:6, fontSize:12, background: msg.includes('failed') ? '#FEF2F2' : '#F0FDF4', color: msg.includes('failed') ? '#991B1B' : '#065F46'}}>{msg}</div>}
+            {msg && <div style={{marginTop:10, padding:'10px 12px', borderRadius:8, fontSize:12, lineHeight:1.5, background: msg.includes('failed') ? '#FEF2F2' : '#F0FDF4', color: msg.includes('failed') ? '#991B1B' : '#065F46', border: `1px solid ${msg.includes('failed') ? '#FECACA' : '#BBF7D0'}`}}>{getFriendlyError(msg)}</div>}
           </div>
         </div>
       )}

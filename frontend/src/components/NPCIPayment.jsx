@@ -139,8 +139,9 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           })
           let drunixData = await drunixRes.json()
           // If primary fails with ERR_BALANCE_NOT_FOUND, retry with originator1 and also try fetching property to get real originator
+          // Guard log with dev check to avoid production noise
           if (!drunixRes.ok && drunixData.error && drunixData.error.includes('ERR_BALANCE_NOT_FOUND')) {
-            console.log(`Transfer failed with ${primaryFromId}, retrying with originator1 and property originator lookup for ${assetId}`)
+            if (import.meta.env.DEV) console.log(`Transfer failed with ${primaryFromId}, retrying with originator1 and property originator lookup for ${assetId}`)
             // Try to get property originator
             try {
               const propRes = await fetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: getHeaders() })

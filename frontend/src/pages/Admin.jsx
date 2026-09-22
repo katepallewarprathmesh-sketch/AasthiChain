@@ -21,8 +21,40 @@ export default function Admin({ user }) {
   const [validationStatus, setValidationStatus] = useState('')
   const [propertyExists, setPropertyExists] = useState(false)
   const [lastRegisteredId, setLastRegisteredId] = useState('')
+  const [propertyQueue, setPropertyQueue] = useState([])
+  const [loadingQueue, setLoadingQueue] = useState(false)
+  const [filterStatus, setFilterStatus] = useState('')
 
   const tokenPrice = form.valuationINR && form.totalTokens ? Math.floor(form.valuationINR / form.totalTokens) : 0
+
+  // Fetch property queue for Registrar — filterable by status, oldest-pending-first per §3.2
+  const fetchQueue = async () => {
+    setLoadingQueue(true)
+    try {
+      const token = localStorage.getItem('aasthi_token')
+      const url = filterStatus ? `/api/properties?status=${filterStatus}` : '/api/properties'
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      let list = data.properties || []
+      // Sort oldest-pending-first per §3.2
+      list.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))
+      if (filterStatus) {
+        // Additional filter for validation status
+        if (filterStatus === 'PENDING') list = list.filter(p => p.registrarValidationStatus === 'PENDING' || p.status === 'DRAFT')
+        if (filterStatus === 'VALIDATED') list = list.filter(p => p.registrarValidationStatus === 'VALIDATED' && p.status !== 'TOKENIZED')
+        if (filterStatus === 'TOKENIZED') list = list.filter(p => p.status === 'TOKENIZED')
+      }
+      setPropertyQueue(list)
+    } catch {
+      setPropertyQueue([])
+    } finally {
+      setLoadingQueue(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchQueue()
+  }, [filterStatus, user?.identityId, lastRegisteredId])
 
   // Refetch validation status when assetId changes or role switches
   useEffect(() => {
@@ -282,11 +314,44 @@ export default function Admin({ user }) {
           <div className="card">
             <h3 style={{marginBottom:4}}>Validate property — Registrar</h3>
             <p style={{fontSize:11, color:'var(--ink-40)', marginBottom:12}}>Table filterable by status, oldest-pending-first per §3.2 · Two explicit buttons, not dropdown per §3.2</p>
+            <div style={{display:'flex', gap:8, marginBottom:12, flexWrap:'wrap', alignItems:'center'}}>
+              <select className="input" style={{flex:1, minWidth:120}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+                <option value="">All Status</option>
+                <option value="PENDING">Pending Review</option>
+                <option value="VALIDATED">Validated — Ready to Mint</option>
+                <option value="TOKENIZED">Tokenized</option>
+              </select>
+              <button type="button" className="btn btn-secondary" style={{fontSize:11, padding:'6px 10px'}} onClick={fetchQueue} disabled={loadingQueue}>
+                {loadingQueue ? 'Loading...' : 'Refresh Queue'}
+              </button>
+            </div>
+
+            <div style={{maxHeight:200, overflowY:'auto', border:'1px solid var(--ink-8)', borderRadius:'var(--radius)', marginBottom:12}}>
+              {propertyQueue.length === 0 ? (
+                <div style={{padding:12, fontSize:11, color:'var(--ink-40)', textAlign:'center'}}>
+                  {loadingQueue ? 'Loading property queue...' : 'No properties in queue — register one as Originator first'}
+                </div>
+              ) : (
+                propertyQueue.map(prop => (
+                  <div key={prop.assetId} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', borderBottom:'1px solid var(--ink-8)', background: validateForm.assetId===prop.assetId ? 'rgba(30,58,95,0.06)' : 'white', cursor:'pointer'}} onClick={()=>{setValidateForm({...validateForm, assetId: prop.assetId}); setMintForm(f=>({...f, assetId: prop.assetId})); setLastRegisteredId(prop.assetId)}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12, fontWeight:600}}>{prop.title?.slice(0,30) || prop.assetId.slice(0,16)}</div>
+                      <div style={{fontSize:10, color:'var(--ink-60)'}}>{prop.assetId.slice(0,16)}... · {prop.registrarValidationStatus || prop.status} · ₹{prop.valuationINR?.toLocaleString('en-IN') || '—'} · {prop.location?.city || ''}</div>
+                    </div>
+                    <div style={{display:'flex', gap:4, alignItems:'center'}}>
+                      <span className={`status-chip ${prop.status==='TOKENIZED' ? 'status-tokenized' : prop.registrarValidationStatus==='VALIDATED' ? 'status-validated' : 'status-pending'}`} style={{fontSize:9}}>{prop.registrarValidationStatus || prop.status}</span>
+                      {validateForm.assetId===prop.assetId && <span style={{fontSize:10, color:'var(--registry-navy)'}}>✓</span>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
             <form onSubmit={handleValidate} style={{display:'flex', flexDirection:'column', gap:12}}>
               <div className="field-group">
-                <label className="field-label">Property queue — filterable per §3.2</label>
+                <label className="field-label">Property queue — filterable per §3.2 — Click a property above to select, or enter manually — Sorted oldest-pending-first</label>
                 <input className="input" placeholder="Asset ID" value={validateForm.assetId} onChange={e=>setValidateForm({...validateForm, assetId:e.target.value})} required />
-                <div className="field-hint">Sorted oldest-pending-first by default per §3.2</div>
+                <div className="field-hint">Selected: {validateForm.assetId ? `${validateForm.assetId.slice(0,16)}... — Status ${validationStatus || 'checking...'}` : 'None — select from queue above'} — Sorted oldest-pending-first by default per §3.2 — Auto-refreshes on role switch</div>
               </div>
               <div className="field-group">
                 <label className="field-label">Document viewer — inline PDF preview per §3.2, side-by-side, no download-and-reopen</label>

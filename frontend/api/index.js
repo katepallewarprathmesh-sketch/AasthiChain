@@ -1,5 +1,102 @@
 // Vercel Serverless API — AasthiChain Mock Fabric Client with Clerk + NPCI UPI rail — v2.1 fixed wallet 500 + abstraction
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+// File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
+// In production, replace with Postgres/Redis per Drunix SQL state store advantage
+const TMP_DIR = os.tmpdir();
+const PERSIST_FILES = {
+  properties: path.join(TMP_DIR, 'aasthi_properties.json'),
+  balances: path.join(TMP_DIR, 'aasthi_balances.json'),
+  transfers: path.join(TMP_DIR, 'aasthi_transfers.json'),
+  kyc: path.join(TMP_DIR, 'aasthi_kyc.json'),
+  idem: path.join(TMP_DIR, 'aasthi_idem.json'),
+  npci: path.join(TMP_DIR, 'aasthi_npci.json'),
+};
+
+function loadFromFile(filePath, fallback) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error(`Failed to load ${filePath}`, e.message);
+  }
+  return fallback;
+}
+
+function saveToFile(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data), 'utf8');
+  } catch (e) {
+    // /tmp may not be writable in some Vercel envs — fallback to globalThis only
+    // console.error(`Failed to save ${filePath}`, e.message);
+  }
+}
+
+function loadAllPersisted() {
+  try {
+    const props = loadFromFile(PERSIST_FILES.properties, null);
+    if (props && Object.keys(props).length > 0) {
+      properties = props;
+      globalThis._aasthi_properties = props;
+    }
+    const bals = loadFromFile(PERSIST_FILES.balances, null);
+    if (bals && Object.keys(bals).length > 0) {
+      balances = bals;
+      globalThis._aasthi_balances = bals;
+    }
+    const trans = loadFromFile(PERSIST_FILES.transfers, null);
+    if (trans && Object.keys(trans).length > 0) {
+      transfers = trans;
+      globalThis._aasthi_transfers = trans;
+    }
+    const kyc = loadFromFile(PERSIST_FILES.kyc, null);
+    if (kyc && Object.keys(kyc).length > 0) {
+      kycRecords = kyc;
+      globalThis._aasthi_kyc = kyc;
+    }
+    const idem = loadFromFile(PERSIST_FILES.idem, null);
+    if (idem && Object.keys(idem).length > 0) {
+      idempotency = idem;
+      globalThis._aasthi_idem = idem;
+    }
+    const npci = loadFromFile(PERSIST_FILES.npci, null);
+    if (npci) {
+      if (npci.payments) {
+        npciPayments = npci.payments;
+        globalThis._aasthi_npcipayments = npci.payments;
+      }
+      if (npci.idem) {
+        npciIdem = npci.idem;
+        globalThis._aasthi_npci_idem = npci.idem;
+      }
+      if (npci.balances) {
+        npciBalances = npci.balances;
+        globalThis._aasthi_npci_balances = npci.balances;
+      }
+    }
+  } catch (e) {
+    console.error('loadAllPersisted failed', e.message);
+  }
+}
+
+function saveAllPersisted() {
+  try {
+    saveToFile(PERSIST_FILES.properties, properties);
+    saveToFile(PERSIST_FILES.balances, balances);
+    saveToFile(PERSIST_FILES.transfers, transfers);
+    saveToFile(PERSIST_FILES.kyc, kycRecords);
+    saveToFile(PERSIST_FILES.idem, idempotency);
+    saveToFile(PERSIST_FILES.npci, { payments: npciPayments, idem: npciIdem, balances: npciBalances });
+  } catch (e) {
+    console.error('saveAllPersisted failed', e.message);
+  }
+}
+
 
 let properties = globalThis._aasthi_properties || {};
 let balances = globalThis._aasthi_balances || {};
@@ -24,6 +121,8 @@ function safeUUID() {
 
 function initState() {
   try {
+    // Load from file first for persistence across warm instances (improves cold start for new properties)
+    loadAllPersisted();
     // Ensure globals are objects
     if (!properties || typeof properties !== 'object') properties = {};
     if (!balances || typeof balances !== 'object') balances = {};
@@ -736,9 +835,10 @@ export default function handler(req, res) {
           documentHash, registrarValidationStatus: 'PENDING', status: 'DRAFT',
           createdAt: now, updatedAt: now, version: 1
         };
-        const resp = { assetId, status: 'DRAFT', message: 'Property registered' };
+        const resp = { assetId, status: 'DRAFT', message: 'Property registered', title, valuationINR, location: { state, city, pincode }, originatorId: user.identityId, validationStatus: 'PENDING', tokenPrice: 0 };
         if (idemKey) idempotency[idemKey] = resp;
         globalThis._aasthi_properties = properties;
+        saveAllPersisted();
         return res.status(201).json(resp);
       } catch (e) {
         return res.status(500).json({ error: e.message });
@@ -774,7 +874,8 @@ export default function handler(req, res) {
         prop.updatedAt = new Date();
         properties[id] = prop;
         globalThis._aasthi_properties = properties;
-        return res.json({ assetId: id, validationStatus: req.body.decision });
+        saveAllPersisted();
+        return res.json({ assetId: id, validationStatus: req.body.decision, title: prop.title, fabricMode: 'mock-persisted', message: `Property ${id.slice(0,16)}... is now ${req.body.decision} — ${req.body.decision==='VALIDATED' ? 'Ready to mint! Switch to Originator role to mint.' : 'REJECTED — reason shown verbatim per §3.2'}` });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
@@ -841,10 +942,11 @@ export default function handler(req, res) {
           return res.status(409).json({ error: 'ERR_DUPLICATE_MINT', message: 'Already minted this amount — try different asset or check Marketplace' });
         }
         balances[key] = { docType: 'balance', assetId: id, ownerId: prop.originatorId, balance: totalTokens, updatedAt: new Date() };
-        const resp = { assetId: id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock-demo-fallback-fixed', validationStatus: prop.registrarValidationStatus, autoCreated: !!prop.autoCreated };
+        const resp = { assetId: id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock-persisted-fixed', validationStatus: prop.registrarValidationStatus, autoCreated: !!prop.autoCreated, tokenPrice: prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0, title: prop.title };
         if (idemKey) idempotency[idemKey] = resp;
         globalThis._aasthi_properties = properties;
         globalThis._aasthi_balances = balances;
+        saveAllPersisted();
         return res.json(resp);
       } catch (e) {
         console.error('mint error', e);
@@ -984,7 +1086,8 @@ export default function handler(req, res) {
         globalThis._aasthi_properties = properties;
         globalThis._aasthi_balances = balances;
         globalThis._aasthi_transfers = transfers;
-        return res.json({ transferId, assetId: effectiveAssetId, fromId, toId, amount: amt, status: 'COMPLETED', fabricMode: 'mock-demo-fallback-fixed' });
+        saveAllPersisted();
+        return res.json({ transferId, assetId: effectiveAssetId, fromId, toId, amount: amt, status: 'COMPLETED', fabricMode: 'mock-persisted-fixed', message: `Transferred ${amt} tokens of ${effectiveAssetId.slice(0,16)}... from ${fromId} to ${toId} — atomic, no partial` });
       } catch (e) {
         console.error('transfers error', e);
         return res.status(500).json({ error: 'Internal error in transfer', message: e.message, stack: e.stack?.slice(0,500) });

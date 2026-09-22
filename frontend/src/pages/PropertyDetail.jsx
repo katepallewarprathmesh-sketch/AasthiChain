@@ -196,15 +196,26 @@ export default function PropertyDetail({ user }) {
             </div>
 
             <div style={{marginTop:20, background:'#F9FAFB', border:'1px solid #E5E7EB', borderRadius:10, padding:14}}>
-              <div style={{fontSize:11, fontWeight:600, color:'#374151', textTransform:'uppercase', marginBottom:10}}>Buy Tokens — Instant UPI Settlement</div>
-              <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                <input type="number" min="1" max={property.totalTokens} value={buyAmount} onChange={e=>setBuyAmount(parseInt(e.target.value)||1)} className="input" style={{width:100, fontSize:13}} />
-                <span style={{fontSize:12, color:'#6B7280'}}>tokens = ₹{(buyAmount*tokenPrice).toLocaleString('en-IN')}</span>
+              <div style={{fontSize:11, fontWeight:600, color:'#374151', textTransform:'uppercase', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <span>Buy Tokens — Instant UPI Settlement</span>
+                <span style={{fontSize:9, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'2px 6px', borderRadius:10}}>Atomic DvP</span>
               </div>
-              <button className="btn btn-primary" style={{width:'100%', padding:'12px', fontSize:13, fontWeight:600, marginTop:10}} onClick={()=>setShowPayment(!showPayment)}>
+              <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+                <input type="number" min="1" max={property.totalTokens || 15000} value={buyAmount} onChange={e=>setBuyAmount(Math.max(1, Math.min(parseInt(e.target.value)||1, property.totalTokens || 15000)))} className="input" style={{width:100, fontSize:13}} aria-label="Number of tokens to buy" />
+                <span style={{fontSize:12, color:'#6B7280'}}>tokens = ₹{(buyAmount*tokenPrice).toLocaleString('en-IN')} · {buyAmount} × ₹{tokenPrice.toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{display:'flex', gap:6, marginTop:8}}>
+                {[10, 50, 100, 500].map(amt => (
+                  <button key={amt} type="button" onClick={()=>setBuyAmount(Math.min(amt, property.totalTokens || 15000))} style={{fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #E5E7EB', background: buyAmount===amt ? '#1E3A5F' : 'white', color: buyAmount===amt ? 'white' : '#6B7280', cursor:'pointer', fontWeight:600}}>
+                    {amt}
+                  </button>
+                ))}
+                <button type="button" onClick={()=>setBuyAmount(property.totalTokens || 15000)} style={{fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #E5E7EB', background:'white', color:'#6B7280', cursor:'pointer'}}>Max</button>
+              </div>
+              <button className="btn btn-primary" style={{width:'100%', padding:'12px', fontSize:13, fontWeight:600, marginTop:10}} onClick={()=>setShowPayment(!showPayment)} aria-label={`Buy ${buyAmount} tokens`}>
                 {showPayment ? 'Hide Payment' : `Buy ${buyAmount} tokens — Pay ₹${(buyAmount*tokenPrice).toLocaleString('en-IN')} →`}
               </button>
-              <div style={{fontSize:10, color:'#9CA3AF', marginTop:8, textAlign:'center'}}>Secure UPI payment · Instant token transfer · No paperwork</div>
+              <div style={{fontSize:10, color:'#6B7280', marginTop:8, textAlign:'center', lineHeight:1.4}}>🔒 Secure UPI payment · Instant token transfer · No paperwork · Money and tokens move together or both refunded — no risk · Pay to locked per Collect P2M security</div>
             </div>
 
             <div style={{height:1, background:'#E5E7EB', margin:'16px 0'}}></div>
