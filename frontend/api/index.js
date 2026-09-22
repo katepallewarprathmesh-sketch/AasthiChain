@@ -2158,28 +2158,78 @@ export default async function handler(req, res) {
       }
     }
 
-    // ============ Persistent DB Config (Phase 4) ============
+    // ============ Persistent DB Config (Phase 4) — Real DB with Postgres + Vercel KV + GitHub ============
     if (path === '/api/db/config' && method === 'GET') {
-      return res.json({
-        currentMode: process.env.DATABASE_URL ? 'postgres' : 'file-backed',
-        fileBacked: {
-          location: '/tmp/aasthi_*.json + globalThis',
-          persists: 'Warm instances, helps with cold start',
-          limitation: 'Lost on full cold start across regions — use Postgres for prod',
-          files: Object.values(PERSIST_FILES || {}),
-          implementation: 'frontend/api/lib/db.js FileStore'
-        },
-        postgres: {
-          requiredEnv: 'DATABASE_URL (Neon/Supabase/RDS)',
-          tables: ['properties', 'balances', 'transfers', 'kyc', 'idempotency', 'npci_payments', 'npci_balances', 'utr_index', 'webhooks'],
-          indexes: ['idx_properties_status', 'idx_transfers_asset', 'idx_npcipayments_status', 'idx_npcipayments_utr'],
-          implementation: 'frontend/api/lib/db.js PostgresStore with pg Pool',
-          initSQL: 'CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY, data JSONB, updated_at TIMESTAMPTZ); ...',
-          migration: 'POST /api/db/migrate { adminKey } -> creates tables'
-        },
-        toggle: 'Set DATABASE_URL env in Vercel -> auto switches to Postgres, no code change',
-        abstraction: 'getDB() factory — same interface for file and postgres, repository pattern'
-      });
+      try {
+        const realMode = realDB.getMode()
+        await realDB.init()
+        return res.json({
+          currentMode: realMode,
+          realDBMode: realMode,
+          env: {
+            hasDatabaseUrl: !!(process.env.DATABASE_URL || process.env.POSTGRES_URL),
+            hasKvUrl: !!(process.env.KV_URL || process.env.KV_REST_API_URL),
+            hasGithubToken: !!(process.env.GITHUB_TOKEN || process.env.GITHUB_PAT),
+            databaseUrlPrefix: process.env.DATABASE_URL ? process.env.DATABASE_URL.slice(0,20) + '...' : null,
+            postgresUrlPrefix: process.env.POSTGRES_URL ? process.env.POSTGRES_URL.slice(0,20) + '...' : null
+          },
+          modes: {
+            postgres: {
+              enabled: realMode === 'postgres',
+              requiredEnv: 'DATABASE_URL or POSTGRES_URL (Neon/Supabase/RDS/Vercel Postgres)',
+              tables: ['properties', 'balances', 'transfers', 'kyc', 'idempotency', 'npci_payments', 'npci_balances', 'utr_index', 'webhooks'],
+              indexes: ['idx_properties_status', 'idx_properties_created', 'idx_transfers_asset', 'idx_transfers_time', 'idx_npcipayments_status', 'idx_npcipayments_utr'],
+              implementation: 'frontend/api/lib/db_real.js + pg Pool + @vercel/postgres',
+              persistent: 'Yes — shared across Vercel lambdas, never vanishes, visible to all investors',
+              howToEnable: 'Vercel Dashboard → Storage → Create Postgres → DATABASE_URL auto set → redeploy'
+            },
+            vercelKv: {
+              enabled: realMode === 'vercel-kv',
+              requiredEnv: 'KV_URL or KV_REST_API_URL (Upstash Redis via Vercel KV)',
+              keys: ['property:{assetId}', 'balance:{key}', 'transfer:{id}'],
+              implementation: 'frontend/api/lib/db_real.js + @vercel/kv',
+              persistent: 'Yes — shared via Upstash Redis'
+            },
+            github: {
+              enabled: realMode === 'github',
+              requiredEnv: 'GITHUB_TOKEN (optional, for write) — reading via raw.githubusercontent.com works without token',
+              files: ['data/properties.json', 'data/balances.json', 'data/transfers.json', 'data/kyc.json', 'data/npci_payments.json', 'data/utr_index.json', 'data/webhooks.json'],
+              implementation: 'frontend/api/lib/github_db.js + GitHub Contents API + raw.githubusercontent.com',
+              persistent: 'Yes — shared via GitHub repo, survives cold start, visible to all via raw URL',
+              howItFixes: 'Property created by originator → saved to GitHub data/properties.json → raw URL shared across lambdas → investor sees in Marketplace',
+              currentData: `https://raw.githubusercontent.com/katepallewarprathmesh-sketch/AasthiChain/main/data/properties.json`
+            },
+            fileBacked: {
+              enabled: realMode === 'file-backed',
+              location: '/tmp/aasthi_*.json + globalThis',
+              persists: 'Warm instances only, per lambda',
+              limitation: 'Lost on cold start across regions — use postgres/github for prod',
+              files: Object.values(PERSIST_FILES || {}),
+              implementation: 'frontend/api/lib/db.js FileStore',
+              fallback: 'Plus localStorage aasthi_created_properties merge in frontend for same-browser visibility'
+            }
+          },
+          fileBacked: {
+            location: '/tmp/aasthi_*.json + globalThis',
+            persists: 'Warm instances, helps with cold start',
+            limitation: 'Lost on full cold start across regions — use Postgres for prod',
+            files: Object.values(PERSIST_FILES || {}),
+            implementation: 'frontend/api/lib/db.js FileStore'
+          },
+          postgres: {
+            requiredEnv: 'DATABASE_URL (Neon/Supabase/RDS)',
+            tables: ['properties', 'balances', 'transfers', 'kyc', 'idempotency', 'npci_payments', 'npci_balances', 'utr_index', 'webhooks'],
+            indexes: ['idx_properties_status', 'idx_transfers_asset', 'idx_npcipayments_status', 'idx_npcipayments_utr'],
+            implementation: 'frontend/api/lib/db.js PostgresStore with pg Pool',
+            initSQL: 'CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY, data JSONB, updated_at TIMESTAMPTZ); ...',
+            migration: 'POST /api/db/migrate { adminKey } -> creates tables'
+          },
+          toggle: 'Set DATABASE_URL env in Vercel -> auto switches to Postgres, no code change — OR set GITHUB_TOKEN for GitHub DB — OR uses file+localStorage fallback',
+          abstraction: 'realDB factory — same interface for postgres, vercel-kv, github, file-backed — repository pattern — fixes vanish on refresh'
+        });
+      } catch (e) {
+        return res.status(500).json({ error: e.message, currentMode: 'file-backed-fallback' });
+      }
     }
 
     if (path === '/api/db/migrate' && method === 'POST') {
@@ -2205,8 +2255,37 @@ export default async function handler(req, res) {
 
     if (path === '/api/db/stats' && method === 'GET') {
       try {
+        const realMode = realDB.getMode()
+        await realDB.init()
+        
+        // Try to get real counts from realDB if postgres/github
+        let realCounts = null
+        try {
+          if (realMode === 'github') {
+            const all = await githubDB.getAll()
+            realCounts = all.count
+          } else if (realMode === 'postgres') {
+            const props = await realDB.getProperties()
+            const bals = await realDB.getBalances()
+            const trans = await realDB.getTransfers()
+            realCounts = {
+              properties: Object.keys(props).length,
+              balances: Object.keys(bals).length,
+              transfers: Object.keys(trans).length
+            }
+          }
+        } catch (e) {
+          console.error('realCounts failed', e.message)
+        }
+        
         return res.json({
-          mode: process.env.DATABASE_URL ? 'postgres' : 'file-backed',
+          mode: realMode,
+          realMode: realMode,
+          env: {
+            hasDatabaseUrl: !!(process.env.DATABASE_URL || process.env.POSTGRES_URL),
+            hasKvUrl: !!(process.env.KV_URL || process.env.KV_REST_API_URL),
+            hasGithubToken: !!(process.env.GITHUB_TOKEN || process.env.GITHUB_PAT)
+          },
           counts: {
             properties: Object.keys(properties).length,
             balances: Object.keys(balances).length,
@@ -2216,14 +2295,21 @@ export default async function handler(req, res) {
             utrIndex: Object.keys(utrIndex).length,
             webhooks: npciWebhooks.length
           },
+          realCounts: realCounts,
           persistence: {
+            mode: realMode,
             files: Object.keys(PERSIST_FILES || {}).map(k => ({ name: k, exists: true })),
             globalThis: {
               properties: !!globalThis._aasthi_properties,
               balances: !!globalThis._aasthi_balances,
               utrIndex: !!globalThis._aasthi_utr_index
+            },
+            github: {
+              rawUrl: `https://raw.githubusercontent.com/katepallewarprathmesh-sketch/AasthiChain/main/data/properties.json`,
+              note: 'GitHub raw is persistent shared across lambdas'
             }
-          }
+          },
+          message: realMode === 'postgres' ? 'Using Postgres — persistent, shared, never vanishes' : realMode === 'github' ? 'Using GitHub as real DB — persistent via repo, shared across lambdas' : 'Using file-backed + localStorage — per lambda, use postgres/github for true persistence'
         });
       } catch (e) {
         return res.status(500).json({ error: e.message });
