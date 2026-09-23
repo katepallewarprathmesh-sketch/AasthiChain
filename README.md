@@ -8,11 +8,19 @@ Live: [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)
 
 ### NPCI Drunix Tokenization
 
-- Ledger: Drunix-compatible Fabric chaincode in Go (`chaincode/`) — properties, fractional token balances, KYC, transfers, `SettleDvP` (atomic delivery-versus-payment with UTR proof) + `SettlementRecorded` chaincode events
-- Drunix Gateway (Golang): `drunix-gateway/` — Drunix transaction lifecycle (PROPOSED → ENDORSED → COMMITTED, deterministic txIDs, read/write sets, chaincode events) + explainable AI fraud engine (`fraud.go`, ML-pluggable). `go test ./...` green. Run: `cd drunix-gateway && go run ./cmd/gateway` (:21100). Real network: `go build -tags real`
+- Ledger: Drunix-compatible Fabric chaincode in Go (`chaincode/`) — properties, fractional token balances, KYC, transfers, `SettleDvP` (atomic delivery-versus-payment with UTR proof) + `SettlementRecorded` chaincode events. **Duplicate deeds rejected on-chain**: `ERR_DUPLICATE_PROPERTY` if a documentHash is already registered — each document tokenizes exactly once
+- Drunix Gateway (Golang): `drunix-gateway/` — Drunix transaction lifecycle (PROPOSED → ENDORSED → COMMITTED, deterministic txIDs, read/write sets, chaincode events) + explainable AI fraud engine (`fraud.go`, ML-pluggable): 11 weighted signals, BLOCK ≥70 / REVIEW ≥40, re-screened at approve. `go test ./...` green. Run: `cd drunix-gateway && go run ./cmd/gateway` (:21100). Real network: `go build -tags real`
 - Settlement: UPI Collect escrow → payment CONFIRMED (bank UTR) → Drunix token transfer → escrow RELEASED — atomic DvP (`drunixTransferId` on every payment)
 - Persistence: production state in Postgres / GitHub-backed real DB (`frontend/api/lib/db_real.js`), shared across serverless instances
+- Identity & org schema (Neon): `user, account, session, organization, member, invitation, verification, jwt, project_config` — implemented in code (`frontend/api/lib/authstore.js`, Postgres + in-memory dual mode) with tables live in Neon; full lifecycle APIs: login→session→logout, JWKS (Ed25519), OTP-style verification, org→invite→accept→members
 - UPI rail: NPCI UPI Collect simulation with RRN/UTR, idempotency, webhooks + UTR reconciliation — real via Setu/ICICI by flipping `NPCI_MODE=real` (`payment-gateway/real_npcibank.go`)
+
+### Ownership & Data Integrity (recent hardening)
+
+- **One deed, one tokenization** — duplicate registration (same document hash, or same title+city+pincode) returns `409 ERR_DUPLICATE_PROPERTY` at API *and* chaincode layers
+- **Owner-only listing** — properties can only be listed by the **Property Owner (Originator)** role; tokens mint 100% to the lister by design, so an Investor can never end up "owning" a property it merely created. Investors buy tokens *from* the owner
+- **Real token availability** — `GET /api/properties/:id` returns `availableTokens` / `soldTokens`; the buy UI caps purchases at actual availability (Max preset, "Only N left"), and the server re-checks balance on transfer (`ERR_INSUFFICIENT_BALANCE`)
+- **Fraud-gated collect** — every UPI collect is risk-screened before approval; velocity burst (≥8 txns/10 min) → `403 FAILED_FRAUD_BLOCKED`; blocked attempts never feed velocity counters
 
 ---
 
@@ -29,12 +37,14 @@ AasthiChain converts each verified property into fixed tokens — like shares. A
 - **Atomic** — money and tokens move together or both refunded
 - **Verified** — Registrar checks title before tokenization
 - **Tradable** — secondary transfers instantly
+- **Scarce by design** — you can only buy tokens that actually exist; sold-out supply is visible, never oversold
+- **No duplicate deeds** — the same property document can never be tokenized twice
 
 ### How It Works — 4 Roles
 
-1. **Owner** lists property with documents → hash anchored
+1. **Owner** lists property with documents → hash anchored → **all tokens mint to the owner** (listing is gated to this role)
 2. **Registrar** validates title → approves
-3. **You** browse → pay via UPI → own tokens instantly
+3. **You** browse → see live availability → pay via UPI → own tokens instantly
 4. **Regulator** audits, can freeze if needed
 
 ### Quick Start
@@ -69,8 +79,9 @@ No partial failures: if payment fails, no tokens move. If tokens fail, payment r
 - **Backend:** Vercel serverless mock + Go API gateway (optional live)
 - **Blockchain:** Drunix Fabric — 4 orgs, Raft orderer, property & token chaincode
 - **Payments:** UPI Collect primary (INR), Sepolia escrow secondary experimental
+- **Identity data:** Neon Postgres schema — user/account/session/organization/member/invitation/verification/jwt/project_config
 
-**Build:** 113 modules, 397KB
+**Build:** 115 modules, 363KB (gzip 101KB)
 
 ### For Judges & Developers — Technical Details
 
@@ -108,17 +119,28 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 - 9 funcs, AND endorsement for mint, integer-only tokens, overflow cap 10M, composite key `balance~assetId~ownerId`, 4 SQL indexes `idx_property_status, idx_balance_owner, idx_balance_asset, idx_transfer_asset_time`, MVCC double-spend protection, 216+ tests
 
 **API Contracts (key):**
-- `/api/npci/collect` POST — Initiate UPI Collect
-- `/api/npci/payments/:id/approve` POST — Approve → CONFIRMED
+- `/api/auth/login` POST — JWT + MSP (+ session row in Neon schema)
+- `/api/auth/session` GET · `/api/auth/logout` POST — session lookup / revoke
+- `/api/auth/jwks` GET — Ed25519 signing keys (JWKS, RFC 7517)
+- `/api/auth/verification` POST + `/verify` — OTP-style verification (value never returned to client)
+- `/api/orgs` POST/GET · `/api/orgs/:id/members` GET · `/api/orgs/:id/invitations` POST/GET · `/api/invitations/accept` POST — organizations
+- `/api/auth/schema` GET — traceability: schema entities ↔ code
+- `/api/npci/collect` POST — Initiate UPI Collect (fraud-screened: BLOCK ≥70 → 403)
+- `/api/npci/payments/:id/approve` POST — Approve → CONFIRMED (re-screened)
 - `/api/npci/payments/:id/release` POST — Release → RELEASED + UTR
 - `/api/npci/payments/:id/refund` POST — Refund → REFUNDED
 - `/api/npci/payments` GET — List with RRN/UTR
-- `/api/transfers` POST — TransferTokens
+- `/api/transfers` POST — TransferTokens (availability-checked)
+- `/api/properties` POST — Register (409 `ERR_DUPLICATE_PROPERTY` on repeat)
+- `/api/properties/:id` GET — detail incl. `availableTokens` / `soldTokens`
 - `/api/balances/wallet/:ownerId` GET — Portfolio (fixed v2.1 wallet 500)
 - `/api/transfers/history?bookmark` GET — Pagination bookmark pattern
+- `/api/drunix/ledger` GET — Drunix settlement trail (7 stages, PROPOSED→COMMITTED)
+- `/api/fraud/config` GET · `/api/openfinance/capabilities` GET — fraud engine + Open Finance exposure
+- `/api/health` GET — v2.6: mode, `drunixGateway` (golang), `fraudEngine`
 
 **LIVE vs MOCKED (Track A6):**
-- LIVE: Chaincode 9 funcs, JWT+MSP, Raft 3, SQL 4 indexes, payment-gateway, atomic DvP, 216+ tests + 8 payment tests
+- LIVE: Chaincode 9 funcs + duplicate-deed guard, JWT+MSP+session rows (Neon), Raft 3, SQL 4 indexes, payment-gateway, atomic DvP, fraud gates, 216+ tests + 8 payment tests
 - MOCKED (pluggable): KYC DigiLocker stub, DILRMP hash, NPCI UPI simulation (no live credentials), Sepolia secondary experimental
 
 **Regulatory — Bill 2026:**
@@ -131,6 +153,7 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 **Testing:**
 ```bash
 cd chaincode && go test -v
+cd drunix-gateway && go test ./...
 cd payment-gateway && go test -v && node gateway.test.js
 cd frontend && npm run build
 ```
