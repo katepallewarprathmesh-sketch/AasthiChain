@@ -66,10 +66,17 @@ func (c *PropertyContract) RegisterProperty(ctx contractapi.TransactionContextIn
 		return "", err
 	}
 
-	// Off-chain dedup hint: check for existing asset with same documentHash
-	// We iterate via range query simulation - in production use SQL index
-	// For chaincode, we do a composite check: if hash exists, flag but allow (spec says allow but flag)
-	// Here we just proceed but could emit event
+	// Duplicate-property guard — the same document can be tokenized only once.
+	// hash~<documentHash>~<assetID> keys are written on register; any existing
+	// key with this document's hash means the deed is already on the ledger.
+	hashIter, err := ctx.GetStub().GetStateByRange("hash~"+documentHash+"~", "hash~"+documentHash+"~\uffff")
+	if err != nil {
+		return "", err
+	}
+	defer hashIter.Close()
+	if hashIter.HasNext() {
+		return "", NewError(ErrDuplicateProperty, "a property with this documentHash is already registered — each document can be tokenized only once")
+	}
 
 	assetID := "PROP-" + uuid.New().String()
 	now := time.Now().UTC()

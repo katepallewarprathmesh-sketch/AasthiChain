@@ -3,3 +3,9 @@ go/
 *.tgz
 nohup.out
 frontend/.env
+
+# local caches & build output
+.cache/
+frontend/dist/
+.npm/
+.gitconfig

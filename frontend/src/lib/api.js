@@ -197,6 +197,47 @@ class ApiClient {
     return this.request('/api/npci/reconcile')
   }
 
+  // Auth & organization (Neon schema entities — additive, Open/Closed)
+  async getSession() {
+    return this.request('/api/auth/session')
+  }
+
+  async logout() {
+    return this.request('/api/auth/logout', { method: 'POST' })
+  }
+
+  async getAuthSchema() {
+    return this.request('/api/auth/schema')
+  }
+
+  async getJwks() {
+    return this.request('/api/auth/jwks')
+  }
+
+  async createOrganization(payload) {
+    return this.request('/api/orgs', { method: 'POST', body: JSON.stringify(payload) })
+  }
+
+  async listOrganizations() {
+    return this.request('/api/orgs')
+  }
+
+  async inviteMember(orgId, payload) {
+    return this.request(`/api/orgs/${encodeURIComponent(orgId)}/invitations`, { method: 'POST', body: JSON.stringify(payload) })
+  }
+
+  async acceptInvitation(invitationId) {
+    return this.request('/api/invitations/accept', { method: 'POST', body: JSON.stringify({ invitationId }) })
+  }
+
+  async createVerification(identifier) {
+    return this.request('/api/auth/verification', { method: 'POST', body: JSON.stringify({ identifier }) })
+  }
+
+  async verifyVerification(identifier, value) {
+    return this.request('/api/auth/verification/verify', { method: 'POST', body: JSON.stringify({ identifier, value }) })
+  }
+
   // KYC — SRP
   async getKYC(identityId) {
     return this.request(`/api/kyc/${encodeURIComponent(identityId)}`)

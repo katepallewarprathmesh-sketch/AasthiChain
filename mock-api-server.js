@@ -22,6 +22,46 @@ let transfers = {};
 let kycRecords = {};
 let idempotency = {};
 
+// ===== Neon schema entities (in-memory parity with frontend/api/lib/authstore.js) =====
+// user, account, session, organization, member, invitation, verification, jwt, project_config
+const authMem = {
+  user: new Map(), account: new Map(), session: new Map(), organization: new Map(),
+  member: new Map(), invitation: new Map(), verification: new Map(), jwt: new Map(),
+  project_config: new Map([['pcfg_default', { id: 'pcfg_default', name: 'aasthichain', single_page_app: true, disable_sign_up: false }]])
+};
+const uidA = (p) => (p ? p + '_' : '') + crypto.randomUUID();
+function authGetOrCreateUser(id) {
+  let u = authMem.user.get(id);
+  if (!u) {
+    u = { id, email: `${id}@aasthichain.demo`, email_not_verified: false, name: id, image: null, first_name: id.replace(/[0-9]+$/, ''), last_name: null, created_at: new Date(), updated_at: new Date(), deleted_at: null };
+    authMem.user.set(id, u);
+  }
+  u.updated_at = new Date();
+  return u;
+}
+function authCreateAccount(userId) {
+  const id = uidA('acc');
+  const row = { id, user_id: userId, account_id: id, email: `${userId}@aasthichain.demo`, display_name: userId, avatar_url: null, external_identifier: userId, external_id: userId, type: 'oauth', provider: 'mock', created_at: new Date(), updated_at: new Date() };
+  authMem.account.set(id, row);
+  return row;
+}
+function authCreateSession(userId, token, req) {
+  const id = uidA('sess');
+  const row = { id, user_id: userId, active_organization_id: null, token, user_agent: req?.headers?.['user-agent'] || null, ip_address: req?.headers?.['x-forwarded-for'] || null, extra_data: {}, created_at: new Date(), updated_at: new Date() };
+  authMem.session.set(id, row);
+  authMem.session.set('tok:' + token, row);
+  return row;
+}
+function authMemberships(userId) {
+  const out = [];
+  for (const m of authMem.member.values()) {
+    if (m.user_id !== userId) continue;
+    const o = authMem.organization.get(m.organization_id);
+    if (o) out.push({ role: m.role, organization_id: o.id, name: o.name, slug: o.slug });
+  }
+  return out;
+}
+
 const now = new Date();
 kycRecords['originator1'] = { docType: 'kyc', identityId: 'originator1', kycStatus: 'VERIFIED', verifiedAt: now, provider: 'mock' };
 kycRecords['investor1'] = { docType: 'kyc', identityId: 'investor1', kycStatus: 'VERIFIED', verifiedAt: now, provider: 'mock' };
@@ -164,14 +204,157 @@ app.post('/api/auth/login', (req, res) => {
   const mspId = mspMap[role];
   if (!mspId) return res.status(400).json({ error: 'ERR_INVALID_INPUT' });
   const token = mockJWT(identityId, mspId, role);
-  res.json({ token, identityId, mspId, role, fabricMode: 'mock' });
+  // Neon schema lifecycle: user + account + session
+  authGetOrCreateUser(identityId);
+  authCreateAccount(identityId);
+  const session = authCreateSession(identityId, token, req);
+  res.json({ token, identityId, mspId, role, sessionId: session.id, userId: identityId, memberships: authMemberships(identityId), fabricMode: 'mock' });
+});
+
+app.get('/api/auth/session', authMiddleware, (req, res) => {
+  const token = (req.headers.authorization || '').split(' ')[1];
+  const session = authMem.session.get('tok:' + token);
+  if (!session) return res.status(404).json({ error: 'Session not found — login again' });
+  res.json({ session: { id: session.id, created_at: session.created_at, user_agent: session.user_agent, ip_address: session.ip_address }, user: authMem.user.get(session.user_id) || null, memberships: authMemberships(session.user_id) });
+});
+
+app.post('/api/auth/logout', authMiddleware, (req, res) => {
+  const token = (req.headers.authorization || '').split(' ')[1];
+  const s = authMem.session.get('tok:' + token);
+  if (s) { authMem.session.delete('tok:' + token); authMem.session.delete(s.id); }
+  res.json({ revoked: true });
+});
+
+app.get('/api/auth/users', authMiddleware, (req, res) => {
+  res.json({ users: [...authMem.user.values()] });
+});
+
+app.get('/api/auth/jwks', (req, res) => {
+  let row = null;
+  for (const j of authMem.jwt.values()) { row = j; break; }
+  if (!row) {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+    row = { id: uidA('jwt'), token_key: 'jwt_demo', public_key: publicKey.export({ type: 'spki', format: 'pem' }).toString(), private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), created_at: new Date(), updated_at: new Date() };
+    authMem.jwt.set(row.id, row);
+  }
+  let jwk = {};
+  try { jwk = crypto.createPublicKey(row.public_key).export({ format: 'jwk' }); } catch {}
+  res.json({ keys: [{ ...jwk, kid: row.token_key, use: 'sig', alg: 'EdDSA' }] });
+});
+
+app.get('/api/auth/schema', (req, res) => {
+  res.json({
+    source: 'Neon schema (uploads/image-1.png) — entities now implemented in code',
+    storeMode: 'memory (Vercel build uses Neon postgres via authstore.js)',
+    entities: [
+      { table: 'user', fields: ['id','email','email_not_verified','name','image','created_at','updated_at','deleted_at','first_name','last_name'] },
+      { table: 'account', fields: ['id','user_id','account_id','email','display_name','avatar_url','external_identifier','external_id','type','provider','created_at','updated_at'] },
+      { table: 'session', fields: ['id','user_id','active_organization_id','token','user_agent','ip_address','extra_data','created_at','updated_at'] },
+      { table: 'organization', fields: ['id','name','slug','logo','client_id','metadata'] },
+      { table: 'member', fields: ['id','organization_id','user_id','role','created_at'] },
+      { table: 'invitation', fields: ['id','organization_id','email','role','status','expires_at','created_at','invited_by'] },
+      { table: 'verification', fields: ['id','identifier','value','expires_at','updated_at'] },
+      { table: 'jwt', fields: ['id','token_key','public_key','private_key','created_at','updated_at'] },
+      { table: 'project_config', fields: ['id','name','org_id','domain_url','cookie_domain','limited_logins','disable_sign_up','enabled_providers','email_at_first_login','single_page_app','magic_link_config'] }
+    ]
+  });
+});
+
+app.post('/api/auth/verification', authMiddleware, (req, res) => {
+  const { identifier } = req.body || {};
+  if (!identifier) return res.status(400).json({ error: 'identifier required' });
+  const id = uidA('ver');
+  const row = { id, identifier: String(identifier).toLowerCase(), value: String(Math.floor(100000 + Math.random() * 900000)), expires_at: new Date(Date.now() + 30 * 60 * 1000), updated_at: new Date() };
+  authMem.verification.set(id, row);
+  res.status(201).json({ id, identifier: row.identifier, expires_at: row.expires_at });
+});
+
+app.post('/api/auth/verification/verify', authMiddleware, (req, res) => {
+  const { identifier, value } = req.body || {};
+  const ident = String(identifier || '').toLowerCase();
+  for (const [k, v] of authMem.verification.entries()) {
+    if (v.identifier === ident && v.value === String(value)) {
+      if (new Date(v.expires_at) < new Date()) return res.json({ verified: false });
+      authMem.verification.delete(k);
+      return res.json({ verified: true });
+    }
+  }
+  res.json({ verified: false });
+});
+
+app.get('/api/auth/config', (req, res) => {
+  for (const c of authMem.project_config.values()) return res.json(c);
+  res.json({ id: 'pcfg_default', name: 'aasthichain', single_page_app: true });
+});
+
+app.post('/api/orgs', authMiddleware, (req, res) => {
+  const { name, slug, logo } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const id = uidA('org');
+  const safeSlug = (slug || name).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  for (const o of authMem.organization.values()) {
+    if (o.slug === safeSlug) return res.status(409).json({ error: 'organization slug already exists: ' + safeSlug });
+  }
+  const org = { id, name, slug: safeSlug, logo: logo || null, client_id: null, metadata: { createdBy: req.user.identityId }, created_at: new Date(), updated_at: new Date() };
+  authMem.organization.set(id, org);
+  const mid = uidA('mem');
+  authMem.member.set(mid, { id: mid, organization_id: id, user_id: req.user.identityId, role: 'owner', created_at: new Date() });
+  authGetOrCreateUser(req.user.identityId);
+  res.status(201).json(org);
+});
+
+app.get('/api/orgs', authMiddleware, (req, res) => {
+  res.json({ organizations: [...authMem.organization.values()] });
+});
+
+app.get('/api/orgs/:id/members', authMiddleware, (req, res) => {
+  res.json({ members: [...authMem.member.values()].filter(m => m.organization_id === req.params.id) });
+});
+
+app.post('/api/orgs/:id/invitations', authMiddleware, (req, res) => {
+  const { email, role } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const id = uidA('inv');
+  const row = { id, organization_id: req.params.id, email: String(email).toLowerCase(), role: role || 'member', status: 'pending', expires_at: new Date(Date.now() + 168 * 3600 * 1000), created_at: new Date(), invited_by: req.user.identityId };
+  authMem.invitation.set(id, row);
+  res.status(201).json(row);
+});
+
+app.get('/api/orgs/:id/invitations', authMiddleware, (req, res) => {
+  res.json({ invitations: [...authMem.invitation.values()].filter(i => i.organization_id === req.params.id) });
+});
+
+app.post('/api/invitations/accept', authMiddleware, (req, res) => {
+  const { invitationId } = req.body || {};
+  const inv = authMem.invitation.get(invitationId);
+  if (!inv) return res.status(404).json({ error: 'invitation not found' });
+  if (inv.status !== 'pending') return res.status(400).json({ error: 'invitation already ' + inv.status });
+  if (new Date(inv.expires_at) < new Date()) { inv.status = 'expired'; return res.status(400).json({ error: 'invitation expired' }); }
+  inv.status = 'accepted';
+  const mid = uidA('mem');
+  const member = { id: mid, organization_id: inv.organization_id, user_id: req.user.identityId, role: inv.role, created_at: new Date() };
+  authMem.member.set(mid, member);
+  authGetOrCreateUser(req.user.identityId);
+  res.json({ member });
 });
 
 app.post('/api/properties', authMiddleware, (req, res) => {
   const { title, state, city, pincode, valuationINR, documentHash } = req.body;
   const idemKey = req.headers['x-idempotency-key'];
   if (idemKey && idempotency[idemKey]) return res.json(idempotency[idemKey]);
-  if (!documentHash || documentHash.length !== 64) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'documentHash must be 64 chars' });
+if (!documentHash || documentHash.length !== 64) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'documentHash must be 64 chars' });
+      // Duplicate-property guard — same document (hash) or same title+location cannot be listed twice
+      {
+        const t = String(title || '').trim().toLowerCase();
+        const c = String(city || '').trim().toLowerCase();
+        const p = String(pincode || '').trim();
+        const dup = Object.values(properties).find(x =>
+          (documentHash && x.documentHash === documentHash) ||
+          (t && x.title && x.title.trim().toLowerCase() === t && x.location && String(x.location.city || '').toLowerCase() === c && String(x.location.pincode || '') === p));
+        if (dup) {
+          return res.status(409).json({ error: 'ERR_DUPLICATE_PROPERTY', assetId: dup.assetId, title: dup.title, message: `This property is already listed ("${dup.title}", ${dup.assetId}). Each document can be tokenized only once.` });
+        }
+      }
   const assetId = 'PROP-' + crypto.randomUUID();
   const now = new Date();
   properties[assetId] = {
@@ -196,7 +379,11 @@ app.get('/api/properties/:id', authMiddleware, (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
   const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0;
-  res.json({ property: prop, tokenPrice, documentHashVerified: true, fabricMode: 'mock' });
+  // Supply visibility: how many tokens can an investor buy right now (owner's remaining holding)
+  const ownerBal = balances[req.params.id + '~' + prop.originatorId];
+  const availableTokens = ownerBal ? Math.max(0, ownerBal.balance) : 0;
+  const soldTokens = Math.max(0, (prop.totalTokens || 0) - availableTokens);
+  res.json({ property: prop, tokenPrice, availableTokens, soldTokens, documentHashVerified: true, fabricMode: 'mock' });
 });
 
 app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {

@@ -16,6 +16,7 @@ const (
 	ErrDuplicateMint       = "ERR_DUPLICATE_MINT"
 	ErrOverflow            = "ERR_OVERFLOW"
 	ErrBalanceNotFound     = "ERR_BALANCE_NOT_FOUND"
+	ErrDuplicateProperty   = "ERR_DUPLICATE_PROPERTY"
 )
 
 type ChaincodeError struct {

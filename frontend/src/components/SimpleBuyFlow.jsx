@@ -42,7 +42,7 @@ function StepTrack({ current, doneCount }) {
   )
 }
 
-export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, onSuccess }) {
+export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, propertyTitle, valuationINR, totalTokens, availableTokens, onSuccess }) {
   const [amount, setAmount] = useState(100)
   const [vpa, setVpa] = useState(user?.identityId ? `${user.identityId}@aasthichain` : 'demo.investor@aasthichain')
   const [step, setStep] = useState('form') // form, paying, pending, confirming, transferring, success, error
@@ -53,7 +53,9 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
   const [secondsLeft, setSecondsLeft] = useState(0)
 
   const safePrice = tokenPrice || 0
-  const total = (amount || 0) * safePrice
+  const cap = Number.isFinite(availableTokens) && availableTokens > 0 ? Math.floor(availableTokens) : null
+  const clampedAmount = cap ? Math.min(amount, cap) : amount
+  const total = (clampedAmount || 0) * safePrice
 
   // Countdown for UPI approval expiry (5 min collect request)
   useEffect(() => {
@@ -76,7 +78,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
     try {
       const collectData = await api.initiateCollect({
         assetId,
-        tokenAmount: parseInt(amount),
+        tokenAmount: parseInt(clampedAmount),
         amountINR: total,
         payerVpa: vpa.trim(),
         payeeVpa: `${recipient || 'originator1'}@aasthichain`,
@@ -119,12 +121,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
       // Leg 1 — Drunix ledger: tokens move from seller to you
       let tr
       try {
-        tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(amount))
+        tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(clampedAmount))
       } catch (e) {
         if (e.status === 404 || e.status === 400) {
           // Balances not on this instance — reattach payment first so state is consistent, then retry
           await api.reattachPayment(confirmed.paymentId, confirmed)
-          tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(amount))
+          tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(clampedAmount))
         } else throw e
       }
       setTransfer(tr)
@@ -150,12 +152,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
           valuationINR: valuationINR || 0,
           totalTokens: totalTokens || 0,
           originatorId: recipient || 'originator1',
-          tokenAmount: parseInt(amount),
+          tokenAmount: parseInt(clampedAmount),
           receipt: {
             paymentId: released.paymentId || collectData.paymentId,
             assetId,
             payerId: user?.identityId || 'investor1',
-            tokenAmount: parseInt(amount),
+            tokenAmount: parseInt(clampedAmount),
             amountINR: total,
             status: released.status || 'RELEASED',
             upiTxnId: released.upiTxnId || collectData.upiTxnId || '',
@@ -193,7 +195,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
         <div style={{ fontSize: 32 }}>✓</div>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#065F46', margin: '8px 0 0' }}>Payment Successful!</h3>
         <p style={{ fontSize: 13, color: '#374151', marginTop: 8, lineHeight: 1.5 }}>
-          You bought <strong>{amount} tokens</strong> of this property for <strong>₹{total.toLocaleString('en-IN')}</strong>.<br />
+          You bought <strong>{clampedAmount} tokens</strong> of this property for <strong>₹{total.toLocaleString('en-IN')}</strong>.<br />
           Money and tokens moved together — nothing partial.
         </p>
         {payment.utr && (
@@ -306,19 +308,37 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
 
       <div style={{ marginTop: 16 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>How many tokens?</label>
+        {cap !== null && (
+          <div style={{ fontSize: 11, color: cap < 10 ? '#92400E' : '#6B7280', marginTop: 4 }}>
+            {cap.toLocaleString('en-IN')} tokens available now from the owner{cap < 10 ? ' — almost sold out' : ''}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
           <input
             type="number"
             min="1"
-            max="10000"
+            max={cap || 10000}
             value={amount}
-            onChange={e => setAmount(Math.max(1, parseInt(e.target.value) || 1))}
+            onChange={e => {
+              const v = Math.max(1, parseInt(e.target.value) || 1)
+              setAmount(cap ? Math.min(v, cap) : v)
+            }}
             style={{ width: 100, padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 14, fontWeight: 600 }}
           />
           <span style={{ fontSize: 13, color: '#6B7280' }}>tokens = ₹{total.toLocaleString('en-IN')}</span>
+          {cap !== null && amount > cap && (
+            <button onClick={() => setAmount(cap)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #FDE68A', background: '#FFFBEB', color: '#92400E', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              Only {cap} left
+            </button>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-          {[10, 50, 100, 500].map(num => (
+        <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+          {cap !== null && cap > 0 && (
+            <button onClick={() => setAmount(cap)} style={{ padding: '6px 12px', borderRadius: 20, border: '1px solid #A7F3D0', background: '#ECFDF5', color: '#065F46', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              Max {cap}
+            </button>
+          )}
+          {[10, 50, 100, 500].filter(num => !cap || num <= cap).map(num => (
             <button
               key={num}
               onClick={() => setAmount(num)}

@@ -32,6 +32,7 @@ function SimpleStep({ number, title, active, done }) {
 }
 
 export default function Admin({ user }) {
+  const isOwner = (user?.role || '') === 'Originator'
   const [form, setForm] = useState({
     title: 'Sunrise Heights 2BHK',
     state: 'Maharashtra',
@@ -68,6 +69,10 @@ export default function Admin({ user }) {
   }, [lastId])
 
   const handleRegister = async (e) => {
+    if (!isOwner) {
+      setResult('Only a Property Owner can list a property. You are logged in as ' + (user?.role || 'unknown') + ' — switch to "Property Owner" on the login page, otherwise the property would wrongly belong to you.')
+      return
+    }
     e.preventDefault()
     setResult('Creating property... Please wait')
     try {
@@ -155,6 +160,11 @@ export default function Admin({ user }) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Manage Properties</h1>
+      {!isOwner && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginTop: 12, fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
+          You are logged in as <strong>{user?.role || 'unknown'}</strong>. Listing a property makes you its owner — only Property Owners should list. Switch to <strong>Property Owner</strong> on the login page first.
+        </div>
+      )}
       <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '70ch' }}>
         For property owners: List your property, get it verified, and create tokens for investors.
       </p>
@@ -165,6 +175,9 @@ export default function Admin({ user }) {
         <SimpleStep number={2} title="Get Verified" active={lastId && validationStatus !== 'VALIDATED'} done={validationStatus === 'VALIDATED'} />
         <div style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
         <SimpleStep number={3} title="Create Tokens" active={validationStatus === 'VALIDATED'} done={false} />
+      </div>
+      <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 1.5 }}>
+        When tokens are created, all of them start with you (the owner). Investors buy from you — your ownership goes down as they buy.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>

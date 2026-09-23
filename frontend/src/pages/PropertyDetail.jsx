@@ -67,6 +67,8 @@ export default function PropertyDetail({ user }) {
   if (!property) return null
 
   const tokenPrice = property.totalTokens ? Math.floor(property.valuationINR / property.totalTokens) : 500
+  const availableTokens = property.availableTokens ?? 0
+  const soldTokens = property.soldTokens ?? 0
   const valuationLakh = ((property.valuationINR || 0) / 100000).toFixed(1)
   const totalHeld = balances.reduce((s, b) => s + (b.balance || 0), 0)
   const soldPct = property.totalTokens ? Math.round((totalHeld / property.totalTokens) * 100) : 0
@@ -81,7 +83,7 @@ export default function PropertyDetail({ user }) {
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>{property.title}</h1>
           <p style={{ color: '#6B7280', fontSize: 13, marginTop: 6 }}>
-            📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} • Listed by {property.originatorId || 'Owner'}
+            📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} • Owner & seller: <strong>{property.originatorId || 'Owner'}</strong>
           </p>
         </div>
         <span style={{
@@ -218,6 +220,7 @@ export default function PropertyDetail({ user }) {
             propertyTitle={property.title}
             valuationINR={property.valuationINR}
             totalTokens={property.totalTokens}
+            availableTokens={availableTokens}
             onSuccess={() => {
               setTimeout(() => window.location.reload(), 1500)
             }}

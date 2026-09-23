@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { realDB } from './lib/db_real.js';
+import { authStore } from './lib/authstore.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -1681,10 +1682,123 @@ export default async function handler(req, res) {
         const mspId = mspMap[role];
         if (!mspId) return res.status(400).json({ error: 'ERR_INVALID_INPUT' });
         const token = mockJWT(identityId, mspId, role);
-        return res.json({ token, identityId, mspId, role });
+        // Neon schema lifecycle: user + account + session + memberships (additive — response shape preserved)
+        try {
+          const auth = await authStore.login(identityId, { role, mspId, token, userAgent: req.headers['user-agent'], ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress });
+          return res.json({ token, identityId, mspId, role, sessionId: auth.session.id, userId: auth.user.id, memberships: auth.memberships, authStoreMode: authStore.getMode() });
+        } catch (eA) {
+          console.error('authStore login failed (non-fatal)', eA.message);
+          return res.json({ token, identityId, mspId, role });
+        }
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
+    }
+
+    // ===== Neon schema entities: session / user / account / organization / member / invitation / verification / jwt / project_config =====
+    if (path === '/api/auth/session' && method === 'GET') {
+      try {
+        await authStore.init();
+        const token = (req.headers.authorization || '').split(' ')[1];
+        const session = await authStore.getSessionByToken(token);
+        if (!session) return res.status(404).json({ error: 'Session not found — login again' });
+        const user = await authStore.getUser(session.user_id);
+        const memberships = await authStore.listMembershipsForUser(session.user_id);
+        return res.json({ session: { id: session.id, created_at: session.created_at, user_agent: session.user_agent, ip_address: session.ip_address }, user, memberships });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/logout' && method === 'POST') {
+      try {
+        const token = (req.headers.authorization || '').split(' ')[1];
+        await authStore.revokeSession(token);
+        return res.json({ revoked: true });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/users' && method === 'GET') {
+      try { return res.json({ users: await authStore.listUsers() }); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/jwks' && method === 'GET') {
+      try { return res.json(await authStore.getJwks()); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/schema' && method === 'GET') {
+      return res.json({
+        source: 'Neon schema (uploads/image-1.png) — entities now implemented in code',
+        storeMode: authStore.getMode(),
+        entities: authStore.constructor.schemaEntities()
+      });
+    }
+
+    if (path === '/api/auth/verification' && method === 'POST') {
+      try {
+        const { identifier } = req.body || {};
+        if (!identifier) return res.status(400).json({ error: 'identifier required (email/phone)' });
+        return res.status(201).json(await authStore.createVerification({ identifier }));
+      } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/verification/verify' && method === 'POST') {
+      try {
+        const { identifier, value } = req.body || {};
+        const ok = await authStore.consumeVerification(identifier, value);
+        return res.json({ verified: ok });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/config' && method === 'GET') {
+      try { return res.json(await authStore.getProjectConfig()); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/auth/config' && method === 'PUT') {
+      try { return res.json(await authStore.upsertProjectConfig(req.body || {})); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/orgs' && method === 'POST') {
+      try {
+        await authStore.init();
+        const { name, slug, logo } = req.body || {};
+        if (!name) return res.status(400).json({ error: 'name required' });
+        const org = await authStore.createOrganization({ name, slug, logo, metadata: { createdBy: user.identityId } });
+        await authStore.addMember({ organizationId: org.id, userId: user.identityId, role: 'owner' });
+        await authStore.getOrCreateUser({ id: user.identityId, name: user.identityId });
+        return res.status(201).json(org);
+      } catch (e) { return res.status(400).json({ error: e.message }); }
+    }
+
+    if (path === '/api/orgs' && method === 'GET') {
+      try {
+        await authStore.init();
+        return res.json({ organizations: await authStore.listOrganizations() });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    const orgMembersMatch = path.match(/^\/api\/orgs\/([^\/]+)\/members$/);
+    if (orgMembersMatch && method === 'GET') {
+      try { return res.json({ members: await authStore.listMembers(decodeURIComponent(orgMembersMatch[1])) }); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    const orgInvMatch = path.match(/^\/api\/orgs\/([^\/]+)\/invitations$/);
+    if (orgInvMatch && method === 'POST') {
+      try {
+        const { email, role } = req.body || {};
+        if (!email) return res.status(400).json({ error: 'email required' });
+        return res.status(201).json(await authStore.createInvitation({ organizationId: decodeURIComponent(orgInvMatch[1]), email, role, invitedBy: user.identityId }));
+      } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+    if (orgInvMatch && method === 'GET') {
+      try { return res.json({ invitations: await authStore.listInvitations(decodeURIComponent(orgInvMatch[1])) }); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    if (path === '/api/invitations/accept' && method === 'POST') {
+      try {
+        const { invitationId } = req.body || {};
+        if (!invitationId) return res.status(400).json({ error: 'invitationId required' });
+        await authStore.init();
+        return res.json({ member: await authStore.acceptInvitation(invitationId, user.identityId) });
+      } catch (e) { return res.status(400).json({ error: e.message }); }
     }
 
     if (path === '/api/properties' && method === 'GET') {
@@ -1704,6 +1818,18 @@ export default async function handler(req, res) {
         const idemKey = req.headers['x-idempotency-key'];
         if (idemKey && idempotency[idemKey]) return res.json(idempotency[idemKey]);
         if (!documentHash || documentHash.length !== 64) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'documentHash must be 64 chars' });
+        // Duplicate-property guard — same document (hash) or same title+location cannot be listed twice
+        {
+          const t = String(title || '').trim().toLowerCase();
+          const c = String(city || '').trim().toLowerCase();
+          const p = String(pincode || '').trim();
+          const dup = Object.values(properties).find(x =>
+            (documentHash && x.documentHash === documentHash) ||
+            (t && x.title && x.title.trim().toLowerCase() === t && x.location && String(x.location.city || '').toLowerCase() === c && String(x.location.pincode || '') === p));
+          if (dup) {
+            return res.status(409).json({ error: 'ERR_DUPLICATE_PROPERTY', assetId: dup.assetId, title: dup.title, message: `This property is already listed ("${dup.title}", ${dup.assetId}). Each document can be tokenized only once.` });
+          }
+        }
         const assetId = 'PROP-' + safeUUID();
         const now = new Date();
         properties[assetId] = {
@@ -1742,7 +1868,11 @@ export default async function handler(req, res) {
           return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
         }
         const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0;
-        return res.json({ property: prop, tokenPrice });
+        // Supply visibility: how many tokens an investor can buy right now (owner's remaining holding)
+        const ownerBal = balances[prop.assetId + '~' + prop.originatorId];
+        const availableTokens = ownerBal ? Math.max(0, ownerBal.balance) : 0;
+        const soldTokens = Math.max(0, (prop.totalTokens || 0) - availableTokens);
+        return res.json({ property: prop, tokenPrice, availableTokens, soldTokens });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }

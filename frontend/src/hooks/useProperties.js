@@ -103,7 +103,12 @@ export function useProperty(assetId) {
     try {
       const data = await api.getProperty(assetId)
       const prop = data.property || data
-      setProperty(prop)
+      // Merge supply visibility from the API response (availableTokens = owner's sellable balance)
+      setProperty({
+        ...prop,
+        availableTokens: typeof data.availableTokens === 'number' ? data.availableTokens : (prop.availableTokens ?? 0),
+        soldTokens: typeof data.soldTokens === 'number' ? data.soldTokens : (prop.soldTokens ?? 0)
+      })
       
       // Update cache
       try {
