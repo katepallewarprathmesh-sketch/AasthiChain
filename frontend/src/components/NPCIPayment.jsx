@@ -12,10 +12,10 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
   const [showDev, setShowDev] = useState(false)
 
   const amountINR = tokenAmount && tokenPrice ? tokenAmount * tokenPrice : 0
-  const amountDisplay = amountINR ? amountINR.toLocaleString('en-IN') : '0'
+  const amountDisplay = amountINR ? (amountINR || 0).toLocaleString('en-IN') : '0'
 
   useEffect(() => {
-    if (assetId) setNote(`Payment for ${tokenAmount || 0} tokens of ${assetId.slice(0,12)}...`)
+    if (assetId) setNote(`Payment for ${tokenAmount || 0} tokens of ${(assetId || '').slice(0,12)}...`)
   }, [assetId, tokenAmount])
 
   useEffect(() => {
@@ -105,20 +105,29 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
   }
 
   const approvePayment = async () => {
-    if (!payment) return
+    if (!payment || !payment.paymentId) {
+      setError('Payment not initialized — please initiate again')
+      setStatus('failed')
+      return
+    }
     setStatus('confirming')
     setError('')
     try {
-      const res = await fetch(`/api/npci/payments/${payment.paymentId}/approve`, {
+      const res = await fetch(`/api/npci/payments/${encodeURIComponent(payment.paymentId)}/approve`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ payerId: user?.identityId || 'investor1' })
       })
-      const data = await res.json()
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error(`Approve failed — invalid response ${res.status}`)
+      }
       if (!res.ok) {
-        setPayment(data.payment || data)
+        setPayment(data.payment || data || payment)
         setStatus('failed')
-        setError(data.failureReason || data.error || 'Payment failed')
+        setError(data.failureReason || data.error || data.message || 'Payment failed — please try again')
         return
       }
       setPayment(data)
@@ -132,12 +141,22 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           // Try primary fromId = recipient (property originator), fallback to originator1 if fails
           const primaryFromId = recipient || 'originator1'
           const toId = user?.identityId || 'investor1'
-          let drunixRes = await fetch('/api/transfers', {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ assetId, fromId: primaryFromId, toId, amount: parseInt(tokenAmount) || 1 })
-          })
-          let drunixData = await drunixRes.json()
+          let drunixRes
+          try {
+            drunixRes = await fetch('/api/transfers', {
+              method: 'POST',
+              headers: getHeaders(),
+              body: JSON.stringify({ assetId, fromId: primaryFromId, toId, amount: parseInt(tokenAmount) || 1 })
+            })
+          } catch (e) {
+            throw new Error(`Transfer network failed: ${e.message}`)
+          }
+          let drunixData
+          try {
+            drunixData = await drunixRes.json()
+          } catch {
+            throw new Error(`Transfer failed — invalid response ${drunixRes.status}`)
+          }
           // If primary fails with ERR_BALANCE_NOT_FOUND, retry with originator1 and also try fetching property to get real originator
           // Guard log with dev check to avoid production noise
           if (!drunixRes.ok && drunixData.error && drunixData.error.includes('ERR_BALANCE_NOT_FOUND')) {
@@ -174,7 +193,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
               headers: getHeaders(),
               body: JSON.stringify({ reason: `Transfer failed: ${drunixData.error} — ${drunixData.message || ''}` })
             })
-            setError(`Transfer failed: ${drunixData.error} ${drunixData.message ? '— '+drunixData.message : ''} — payment refunded. Tips: 1) Property ${assetId.slice(0,16)}... may be on different server instance (Vercel cold start) — backend now auto-creates balance for demo 2) Try again — second attempt should work after auto-fix 3) Check Marketplace balances for ${primaryFromId}. For new properties, originator should have ${tokenAmount} tokens after mint.`)
+            setError(`Transfer failed: ${drunixData.error} ${drunixData.message ? '— '+drunixData.message : ''} — payment refunded. Tips: 1) Property ${(assetId || '').slice(0,16)}... may be on different server instance (Vercel cold start) — backend now auto-creates balance for demo 2) Try again — second attempt should work after auto-fix 3) Check Marketplace balances for ${primaryFromId}. For new properties, originator should have ${tokenAmount} tokens after mint.`)
             setStatus('failed')
             return
           }
@@ -293,7 +312,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
                 <span style={{fontSize:11, color:'#64748B'}}>Total amount</span>
                 <span style={{fontSize:20, fontWeight:800, fontFamily:'Fraunces'}}>₹{amountDisplay}</span>
               </div>
-              <div style={{fontSize:10, color:'#94A3B8', marginTop:4}}>{tokenAmount || 0} tokens × ₹{tokenPrice?.toLocaleString('en-IN') || 0} per token</div>
+              <div style={{fontSize:10, color:'#94A3B8', marginTop:4}}>{tokenAmount || 0} tokens × ₹{(tokenPrice || 0).toLocaleString('en-IN')} per token</div>
             </div>
           </div>
 
@@ -344,8 +363,8 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           ) : (
             <div style={{display:'flex', flexDirection:'column', gap:10, fontSize:11}}>
               <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10}}>
-                <div style={{display:'flex', justifyContent:'space-between'}}><span style={{color:'#64748B'}}>Amount</span><span style={{fontWeight:700}}>₹{payment.amountINR.toLocaleString('en-IN')}</span></div>
-                <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Tokens</span><span style={{fontWeight:600}}>{payment.tokenAmount}</span></div>
+                <div style={{display:'flex', justifyContent:'space-between'}}><span style={{color:'#64748B'}}>Amount</span><span style={{fontWeight:700}}>₹{(payment.amountINR || 0).toLocaleString('en-IN')}</span></div>
+                <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Tokens</span><span style={{fontWeight:600}}>{payment.tokenAmount || 0}</span></div>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Status</span><span className={`status-chip ${payment.status==='RELEASED' ? 'status-tokenized' : payment.status==='PENDING' ? 'status-pending' : payment.status==='CONFIRMED' ? 'status-validated' : 'status-frozen'}`} style={{fontSize:10}}>{payment.status}</span></div>
                 {/* UTR — always show after CONFIRMED for bank reconciliation */}
                 {(payment.utr || payment.utr12 || payment.rrn) && (
@@ -357,13 +376,13 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
                     {payment.utr && <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B', fontSize:10}}>UTR (12-digit)</span><span style={{fontFamily:'monospace', fontSize:10, fontWeight:700, color:'#1E3A5F'}}>{payment.utr}</span></div>}
                     {payment.utr12 && payment.utr12 !== payment.utr && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UTR12</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.utr12}</span></div>}
                     {payment.rrn && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>RRN</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.rrn}</span></div>}
-                    {payment.upiTxnId && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UPI Txn ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.upiTxnId.slice(0,18)}...</span></div>}
+                    {payment.upiTxnId && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UPI Txn ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{(payment.upiTxnId || '').slice(0,18)}...</span></div>}
                     <div style={{fontSize:8, color:'#94A3B8', marginTop:6, lineHeight:1.4}}>UTR = Unique Transaction Reference from NPCI/bank — use for bank statement reconciliation. Verify at /api/npci/utr/{utr}. Webhook: {payment.webhookReceivedAt ? new Date(payment.webhookReceivedAt).toLocaleTimeString() : 'pending'} via {payment.provider || 'mock'}</div>
                   </div>
                 )}
                 {showDev && (
                   <>
-                    <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Payment ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.paymentId.slice(0,12)}...</span></div>
+                    <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Payment ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{(payment.paymentId || '').slice(0,12)}...</span></div>
                     <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B'}}>Provider</span><span style={{fontSize:9}}>{payment.provider || 'mock'} {payment.callbackReceived ? '✓ webhook' : ''}</span></div>
                   </>
                 )}
@@ -391,7 +410,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
                 <div style={{background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:8, padding:10}}>
                   <div style={{fontSize:11, fontWeight:700, color:'#059669'}}>✓ Payment Successful — UTR {payment.utr ? payment.utr.slice(-4) : ''}</div>
                   <div style={{fontSize:10, color:'#475569', marginTop:4, lineHeight:1.5}}>
-                    ₹{payment.amountINR.toLocaleString('en-IN')} paid · {payment.tokenAmount} tokens transferred to you · UTR {payment.utr || payment.utr12 || '—'} for bank statement · Secure & instant settlement · Webhook {payment.webhookReceivedAt ? '✓' : 'pending'} via {payment.provider || 'mock'} — atomic DvP, no partial
+                    ₹{(payment.amountINR || 0).toLocaleString('en-IN')} paid · {payment.tokenAmount || 0} tokens transferred to you · UTR {payment.utr || payment.utr12 || '—'} for bank statement · Secure & instant settlement · Webhook {payment.webhookReceivedAt ? '✓' : 'pending'} via {payment.provider || 'mock'} — atomic DvP, no partial
                   </div>
                   {payment.utr && <div style={{marginTop:6, display:'flex', gap:6}}><a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#065F46'}}>Verify UTR →</a><a href="/api/npci/reconcile" target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #E2E8F0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#475569'}}>Reconciliation Dashboard</a></div>}
                 </div>

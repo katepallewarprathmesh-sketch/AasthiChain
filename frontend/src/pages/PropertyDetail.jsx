@@ -177,7 +177,7 @@ export default function PropertyDetail({ user }) {
         <div className="card">
           <h3 style={{fontSize:16, fontWeight:600}}>Investment Details</h3>
           <div style={{marginTop:16}}>
-            <div style={{fontSize:36, fontFamily:'Fraunces', fontWeight:700, lineHeight:1}}>₹{property.valuationINR.toLocaleString('en-IN')}</div>
+            <div style={{fontSize:36, fontFamily:'Fraunces', fontWeight:700, lineHeight:1}}>₹{(property.valuationINR || 0).toLocaleString('en-IN')}</div>
             <div style={{fontSize:12, color:'#9CA3AF', marginTop:4}}>Property value · ₹{(property.valuationINR/100000).toFixed(1)}L</div>
             
             <div style={{height:1, background:'#E5E7EB', margin:'16px 0'}}></div>
@@ -185,12 +185,12 @@ export default function PropertyDetail({ user }) {
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, fontSize:13}}>
               <div>
                 <div style={{fontSize:11, color:'#9CA3AF', textTransform:'uppercase', fontWeight:600}}>Total tokens</div>
-                <div style={{fontSize:18, fontWeight:700, marginTop:4}}>{property.totalTokens?.toLocaleString('en-IN')}</div>
+                <div style={{fontSize:18, fontWeight:700, marginTop:4}}>{(property.totalTokens || 0).toLocaleString('en-IN')}</div>
                 <div style={{fontSize:11, color:'#9CA3AF'}}>Fixed supply — no inflation</div>
               </div>
               <div>
                 <div style={{fontSize:11, color:'#9CA3AF', textTransform:'uppercase', fontWeight:600}}>Price per token</div>
-                <div style={{fontSize:18, fontWeight:700, marginTop:4}}>₹{tokenPrice.toLocaleString('en-IN')}</div>
+                <div style={{fontSize:18, fontWeight:700, marginTop:4}}>₹{(tokenPrice || 0).toLocaleString('en-IN')}</div>
                 <div style={{fontSize:11, color:'#9CA3AF'}}>Own from ₹500</div>
               </div>
             </div>
@@ -202,7 +202,7 @@ export default function PropertyDetail({ user }) {
               </div>
               <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
                 <input type="number" min="1" max={property.totalTokens || 15000} value={buyAmount} onChange={e=>setBuyAmount(Math.max(1, Math.min(parseInt(e.target.value)||1, property.totalTokens || 15000)))} className="input" style={{width:100, fontSize:13}} aria-label="Number of tokens to buy" />
-                <span style={{fontSize:12, color:'#6B7280'}}>tokens = ₹{(buyAmount*tokenPrice).toLocaleString('en-IN')} · {buyAmount} × ₹{tokenPrice.toLocaleString('en-IN')}</span>
+                <span style={{fontSize:12, color:'#6B7280'}}>tokens = ₹{((buyAmount || 0)*(tokenPrice || 0)).toLocaleString('en-IN')} · {buyAmount || 0} × ₹{(tokenPrice || 0).toLocaleString('en-IN')}</span>
               </div>
               <div style={{display:'flex', gap:6, marginTop:8}}>
                 {[10, 50, 100, 500].map(amt => (
@@ -213,7 +213,7 @@ export default function PropertyDetail({ user }) {
                 <button type="button" onClick={()=>setBuyAmount(property.totalTokens || 15000)} style={{fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #E5E7EB', background:'white', color:'#6B7280', cursor:'pointer'}}>Max</button>
               </div>
               <button className="btn btn-primary" style={{width:'100%', padding:'12px', fontSize:13, fontWeight:600, marginTop:10}} onClick={()=>setShowPayment(!showPayment)} aria-label={`Buy ${buyAmount} tokens`}>
-                {showPayment ? 'Hide Payment' : `Buy ${buyAmount} tokens — Pay ₹${(buyAmount*tokenPrice).toLocaleString('en-IN')} →`}
+                {showPayment ? 'Hide Payment' : `Buy ${buyAmount || 0} tokens — Pay ₹{((buyAmount || 0)*(tokenPrice || 0)).toLocaleString('en-IN')} →`}
               </button>
               <div style={{fontSize:10, color:'#6B7280', marginTop:8, textAlign:'center', lineHeight:1.4}}>🔒 Secure UPI payment · Instant token transfer · No paperwork · Money and tokens move together or both refunded — no risk · Pay to locked per Collect P2M security</div>
             </div>
@@ -262,17 +262,17 @@ export default function PropertyDetail({ user }) {
                   <div key={b.ownerId} style={{background:'#F9FAFB', border:'1px solid #E5E7EB', borderRadius:8, padding:12, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                     <div>
                       <div style={{fontSize:13, fontWeight:600}}>{b.ownerId}</div>
-                      <div style={{fontSize:11, color:'#6B7280'}}>{b.balance.toLocaleString('en-IN')} tokens</div>
+                      <div style={{fontSize:11, color:'#6B7280'}}>{(b.balance || 0).toLocaleString('en-IN')} tokens</div>
                     </div>
                     <div style={{textAlign:'right'}}>
                       <div style={{fontSize:14, fontWeight:700}}>{pct}%</div>
-                      <div style={{fontSize:11, color:'#6B7280'}}>₹{(b.balance * tokenPrice).toLocaleString('en-IN')}</div>
+                      <div style={{fontSize:11, color:'#6B7280'}}>₹{((b.balance || 0) * (tokenPrice || 0)).toLocaleString('en-IN')}</div>
                     </div>
                   </div>
                 )
               })}
               <div style={{fontSize:11, color:'#9CA3AF', marginTop:8, paddingTop:12, borderTop:'1px solid #E5E7EB'}}>
-                Total owned: <span style={{fontWeight:600}}>{totalHeld.toLocaleString('en-IN')}</span> / {property.totalTokens?.toLocaleString('en-IN')} tokens · {((totalHeld/property.totalTokens)*100).toFixed(1)}% sold
+                Total owned: <span style={{fontWeight:600}}>{(totalHeld || 0).toLocaleString('en-IN')}</span> / {(property.totalTokens || 0).toLocaleString('en-IN')} tokens · {property.totalTokens ? ((totalHeld/property.totalTokens)*100).toFixed(1) : 0}% sold
               </div>
               <div style={{marginTop:8, height:6, background:'#E5E7EB', borderRadius:4, overflow:'hidden'}}>
                 <div style={{width:`${(totalHeld/property.totalTokens)*100}%`, height:'100%', background:'#1E3A5F'}}></div>
@@ -296,8 +296,14 @@ export default function PropertyDetail({ user }) {
             tokenPrice={tokenPrice} 
             recipient={property.originatorId}
             user={user}
-            onPaymentComplete={() => {
-              setTimeout(()=>fetchDetails(), 1000)
+            onPaymentComplete={(paymentData) => {
+              console.log('Payment complete', paymentData)
+              // Handle both old signature (paymentId, transferId) and new signature (object)
+              try {
+                setTimeout(()=>fetchDetails(), 1000)
+              } catch (e) {
+                console.error('fetchDetails after payment failed', e)
+              }
             }}
           />
           {showDev ? <NPCIFailureModeDemo /> : (

@@ -1,5 +1,45 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+
+// Error Boundary to catch blank screen errors — shows error instead of blank per §1.4 voice
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null, info: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught', error, info)
+    this.setState({ info })
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{padding:24, maxWidth:600, margin:'40px auto'}}>
+          <div className="card" style={{borderColor:'#FECACA', background:'#FEF2F2'}}>
+            <h3 style={{color:'#991B1B'}}>Something went wrong — but your payment is safe</h3>
+            <p style={{fontSize:13, color:'#6B7280', marginTop:8, lineHeight:1.5}}>
+              The screen error was caught to prevent blank screen. Your payment and tokens move together atomically — if one fails, both refunded — no risk. Please refresh or try again.
+            </p>
+            <pre style={{marginTop:12, background:'white', padding:10, borderRadius:6, fontSize:11, overflow:'auto', maxHeight:200, border:'1px solid #FECACA'}}>
+              {String(this.state.error?.message || this.state.error || 'Unknown error')}
+              {this.state.info?.componentStack ? '\n' + this.state.info.componentStack.slice(0,500) : ''}
+            </pre>
+            <div style={{marginTop:12, display:'flex', gap:8}}>
+              <button className="btn btn-primary" style={{fontSize:12}} onClick={()=>window.location.reload()}>Refresh Page</button>
+              <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>this.setState({hasError:false, error:null, info:null})}>Try Again</button>
+              <a href="/marketplace" className="btn btn-secondary" style={{fontSize:12, textDecoration:'none'}}>Back to Marketplace</a>
+            </div>
+            <div style={{fontSize:10, color:'#9CA3AF', marginTop:8}}>Error caught by boundary — prevents blank screen — check console for details</div>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
 import Landing from './pages/Landing.jsx'
@@ -211,7 +251,7 @@ function AppContent({ user, setUser }) {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
       <main className="container" style={{paddingTop:0, paddingBottom:0}}>
         <Routes>
@@ -225,7 +265,7 @@ function AppContent({ user, setUser }) {
         </Routes>
       </main>
       <Footer />
-    </>
+    </ErrorBoundary>
   )
 }
 
@@ -233,8 +273,10 @@ export default function App() {
   const [user, setUser] = useState(() => getStoredUser())
 
   return (
-    <BrowserRouter>
-      <AppContent user={user} setUser={setUser} />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppContent user={user} setUser={setUser} />
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
