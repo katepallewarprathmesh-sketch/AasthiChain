@@ -194,6 +194,10 @@ export class RealDB {
   }
 
   getMode() {
+    // After init() has run, report the ACTUAL mode — not the env guess.
+    // Fixes silent write-loss: if Postgres connection fails and we fall back to
+    // github/file, env-based 'postgres' would route writes to a dead pool.
+    if (this.initialized && this.mode) return this.mode
     if (process.env.DATABASE_URL || process.env.POSTGRES_URL) return 'postgres'
     if (process.env.KV_URL || process.env.KV_REST_API_URL) return 'vercel-kv'
     if (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT) return 'github'

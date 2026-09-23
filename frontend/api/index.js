@@ -601,10 +601,19 @@ export default async function handler(req, res) {
     const user = getUser(req);
 
     if (path === '/health' || path === '/api/health') {
+      let dbMode = 'unknown';
+      let dbCounts = null;
+      try {
+        await realDB.init();
+        dbMode = realDB.getMode();
+      } catch {}
+      try { dbCounts = { properties: Object.keys(properties || {}).length, balances: Object.keys(balances || {}).length, transfers: Object.keys(transfers || {}).length }; } catch {}
       return res.json({ 
         status: 'ok', 
         service: 'aasthichain-api-gateway', 
-        version: '2.4-go-webhook-utr-digilocker-property-db',
+        version: '2.5-neon-postgres-persistence',
+        dbMode,
+        dbCounts,
         goImplementation: {
           webhook: 'payment-gateway/webhook.go — GatewayWithWebhook with UTR12, signature verification, reconciliation',
           digilocker: 'payment-gateway/digilocker.go — DigiLockerProvider with OAuth mock/real',
