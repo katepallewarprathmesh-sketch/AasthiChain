@@ -608,6 +608,94 @@ export class RealDB {
       globalThis._aasthi_transfers[transferId] = transfer
     } catch (e) {}
   }
+
+  // ===== NPCI state — payments + UPI balances + UTR index — persistent across lambdas =====
+  // Bundle style: one record per store so writes are atomic (fixes "Payment not found" on Vercel)
+  async getNpciState() {
+    const mode = this.getMode()
+
+    if (mode === 'github') {
+      try {
+        const s = await githubDB.getNpciState()
+        if (s && s.payments && Object.keys(s.payments).length > 0) return s
+      } catch (e) {}
+    }
+
+    if (mode === 'postgres') {
+      try {
+        const pool = await getPgPool()
+        if (!pool) throw new Error('No pool')
+        let result
+        if (pool.query) {
+          result = await pool.query(`SELECT data FROM npci_payments WHERE id = 'bundle'`)
+        } else {
+          result = await pool.sql`SELECT data FROM npci_payments WHERE id = 'bundle'`
+        }
+        const rows = result.rows || result
+        if (rows && rows[0]) {
+          const d = rows[0].data || rows[0]
+          return typeof d === 'string' ? JSON.parse(d) : d
+        }
+      } catch (e) {}
+    }
+
+    if (mode === 'vercel-kv') {
+      try {
+        const kv = await getKvClient()
+        if (kv) {
+          const s = await kv.get('npci:bundle')
+          if (s) return s
+        }
+      } catch (e) {}
+    }
+
+    // File fallback (per-lambda)
+    const f = loadFromFile(PERSIST_FILES.npci, null)
+    if (f && f.payments) {
+      return { payments: f.payments, balances: f.balances || {}, utrIndex: f.utrIndex || {} }
+    }
+    return null
+  }
+
+  async saveNpciState(state) {
+    const mode = this.getMode()
+    const bundle = {
+      payments: state.payments || {},
+      balances: state.balances || {},
+      utrIndex: state.utrIndex || {},
+      savedAt: new Date().toISOString()
+    }
+
+    if (mode === 'github') {
+      try { await githubDB.saveNpciState(bundle) } catch (e) {}
+    }
+
+    if (mode === 'postgres') {
+      try {
+        const pool = await getPgPool()
+        if (pool) {
+          const data = JSON.stringify(bundle)
+          if (pool.query) {
+            await pool.query(
+              `INSERT INTO npci_payments (id, data, updated_at) VALUES ('bundle', $1, NOW()) ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = NOW()`,
+              [data]
+            )
+          } else {
+            await pool.sql`INSERT INTO npci_payments (id, data, updated_at) VALUES ('bundle', ${data}, NOW()) ON CONFLICT (id) DO UPDATE SET data = ${data}, updated_at = NOW()`
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (mode === 'vercel-kv') {
+      try {
+        const kv = await getKvClient()
+        if (kv) await kv.set('npci:bundle', bundle)
+      } catch (e) {}
+    }
+
+    try { saveToFile(PERSIST_FILES.npci, bundle) } catch (e) {}
+  }
 }
 
 export const realDB = new RealDB()

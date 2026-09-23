@@ -64,36 +64,45 @@ async function saveToGitHub(filePath, content, token, message) {
       return false
     }
 
-    const sha = await getGitHubFileSHA(filePath, token)
-    
-    const b64Content = Buffer.from(JSON.stringify(content, null, 2)).toString('base64')
-    
-    const body = {
-      message: message || `feat: update ${filePath} via real DB`,
-      content: b64Content,
-      branch: GITHUB_BRANCH
-    }
-    if (sha) body.sha = sha
+    // Retry on 409 conflict (concurrent lambda writes) — refetch sha and retry, max 3 attempts
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const sha = await getGitHubFileSHA(filePath, token)
 
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000)
-    })
+      const b64Content = Buffer.from(JSON.stringify(content, null, 2)).toString('base64')
 
-    if (!res.ok) {
+      const body = {
+        message: message || `feat: update ${filePath} via real DB`,
+        content: b64Content,
+        branch: GITHUB_BRANCH
+      }
+      if (sha) body.sha = sha
+
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000)
+      })
+
+      if (res.ok) {
+        console.log(`[GitHubDB] Saved ${filePath} to GitHub — ${Object.keys(content).length} keys`)
+        return true
+      }
+
       const err = await res.text()
-      console.error(`[GitHubDB] saveToGitHub ${filePath} failed ${res.status}: ${err.slice(0,200)}`)
+      if (res.status === 409 && attempt < 2) {
+        console.log(`[GitHubDB] 409 conflict on ${filePath}, retry ${attempt + 1}`)
+        await new Promise(r => setTimeout(r, 300 * (attempt + 1)))
+        continue
+      }
+      console.error(`[GitHubDB] saveToGitHub ${filePath} failed ${res.status}: ${err.slice(0, 200)}`)
       return false
     }
-
-    console.log(`[GitHubDB] Saved ${filePath} to GitHub — ${Object.keys(content).length} keys`)
-    return true
+    return false
   } catch (e) {
     console.error(`[GitHubDB] saveToGitHub ${filePath} failed`, e.message)
     return false
@@ -194,6 +203,19 @@ export class GitHubDB {
   async getTransfers() {
     const data = await fetchFromGitHubRaw('data/transfers.json')
     return data || {}
+  }
+
+  // NPCI state bundle — payments + UPI balances + UTR index in data/npci_payments.json
+  async getNpciState() {
+    return await fetchFromGitHubRaw('data/npci_payments.json')
+  }
+
+  async saveNpciState(bundle) {
+    if (!this.token) {
+      console.log('[GitHubDB] No GITHUB_TOKEN — NPCI state write skipped (set GITHUB_TOKEN env in Vercel for shared persistence)')
+      return false
+    }
+    return await saveToGitHub('data/npci_payments.json', bundle, this.token, 'feat(data): NPCI UPI payments state — real DB shared across lambdas')
   }
 
   async saveTransfer(transferId, transfer) {

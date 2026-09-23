@@ -1,79 +1,203 @@
-// SOLID: Single Responsibility — Only handles buy flow for layman
-// Interface Segregation — Small props interface
-// Dependency Inversion — Depends on api abstraction
+// SOLID: Single Responsibility — only the UPI buy journey for layman
+// Open/Closed — status config object; new statuses need no component change
+// Dependency Inversion — depends on api abstraction, not fetch
+// UPI Collect journey (NPCI rail, simulation): collect → approve in UPI app → CONFIRMED (UTR)
+//   → token transfer on Drunix ledger → escrow RELEASED. Payment and tokens move together (DvP).
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import api from '../lib/api.js'
+
+const STATUS_STEPS = [
+  { key: 'collect', label: 'Payment Request', desc: 'Secure request created' },
+  { key: 'approved', label: 'Payment Confirmed', desc: 'Approved in UPI app' },
+  { key: 'tokens', label: 'Tokens Transferred', desc: 'Ownership moved to you' },
+  { key: 'settled', label: 'Complete', desc: 'Money & tokens settled' }
+]
+
+const DEMO_VPAS = ['demo.investor@aasthichain', 'demo.investor@fakebank']
+
+function StepTrack({ current, doneCount }) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      {STATUS_STEPS.map((s, i) => {
+        const done = i < doneCount
+        const active = i === doneCount && ['paying', 'confirming', 'transferring'].includes(current)
+        return (
+          <div key={s.key} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
+            <div style={{
+              width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+              background: done ? '#059669' : active ? '#F59E0B' : '#E5E7EB',
+              color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 9, fontWeight: 700
+            }}>{done ? '✓' : i + 1}</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: done || active ? 700 : 500, color: done ? '#065F46' : active ? '#92400E' : '#9CA3AF' }}>{s.label}</div>
+              {(done || active) && <div style={{ fontSize: 10, color: '#9CA3AF' }}>{s.desc}</div>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, onSuccess }) {
   const [amount, setAmount] = useState(100)
-  const [step, setStep] = useState('idle') // idle, paying, success, error
+  const [vpa, setVpa] = useState(user?.identityId ? `${user.identityId}@aasthichain` : 'demo.investor@aasthichain')
+  const [step, setStep] = useState('form') // form, paying, pending, confirming, transferring, success, error
   const [error, setError] = useState('')
+  const [advanced, setAdvanced] = useState(false)
   const [payment, setPayment] = useState(null)
+  const [transfer, setTransfer] = useState(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
 
-  const total = (amount || 0) * (tokenPrice || 0)
+  const safePrice = tokenPrice || 0
+  const total = (amount || 0) * safePrice
 
-  const handleBuy = async () => {
+  // Countdown for UPI approval expiry (5 min collect request)
+  useEffect(() => {
+    if (step !== 'pending' || !payment) return
+    const t = setInterval(() => {
+      const msLeft = new Date(payment.expiresAt).getTime() - Date.now()
+      setSecondsLeft(Math.max(0, Math.ceil(msLeft / 1000)))
+      if (msLeft <= 0) {
+        clearInterval(t)
+        setError('This payment request expired after 5 minutes. Please start again — no money was taken.')
+        setStep('error')
+      }
+    }, 1000)
+    return () => clearInterval(t)
+  }, [step, payment])
+
+  const startPayment = async () => {
     setError('')
     setStep('paying')
-    
     try {
-      // Step 1: Create payment request
       const collectData = await api.initiateCollect({
         assetId,
         tokenAmount: parseInt(amount),
         amountINR: total,
-        payerVpa: `${user?.identityId || 'investor1'}@aasthichain`,
+        payerVpa: vpa.trim(),
         payeeVpa: `${recipient || 'originator1'}@aasthichain`,
         note: `Buy ${amount} tokens of ${assetId}`,
         payerId: user?.identityId || 'investor1',
         payeeId: recipient || 'originator1'
       })
-      
       setPayment(collectData)
-      
-      // Step 2: Approve payment (simulates UPI app approval)
-      const approved = await api.approvePayment(collectData.paymentId, user?.identityId || 'investor1')
-      setPayment(approved)
-      
-      // Step 3: Transfer tokens from owner to buyer
-      const transfer = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(amount))
-      
-      // Step 4: Release payment (settlement)
-      const released = await api.releasePayment(collectData.paymentId, transfer.transferId)
-      setPayment(released)
-      
-      setStep('success')
-      if (onSuccess) onSuccess(released, transfer)
-      
+      setSecondsLeft(300)
+      setStep('pending')
     } catch (e) {
-      console.error('Buy failed', e)
-      setError(e.data?.failureReason || e.message || 'Payment failed — please try again')
+      setError(e.data?.failureReason || e.message || 'Could not start payment — please try again')
       setStep('error')
-      
-      // Try refund if payment was created
-      if (payment?.paymentId) {
-        try {
-          await api.refundPayment(payment.paymentId, e.message)
-        } catch {}
-      }
     }
   }
+
+  const approve = async () => {
+    setStep('confirming')
+    try {
+      let confirmed
+      try {
+        confirmed = await api.approvePayment(payment.paymentId, user?.identityId || 'investor1', payment)
+      } catch (e) {
+        if (e.status === 404 && payment) {
+          // Server lost it (fresh cloud instance) — re-upload our copy and retry once
+          await api.reattachPayment(payment.paymentId, payment)
+          confirmed = await api.approvePayment(payment.paymentId, user?.identityId || 'investor1', payment)
+        } else throw e
+      }
+      setPayment(confirmed)
+      await transferAndRelease(confirmed)
+    } catch (e) {
+      failWithRefund(e, 'Payment could not be confirmed')
+    }
+  }
+
+  const transferAndRelease = async (confirmed) => {
+    setStep('transferring')
+    try {
+      // Leg 1 — Drunix ledger: tokens move from seller to you
+      let tr
+      try {
+        tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(amount))
+      } catch (e) {
+        if (e.status === 404 || e.status === 400) {
+          // Balances not on this instance — reattach payment first so state is consistent, then retry
+          await api.reattachPayment(confirmed.paymentId, confirmed)
+          tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(amount))
+        } else throw e
+      }
+      setTransfer(tr)
+      // Leg 2 — release escrow to seller (settlement completes)
+      let released
+      try {
+        released = await api.releasePayment(confirmed.paymentId, tr.transferId, confirmed)
+      } catch (e) {
+        if (e.status === 404) {
+          await api.reattachPayment(confirmed.paymentId, confirmed)
+          released = await api.releasePayment(confirmed.paymentId, tr.transferId, confirmed)
+        } else throw e
+      }
+      setPayment(released)
+      setStep('success')
+      if (onSuccess) onSuccess(released, tr)
+    } catch (e) {
+      failWithRefund(e, 'Tokens could not be transferred — your money will be refunded')
+    }
+  }
+
+  const decline = async () => {
+    try { await api.declinePayment(payment.paymentId, 'user declined') } catch {}
+    setError('Payment cancelled. No money was taken.')
+    setStep('error')
+  }
+
+  const failWithRefund = async (e, friendly) => {
+    setError(e.data?.failureReason || e.message || friendly)
+    setStep('error')
+    if (payment?.paymentId && payment.status === 'CONFIRMED') {
+      try { await api.refundPayment(payment.paymentId, e.message || friendly) } catch {}
+    }
+  }
+
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(1, '0')
+  const ss = String(secondsLeft % 60).padStart(2, '0')
 
   if (step === 'success' && payment) {
     return (
       <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
         <div style={{ fontSize: 32 }}>✓</div>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#065F46', marginTop: 8 }}>Payment Successful!</h3>
-        <p style={{ fontSize: 13, color: '#6B7280', marginTop: 8, lineHeight: 1.5 }}>
-          You bought <strong>{amount} tokens</strong> for <strong>₹{total.toLocaleString('en-IN')}</strong><br/>
-          Tokens added to your wallet. Payment ref: {(payment.utr || payment.paymentId || '').slice(-6) || '—'}
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#065F46', margin: '8px 0 0' }}>Payment Successful!</h3>
+        <p style={{ fontSize: 13, color: '#374151', marginTop: 8, lineHeight: 1.5 }}>
+          You bought <strong>{amount} tokens</strong> of this property for <strong>₹{total.toLocaleString('en-IN')}</strong>.<br />
+          Money and tokens moved together — nothing partial.
         </p>
+        {payment.utr && (
+          <div style={{ background: 'white', border: '1px solid #D1FAE5', borderRadius: 8, padding: '8px 12px', margin: '12px auto', maxWidth: 320, fontSize: 12 }}>
+            <div style={{ color: '#6B7280', fontSize: 11 }}>Bank reference (UTR)</div>
+            <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#065F46' }}>{payment.utr}</div>
+          </div>
+        )}
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => setAdvanced(!advanced)} style={{ background: 'none', border: 'none', color: '#059669', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>
+            {advanced ? 'Hide' : 'Show'} payment details
+          </button>
+        </div>
+        {advanced && (
+          <div style={{ textAlign: 'left', background: 'white', border: '1px solid #E2E8F0', borderRadius: 8, padding: 10, margin: '8px auto 0', maxWidth: 320, fontSize: 10, color: '#475569', fontFamily: 'monospace', lineHeight: 1.7 }}>
+            <div>paymentId: {payment.paymentId}</div>
+            <div>upiTxnId: {payment.upiTxnId || '—'}</div>
+            <div>RRN: {payment.rrn || '—'}</div>
+            <div>UTR12: {payment.utr12 || payment.utr || '—'}</div>
+            <div>Drunix transfer: {payment.drunixTransferId || (transfer && transfer.transferId) || '—'}</div>
+            <div>status: {payment.status}</div>
+            {payment.utr && <a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{ color: '#1E3A5F' }}>Verify UTR →</a>}
+          </div>
+        )}
         <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'center' }}>
           <a href="/wallet" className="btn btn-primary" style={{ fontSize: 13, textDecoration: 'none', padding: '10px 16px' }}>
             View Wallet →
           </a>
-          <button className="btn btn-secondary" style={{ fontSize: 13, padding: '10px 16px' }} onClick={() => { setStep('idle'); setPayment(null); setError('') }}>
+          <button className="btn btn-secondary" style={{ fontSize: 13, padding: '10px 16px' }} onClick={() => { setStep('form'); setPayment(null); setTransfer(null); setError('') }}>
             Buy More
           </button>
         </div>
@@ -81,11 +205,72 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
     )
   }
 
+  if (step === 'error') {
+    return (
+      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Buy Tokens</h3>
+        <div style={{ marginTop: 12, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, fontSize: 12, color: '#991B1B', lineHeight: 1.5 }}>
+          {error}
+        </div>
+        <button
+          onClick={() => { setStep('form'); setPayment(null); setError('') }}
+          style={{ width: '100%', marginTop: 14, padding: 12, background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
+  if (step === 'pending' && payment) {
+    return (
+      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Approve in your UPI app</h3>
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginTop: 12, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>₹{total.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>to {payment.payeeVpa} · for {amount} tokens</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E', marginTop: 6 }}>Expires in {mm}:{ss}</div>
+        </div>
+        <StepTrack current="pending" doneCount={0} />
+        <button
+          onClick={approve}
+          style={{ width: '100%', marginTop: 14, padding: 13, background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+        >
+          ✓ Approve Payment
+        </button>
+        <button
+          onClick={decline}
+          style={{ width: '100%', marginTop: 8, padding: 11, background: 'white', color: '#6B7280', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >
+          ✕ Decline
+        </button>
+        <div style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center', marginTop: 10 }}>
+          Demo: this button simulates your UPI app approval. Live UPI comes via NPCI-certified partners (Setu / bank APIs).
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'confirming' || step === 'transferring' || step === 'paying') {
+    return (
+      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+          {step === 'paying' ? 'Creating payment request…' : step === 'confirming' ? 'Confirming payment…' : 'Transferring tokens…'}
+        </h3>
+        <StepTrack current={step} doneCount={step === 'paying' ? 0 : step === 'confirming' ? 1 : 2} />
+        <div style={{ marginTop: 12, fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
+          🔒 Money and tokens move together — never one without the other
+        </div>
+      </div>
+    )
+  }
+
+  // step === 'form'
   return (
     <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
       <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Buy Tokens</h3>
-      <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Own a part of this property from ₹500</p>
-      
+      <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Own a part of this property — pay by UPI</p>
+
       <div style={{ marginTop: 16 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>How many tokens?</label>
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
@@ -95,37 +280,56 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
             max="10000"
             value={amount}
             onChange={e => setAmount(Math.max(1, parseInt(e.target.value) || 1))}
-            style={{
-              width: 100,
-              padding: '10px 12px',
-              border: '1px solid #E5E7EB',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600
-            }}
+            style={{ width: 100, padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 14, fontWeight: 600 }}
           />
           <span style={{ fontSize: 13, color: '#6B7280' }}>tokens = ₹{total.toLocaleString('en-IN')}</span>
         </div>
-        
         <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
           {[10, 50, 100, 500].map(num => (
             <button
               key={num}
               onClick={() => setAmount(num)}
               style={{
-                padding: '6px 12px',
-                borderRadius: 20,
+                padding: '6px 12px', borderRadius: 20, cursor: 'pointer',
                 border: '1px solid #E5E7EB',
                 background: amount === num ? '#1E3A5F' : 'white',
                 color: amount === num ? 'white' : '#6B7280',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer'
+                fontSize: 12, fontWeight: 600
               }}
             >
               {num}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Your UPI ID</label>
+        <input
+          type="text"
+          value={vpa}
+          onChange={e => setVpa(e.target.value)}
+          placeholder="yourname@bank"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 14, marginTop: 6, fontFamily: 'monospace' }}
+        />
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+          {DEMO_VPAS.map(dv => (
+            <button
+              key={dv}
+              onClick={() => setVpa(dv)}
+              style={{
+                padding: '4px 10px', borderRadius: 12, cursor: 'pointer', fontSize: 11,
+                border: '1px solid #C7D2FE',
+                background: vpa === dv ? '#EEF2FF' : 'white',
+                color: '#4338CA', fontFamily: 'monospace'
+              }}
+            >
+              {dv}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 6 }}>
+          Test handles only — pre-loaded with demo money. No real bank account is used.
         </div>
       </div>
 
@@ -135,33 +339,20 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
           <span style={{ fontWeight: 700, fontSize: 18, color: '#111827' }}>₹{total.toLocaleString('en-IN')}</span>
         </div>
         <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
-          {amount} tokens × ₹{(tokenPrice || 0).toLocaleString('en-IN')} each
+          {amount} tokens × ₹{safePrice.toLocaleString('en-IN')} each
         </div>
       </div>
 
-      {error && (
-        <div style={{ marginTop: 12, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 10, fontSize: 12, color: '#991B1B' }}>
-          {error}
-        </div>
-      )}
-
       <button
-        onClick={handleBuy}
+        onClick={startPayment}
         disabled={step === 'paying'}
         style={{
-          width: '100%',
-          marginTop: 16,
-          padding: '14px',
-          background: step === 'paying' ? '#9CA3AF' : '#1E3A5F',
-          color: 'white',
-          border: 'none',
-          borderRadius: 8,
-          fontSize: 14,
-          fontWeight: 600,
-          cursor: step === 'paying' ? 'not-allowed' : 'pointer'
+          width: '100%', marginTop: 16, padding: 14,
+          background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8,
+          fontSize: 14, fontWeight: 700, cursor: 'pointer'
         }}
       >
-        {step === 'paying' ? 'Processing payment...' : `Pay ₹${total.toLocaleString('en-IN')} →`}
+        Pay ₹{total.toLocaleString('en-IN')} →
       </button>
 
       <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', marginTop: 10, lineHeight: 1.4 }}>

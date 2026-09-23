@@ -1,5 +1,14 @@
 # Chaincode — AasthiChain
 
+## NPCI Drunix Tokenization
+
+This chaincode targets **NPCI Drunix** — NPCI's open-source blockchain platform for enterprise tokenization and digital assets (Hyperledger Fabric fork, Apache 2.0). Drunix is Fabric-compatible, so these Go contracts (fabric-contract-api) deploy as-is on a Drunix network:
+
+- **Real-world assets as fractional tokens** — each verified property mints a fixed token supply (`MintPropertyTokens`), balances held per owner (`balance~assetId~ownerId` composite keys)
+- **UPI settlement mapped to Drunix identities** — the payment gateway's escrow release passes `drunixTransferId`; money (UPI Collect → UTR) and tokens (Drunix transfer) move atomically (DvP)
+- **T+0 settlement** — UPI handle (VPA) ↔ on-chain identity mapping in the gateway layer
+- **Governed multi-org network** — OriginatorMSP / RegistrarMSP / InvestorMSP / RegulatorMSP endorsement mirrors Drunix multi-organization networks
+
 Implements spec §5 API with full §6 edge cases.
 
 ## Contracts

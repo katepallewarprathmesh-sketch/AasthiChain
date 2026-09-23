@@ -121,17 +121,17 @@ class ApiClient {
     })
   }
 
-  async approvePayment(paymentId, payerId) {
+  async approvePayment(paymentId, payerId, payment) {
     return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ payerId })
+      body: JSON.stringify({ payerId, payment })
     })
   }
 
-  async releasePayment(paymentId, drunixTransferId) {
+  async releasePayment(paymentId, drunixTransferId, payment) {
     return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}/release`, {
       method: 'POST',
-      body: JSON.stringify({ drunixTransferId })
+      body: JSON.stringify({ drunixTransferId, payment })
     })
   }
 
@@ -151,6 +151,40 @@ class ApiClient {
 
   async getPayment(paymentId) {
     return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}`)
+  }
+
+  // Self-heal for serverless multi-instance races — re-upload payment state the client holds
+  async reattachPayment(paymentId, payment) {
+    return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}/reattach`, {
+      method: 'POST',
+      body: JSON.stringify({ payment })
+    })
+  }
+
+  // Ensure server knows this payment — GET, and reattach on 404 (SRP: one place for the retry policy)
+  async ensurePayment(payment) {
+    if (!payment || !payment.paymentId) return payment
+    try {
+      return await this.getPayment(payment.paymentId)
+    } catch (e) {
+      if (e.status === 404) {
+        await this.reattachPayment(payment.paymentId, payment)
+        return this.getPayment(payment.paymentId)
+      }
+      throw e
+    }
+  }
+
+  async getNpciConfig() {
+    return this.request('/api/npci/config')
+  }
+
+  async listNpciPayments(limit = 20) {
+    return this.request(`/api/npci/payments?limit=${limit}`)
+  }
+
+  async getNpciWebhooks() {
+    return this.request('/api/npci/webhooks')
   }
 
   async getPaymentByUTR(utr) {
