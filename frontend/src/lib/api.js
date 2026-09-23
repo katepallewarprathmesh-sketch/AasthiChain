@@ -96,10 +96,12 @@ class ApiClient {
   }
 
   // Transfers — SRP
-  async transferTokens(assetId, fromId, toId, amount) {
+  // clientState (optional): { property, receipts, claimedBalance } — lets a cold
+  // serverless instance re-materialize the sender's balance from verified receipts
+  async transferTokens(assetId, fromId, toId, amount, clientState) {
     return this.request('/api/transfers', {
       method: 'POST',
-      body: JSON.stringify({ assetId, fromId, toId, amount })
+      body: JSON.stringify({ assetId, fromId, toId, amount, clientState })
     })
   }
 

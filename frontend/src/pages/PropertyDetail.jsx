@@ -215,6 +215,9 @@ export default function PropertyDetail({ user }) {
             tokenPrice={tokenPrice}
             recipient={property.originatorId}
             user={user}
+            propertyTitle={property.title}
+            valuationINR={property.valuationINR}
+            totalTokens={property.totalTokens}
             onSuccess={() => {
               setTimeout(() => window.location.reload(), 1500)
             }}

@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from 'react'
 import api from '../lib/api.js'
+import { useLocalCache } from '../hooks/useLocalCache.js'
 
 const STATUS_STEPS = [
   { key: 'collect', label: 'Payment Request', desc: 'Secure request created' },
@@ -139,6 +140,30 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
       }
       setPayment(released)
       setStep('success')
+      // Record holdings locally with the payment receipt — lets a cold server
+      // instance re-materialize this balance later (self-heal, no lost tokens)
+      try {
+        recordBuy(user?.identityId || 'investor1', {
+          assetId,
+          title: propertyTitle || assetId.slice(0, 16),
+          tokenPrice: safePrice,
+          valuationINR: valuationINR || 0,
+          totalTokens: totalTokens || 0,
+          originatorId: recipient || 'originator1',
+          tokenAmount: parseInt(amount),
+          receipt: {
+            paymentId: released.paymentId || collectData.paymentId,
+            assetId,
+            payerId: user?.identityId || 'investor1',
+            tokenAmount: parseInt(amount),
+            amountINR: total,
+            status: released.status || 'RELEASED',
+            upiTxnId: released.upiTxnId || collectData.upiTxnId || '',
+            createdAt: collectData.createdAt || new Date().toISOString(),
+            utr: released.utr || ''
+          }
+        })
+      } catch {}
       if (onSuccess) onSuccess(released, tr)
     } catch (e) {
       failWithRefund(e, 'Tokens could not be transferred — your money will be refunded')
