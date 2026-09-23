@@ -9,3 +9,6 @@ frontend/.env
 frontend/dist/
 .npm/
 .gitconfig
+
+# local reference material (not part of the app)
+uploads/
