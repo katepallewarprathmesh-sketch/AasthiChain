@@ -8,7 +8,8 @@ Live: [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)
 
 ### NPCI Drunix Tokenization
 
-- Ledger: Drunix-compatible Fabric chaincode in Go (`chaincode/`) — properties, fractional token balances, KYC, transfers
+- Ledger: Drunix-compatible Fabric chaincode in Go (`chaincode/`) — properties, fractional token balances, KYC, transfers, `SettleDvP` (atomic delivery-versus-payment with UTR proof) + `SettlementRecorded` chaincode events
+- Drunix Gateway (Golang): `drunix-gateway/` — Drunix transaction lifecycle (PROPOSED → ENDORSED → COMMITTED, deterministic txIDs, read/write sets, chaincode events) + explainable AI fraud engine (`fraud.go`, ML-pluggable). `go test ./...` green. Run: `cd drunix-gateway && go run ./cmd/gateway` (:21100). Real network: `go build -tags real`
 - Settlement: UPI Collect escrow → payment CONFIRMED (bank UTR) → Drunix token transfer → escrow RELEASED — atomic DvP (`drunixTransferId` on every payment)
 - Persistence: production state in Postgres / GitHub-backed real DB (`frontend/api/lib/db_real.js`), shared across serverless instances
 - UPI rail: NPCI UPI Collect simulation with RRN/UTR, idempotency, webhooks + UTR reconciliation — real via Setu/ICICI by flipping `NPCI_MODE=real` (`payment-gateway/real_npcibank.go`)

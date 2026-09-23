@@ -1,33 +1,5 @@
-# Go
-*.exe
-*.test
-*.out
-coverage.*
-vendor/
-go.work
-go.work.sum
-.env
-
-# Node
 node_modules/
-frontend/node_modules/
-frontend/dist/
-dist/
-build/
-.npm/
-.cache/
-
-# Zip artifacts
-*.zip
-*.bundle
-*.tar.gz
-
-# Data
-api-gateway/data/
-data/
-*.log
-
-# IDE
-.idea/
-.vscode/
-.DS_Store
+go/
+*.tgz
+nohup.out
+frontend/.env

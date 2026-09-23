@@ -74,8 +74,7 @@ function Footer() {
     <footer style={{borderTop:'1px solid #F3F4F6', background:'white', padding:'20px 0', marginTop:40}}>
       <div className="container" style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
         <div style={{fontSize:12, color:'#6B7280'}}>
-          <span style={{fontWeight:700, color:'#111827'}}>AasthiChain</span> • Own property from ₹500 • Secure UPI • Instant
-        </div>
+          <span style={{fontWeight:700, color:'#111827'}}>AasthiChain</span> • Own property from ₹500 • Secure UPI • Instant • Settled on NPCI Drunix</div>
         <div style={{fontSize:11, color:'#9CA3AF'}}>© 2024 AasthiChain • Made for everyone</div>
       </div>
     </footer>

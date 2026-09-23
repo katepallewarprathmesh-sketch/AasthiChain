@@ -421,3 +421,195 @@ func (c *TokenContract) GetWallet(ctx contractapi.TransactionContextInterface, o
 	}
 	return results, nil
 }
+
+// RecordSettlement — persist a DvP settlement proof on the Drunix ledger.
+// Called by the payment gateway after escrow release: tokens already moved via
+// TransferTokens; this records the bank payment (paymentId + UTR) that the
+// move was settled against, emitting a SettlementRecorded chaincode event.
+// Amount paise is stored for regulator-accurate audit.
+func (c *TokenContract) RecordSettlement(ctx contractapi.TransactionContextInterface, paymentId string, utr string, assetId string, fromId string, toId string, tokenAmount int64, amountINRPaise int64) (string, error) {
+	if err := c.requireMSP(ctx, []string{"InvestorMSP", "OriginatorMSP", "RegistrarMSP"}); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(paymentId) == "" || strings.TrimSpace(utr) == "" || strings.TrimSpace(assetId) == "" {
+		return "", NewError(ErrInvalidInput, "paymentId, utr and assetId are required")
+	}
+	if tokenAmount <= 0 {
+		return "", NewError(ErrInvalidAmount, "tokenAmount must be > 0")
+	}
+
+	// Idempotency — the same payment can never settle twice on-chain.
+	settleKey, err := ctx.GetStub().CreateCompositeKey(CompositeSettlePrefix, []string{assetId, paymentId})
+	if err != nil {
+		return "", err
+	}
+	if existing, _ := ctx.GetStub().GetState(settleKey); existing != nil {
+		return "", NewError(ErrInvalidInput, "settlement already recorded for payment "+paymentId)
+	}
+
+	settlement := SettlementRecord{
+		DocType:        "settlement",
+		SettlementID:   "STL-" + paymentId,
+		PaymentID:      paymentId,
+		UTR:            utr,
+		AssetID:        assetId,
+		FromID:         fromId,
+		ToID:           toId,
+		TokenAmount:    tokenAmount,
+		AmountINRPaise: amountINRPaise,
+		SettledAt:      time.Now().UTC(),
+		Status:         SettlementSettled,
+	}
+	bytes, err := json.Marshal(settlement)
+	if err != nil {
+		return "", err
+	}
+	if err := ctx.GetStub().PutState(settleKey, bytes); err != nil {
+		return "", err
+	}
+
+	// Chaincode event — Drunix network subscribers (payment ops, regulator)
+	// consume SettlementRecorded for real-time settlement intelligence.
+	eventPayload, _ := json.Marshal(map[string]string{
+		"settlementId": settlement.SettlementID,
+		"paymentId":    paymentId,
+		"utr":          utr,
+		"assetId":      assetId,
+		"toId":         toId,
+	})
+	if err := ctx.GetStub().SetEvent("SettlementRecorded", eventPayload); err != nil {
+		return "", err
+	}
+	return settlement.SettlementID, nil
+}
+
+// SettleDvP — atomic Delivery-versus-Payment on the Drunix ledger:
+// tokens transfer from seller to buyer AND the bank payment proof (paymentId +
+// UTR) is recorded in the SAME transaction — all-or-nothing, no partial state.
+// This is the chaincode entrypoint the Golang Drunix gateway submits after the
+// UPI escrow reaches CONFIRMED (UTR assigned by the bank).
+func (c *TokenContract) SettleDvP(ctx contractapi.TransactionContextInterface, paymentId string, utr string, assetId string, fromId string, toId string, tokenAmount int64, amountINRPaise int64) (string, error) {
+	if err := c.requireMSP(ctx, []string{"InvestorMSP", "OriginatorMSP", "RegistrarMSP"}); err != nil {
+		return "", err
+	}
+
+	// Idempotency first — a replayed DvP submission must be a no-op.
+	settleKey, err := ctx.GetStub().CreateCompositeKey(CompositeSettlePrefix, []string{assetId, paymentId})
+	if err != nil {
+		return "", err
+	}
+	if existing, _ := ctx.GetStub().GetState(settleKey); existing != nil {
+		return "", NewError(ErrInvalidInput, "DvP already settled for payment "+paymentId)
+	}
+
+	// Leg 1 — token delivery (same rules as TransferTokens; caller is fromId).
+	transferID, err := c.TransferTokensAs(ctx, assetId, fromId, toId, tokenAmount)
+	if err != nil {
+		return "", fmt.Errorf("DvP delivery leg failed: %w", err)
+	}
+
+	// Leg 2 — payment proof (UTR) recorded atomically in this same tx.
+	settlementID, err := c.RecordSettlement(ctx, paymentId, utr, assetId, fromId, toId, tokenAmount, amountINRPaise)
+	if err != nil {
+		// Fabric transaction semantics: a returned error discards ALL writes
+		// from this invocation — the transfer leg cannot persist without the
+		// settlement proof. Atomicity is enforced by the ledger itself.
+		return "", fmt.Errorf("DvP payment leg failed — transaction rolled back (%s): %w", transferID, err)
+	}
+	return settlementID, nil
+}
+
+// TransferTokensAs is TransferTokens with an explicit fromId (gateway/escrow
+// settlements move tokens on behalf of the recorded owner). Authorization:
+// caller must be an authorized settlement MSP; the from-owner must exist.
+func (c *TokenContract) TransferTokensAs(ctx contractapi.TransactionContextInterface, assetId string, fromId string, toId string, amount int64) (string, error) {
+	if err := c.requireMSP(ctx, []string{"InvestorMSP", "OriginatorMSP", "RegistrarMSP"}); err != nil {
+		return "", err
+	}
+	if amount <= 0 {
+		return "", NewError(ErrInvalidAmount, "amount must be > 0")
+	}
+	if fromId == toId {
+		return "", NewError(ErrInvalidTransfer, "self-transfer not allowed")
+	}
+	assetBytes, err := ctx.GetStub().GetState(assetId)
+	if err != nil {
+		return "", err
+	}
+	if assetBytes == nil {
+		return "", NewError(ErrAssetNotFound, "asset not found")
+	}
+	var asset PropertyAsset
+	if err := json.Unmarshal(assetBytes, &asset); err != nil {
+		return "", err
+	}
+	if asset.Status == PropertyFrozen {
+		return "", NewError(ErrAssetFrozen, "asset is frozen, transfers blocked")
+	}
+	if asset.Status != PropertyTokenized {
+		return "", NewError(ErrInvalidTransfer, fmt.Sprintf("asset status %s does not allow transfer", asset.Status))
+	}
+
+	fromKey, err := ctx.GetStub().CreateCompositeKey(CompositeBalancePrefix, []string{assetId, fromId})
+	if err != nil {
+		return "", err
+	}
+	fromBytes, err := ctx.GetStub().GetState(fromKey)
+	if err != nil {
+		return "", err
+	}
+	if fromBytes == nil {
+		return "", NewError(ErrBalanceNotFound, "sender balance not found")
+	}
+	var fromBal TokenBalance
+	if err := json.Unmarshal(fromBytes, &fromBal); err != nil {
+		return "", err
+	}
+	if fromBal.Balance < amount {
+		return "", NewError(ErrInsufficientBalance, fmt.Sprintf("have %d need %d", fromBal.Balance, amount))
+	}
+
+	toKey, err := ctx.GetStub().CreateCompositeKey(CompositeBalancePrefix, []string{assetId, toId})
+	if err != nil {
+		return "", err
+	}
+	var toBal TokenBalance
+	toBytes, _ := ctx.GetStub().GetState(toKey)
+	if toBytes != nil {
+		if err := json.Unmarshal(toBytes, &toBal); err != nil {
+			return "", err
+		}
+	} else {
+		toBal = TokenBalance{DocType: DocTypeBalance, AssetID: assetId, OwnerID: toId, Balance: 0, UpdatedAt: time.Now().UTC()}
+	}
+
+	fromBal.Balance -= amount
+	fromBal.UpdatedAt = time.Now().UTC()
+	fromJSON, _ := json.Marshal(fromBal)
+	if err := ctx.GetStub().PutState(fromKey, fromJSON); err != nil {
+		return "", err
+	}
+	toBal.Balance += amount
+	toBal.UpdatedAt = time.Now().UTC()
+	toJSON, _ := json.Marshal(toBal)
+	if err := ctx.GetStub().PutState(toKey, toJSON); err != nil {
+		return "", err
+	}
+
+	transferID := "TXN-" + uuid.New().String()
+	record := TransferRecord{
+		DocType:     DocTypeTransfer,
+		TransferID:  transferID,
+		AssetID:     assetId,
+		FromID:      fromId,
+		ToID:        toId,
+		Amount:      amount,
+		TxTimestamp: time.Now().UTC(),
+		Status:      TransferCompleted,
+	}
+	tJSON, _ := json.Marshal(record)
+	if err := ctx.GetStub().PutState("transfer~"+transferID, tJSON); err != nil {
+		return "", err
+	}
+	return transferID, nil
+}

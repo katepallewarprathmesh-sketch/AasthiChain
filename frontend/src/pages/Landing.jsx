@@ -261,6 +261,17 @@ export default function Landing({ user }) {
           
           {showDev && (
             <div style={{marginTop:20, background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:20}}>
+              <div style={{background:'white', border:'1px solid #C7D2FE', borderRadius:8, padding:14, marginBottom:16}}>
+                <div style={{fontSize:12, fontWeight:800, color:'#1E3A5F'}}>NPCI Drunix — Core Platform (Golang)</div>
+                <div style={{fontSize:11, color:'#475569', marginTop:6, lineHeight:1.6}}>
+                  Built ON Drunix (NPCI's open-source Fabric-fork for tokenization), not just integrated:
+                  Go chaincode (property.go / token.go / kyc.go — RecordSettlement + SettleDvP atomic DvP with UTR proof),
+                  Go Drunix gateway (<code>drunix-gateway/</code>: PROPOSED → ENDORSED → COMMITTED lifecycle, deterministic txIDs, read/write sets, SettlementRecorded events — <code>go test ./...</code> green),
+                  Go AI fraud engine (<code>fraud.go</code> — explainable weights, ML-pluggable).
+                  Demo flow: /api/drunix/ledger shows the full Drunix transaction flow per payment.
+                  Themes: Real-Time Payments + Financial Inclusion (₹500 entry) + AI &amp; Fraud Detection + Open Finance APIs (/api/openfinance/capabilities).
+                </div>
+              </div>
               <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:16}}>
                 <span style={{fontSize:9, background:'#FEF3C7', border:'1px solid #FDE68A', padding:'4px 8px', borderRadius:4, color:'#92400E', fontWeight:700}}>SIMULATION</span>
                 <span style={{fontSize:10, color:'#92400E'}}>NPCI UPI rail is simulation — no live NPCI sandbox credentials available for hackathon. Honest labeling per Track A6. PPRO docs: Sandbox Not Available from UPI. Inspired by upi-mock-engine deterministic simulator.</span>

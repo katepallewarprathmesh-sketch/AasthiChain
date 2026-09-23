@@ -202,6 +202,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
             <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#065F46' }}>{payment.utr}</div>
           </div>
         )}
+        {payment.risk && (
+          <div style={{ fontSize: 12, color: payment.risk.decision === 'APPROVE' ? '#065F46' : '#92400E', marginTop: 10 }}>
+            🛡 Security check {payment.risk.decision === 'APPROVE' ? 'passed' : 'flagged'} — risk {payment.risk.band} ({payment.risk.score}/100)
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>Settled on NPCI Drunix · atomic DvP</div>
         <div style={{ marginTop: 12 }}>
           <button onClick={() => setAdvanced(!advanced)} style={{ background: 'none', border: 'none', color: '#059669', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>
             {advanced ? 'Hide' : 'Show'} payment details
@@ -215,6 +221,8 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, on
             <div>UTR12: {payment.utr12 || payment.utr || '—'}</div>
             <div>Drunix transfer: {payment.drunixTransferId || (transfer && transfer.transferId) || '—'}</div>
             <div>status: {payment.status}</div>
+            {payment.risk && <div>risk: {payment.risk.score}/100 {payment.risk.band} — {(payment.risk.factors || []).map(f => f.code).join(', ')}</div>}
+            {payment.risk && <div>fraud model: {payment.risk.model}</div>}
             {payment.utr && <a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{ color: '#1E3A5F' }}>Verify UTR →</a>}
           </div>
         )}

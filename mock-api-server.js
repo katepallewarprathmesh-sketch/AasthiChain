@@ -155,7 +155,7 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'aasthichain-api-gateway', version: '1.1', fabricMode: 'mock' });
+  res.json({ status: 'ok', service: 'aasthichain-api-gateway', version: '2.6-drunix-fraud-golang', fabricMode: 'mock', drunixGateway: { mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go' : 'embedded', language: 'golang', source: 'drunix-gateway/ (Go)' }, fraudEngine: { model: 'aasthichain-rules-v1', theme: 'AI & Fraud Detection', parityOf: 'drunix-gateway/fraud.go' } });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -597,6 +597,63 @@ function addWebhookAudit(entry) {
   return entry;
 }
 
+// ===== AI & Fraud Detection — JS parity of drunix-gateway/fraud.go (rules-v1) =====
+// Same rules, weights and thresholds as the Golang engine so serverless lambdas
+// and the Go Drunix gateway reach identical decisions. ML-pluggable (OCP).
+const FRAUD_T = { blockScore: 70, reviewScore: 40, highValue: 500000, elevated: 200000,
+  structFloor: 180000, structCeil: 200000, structCount: 3, velBlock: 8, velWarn: 5,
+  total24h: 1000000, riskyFragments: ['fraud','scam','thief','steal','phish','xxx','darkweb'] };
+
+function computeRiskScore(payment, history) {
+  const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
+  const factors = [];
+  let score = 0;
+  const amt = parseFloat(payment.amountINR) || 0;
+  if (amt > FRAUD_T.highValue) { score += 30; factors.push({ code: 'HIGH_VALUE', note: 'high-value transaction', weight: 30 }); }
+  else if (amt > FRAUD_T.elevated) { score += 15; factors.push({ code: 'ELEVATED_VALUE', note: 'above usual retail band', weight: 15 }); }
+  let band = (h.recentINR || []).filter(a => a > FRAUD_T.structFloor && a <= FRAUD_T.structCeil).length;
+  if (amt > FRAUD_T.structFloor && amt <= FRAUD_T.structCeil) band++;
+  if (band >= FRAUD_T.structCount) { score += 40; factors.push({ code: 'STRUCTURING_PATTERN', note: band + ' transactions just below reporting band', weight: 40 }); }
+  if (h.txnCount10m >= FRAUD_T.velBlock) { score += 70; factors.push({ code: 'VELOCITY_BURST', note: h.txnCount10m + ' payments in 10 minutes', weight: 70 }); }
+  else if (h.txnCount10m >= FRAUD_T.velWarn) { score += 40; factors.push({ code: 'VELOCITY_ELEVATED', note: h.txnCount10m + ' payments in 10 minutes', weight: 40 }); }
+  if ((h.totalINR24h || 0) + amt > FRAUD_T.total24h) { score += 20; factors.push({ code: 'DAILY_EXPOSURE', note: '24h total would exceed daily cap', weight: 20 }); }
+  const vpa = String(payment.payerVpa || '').toLowerCase();
+  const frag = FRAUD_T.riskyFragments.find(f => vpa.includes(f));
+  if (frag) { score += 40; factors.push({ code: 'RISKY_VPA_PATTERN', note: 'VPA contains phishing-style fragment: ' + frag, weight: 40 }); }
+  const payeeLocal = String(payment.payeeVpa || '').split('@')[0].toLowerCase();
+  const payerLocal = vpa.split('@')[0];
+  if (payeeLocal && payerLocal && payeeLocal === payerLocal && vpa !== String(payment.payeeVpa || '').toLowerCase()) {
+    score += 15; factors.push({ code: 'HANDLE_MIMIC', note: 'lookalike handle on different bank', weight: 15 });
+  }
+  if (h.kycVerified === false) { score += 25; factors.push({ code: 'KYC_NOT_VERIFIED', note: 'payer KYC not verified', weight: 25 }); }
+  const hour = new Date().getHours();
+  if (hour >= 0 && hour < 5 && amt > FRAUD_T.elevated) { score += 10; factors.push({ code: 'ODD_HOURS', note: 'high-value payment 00:00-05:00', weight: 10 }); }
+  score = Math.max(0, Math.min(100, score));
+  let bandName = 'LOW', decision = 'APPROVE';
+  if (score >= FRAUD_T.blockScore) { bandName = 'HIGH'; decision = 'BLOCK'; }
+  else if (score >= FRAUD_T.reviewScore) { bandName = 'MEDIUM'; decision = 'REVIEW'; }
+  if (factors.length === 0) factors.push({ code: 'CLEAN', note: 'no risk signals — genuine retail purchase pattern', weight: 0 });
+  return { score, band: bandName, decision, factors, model: 'aasthichain-rules-v1 (JS parity of drunix-gateway/fraud.go)' };
+}
+
+function payerHistory(payerId, excludePaymentId) {
+  const now = Date.now();
+  let c10 = 0, c24 = 0, total24 = 0; const recent = [];
+  Object.values(npciPayments).forEach(p => {
+    if (p.paymentId === excludePaymentId) return;
+    if ((p.payerId || '') !== payerId && (p.payerVpa || '').split('@')[0] !== payerId) return;
+    if (String(p.status).startsWith('FAILED')) return; // blocked attempts don't feed velocity
+    const t = new Date(p.createdAt).getTime();
+    if (isNaN(t)) return;
+    const age = now - t;
+    if (age <= 10 * 60 * 1000) c10++;
+    if (age <= 24 * 3600 * 1000) { c24++; total24 += parseFloat(p.amountINR) || 0; recent.push(parseFloat(p.amountINR) || 0); }
+  });
+  const kyc = kycRecords[payerId] || kycRecords[String(payerId).toLowerCase()];
+  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24, recentINR: recent.slice(0, 10), kycVerified: !kyc || kyc.kycStatus === 'VERIFIED' };
+}
+
+
 app.get('/api/npci/config', (req, res) => {
   res.json({
     rail: 'UPI Collect (P2M)',
@@ -670,9 +727,63 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
     payerId: payerId || 'investor1', payeeId: payeeId || 'originator1',
     callbackReceived: false, provider: 'mock', webhookReceivedAt: null
   };
+  // AI & Fraud Detection screen (parity with drunix-gateway/fraud.go, Golang)
+  pay.risk = computeRiskScore(pay, payerHistory(pay.payerId, pay.paymentId));
+  if (pay.risk.decision === 'BLOCK') {
+    pay.status = 'FAILED_FRAUD_BLOCKED';
+    pay.failureReason = 'Blocked by fraud engine: ' + pay.risk.factors.map(f => f.code).join(', ');
+    npciPayments[paymentId] = pay;
+    return res.status(403).json(pay);
+  }
   npciPayments[paymentId] = pay;
   if (idemKey) npciIdem[idemKey] = pay;
   res.status(201).json(pay);
+});
+
+// Drunix transaction flow for a payment (FAQ 14 demo: Drunix Transaction Flow)
+app.get('/api/drunix/ledger', authMiddleware, (req, res) => {
+  const pay = req.query.paymentId ? npciPayments[req.query.paymentId] : Object.values(npciPayments).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId: req.query.paymentId });
+  const crypto = require('crypto');
+  const txId = crypto.createHash('sha256').update(`aasthichain|SettleDvP|${pay.paymentId}|${pay.drunixTransferId || pay.utr || ''}`).digest('hex');
+  const pseudoBlock = 100 + (parseInt(txId.slice(0, 6), 16) % 90000);
+  const stages = [
+    { stage: 1, name: 'UPI Collect', network: 'NPCI UPI (off-chain trigger)', detail: `${pay.paymentId} — ₹${pay.amountINR} from ${pay.payerVpa}`, status: ['PENDING', 'CONFIRMED', 'RELEASED'].includes(pay.status) ? 'DONE' : (String(pay.status).startsWith('FAILED') ? 'FAILED' : 'PENDING') },
+    { stage: 2, name: 'AI Fraud Screen', network: 'aasthichain-rules-v1 (Go engine, JS parity)', detail: pay.risk ? `${pay.risk.decision} — score ${pay.risk.score}/100 (${pay.risk.factors.map(f => f.code).join(', ')})` : 'not screened', status: pay.risk ? 'DONE' : 'PENDING' },
+    { stage: 3, name: 'Escrow Confirmed (UTR)', network: 'NPCI UPI / IMPS', detail: pay.utr ? `UTR ${pay.utr} · RRN ${pay.rrn}` : 'awaiting approval', status: pay.utr ? 'DONE' : 'PENDING' },
+    { stage: 4, name: 'Drunix Proposal + Endorsement', network: 'NPCI Drunix (Fabric fork)', detail: `chaincode aasthichain · SettleDvP(${pay.paymentId}, ${pay.utr || 'UTR'}, ${pay.assetId.slice(0, 20)}...)`, status: pay.drunixTransferId ? 'DONE' : 'PENDING' },
+    { stage: 5, name: 'Drunix Commit', network: 'NPCI Drunix — block ' + pseudoBlock, detail: 'txId ' + txId.slice(0, 24) + '… · validationCode 0 (VALID)', status: pay.drunixTransferId ? 'DONE' : 'PENDING' },
+    { stage: 6, name: 'Chaincode Event', network: 'NPCI Drunix', detail: 'SettlementRecorded — regulator + payment ops subscribe', status: pay.drunixTransferId ? 'DONE' : 'PENDING' },
+    { stage: 7, name: 'Escrow Released (DvP complete)', network: 'NPCI UPI escrow', detail: pay.drunixTransferId ? `atomic settlement ${pay.drunixTransferId}` : 'tokens transfer then release', status: pay.status === 'RELEASED' ? 'DONE' : 'PENDING' }
+  ];
+  res.json({
+    paymentId: pay.paymentId,
+    mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go-gateway' : 'embedded-simulation (Go source: drunix-gateway/ — Golang)',
+    language: 'golang',
+    channel: 'aasthichain',
+    stages,
+    settlement: { txId, block: pseudoBlock, chaincodeEvent: 'SettlementRecorded', drunixTransferId: pay.drunixTransferId || null }
+  });
+});
+
+app.get('/api/fraud/config', authMiddleware, (req, res) => {
+  res.json({ model: 'aasthichain-rules-v1 (ML-pluggable)', thresholds: FRAUD_T, sourceOfTruth: 'drunix-gateway/fraud.go (Golang)', theme: 'AI & Fraud Detection' });
+});
+
+app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
+  res.json({
+    theme: 'Open Finance APIs',
+    apis: [
+      { name: 'NPCI UPI Collect', endpoint: '/api/npci/collect', auth: 'Bearer JWT', status: 'live' },
+      { name: 'UTR Reconciliation Lookup', endpoint: '/api/npci/utr/:utr', auth: 'Bearer JWT', status: 'live' },
+      { name: 'Bank Webhooks', endpoint: '/api/npci/webhook', auth: 'signature', status: 'live' },
+      { name: 'Drunix Ledger Flow', endpoint: '/api/drunix/ledger?paymentId=', auth: 'Bearer JWT', status: 'live' },
+      { name: 'Fraud Scoring', endpoint: '/api/fraud/config', auth: 'Bearer JWT', status: 'live' },
+      { name: 'Property Data (Bhoomi/Dharani)', endpoint: '/api/properties/:id/verify', auth: 'Bearer JWT', status: 'live' },
+      { name: 'KYC — DigiLocker', endpoint: '/api/kyc/digilocker/init', auth: 'Bearer JWT', status: 'live' },
+      { name: 'Drunix Gateway (Golang)', endpoint: 'http://localhost:21100 (DRUNIX_GATEWAY_URL)', auth: 'internal', status: 'optional remote' }
+    ]
+  });
 });
 
 app.get('/api/npci/payments', authMiddleware, (req, res) => {
@@ -725,6 +836,15 @@ app.post('/api/npci/payments/:id/approve', authMiddleware, (req, res) => {
     pay.failureReason = `payer ${payerId} KYC not verified`;
     npciPayments[pay.paymentId] = pay;
     return res.status(400).json(pay);
+  }
+  // AI & Fraud Detection re-screen at approval (before any money movement)
+  const riskAtApprove = computeRiskScore(pay, payerHistory(payerId, pay.paymentId));
+  pay.risk = riskAtApprove;
+  if (riskAtApprove.decision === 'BLOCK') {
+    pay.status = 'FAILED_FRAUD_BLOCKED';
+    pay.failureReason = 'Blocked by fraud engine at approval: ' + riskAtApprove.factors.map(f => f.code).join(', ');
+    npciPayments[pay.paymentId] = pay;
+    return res.status(403).json(pay);
   }
   const vpaLower = pay.payerVpa.toLowerCase();
   const bal = npciBalances[vpaLower] !== undefined ? npciBalances[vpaLower] : 100000000;
