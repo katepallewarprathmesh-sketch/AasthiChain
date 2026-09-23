@@ -129,13 +129,6 @@ cd frontend && npm run build
 
 </details>
 
-### Docs
-
-- `docs/DEMO_SCRIPT_v2.md` — 5-6 min pitch with NPCI primary + honest scoping
-- `PITCH_DECK.html` — slides
-- `TRACK_A_IMPLEMENTATION.md` — Track A details
-- `payment-gateway/README.md` — payments module
-
 ### Production Roadmap (Not Built — Roadmap Only)
 
 Secondary market order-matching, custodian org (demat), DILRMP integration, DigiLocker KYC, real UPI AutoCollect (ICICI/Yes Bank), channel-per-asset-class, SPV legal wrapper (token = beneficial interest in SPV per Registration Act 1908 + Bill 2026), rental income via UPI
