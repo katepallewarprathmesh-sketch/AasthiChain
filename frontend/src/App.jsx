@@ -71,12 +71,12 @@ function getStoredUser() {
 
 function Footer() {
   return (
-    <footer style={{borderTop:'1px solid #E5E7EB', background:'white', padding:'20px 0', marginTop:40}}>
+    <footer style={{borderTop:'1px solid #F3F4F6', background:'white', padding:'20px 0', marginTop:40}}>
       <div className="container" style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
         <div style={{fontSize:12, color:'#6B7280'}}>
-          <span style={{fontFamily:'Fraunces', fontWeight:600, color:'#111827'}}>AasthiChain</span> v2.1 · One easy auth · Landing intro · {isClerkConfigured ? 'Clerk' : 'Demo auth'}
+          <span style={{fontWeight:700, color:'#111827'}}>AasthiChain</span> • Own property from ₹500 • Secure UPI • Instant
         </div>
-        <div style={{fontSize:11, color:'#9CA3AF'}}>Fractional real estate on Drunix · No friction</div>
+        <div style={{fontSize:11, color:'#9CA3AF'}}>© 2024 AasthiChain • Made for everyone</div>
       </div>
     </footer>
   )

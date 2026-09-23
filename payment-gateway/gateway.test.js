@@ -12,7 +12,7 @@ class Gateway {
     this.payments = new Map();
     this.idem = new Map();
     this.kyc = { originator1: 'VERIFIED', investor1: 'VERIFIED', investor2: 'VERIFIED', unverified_user: 'UNVERIFIED' };
-    this.balances = { 'investor@aasthichain': 100000000, 'poor@aasthichain': 100, '80105301033@axl': 100000000, '80105301033@okaxis': 100000000 };
+    this.balances = { 'investor@aasthichain': 100000000, 'poor@aasthichain': 100, 'demo.investor@aasthichain': 100000000, 'demo.investor@fakebank': 100000000 };
   }
   initiate(req) {
     if (!req.amountINR || req.amountINR <=0) throw new Error('FAILED_INVALID_AMOUNT');

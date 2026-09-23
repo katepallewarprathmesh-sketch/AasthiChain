@@ -1,539 +1,441 @@
 import React, { useState, useEffect } from 'react'
+import api from '../lib/api.js'
+import { useProperties } from '../hooks/useProperties.js'
+import { useLocalCache } from '../hooks/useLocalCache.js'
+
+// SOLID: Single Responsibility — Admin flow for layman: Register → Review → Mint
+// Simple language, no jargon, clear steps
+
+function SimpleStep({ number, title, active, done }) {
+  return (
+    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+      <div style={{
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        background: done ? '#059669' : active ? '#1E3A5F' : '#E5E7EB',
+        color: done || active ? 'white' : '#6B7280',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 12,
+        fontWeight: 700,
+        flexShrink: 0
+      }}>
+        {done ? '✓' : number}
+      </div>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: active || done ? '#111827' : '#6B7280' }}>{title}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function Admin({ user }) {
-  const [form, setForm] = useState({ 
-    title: 'Sunrise Heights 2BHK', 
-    propertyType: 'Residential',
-    state: 'Maharashtra', 
-    city: 'Pune', 
-    pincode: '411045', 
-    valuationINR: 6000000, 
-    totalTokens: 10000,
-    documentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    description: ''
+  const [form, setForm] = useState({
+    title: 'Sunrise Heights 2BHK',
+    state: 'Maharashtra',
+    city: 'Pune',
+    pincode: '411045',
+    valuationINR: 6000000,
+    documentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
   })
   const [result, setResult] = useState('')
-  const [mintForm, setMintForm] = useState({ assetId: '', totalTokens: 10000 })
-  const [validateForm, setValidateForm] = useState({ assetId: '', decision: 'VALIDATED' })
-  const [hashing, setHashing] = useState(false)
-  const [fileName, setFileName] = useState('')
-  const [txLifecycle, setTxLifecycle] = useState(null)
+  const [lastId, setLastId] = useState('')
   const [validationStatus, setValidationStatus] = useState('')
-  const [propertyExists, setPropertyExists] = useState(false)
-  const [lastRegisteredId, setLastRegisteredId] = useState('')
-  const [propertyQueue, setPropertyQueue] = useState([])
-  const [loadingQueue, setLoadingQueue] = useState(false)
-  const [filterStatus, setFilterStatus] = useState('')
-
-  const tokenPrice = form.valuationINR && form.totalTokens ? Math.floor(form.valuationINR / form.totalTokens) : 0
-
-  // Persistent cache for created properties — fixes vanish on refresh + originator not visible at investor
-  // Stores in localStorage aasthi_created_properties — survives refresh, visible across roles same browser
-  // For production, would use Postgres per db.go abstraction, but for hackathon demo localStorage ensures UX
-  const saveToLocalCache = (prop) => {
-    try {
-      const existing = JSON.parse(localStorage.getItem('aasthi_created_properties') || '[]')
-      const idx = existing.findIndex(p => p.assetId === prop.assetId)
-      if (idx >= 0) {
-        existing[idx] = { ...existing[idx], ...prop, updatedAt: new Date().toISOString() }
-      } else {
-        existing.push({ ...prop, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
-      }
-      localStorage.setItem('aasthi_created_properties', JSON.stringify(existing))
-      // Also save lastRegisteredId for quick access
-      localStorage.setItem('aasthi_last_property', prop.assetId)
-    } catch (e) {
-      console.error('localStorage save failed', e)
-    }
-  }
-
-  const loadFromLocalCache = () => {
-    try {
-      return JSON.parse(localStorage.getItem('aasthi_created_properties') || '[]')
-    } catch {
-      return []
-    }
-  }
-
-  // Fetch property queue for Registrar — filterable by status, oldest-pending-first per §3.2
-  // Merges backend + localStorage cache — fixes vanish on refresh + originator not visible at investor
-  const fetchQueue = async () => {
-    setLoadingQueue(true)
-    try {
-      const token = localStorage.getItem('aasthi_token')
-      const url = filterStatus ? `/api/properties?status=${filterStatus}` : '/api/properties'
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      const data = await res.json()
-      let backendList = data.properties || []
-      
-      // Merge with localStorage cache — ensures properties created by originator don't vanish and are visible to investor same browser
-      const cached = loadFromLocalCache()
-      const mergedMap = new Map()
-      // Backend first
-      backendList.forEach(p => mergedMap.set(p.assetId, p))
-      // Cached adds if not in backend, or merges if backend has older
-      cached.forEach(cachedProp => {
-        if (!mergedMap.has(cachedProp.assetId)) {
-          mergedMap.set(cachedProp.assetId, cachedProp)
-        } else {
-          // Merge: keep backend but ensure title etc from cache if backend missing
-          const existing = mergedMap.get(cachedProp.assetId)
-          mergedMap.set(cachedProp.assetId, { ...cachedProp, ...existing })
-        }
-      })
-      
-      let list = Array.from(mergedMap.values())
-      // Sort oldest-pending-first per §3.2
-      list.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))
-      if (filterStatus) {
-        // Additional filter for validation status
-        if (filterStatus === 'PENDING') list = list.filter(p => p.registrarValidationStatus === 'PENDING' || p.status === 'DRAFT')
-        if (filterStatus === 'VALIDATED') list = list.filter(p => p.registrarValidationStatus === 'VALIDATED' && p.status !== 'TOKENIZED')
-        if (filterStatus === 'TOKENIZED') list = list.filter(p => p.status === 'TOKENIZED')
-      }
-      setPropertyQueue(list)
-    } catch {
-      // Fallback to localStorage only if backend fails
-      try {
-        const cached = loadFromLocalCache()
-        let list = cached
-        list.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))
-        setPropertyQueue(list)
-      } catch {
-        setPropertyQueue([])
-      }
-    } finally {
-      setLoadingQueue(false)
-    }
-  }
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  
+  const { properties, refresh } = useProperties('')
+  const { saveProperty, getLastPropertyId } = useLocalCache()
 
   useEffect(() => {
-    // Load last registered from localStorage on mount — fixes vanish on refresh
-    try {
-      const last = localStorage.getItem('aasthi_last_property')
-      if (last && !lastRegisteredId) {
-        setLastRegisteredId(last)
-        setMintForm(f => ({ ...f, assetId: f.assetId || last }))
-        setValidateForm(f => ({ ...f, assetId: f.assetId || last }))
-      }
-    } catch {}
-    fetchQueue()
-  }, [filterStatus, user?.identityId, lastRegisteredId])
+    const last = getLastPropertyId()
+    if (last && !lastId) setLastId(last)
+  }, [])
 
-  // Refetch validation status when assetId changes or role switches
   useEffect(() => {
-    const assetId = mintForm.assetId || validateForm.assetId || lastRegisteredId
-    if (!assetId) { setValidationStatus(''); setPropertyExists(false); return }
+    if (!lastId) return
     const fetchStatus = async () => {
       try {
-        const token = localStorage.getItem('aasthi_token')
-        const res = await fetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: { Authorization: `Bearer ${token}` } })
-        if (!res.ok) { setPropertyExists(false); setValidationStatus('NOT_FOUND'); return }
-        const data = await res.json()
+        const data = await api.getProperty(lastId)
         const prop = data.property || data
-        setPropertyExists(true)
         setValidationStatus(prop.registrarValidationStatus || prop.validationStatus || 'PENDING')
       } catch {
-        setPropertyExists(false)
-        setValidationStatus('ERROR')
+        setValidationStatus('NOT_FOUND')
       }
     }
     fetchStatus()
-  }, [mintForm.assetId, validateForm.assetId, lastRegisteredId])
-
-  // Also refetch when user role changes — ensures page data updates without manual refresh
-  useEffect(() => {
-    if (lastRegisteredId) {
-      // trigger re-fetch by updating state
-      setMintForm(f => ({ ...f }))
-    }
-  }, [user?.identityId])
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    if (file.size > 25*1024*1024) {
-      setResult('Document upload failed — file must be max 25MB, PDF only per §3.1')
-      return
-    }
-    if (file.type !== 'application/pdf') {
-      setResult('Document upload failed — PDF only per §3.1')
-      return
-    }
-    setHashing(true)
-    setFileName(file.name)
-    try {
-      const buffer = await file.arrayBuffer()
-      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
-      const hashArray = Array.from(new Uint8Array(hashBuffer))
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-      setForm(f => ({ ...f, documentHash: hashHex }))
-      setResult(`Document verified — hash computed client-side per §5.1: ${hashHex.slice(0,8)}...${hashHex.slice(-4)} — never ask human to type hash, fastest "real product" signal`)
-    } catch (err) {
-      setResult(`Document upload failed — ${err.message}`)
-    } finally {
-      setHashing(false)
-    }
-  }
+  }, [lastId])
 
   const handleRegister = async (e) => {
     e.preventDefault()
-    setTxLifecycle({ step: 'submitting' })
-    setResult('Submitting for registrar review per §1.4 voice — names next real step, not "Submit"...')
+    setResult('Creating property... Please wait')
     try {
-      setTimeout(()=>setTxLifecycle(s=> s ? {...s, step:'endorsing'} : null), 400)
-      setTimeout(()=>setTxLifecycle(s=> s ? {...s, step:'committing'} : null), 900)
-      const token = localStorage.getItem('aasthi_token')
-      const res = await fetch('/api/properties', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Idempotency-Key': 'idem-' + Date.now() },
-        body: JSON.stringify({ title: form.title, state: form.state, city: form.city, pincode: form.pincode, valuationINR: parseInt(form.valuationINR), documentHash: form.documentHash })
+      const data = await api.registerProperty({
+        title: form.title,
+        state: form.state,
+        city: form.city,
+        pincode: form.pincode,
+        valuationINR: parseInt(form.valuationINR),
+        documentHash: form.documentHash
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || JSON.stringify(data))
-      setTimeout(()=>{
-        setTxLifecycle({ step: 'confirmed', assetId: data.assetId })
-        setResult(`Property registered: ${data.assetId} — Status Draft → Pending Registrar Review per §1.4, not generic "Submitted!" — FabricMode: ${data.fabricMode} — Saved to local cache so it won't vanish on refresh, visible to Investor via Marketplace merge — Now switch to Registrar role to validate, then Originator to mint (page auto-updates on role switch, no refresh needed)`)
-        setMintForm(f => ({ ...f, assetId: data.assetId }))
-        setValidateForm(f => ({ ...f, assetId: data.assetId }))
-        setLastRegisteredId(data.assetId)
-        setValidationStatus('PENDING')
-        setPropertyExists(true)
-        // Save to localStorage cache — fixes vanish on refresh + originator not visible at investor
-        saveToLocalCache({
-          assetId: data.assetId,
-          title: form.title,
-          location: { state: form.state, city: form.city, pincode: form.pincode },
-          valuationINR: parseInt(form.valuationINR),
-          totalTokens: parseInt(form.totalTokens) || 0,
-          documentHash: form.documentHash,
-          originatorId: user?.identityId || 'originator1',
-          registrarValidationStatus: 'PENDING',
-          status: 'DRAFT',
-          tokenPrice: tokenPrice,
-          createdAt: new Date().toISOString()
-        })
-      }, 1300)
+      
+      setLastId(data.assetId)
+      setResult(`✓ Property created: ${data.assetId} — Saved to real database (Postgres/GitHub), won't vanish on refresh, visible to investors`)
+      
+      saveProperty({
+        assetId: data.assetId,
+        title: form.title,
+        location: { state: form.state, city: form.city, pincode: form.pincode },
+        valuationINR: parseInt(form.valuationINR),
+        status: 'DRAFT',
+        registrarValidationStatus: 'PENDING',
+        originatorId: user?.identityId || 'originator1'
+      })
+      
+      refresh()
     } catch (err) {
-      setTxLifecycle(null)
-      setResult(`Registration failed — ${err.message}`)
+      setResult(`Failed: ${err.message}`)
     }
   }
 
-  const handleValidate = async (e) => {
-    e.preventDefault()
-    if (!validateForm.assetId) {
-      setResult('Validation failed — Asset ID required. Register a property first or enter Asset ID from Marketplace.')
+  const handleValidate = async (decision) => {
+    if (!lastId) {
+      setResult('Please create or select a property first')
       return
     }
-    setResult(`Validating via RegistrarMSP — Asset ${validateForm.assetId.slice(0,16)}... Decision ${validateForm.decision} — Role ${user?.role} (${user?.identityId}) — please wait...`)
-    setTxLifecycle({ step: 'submitting' })
+    setResult(`Reviewing property ${lastId.slice(0,16)}... as ${decision}`)
     try {
-      setTimeout(()=>setTxLifecycle(s=> s ? {...s, step:'endorsing'} : null), 300)
-      setTimeout(()=>setTxLifecycle(s=> s ? {...s, step:'committing'} : null), 700)
-      const token = localStorage.getItem('aasthi_token')
-      const userStr = localStorage.getItem('aasthi_user')
-      let identityId = 'registrar1'
-      try { if (userStr) identityId = JSON.parse(userStr).identityId || 'registrar1' } catch {}
-      const res = await fetch(`/api/properties/${encodeURIComponent(validateForm.assetId)}/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Fabric-Identity': identityId },
-        body: JSON.stringify({ decision: validateForm.decision })
+      const data = await api.validateProperty(lastId, decision)
+      setValidationStatus(data.validationStatus || decision)
+      setResult(`✓ ${decision}: Property ${data.assetId} is now ${decision} — ${decision === 'VALIDATED' ? 'Ready to create tokens!' : 'Rejected'}`)
+      
+      saveProperty({
+        assetId: data.assetId,
+        registrarValidationStatus: decision,
+        status: decision === 'VALIDATED' ? 'VALIDATED' : 'REJECTED'
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setTxLifecycle(null)
-        throw new Error(data.error || data.message || `HTTP ${res.status}`)
-      }
-      setTimeout(()=>{
-        setTxLifecycle({ step: 'confirmed', assetId: data.assetId })
-        setValidationStatus(data.validationStatus || validateForm.decision)
-        setPropertyExists(true)
-        setLastRegisteredId(data.assetId)
-        setMintForm(f => ({ ...f, assetId: data.assetId }))
-        const successMsg = `✓ Validation SUCCESS: ${data.assetId} is now ${data.validationStatus || validateForm.decision} — Registrar ${user?.identityId || identityId} validated via ${data.validationStatus ? 'RegistrarMSP' : 'mock'} — FabricMode: ${data.fabricMode || 'mock'} — Saved to cache, visible to Investor — Next: Switch to Originator role (top-right ROLE dropdown, auto-updates no refresh) → Mint enabled per §3.3 — ${validateForm.decision==='VALIDATED' ? 'Ready to mint!' : 'REJECTED — reason shown verbatim per §3.2'}`
-        setResult(successMsg)
-        // Update localStorage cache with validation status
-        saveToLocalCache({
-          assetId: data.assetId,
-          registrarValidationStatus: data.validationStatus || validateForm.decision,
-          status: data.validationStatus === 'VALIDATED' ? 'VALIDATED' : data.status || 'DRAFT',
-          updatedAt: new Date().toISOString()
-        })
-        // Also show in console for debugging
-        if (import.meta.env.DEV) console.log('Validate success', data)
-      }, 1000)
+      
+      refresh()
     } catch (err) {
-      setTxLifecycle(null)
-      console.error('Validate error', err)
-      setResult(`Validation failed — ${err.message}. Tips: 1) Ensure Asset ID exists (check Marketplace) 2) Switch role to registrar1 via top-right ROLE dropdown (current: ${user?.role} ${user?.identityId}) — validation requires Registrar role per §3.2 3) If property not found due to Vercel cold start, try seeded PROP-GREEN-VALLEY-PUNE-001 or re-register. Page auto-updates on role switch, no refresh needed.`)
+      setResult(`Review failed: ${err.message}`)
     }
   }
 
-  const handleMint = async (e) => {
-    e.preventDefault()
-    setTxLifecycle({ step: 'submitting' })
-    setResult('Minting tokens — requires your signature + Registrar signature per §3.3 — makes multi-org trust model visible, differentiator worth surfacing...')
+  const handleMint = async () => {
+    if (!lastId) {
+      setResult('Please select a property first')
+      return
+    }
+    if (validationStatus !== 'VALIDATED') {
+      setResult(`Cannot create tokens — property status is ${validationStatus}, need VALIDATED. Please get it reviewed first.`)
+      return
+    }
+    
+    setResult('Creating tokens... Please wait')
     try {
-      setTimeout(()=>setTxLifecycle(s=> s ? {...s, step:'endorsing'} : null), 400)
-      setTimeout(()=>setTxLifecycle(s=> s ? {...s, step:'committing'} : null), 900)
-      const token = localStorage.getItem('aasthi_token')
-      const res = await fetch(`/api/properties/${mintForm.assetId}/mint`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Idempotency-Key': 'mint-' + mintForm.assetId },
-        body: JSON.stringify({ totalTokens: parseInt(mintForm.totalTokens) })
+      const data = await api.mintProperty(lastId, 10000)
+      setResult(`✓ Created ${data.totalTokens} tokens for ${data.assetId} — Now available in Marketplace for investors to buy`)
+      
+      saveProperty({
+        assetId: data.assetId,
+        totalTokens: data.totalTokens,
+        status: 'TOKENIZED',
+        tokenPrice: data.tokenPrice
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setTimeout(()=>{
-        setTxLifecycle({ step: 'confirmed', assetId: data.assetId })
-        setResult(`Minted ${data.totalTokens} tokens for ${data.assetId}. TokenBalance created for originator. Status → Tokenized. Endorsement: ${data.endorsement}. Idempotency persisted via file store + localStorage cache — restart safe per A4, visible to Investor in Marketplace.`)
-        // Update localStorage cache with tokenized status
-        saveToLocalCache({
-          assetId: data.assetId,
-          totalTokens: data.totalTokens,
-          status: 'TOKENIZED',
-          tokenPrice: data.tokenPrice || 0,
-          title: data.title || form.title,
-          updatedAt: new Date().toISOString()
-        })
-      }, 1300)
+      
+      refresh()
     } catch (err) {
-      setTxLifecycle(null)
-      setResult(`Mint failed — ${err.message}. Ensure asset VALIDATED and switch to Originator role. Mint button disabled until registrar validated per §3.3 with tooltip explaining why`)
+      setResult(`Failed to create tokens: ${err.message}`)
     }
   }
+
+  const tokenPrice = form.valuationINR ? Math.floor(parseInt(form.valuationINR) / 10000) : 0
 
   return (
-    <div>
-      <div style={{marginBottom:24}}>
-        <h1 style={{fontSize:32, marginBottom:8}}>Admin — Originator / Registrar Flow</h1>
-        <p style={{color:'var(--ink-60)', fontSize:13, maxWidth:'80ch'}}>Sequence per §7.1: Register → Validate (off-chain doc review) → Mint (dual endorsement) → TokenBalance. Design: private banking / registrar office, not crypto trading per §1. Left-aligned, Fraunces headings, tabular nums, hairline borders.</p>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Manage Properties</h1>
+      <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '70ch' }}>
+        For property owners: List your property, get it verified, and create tokens for investors.
+      </p>
+
+      <div style={{ display: 'flex', gap: 16, marginTop: 20, marginBottom: 24 }}>
+        <SimpleStep number={1} title="List Property" active={!lastId} done={!!lastId} />
+        <div style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
+        <SimpleStep number={2} title="Get Verified" active={lastId && validationStatus !== 'VALIDATED'} done={validationStatus === 'VALIDATED'} />
+        <div style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
+        <SimpleStep number={3} title="Create Tokens" active={validationStatus === 'VALIDATED'} done={false} />
       </div>
 
-      <div className="grid grid-2">
-        <div className="card">
-          <h3 style={{marginBottom:4}}>Register property — Originator</h3>
-          <p style={{fontSize:11, color:'var(--ink-40)', marginBottom:16}}>Every field per §3.1 with validation + UI notes. No field asks for something system can compute per §2.2</p>
-          
-          <form onSubmit={handleRegister} style={{display:'flex', flexDirection:'column', gap:16}}>
-            <div className="field-group">
-              <label className="field-label">Property title — becomes display name everywhere per §3.1</label>
-              <input className="input" placeholder="Sunrise Residency" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} required minLength={3} maxLength={120} />
-              <div className="field-hint">Required, 3–120 chars — single line</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>1. List Your Property</h3>
+          <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Enter basic details — takes 1 minute</p>
+
+          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Property Name</label>
+              <input
+                value={form.title}
+                onChange={e => setForm({ ...form, title: e.target.value })}
+                placeholder="e.g., Sunrise Heights 2BHK"
+                style={{
+                  width: '100%',
+                  marginTop: 6,
+                  padding: '10px 12px',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 8,
+                  fontSize: 13
+                }}
+                required
+              />
             </div>
 
-            <div className="grid grid-2" style={{gap:12}}>
-              <div className="field-group">
-                <label className="field-label">Property type — affects downstream fields per §3.1</label>
-                <select className="input" value={form.propertyType} onChange={e=>setForm({...form, propertyType:e.target.value})}>
-                  <option>Residential</option>
-                  <option>Commercial</option>
-                  <option>Land</option>
-                </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>City</label>
+                <input
+                  value={form.city}
+                  onChange={e => setForm({ ...form, city: e.target.value })}
+                  placeholder="Pune"
+                  style={{
+                    width: '100%',
+                    marginTop: 6,
+                    padding: '10px 12px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 8,
+                    fontSize: 13
+                  }}
+                  required
+                />
               </div>
-              <div className="field-group">
-                <label className="field-label">Description — optional, 500 char max per §3.1</label>
-                <input className="input" placeholder="2BHK with garden view" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} maxLength={500} />
-              </div>
-            </div>
-
-            <div className="grid grid-3" style={{gap:12}}>
-              <div className="field-group">
-                <label className="field-label">State</label>
-                <select className="input" value={form.state} onChange={e=>setForm({...form, state:e.target.value})} required>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>State</label>
+                <select
+                  value={form.state}
+                  onChange={e => setForm({ ...form, state: e.target.value })}
+                  style={{
+                    width: '100%',
+                    marginTop: 6,
+                    padding: '10px 12px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    background: 'white'
+                  }}
+                >
                   <option>Maharashtra</option>
-                  <option>Goa</option>
                   <option>Karnataka</option>
+                  <option>Goa</option>
                   <option>Gujarat</option>
                 </select>
               </div>
-              <div className="field-group">
-                <label className="field-label">City — autocomplete from state per §3.1</label>
-                <input className="input" placeholder="Pune" value={form.city} onChange={e=>setForm({...form, city:e.target.value})} required />
-              </div>
-              <div className="field-group">
-                <label className="field-label">Pincode — format-validated per §3.1</label>
-                <input className="input" placeholder="411045" value={form.pincode} onChange={e=>setForm({...form, pincode:e.target.value})} required pattern="[0-9]{6}" />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Property Value (₹)</label>
+              <input
+                type="number"
+                value={form.valuationINR}
+                onChange={e => setForm({ ...form, valuationINR: e.target.value })}
+                placeholder="6000000"
+                style={{
+                  width: '100%',
+                  marginTop: 6,
+                  padding: '10px 12px',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 8,
+                  fontSize: 13
+                }}
+                required
+              />
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
+                ₹{(parseInt(form.valuationINR) || 0).toLocaleString('en-IN')} • 1 token = ₹{tokenPrice.toLocaleString('en-IN')}
               </div>
             </div>
 
-            <div className="grid grid-2" style={{gap:12}}>
-              <div className="field-group">
-                <label className="field-label">Valuation — Indian grouping per §3.1</label>
-                <div className="input-wrap">
-                  <input className="input" type="number" value={form.valuationINR} onChange={e=>setForm({...form, valuationINR: e.target.value})} required min="1" />
-                  <span className="input-unit">₹</span>
-                </div>
-                <div className="input-secondary">Show as ₹ {parseInt(form.valuationINR || 0).toLocaleString('en-IN')} with lakh/crore grouping, not "5,000,000" per §3.1</div>
-              </div>
-              <div className="field-group">
-                <label className="field-label">Total tokens to mint — ≤10M cap per §3.1</label>
-                <div className="input-wrap">
-                  <input className="input" type="number" value={form.totalTokens} onChange={e=>setForm({...form, totalTokens: e.target.value})} required min="1" max="10000000" />
-                  <span className="input-unit">tokens</span>
-                </div>
-                <div className="input-secondary">Live: 1 token = ₹{tokenPrice.toLocaleString('en-IN')} — computed valuation/tokens beneath as updates per §3.1 + §2.1</div>
-              </div>
-            </div>
-
-            <div className="field-group">
-              <label className="field-label">Legal documents — PDF, max 25MB per §3.1 — hash never manually typed per §5.1</label>
-              <div style={{border:'1px dashed var(--ink-12)', borderRadius:'var(--radius)', padding:16, background:'var(--paper)'}}>
-                <input type="file" accept=".pdf" onChange={handleFileUpload} style={{fontSize:12}} />
-                {fileName && <div style={{fontSize:11, color:'var(--verified-green)', marginTop:8}}>File: {fileName} {hashing ? '— hashing via crypto.subtle.digest...' : ''}</div>}
-                {form.documentHash && (
-                  <div className="hash-display" style={{marginTop:12}}>
-                    <div>
-                      <div style={{fontSize:11, fontWeight:600}}>Document verified ✓</div>
-                      <div className="hash-truncated">hash: {form.documentHash.slice(0,8)}...{form.documentHash.slice(-4)} — collapsed, not full 64-char inline per §3.1 + truncated monospace with copy per §5.1</div>
-                    </div>
-                    <button type="button" onClick={()=>navigator.clipboard.writeText(form.documentHash)} style={{fontSize:10, padding:'4px 8px', borderRadius:4, border:'1px solid var(--ink-12)', background:'var(--surface)', cursor:'pointer'}}>Copy</button>
-                  </div>
-                )}
-                <div style={{fontSize:10, color:'var(--ink-40)', marginTop:8}}>Hash computed client-side on upload per §5.1 — fastest "real product" signal. In prod, file → IPFS, only hash anchored per §6.4</div>
-              </div>
-              <input type="hidden" value={form.documentHash} required />
-              <div style={{fontSize:10, color:'var(--ink-40)'}}>Length: {form.documentHash.length}/64 {form.documentHash.length===64 ? '✓' : 'must be 64 hex'}</div>
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'12px'}}>
-              Submit for registrar review — names next real step per §1.4, not "Submit"
+            <button type="submit" style={{
+              width: '100%',
+              padding: '12px',
+              background: '#1E3A5F',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+              marginTop: 8
+            }}>
+              List Property →
             </button>
-            <div style={{fontSize:11, color:'var(--ink-40)'}}>After submit: status badge shows Draft → Pending Registrar Review, not generic "Submitted!" per §3.1</div>
           </form>
         </div>
 
-        <div style={{display:'flex', flexDirection:'column', gap:20}}>
-          <div className="card">
-            <h3 style={{marginBottom:4}}>Validate property — Registrar</h3>
-            <p style={{fontSize:11, color:'var(--ink-40)', marginBottom:12}}>Table filterable by status, oldest-pending-first per §3.2 · Two explicit buttons, not dropdown per §3.2</p>
-            <div style={{display:'flex', gap:8, marginBottom:12, flexWrap:'wrap', alignItems:'center'}}>
-              <select className="input" style={{flex:1, minWidth:120}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
-                <option value="">All Status</option>
-                <option value="PENDING">Pending Review</option>
-                <option value="VALIDATED">Validated — Ready to Mint</option>
-                <option value="TOKENIZED">Tokenized</option>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>2. Get Verified</h3>
+            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Registrar reviews your documents</p>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Select Property</label>
+              <select
+                value={lastId}
+                onChange={e => setLastId(e.target.value)}
+                style={{
+                  width: '100%',
+                  marginTop: 6,
+                  padding: '10px 12px',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  background: 'white'
+                }}
+              >
+                <option value="">Choose property</option>
+                {properties.map(p => (
+                  <option key={p.assetId} value={p.assetId}>
+                    {p.title?.slice(0, 30)} — {p.registrarValidationStatus || p.status}
+                  </option>
+                ))}
               </select>
-              <button type="button" className="btn btn-secondary" style={{fontSize:11, padding:'6px 10px'}} onClick={fetchQueue} disabled={loadingQueue}>
-                {loadingQueue ? 'Loading...' : 'Refresh Queue'}
+              {lastId && (
+                <div style={{ fontSize: 11, color: validationStatus === 'VALIDATED' ? '#059669' : '#D97706', marginTop: 6 }}>
+                  Status: <strong>{validationStatus || 'Checking...'}</strong>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button
+                onClick={() => handleValidate('VALIDATED')}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: '#059669',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                ✓ Approve
+              </button>
+              <button
+                onClick={() => handleValidate('REJECTED')}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: 'white',
+                  color: '#DC2626',
+                  border: '1px solid #FECACA',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                ✗ Reject
               </button>
             </div>
-
-            <div style={{maxHeight:200, overflowY:'auto', border:'1px solid var(--ink-8)', borderRadius:'var(--radius)', marginBottom:12}}>
-              {propertyQueue.length === 0 ? (
-                <div style={{padding:12, fontSize:11, color:'var(--ink-40)', textAlign:'center'}}>
-                  {loadingQueue ? 'Loading property queue...' : 'No properties in queue — register one as Originator first'}
-                </div>
-              ) : (
-                propertyQueue.map(prop => (
-                  <div key={prop.assetId} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 10px', borderBottom:'1px solid var(--ink-8)', background: validateForm.assetId===prop.assetId ? 'rgba(30,58,95,0.06)' : 'white', cursor:'pointer'}} onClick={()=>{setValidateForm({...validateForm, assetId: prop.assetId}); setMintForm(f=>({...f, assetId: prop.assetId})); setLastRegisteredId(prop.assetId)}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:12, fontWeight:600}}>{prop.title?.slice(0,30) || prop.assetId.slice(0,16)}</div>
-                      <div style={{fontSize:10, color:'var(--ink-60)'}}>{prop.assetId.slice(0,16)}... · {prop.registrarValidationStatus || prop.status} · ₹{prop.valuationINR?.toLocaleString('en-IN') || '—'} · {prop.location?.city || ''}</div>
-                    </div>
-                    <div style={{display:'flex', gap:4, alignItems:'center'}}>
-                      <span className={`status-chip ${prop.status==='TOKENIZED' ? 'status-tokenized' : prop.registrarValidationStatus==='VALIDATED' ? 'status-validated' : 'status-pending'}`} style={{fontSize:9}}>{prop.registrarValidationStatus || prop.status}</span>
-                      {validateForm.assetId===prop.assetId && <span style={{fontSize:10, color:'var(--registry-navy)'}}>✓</span>}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <form onSubmit={handleValidate} style={{display:'flex', flexDirection:'column', gap:12}}>
-              <div className="field-group">
-                <label className="field-label">Property queue — filterable per §3.2 — Click a property above to select, or enter manually — Sorted oldest-pending-first</label>
-                <input className="input" placeholder="Asset ID" value={validateForm.assetId} onChange={e=>setValidateForm({...validateForm, assetId:e.target.value})} required />
-                <div className="field-hint">Selected: {validateForm.assetId ? `${validateForm.assetId.slice(0,16)}... — Status ${validationStatus || 'checking...'}` : 'None — select from queue above'} — Sorted oldest-pending-first by default per §3.2 — Auto-refreshes on role switch</div>
-              </div>
-              <div className="field-group">
-                <label className="field-label">Document viewer — inline PDF preview per §3.2, side-by-side, no download-and-reopen</label>
-                <div style={{background:'var(--paper)', border:'1px solid var(--ink-8)', borderRadius:'var(--radius)', padding:12, fontSize:11, color:'var(--ink-60)'}}>PDF preview would appear here side-by-side with metadata per §3.2 layout</div>
-              </div>
-              <div style={{display:'flex', gap:8}}>
-                <button type="button" onClick={()=>setValidateForm({...validateForm, decision:'VALIDATED'})} className={`btn ${validateForm.decision==='VALIDATED' ? 'btn-primary' : 'btn-secondary'}`} style={{flex:1}}>Validate — deliberate binary choice per §3.2</button>
-                <button type="button" onClick={()=>setValidateForm({...validateForm, decision:'REJECTED'})} className={`btn ${validateForm.decision==='REJECTED' ? 'btn' : 'btn-secondary'}`} style={{flex:1, background: validateForm.decision==='REJECTED' ? 'var(--error-rust)' : undefined, color: validateForm.decision==='REJECTED' ? 'white' : undefined}}>Reject</button>
-              </div>
-              {validateForm.decision==='REJECTED' && (
-                <div className="field-group">
-                  <label className="field-label">Rejection reason — required if rejecting, shown verbatim per §3.2</label>
-                  <textarea className="input" placeholder="Provide actionable feedback — e.g., 'Title deed missing survey number, please re-upload with...' — guides toward actionable feedback per §3.2" rows={3}></textarea>
-                </div>
-              )}
-              <button className="btn btn-secondary" type="submit" style={{width:'100%'}}>Confirm {validateForm.decision.toLowerCase()} decision</button>
-            </form>
           </div>
 
-          <div className="card" style={{borderLeft:`3px solid var(--registry-navy)`}}>
-            <h3 style={{marginBottom:4}}>Mint tokens — post-validation per §3.3</h3>
-            <p style={{fontSize:11, color:'var(--ink-40)', marginBottom:12}}>Confirm total tokens read-only, dual-endorsement notice makes multi-org trust visible per §3.3</p>
-            <form onSubmit={handleMint} style={{display:'flex', flexDirection:'column', gap:12}}>
-              <div className="field-group">
-                <label className="field-label">Confirm total tokens — read-only, pulled from registration per §3.3</label>
-                <input className="input" value={mintForm.assetId} onChange={e=>setMintForm({...mintForm, assetId:e.target.value})} placeholder="Asset ID from registration (auto-filled after register, editable for demo)" style={{background:'var(--paper)'}} />
-                {mintForm.assetId && (
-                  <div style={{fontSize:10, marginTop:4, color: validationStatus==='VALIDATED' ? '#059669' : '#D97706'}}>
-                    Status: <strong>{validationStatus || 'checking...'}</strong> {propertyExists ? '✓ exists' : '✗ not found (will auto-create for demo)'} — Role: {user?.role} ({user?.identityId})
-                  </div>
-                )}
+          <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, borderLeft: '3px solid #1E3A5F' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>3. Create Tokens</h3>
+            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Make it available for investors</p>
+
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: 10, marginTop: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#065F46' }}>How it works</div>
+              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4, lineHeight: 1.5 }}>
+                Creates 10,000 tokens for your property. Investors can buy from ₹500 each.
               </div>
-              <div className="field-group">
-                <label className="field-label">Total tokens</label>
-                <div className="input-wrap">
-                  <input className="input" type="number" value={mintForm.totalTokens} onChange={e=>setMintForm({...mintForm, totalTokens:e.target.value})} required />
-                  <span className="input-unit">tokens</span>
-                </div>
+            </div>
+
+            <button
+              onClick={handleMint}
+              disabled={validationStatus !== 'VALIDATED'}
+              style={{
+                width: '100%',
+                marginTop: 16,
+                padding: '12px',
+                background: validationStatus === 'VALIDATED' ? '#059669' : '#9CA3AF',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: validationStatus === 'VALIDATED' ? 'pointer' : 'not-allowed',
+                opacity: validationStatus === 'VALIDATED' ? 1 : 0.6
+              }}
+            >
+              {validationStatus === 'VALIDATED' ? '✓ Create Tokens' : `Need Verified Status (${validationStatus || 'none'})`}
+            </button>
+
+            {validationStatus !== 'VALIDATED' && lastId && (
+              <div style={{ fontSize: 11, color: '#D97706', marginTop: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '8px 10px' }}>
+                {validationStatus === 'PENDING' ? 'Waiting for verification — click Approve above' : `Status is ${validationStatus} — need Verified to create tokens`}
               </div>
-              <div style={{background:'rgba(30,58,95,0.06)', border:'1px solid rgba(30,58,95,0.12)', borderRadius:'var(--radius)', padding:12}}>
-                <div style={{fontSize:11, fontWeight:700, color:'var(--registry-navy)'}}>Dual-endorsement notice — static info panel per §3.3</div>
-                <div style={{fontSize:11, color:'var(--ink-60)', marginTop:4}}>Requires your signature + Registrar signature — both orgs' status pending/signed — makes multi-org trust model visible, differentiator worth surfacing per §3.3</div>
-                <div style={{display:'flex', gap:8, marginTop:8, fontSize:10}}>
-                  <span className="status-chip status-pending">Originator: pending</span>
-                  <span className="status-chip status-pending">Registrar: pending</span>
-                </div>
-              </div>
-              <div style={{position:'relative'}}>
-                <button 
-                  className="btn" 
-                  type="submit" 
-                  disabled={validationStatus !== 'VALIDATED'}
-                  title={validationStatus !== 'VALIDATED' ? `Mint disabled — current status: ${validationStatus || 'unknown'}. Need VALIDATED by Registrar per §3.3. Steps: 1) Register as Originator (DRAFT) 2) Switch to Registrar role (auto-refreshes, no manual refresh) 3) Validate → VALIDATED 4) Switch to Originator → Mint enabled. Current: ${validationStatus || 'no property selected'}` : 'Ready to mint — dual endorsement Originator+Registrar per §3.3'}
-                  style={{width:'100%', background: validationStatus==='VALIDATED' ? 'var(--verified-green)' : '#9CA3AF', color:'white', cursor: validationStatus==='VALIDATED' ? 'pointer' : 'not-allowed', opacity: validationStatus==='VALIDATED' ? 1 : 0.6}}>
-                  {validationStatus==='VALIDATED' ? `✓ Mint ${mintForm.totalTokens || 0} tokens — VALIDATED ready` : `Mint disabled — ${validationStatus || 'need VALIDATED'} per §3.3`}
-                </button>
-                {validationStatus !== 'VALIDATED' && (
-                  <div style={{fontSize:10, color:'#DC2626', marginTop:6, background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, padding:'6px 8px'}}>
-                    ⚠️ {validationStatus==='NOT_FOUND' ? 'Property not found on this server instance — Vercel lambda cold start. Try with seeded property PROP-GREEN-VALLEY-PUNE-001 or re-register. For new properties, mint auto-creates VALIDATED placeholder for demo if not found.' : validationStatus==='PENDING' ? 'Awaiting Registrar validation — switch to Registrar role (top-right ROLE dropdown, auto-updates no refresh) → Validate → VALIDATED → switch back to Originator → Mint enabled' : validationStatus==='' ? 'Enter Asset ID from registration — status will show here. Mint requires VALIDATED per §3.3 dual endorsement AND(Originator,Registrar)' : `Status ${validationStatus} — need VALIDATED. Current role: ${user?.role || 'unknown'} — switch to Registrar to validate, then Originator to mint` }
-                  </div>
-                )}
-              </div>
-            </form>
+            )}
           </div>
         </div>
       </div>
 
-      {txLifecycle && (
-        <div className="card" style={{marginTop:20, background:'var(--paper)'}}>
-          <h4 style={{fontSize:11, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:12}}>Transaction status — real Fabric lifecycle per §2.5, not generic spinner — trust signal</h4>
-          {['submitting','endorsing','committing','confirmed'].map((step, idx) => {
-            const isDone = ['submitting','endorsing','committing','confirmed'].indexOf(txLifecycle.step) > idx
-            const isActive = txLifecycle.step === step
-            return (
-              <div key={step} className="tx-step">
-                <div className={`tx-step-dot ${isActive ? 'active' : isDone ? 'done' : 'pending'}`}>{isDone ? '✓' : isActive ? '⟳' : '○'}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13, fontWeight:600, textTransform:'capitalize'}}>{step}</div>
-                  <div style={{fontSize:11, color:'var(--ink-60)'}}>{step==='submitting' ? 'Transaction sent to peers' : step==='endorsing' ? 'Originator + Registrar signing — AND policy' : step==='committing' ? 'Waiting for orderer — Raft consensus' : `Confirmed — ${txLifecycle.assetId || 'asset ready'}`}</div>
-                </div>
-                <div style={{fontSize:11, color: isDone ? 'var(--verified-green)' : isActive ? 'var(--pending-amber)' : 'var(--ink-40)'}}>{isActive ? '⟳' : isDone ? '✓' : ''}</div>
-              </div>
-            )
-          })}
+      {result && (
+        <div style={{
+          marginTop: 20,
+          background: result.includes('Failed') ? '#FEF2F2' : '#F0FDF4',
+          border: `1px solid ${result.includes('Failed') ? '#FECACA' : '#BBF7D0'}`,
+          borderRadius: 8,
+          padding: 14,
+          fontSize: 13,
+          color: result.includes('Failed') ? '#991B1B' : '#065F46',
+          whiteSpace: 'pre-wrap'
+        }}>
+          {result}
         </div>
       )}
 
-      {result && <div className="card" style={{marginTop:20, background:'var(--paper)', borderColor:'var(--registry-navy)'}}><pre style={{whiteSpace:'pre-wrap', fontSize:13, color:'var(--ink)', fontFamily:'Inter'}}>{result}</pre></div>}
+      <div style={{ marginTop: 16, textAlign: 'center' }}>
+        <button
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          style={{
+            fontSize: 12,
+            color: '#9CA3AF',
+            background: 'none',
+            border: '1px dashed #E5E7EB',
+            padding: '6px 12px',
+            borderRadius: 20,
+            cursor: 'pointer'
+          }}
+        >
+          {showAdvanced ? 'Hide' : 'Show'} Advanced Options
+        </button>
+      </div>
+
+      {showAdvanced && (
+        <div style={{ marginTop: 16, background: '#F9FAFB', border: '1px dashed #E5E7EB', borderRadius: 12, padding: 16 }}>
+          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced — For Developers</h4>
+          <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Technical details hidden from layman — only for developers</p>
+          <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
+            Last ID: {lastId || 'none'}<br/>
+            Status: {validationStatus || 'none'}<br/>
+            Properties: {properties.length}<br/>
+            User: {user?.identityId} ({user?.role})
+          </div>
+          <button onClick={refresh} style={{
+            marginTop: 10,
+            padding: '6px 12px',
+            fontSize: 11,
+            border: '1px solid #E5E7EB',
+            borderRadius: 6,
+            background: 'white',
+            cursor: 'pointer'
+          }}>
+            Refresh Properties
+          </button>
+        </div>
+      )}
     </div>
   )
 }
