@@ -128,8 +128,6 @@ func (p *PayUProvider) BuildCheckout(req CollectRequest, payment *Payment) *PayU
 		"firstname":   firstname,
 		"email":       email,
 		"phone":       "9999999999",
-		"pg":          "UPI",
-		"bankcode":    "UPI",
 		"vpa":         req.PayerVPA,
 		"surl":        p.Surl,
 		"furl":        p.Furl,
@@ -138,6 +136,11 @@ func (p *PayUProvider) BuildCheckout(req CollectRequest, payment *Payment) *PayU
 		"udf3":        udf[2],
 		"udf4":        udf[3],
 		"udf5":        udf[4],
+	}
+	// PAYU_PIN_UPI=false → full PayU menu (Cards/Netbanking/Wallets/UPI). Default: pinned UPI.
+	if os.Getenv("PAYU_PIN_UPI") != "false" {
+		params["pg"] = "UPI"
+		params["bankcode"] = "UPI"
 	}
 	params["hash"] = payuRequestHash(p.Key, payment.PaymentID, amount, productinfo, firstname, email, udf, p.Salt)
 	return &PayUCheckout{Action: p.BaseURL + "/_payment", Params: params}

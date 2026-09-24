@@ -108,10 +108,23 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         }
         if (pay.status === 'CONFIRMED' && (!pending.assetId || pending.assetId === assetId)) {
           localStorage.removeItem('aasthi_payu_pending')
+          setResumeInfo('Completing your purchase — moving tokens to you…')
+          // Server settles with the payment's OWN data (paid amount, payer, seller) —
+          // nothing depends on this component's state. Idempotent.
+          try {
+            const s = await api.settlePayment(pay.paymentId, pay)
+            if (cancelled) return
+            if (s.ok) {
+              setResumeInfo('')
+              setPayment(s.payment)
+              if (s.transfer) setTransfer(s.transfer)
+              setStep('success')
+              return
+            }
+            // settle refused (not confirmed / seller broke) — fall through to client DvP
+          } catch { /* older server without settle — fall back below */ }
           setResumeInfo('')
           setPayment(pay)
-          // Transfer the PAID amount (pay.tokenAmount), not the form's current value —
-          // the component remounted after the PayU redirect, so state was reset.
           await transferAndRelease(pay, pay.tokenAmount)
           return
         }

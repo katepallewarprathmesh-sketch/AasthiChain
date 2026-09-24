@@ -232,6 +232,16 @@ class ApiClient {
     return this.request('/api/npci/payu/reconcile', { method: 'POST', body: JSON.stringify({ paymentId }) })
   }
 
+  // Server-side settlement — completes a CONFIRMED payment (tokens move server-side;
+  // survives closed tabs / lost browser state). Idempotent.
+  async settlePayment(paymentId, paymentCopy) {
+    return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}/settle`, { method: 'POST', body: JSON.stringify({ payment: paymentCopy || null }) })
+  }
+
+  async deleteProperty(assetId) {
+    return this.request(`/api/properties/${encodeURIComponent(assetId)}`, { method: 'DELETE' })
+  }
+
   async acceptInvitation(invitationId) {
     return this.request('/api/invitations/accept', { method: 'POST', body: JSON.stringify({ invitationId }) })
   }

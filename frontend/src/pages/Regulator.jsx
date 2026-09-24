@@ -64,21 +64,37 @@ export default function Regulator({ user }) {
                   {p.location?.city || '—'} • ₹{(p.valuationINR || 0).toLocaleString('en-IN')} • {p.totalTokens || 0} tokens • {p.status}
                 </div>
               </div>
-              <button
-                onClick={() => handleFreeze(p.assetId)}
-                style={{
-                  padding: '6px 12px',
-                  background: 'white',
-                  color: '#DC2626',
-                  border: '1px solid #FECACA',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Freeze
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => handleFreeze(p.assetId)}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'white',
+                    color: '#DC2626',
+                    border: '1px solid #FECACA',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Freeze
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Remove listing "${p.title}" from the marketplace? Investors keep their tokens; ledger history is preserved.`)) return
+                    try {
+                      await api.deleteProperty(p.assetId)
+                      setProperties(props => props.filter(x => x.assetId !== p.assetId))
+                    } catch (e) {
+                      alert(e.data?.message || e.message || 'Delete failed')
+                    }
+                  }}
+                  style={{ padding: '6px 12px', background: '#DC2626', color: 'white', border: '1px solid #DC2626', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Remove Listing
+                </button>
+              </div>
             </div>
           ))}
         </div>

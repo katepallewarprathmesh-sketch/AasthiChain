@@ -784,6 +784,65 @@ function genUTRRealistic() {
 // Real PSP contract on https://test.payu.in — SHA-512 request hash, reverse-hash
 // callback verification, mihpayid/bank_ref_num. Simulated settlement (no NPCI,
 // no real money). Mock rail stays default; NPCI_MODE=payu + PAYU_* envs activate.
+
+// ===== Server-side settlement — THE source of truth for completing a purchase =====
+// A CONFIRMED payment must always result in tokens moving, regardless of what the
+// browser does afterwards (closed tab, lost localStorage, buggy client orchestration).
+// Idempotent: RELEASED payments return as-is.
+async function settleConfirmedPayment(pay) {
+  if (!pay) return { ok: false, code: 404, error: 'ERR_PAYMENT_NOT_FOUND', message: 'Payment not found' };
+  if (pay.status === 'RELEASED' && pay.drunixTransferId) return { ok: true, already: true, payment: pay, message: 'Already settled' };
+  if (pay.status !== 'CONFIRMED') return { ok: false, code: 409, error: 'ERR_NOT_CONFIRMED', message: `Payment is ${pay.status} — only CONFIRMED payments settle. Use /payu/reconcile first for PayU payments.` };
+  const assetId = pay.assetId, buyer = pay.payerId || 'investor1';
+  if (!assetId) return { ok: false, code: 400, error: 'ERR_NO_ASSET', message: 'Payment has no assetId' };
+  const amt = parseInt(pay.tokenAmount);
+  if (!amt || amt <= 0) return { ok: false, code: 400, error: 'ERR_NO_TOKENS', message: 'Payment has no tokenAmount' };
+  let prop = properties[assetId] || Object.values(properties).find(p => p.assetId === assetId);
+  if (!prop) return { ok: false, code: 404, error: 'ERR_ASSET_NOT_FOUND', message: 'Property not found: ' + assetId };
+  const seller = prop.originatorId || 'originator1';
+  const sKey = assetId + '~' + seller, bKey = assetId + '~' + buyer;
+  const sBal = balances[sKey] || Object.values(balances).find(b => b.assetId === assetId && b.ownerId === seller);
+  const sHave = sBal ? parseInt(sBal.balance) : 0;
+  if (sHave < amt) {
+    return { ok: false, code: 409, error: 'ERR_SELLER_NO_BALANCE', message: `Seller ${seller} holds ${sHave} tokens but payment needs ${amt}. Re-mint the property or fix ownership.` };
+  }
+  const now = new Date();
+  balances[sKey] = { docType: 'balance', assetId, ownerId: seller, balance: sHave - amt, updatedAt: now };
+  const bBal = balances[bKey] || Object.values(balances).find(b => b.assetId === assetId && b.ownerId === buyer);
+  balances[bKey] = { docType: 'balance', assetId, ownerId: buyer, balance: ((bBal ? parseInt(bBal.balance) : 0)) + amt, updatedAt: now };
+  const tid = `TXN-${(typeof safeUUID === 'function' ? safeUUID() : crypto.randomUUID()).slice(0, 8)}-S1`;
+  transfers[tid] = { docType: 'transfer', transferId: tid, assetId, fromId: seller, toId: buyer, amount: amt, txTimestamp: now, status: 'COMPLETED', paymentId: pay.paymentId, settledServerSide: true };
+  pay.drunixTransferId = tid;
+  pay.status = 'RELEASED';
+  pay.releasedAt = now;
+  if (typeof globalThis !== 'undefined') {
+    globalThis._aasthi_balances = balances;
+    globalThis._aasthi_transfers = transfers;
+    globalThis._aasthi_npcipayments = npciPayments;
+  }
+  try { if (typeof persistNpciState === 'function') await persistNpciState(); } catch {}
+  try { if (typeof saveAllPersisted === 'function') saveAllPersisted(); } catch {}
+  console.log(`[SETTLE] ${pay.paymentId}: ${amt} tokens ${seller} → ${buyer} (${tid}) — server-side settlement`);
+  return { ok: true, payment: pay, transfer: transfers[tid], moved: amt, seller, buyer };
+}
+
+
+// ===== Property deletion / delisting =====
+// Originator: own listing — anytime while DRAFT (nothing tokenized), or once fully
+// subscribed (all tokens sold: owner holds 0). Regulator: any listing (compliance).
+function deletePropertyAuthorized(user, prop, assetId) {
+  const role = user.role || user.identityId;
+  if (role === 'Regulator') return { allowed: true, reason: 'regulator' };
+  if (role === 'Originator' && prop.originatorId === user.identityId) {
+    if (prop.status === 'DRAFT') return { allowed: true, reason: 'draft' };
+    const ownerBal = balances[assetId + '~' + user.identityId] || Object.values(balances).find(b => b.assetId === assetId && b.ownerId === user.identityId);
+    const have = ownerBal ? parseInt(ownerBal.balance) : 0;
+    if (have === 0) return { allowed: true, reason: 'fully-subscribed' };
+    return { allowed: false, message: `Fully-subscribed listings can be deleted only when all your tokens are sold (you still hold ${have}). Unsold listings can be deleted while in DRAFT — or ask the Regulator.` };
+  }
+  return { allowed: false, message: `Only the listing owner (${prop.originatorId}) or a Regulator can delete this listing.` };
+}
+
 function payuConfig() {
   const key = process.env.PAYU_MERCHANT_KEY || '';
   const salt = process.env.PAYU_SALT || '';
@@ -825,12 +884,17 @@ function buildPayUCheckout(payu, pay, req, cbBase) {
   const amount = Number(req.amountINR).toFixed(2);
   const params = {
     key: payu.key, txnid: pay.paymentId, amount, productinfo, firstname, email,
-    phone: '9999999999', pg: 'UPI', bankcode: 'UPI', vpa: req.payerVpa,
+    phone: '9999999999', vpa: req.payerVpa,
     // PayU requires ABSOLUTE redirect URLs — derive from request host when not configured
     surl: process.env.PAYU_SURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
     furl: process.env.PAYU_FURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
     udf1: udf[0], udf2: udf[1], udf3: udf[2], udf4: udf[3], udf5: udf[4]
   };
+  // PAYU_PIN_UPI=false → full PayU menu (Cards/Netbanking/Wallets/UPI). Default: pinned UPI (NPCI rail).
+  if (process.env.PAYU_PIN_UPI !== 'false') {
+    params.pg = 'UPI';
+    params.bankcode = 'UPI';
+  }
   params.hash = payuRequestHash(payu.key, pay.paymentId, amount, productinfo, firstname, email, udf, payu.salt);
   return { action: payu.base + '/_payment', params };
 }
@@ -1118,10 +1182,38 @@ app.post('/api/npci/payu/reconcile', authMiddleware, async (req, res) => {
   try {
     const result = await reconcilePayuPayment(payu, pay);
     if (result.reconciled) addWebhookAudit({ webhookId: `payu-reconcile-${Date.now()}`, paymentId: pay.paymentId, status: pay.status, utr: pay.utr, provider: 'payu-reconcile', timestamp: new Date(), result: 'OK' });
-    res.json({ paymentId: pay.paymentId, ...result, payment: pay });
+    // Auto-settle: reconciliation CONFIRMed (or payment already CONFIRMed) →
+    // complete the purchase server-side. Tokens move now, no browser needed.
+    let settle = null;
+    if (pay.status === 'CONFIRMED') settle = await settleConfirmedPayment(pay);
+    res.json({ paymentId: pay.paymentId, ...result, settle, payment: pay });
   } catch (e) {
     res.status(502).json({ error: 'PayU verify_payment failed', message: e.message });
   }
+});
+
+// POST /api/npci/payments/:id/settle — server-side completion of a CONFIRMED purchase
+app.post('/api/npci/payments/:id/settle', authMiddleware, async (req, res) => {
+  try {
+    const pay = npciPayments[req.params.id];
+    const result = await settleConfirmedPayment(pay);
+    return res.status(result.ok ? 200 : (result.code || 400)).json(result);
+  } catch (e) {
+    return res.status(500).json({ error: 'ERR_SETTLE_FAILED', message: e.message });
+  }
+});
+
+// DELETE /api/properties/:id — originator (draft or fully-subscribed) / regulator (any)
+app.delete('/api/properties/:id', authMiddleware, (req, res) => {
+  const assetId = req.params.id;
+  const prop = properties[assetId] || Object.values(properties).find(x => x.assetId === assetId);
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND', assetId });
+  const check = deletePropertyAuthorized(req.user, prop, assetId);
+  if (!check.allowed) return res.status(403).json({ error: 'ERR_DELETE_NOT_ALLOWED', message: check.message });
+  delete properties[prop.assetId || assetId];
+  if (prop.assetId && prop.assetId !== assetId) delete properties[assetId];
+  console.log(`[DELETE] property ${assetId} removed by ${req.user.identityId} (${check.reason})`);
+  res.json({ deleted: true, assetId, deletedBy: req.user.identityId, reason: check.reason, note: 'Investors keep their tokens — only the marketplace listing is removed. Ledger history is preserved.' });
 });
 
 // Drunix transaction flow for a payment (FAQ 14 demo: Drunix Transaction Flow)

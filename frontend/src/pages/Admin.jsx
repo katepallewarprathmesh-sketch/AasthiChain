@@ -449,6 +449,43 @@ export default function Admin({ user }) {
           </button>
         </div>
       )}
+
+      {/* Your Listings — delete rules: DRAFT anytime; TOKENIZED once fully sold. Regulator can remove any. */}
+      {user?.role === 'Originator' && properties.filter(pp => pp.originatorId === user.identityId).length > 0 && (
+        <div style={{ marginTop: 24, background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Your Listings</h3>
+          <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+            Delete a listing anytime while in draft (nothing tokenized), or once it is fully subscribed (all your tokens sold). Investors keep their tokens.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+            {properties.filter(pp => pp.originatorId === user.identityId).map(pp => (
+              <div key={pp.assetId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{pp.title}</div>
+                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                    {pp.location?.city || '—'} • {pp.status} • {pp.totalTokens?.toLocaleString?.('en-IN') || pp.totalTokens} tokens
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete listing "${pp.title}"? Investors keep their tokens — only the marketplace listing is removed.`)) return
+                    try {
+                      await api.deleteProperty(pp.assetId)
+                      alert('Listing deleted. Marketplace no longer shows it.')
+                      refresh()
+                    } catch (e) {
+                      alert(e.data?.message || e.message || 'Delete failed')
+                    }
+                  }}
+                  style={{ padding: '7px 12px', background: 'white', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
+                >
+                  Delete Listing
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
