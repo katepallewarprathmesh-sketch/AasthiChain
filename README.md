@@ -162,10 +162,16 @@ cd frontend && npm run build
 
 **Try the PayU test UPI locally:**
 ```bash
-NPCI_MODE=payu PAYU_MERCHANT_KEY=<test key> PAYU_SALT=<test salt> node mock-api-server.js
-# collect now returns payuCheckout → frontend auto-submits to https://test.payu.in/_payment
+cp .env.payu.example .env.payu   # then paste your Test key/salt from PayU Dashboard (Test Mode → Key Salt)
+set -a && source .env.payu && set +a
+node mock-api-server.js          # collect returns payuCheckout → auto-submits to https://test.payu.in/_payment
 # set PUBLIC_BASE_URL (or PAYU_SURL/PAYU_FURL) so PayU can reach the callback on deployed URLs
 ```
+
+**Verified against the real PayU test gateway:** signed forms from our collect endpoint are accepted by
+`test.payu.in/_payment` (302 into a payment session / checkout page) with Test key+salt; tampered amounts and
+garbage hashes are rejected by PayU server-side. Client ID/Secret from the dashboard are for the Payment Links
+API & Split Payments — not required for this merchant-hosted UPI Collect flow. `.env.payu` is gitignored — never commit credentials.
 
 </details>
 
