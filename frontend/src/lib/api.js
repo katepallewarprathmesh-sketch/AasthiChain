@@ -226,6 +226,12 @@ class ApiClient {
     return this.request(`/api/orgs/${encodeURIComponent(orgId)}/invitations`, { method: 'POST', body: JSON.stringify(payload) })
   }
 
+  // PayU S2S reconciliation — asks PayU (verify_payment) for the real status
+  // of a PENDING payment and heals it server-side (CONFIRMED/DECLINED)
+  async reconcilePayu(paymentId) {
+    return this.request('/api/npci/payu/reconcile', { method: 'POST', body: JSON.stringify({ paymentId }) })
+  }
+
   async acceptInvitation(invitationId) {
     return this.request('/api/invitations/accept', { method: 'POST', body: JSON.stringify({ invitationId }) })
   }

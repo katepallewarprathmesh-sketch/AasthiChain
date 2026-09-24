@@ -52,6 +52,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
   const [payment, setPayment] = useState(null)
   const [transfer, setTransfer] = useState(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  const [resumeInfo, setResumeInfo] = useState('')
 
   const safePrice = tokenPrice || 0
   const cap = Number.isFinite(availableTokens) && availableTokens > 0 ? Math.floor(availableTokens) : null
@@ -85,26 +86,45 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
     if (!pending?.paymentId) return
     let cancelled = false
     let attempts = 0
+    let reconciledAt = 0
+    setResumeInfo('Checking your PayU payment…')
     const poll = async () => {
       if (cancelled) return
       attempts++
       try {
-        const pay = await api.getPayment(pending.paymentId)
+        let pay = await api.getPayment(pending.paymentId)
         if (cancelled) return
+        // Self-heal: if PayU said success but our callback was missed/rejected
+        // (old hash bug, closed tab), ask the server to reconcile via PayU
+        // verify_payment and flip the payment before completing the purchase.
+        if (pay.status === 'PENDING' && attempts >= 3 && Date.now() - reconciledAt > 15000) {
+          setResumeInfo('Confirming with PayU (this heals missed callbacks)…')
+          try {
+            const rec = await api.reconcilePayu(pending.paymentId)
+            if (cancelled) return
+            reconciledAt = Date.now()
+            if (rec?.payment?.status) pay = rec.payment
+          } catch { /* reconcile is best-effort; keep polling */ }
+        }
         if (pay.status === 'CONFIRMED' && (!pending.assetId || pending.assetId === assetId)) {
           localStorage.removeItem('aasthi_payu_pending')
+          setResumeInfo('')
           setPayment(pay)
-          await transferAndRelease(pay)
+          // Transfer the PAID amount (pay.tokenAmount), not the form's current value —
+          // the component remounted after the PayU redirect, so state was reset.
+          await transferAndRelease(pay, pay.tokenAmount)
           return
         }
         if (pay.status !== 'PENDING') {
           localStorage.removeItem('aasthi_payu_pending')
+          setResumeInfo('')
           setPayment(pay)
           setError(pay.failureReason || `Payment ${pay.status} — no tokens moved, nothing was kept`)
           setStep('error')
           return
         }
         if (attempts < 60) setTimeout(poll, 3000) // keep waiting for the PayU callback (~3 min)
+        else { setResumeInfo(''); localStorage.removeItem('aasthi_payu_pending'); setError('Could not confirm this payment with PayU within 3 minutes. If your PayU dashboard shows success, re-open this page — the purchase completes automatically. No money moves without tokens.'); setStep('error') }
       } catch { if (attempts < 10) setTimeout(poll, 3000) }
     }
     poll()
@@ -163,18 +183,19 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
     }
   }
 
-  const transferAndRelease = async (confirmed) => {
+  const transferAndRelease = async (confirmed, amountOverride) => {
     setStep('transferring')
+    const moveAmount = parseInt(amountOverride || clampedAmount) // paid amount wins on resume
     try {
       // Leg 1 — Drunix ledger: tokens move from seller to you
       let tr
       try {
-        tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(clampedAmount))
+        tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', moveAmount)
       } catch (e) {
         if (e.status === 404 || e.status === 400) {
           // Balances not on this instance — reattach payment first so state is consistent, then retry
           await api.reattachPayment(confirmed.paymentId, confirmed)
-          tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', parseInt(clampedAmount))
+          tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', moveAmount)
         } else throw e
       }
       setTransfer(tr)
@@ -200,12 +221,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           valuationINR: valuationINR || 0,
           totalTokens: totalTokens || 0,
           originatorId: recipient || 'originator1',
-          tokenAmount: parseInt(clampedAmount),
+          tokenAmount: moveAmount,
           receipt: {
             paymentId: released.paymentId || collectData.paymentId,
             assetId,
             payerId: user?.identityId || 'investor1',
-            tokenAmount: parseInt(clampedAmount),
+            tokenAmount: moveAmount,
             amountINR: total,
             status: released.status || 'RELEASED',
             upiTxnId: released.upiTxnId || collectData.upiTxnId || '',
@@ -369,6 +390,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
   return (
     <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
       <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Buy Tokens</h3>
+      {resumeInfo && (
+        <div style={{ marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 10, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 12, height: 12, border: '2px solid #FDE68A', borderTopColor: '#D97706', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span>
+          {resumeInfo}
+        </div>
+      )}
       <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Own a part of this property — pay by UPI</p>
 
       <div style={{ marginTop: 16 }}>
