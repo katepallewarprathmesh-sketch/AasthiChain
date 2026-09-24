@@ -259,11 +259,11 @@ func (s *Server) handlePayments(w http.ResponseWriter, r *http.Request) {
 			}
 			if p.UTR == "" {
 				p.UTR = gen.UTR
-				s.Gateway.Mu.Lock()
-				s.Gateway.UtrIndex[gen.UTR] = paymentID
-				s.Gateway.UtrIndex[gen.UTR12] = paymentID
-				s.Gateway.UtrIndex[gen.RRN] = paymentID
-				s.Gateway.Mu.Unlock()
+				s.Gateway.mu.Lock()
+				s.Gateway.utrIndex[gen.UTR] = paymentID
+				s.Gateway.utrIndex[gen.UTR12] = paymentID
+				s.Gateway.utrIndex[gen.RRN] = paymentID
+				s.Gateway.mu.Unlock()
 			}
 			SaveJSON(s.DB.NPCIPayments, paymentID, p)
 			json.NewEncoder(w).Encode(p)

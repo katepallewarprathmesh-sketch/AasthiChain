@@ -15,40 +15,45 @@ import (
 type Status string
 
 const (
-	StatusPending              Status = "PENDING"
-	StatusConfirmed            Status = "CONFIRMED"
-	StatusReleased             Status = "RELEASED"
-	StatusRefunded             Status = "REFUNDED"
-	StatusFailedKYC            Status = "FAILED_KYC_NOT_VERIFIED"
-	StatusFailedInsufficient   Status = "FAILED_INSUFFICIENT_FUNDS"
-	StatusExpired              Status = "EXPIRED"
-	StatusDeclined             Status = "DECLINED"
-	StatusFailedInvalidVPA     Status = "FAILED_INVALID_VPA"
-	StatusFailedZeroAmount     Status = "FAILED_INVALID_AMOUNT"
-	StatusFailedSelfTransfer   Status = "FAILED_SELF_TRANSFER"
+	StatusPending            Status = "PENDING"
+	StatusConfirmed          Status = "CONFIRMED"
+	StatusReleased           Status = "RELEASED"
+	StatusRefunded           Status = "REFUNDED"
+	StatusFailedKYC          Status = "FAILED_KYC_NOT_VERIFIED"
+	StatusFailedInsufficient Status = "FAILED_INSUFFICIENT_FUNDS"
+	StatusExpired            Status = "EXPIRED"
+	StatusDeclined           Status = "DECLINED"
+	StatusFailedInvalidVPA   Status = "FAILED_INVALID_VPA"
+	StatusFailedZeroAmount   Status = "FAILED_INVALID_AMOUNT"
+	StatusFailedSelfTransfer Status = "FAILED_SELF_TRANSFER"
 )
 
 // Payment represents NPCI-style UPI Collect transaction
 type Payment struct {
-	PaymentID        string    `json:"paymentId"`        // NPCI-XXXXXXXXXXXX
-	UpiTxnID         string    `json:"upiTxnId"`         // AAST20260921X7K9P2Q1
-	RRN              string    `json:"rrn"`              // 12-digit Retrieval Reference Number
-	UTR              string    `json:"utr"`              // IMPS UTR: IMPS + RRN
-	AssetID          string    `json:"assetId"`
-	TokenAmount      int64     `json:"tokenAmount"`
-	AmountINRPaise   int64     `json:"amountINRPaise"` // store in paise to avoid float
-	AmountINR        float64   `json:"amountINR"`      // display convenience
-	PayerVPA         string    `json:"payerVpa"`       // investor@aasthichain
-	PayeeVPA         string    `json:"payeeVpa"`       // originator@aasthichain
-	Note             string    `json:"note"`
-	Status           Status    `json:"status"`
-	CreatedAt        time.Time `json:"createdAt"`
-	ExpiresAt        time.Time `json:"expiresAt"`
+	PaymentID        string     `json:"paymentId"` // NPCI-XXXXXXXXXXXX
+	UpiTxnID         string     `json:"upiTxnId"`  // AAST20260921X7K9P2Q1
+	RRN              string     `json:"rrn"`       // 12-digit Retrieval Reference Number
+	UTR              string     `json:"utr"`       // IMPS UTR: IMPS + RRN
+	AssetID          string     `json:"assetId"`
+	TokenAmount      int64      `json:"tokenAmount"`
+	AmountINRPaise   int64      `json:"amountINRPaise"` // store in paise to avoid float
+	AmountINR        float64    `json:"amountINR"`      // display convenience
+	PayerVPA         string     `json:"payerVpa"`       // investor@aasthichain
+	PayeeVPA         string     `json:"payeeVpa"`       // originator@aasthichain
+	Note             string     `json:"note"`
+	Status           Status     `json:"status"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	ExpiresAt        time.Time  `json:"expiresAt"`
 	ConfirmedAt      *time.Time `json:"confirmedAt,omitempty"`
 	ReleasedAt       *time.Time `json:"releasedAt,omitempty"`
-	DrunixTransferID string    `json:"drunixTransferId,omitempty"`
-	IdempotencyKey   string    `json:"idempotencyKey,omitempty"`
-	FailureReason    string    `json:"failureReason,omitempty"`
+	DrunixTransferID string     `json:"drunixTransferId,omitempty"`
+	IdempotencyKey   string     `json:"idempotencyKey,omitempty"`
+	FailureReason    string     `json:"failureReason,omitempty"`
+	// PayU test/live rail (additive — empty for the mock rail)
+	Provider     string        `json:"provider,omitempty"`     // "", "mock", "payu"
+	PayuID       string        `json:"payuId,omitempty"`       // PayU mihpayid
+	PayuTestMode bool          `json:"payuTestMode,omitempty"` // true on test.payu.in (simulated settlement)
+	PayuCheckout *PayUCheckout `json:"payuCheckout,omitempty"` // browser form → PayU hosted checkout
 	// Simulation flags
 	IsSimulation bool `json:"isSimulation"` // always true for this mock, honest labeling
 }
@@ -155,11 +160,11 @@ type CollectRequest struct {
 }
 
 type Gateway struct {
-	mu           sync.RWMutex
-	payments     map[string]*Payment
-	idempotency  map[string]*Payment // idempotencyKey -> payment
-	kycProvider  KYCProvider
-	balProvider  BalanceProvider
+	mu          sync.RWMutex
+	payments    map[string]*Payment
+	idempotency map[string]*Payment // idempotencyKey -> payment
+	kycProvider KYCProvider
+	balProvider BalanceProvider
 }
 
 func NewGateway(kyc KYCProvider, bal BalanceProvider) *Gateway {
@@ -247,21 +252,21 @@ func (g *Gateway) InitiateCollect(req CollectRequest) (*Payment, error) {
 
 	now := time.Now()
 	p := &Payment{
-		PaymentID:        GeneratePaymentID(),
-		UpiTxnID:         GenerateUpiTxnID(),
-		RRN:              GenerateRRN(),
-		AssetID:          req.AssetID,
-		TokenAmount:      req.TokenAmount,
-		AmountINR:        req.AmountINR,
-		AmountINRPaise:   int64(req.AmountINR * 100),
-		PayerVPA:         strings.ToLower(req.PayerVPA),
-		PayeeVPA:         strings.ToLower(req.PayeeVPA),
-		Note:             req.Note,
-		Status:           StatusPending,
-		CreatedAt:        now,
-		ExpiresAt:        now.Add(5 * time.Minute),
-		IdempotencyKey:   req.IdempotencyKey,
-		IsSimulation:     true,
+		PaymentID:      GeneratePaymentID(),
+		UpiTxnID:       GenerateUpiTxnID(),
+		RRN:            GenerateRRN(),
+		AssetID:        req.AssetID,
+		TokenAmount:    req.TokenAmount,
+		AmountINR:      req.AmountINR,
+		AmountINRPaise: int64(req.AmountINR * 100),
+		PayerVPA:       strings.ToLower(req.PayerVPA),
+		PayeeVPA:       strings.ToLower(req.PayeeVPA),
+		Note:           req.Note,
+		Status:         StatusPending,
+		CreatedAt:      now,
+		ExpiresAt:      now.Add(5 * time.Minute),
+		IdempotencyKey: req.IdempotencyKey,
+		IsSimulation:   true,
 	}
 	p.UTR = GenerateUTR(p.RRN)
 
@@ -389,7 +394,9 @@ func (g *Gateway) RefundPayment(paymentID string, reason string) (*Payment, erro
 	if !ok {
 		return nil, errors.New("payment not found")
 	}
-	if p.Status != StatusPending && p.Status != StatusConfirmed && p.Status != StatusFailedInsufficient && p.Status != StatusFailedKYC {
+	// EXPIRED is refundable — the documented timeout→refund path (README payment tests):
+	// a late-approved collect must return the payer's money, not strand it in escrow.
+	if p.Status != StatusPending && p.Status != StatusConfirmed && p.Status != StatusExpired && p.Status != StatusFailedInsufficient && p.Status != StatusFailedKYC {
 		return nil, fmt.Errorf("cannot refund from %s", p.Status)
 	}
 	p.Status = StatusRefunded

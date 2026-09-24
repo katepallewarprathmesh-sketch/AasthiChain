@@ -496,6 +496,84 @@ function verifyWebhookSignature(rawBody, signature, secret, provider) {
     return false;
   }
 }
+// ===== PayU test-mode UPI bridge ("feels like real UPI") =====
+// Real PSP contract (SHA-512 request hash, reverse-hash callback verification,
+// mihpayid/bank_ref_num) against https://test.payu.in — simulated settlement,
+// no NPCI/real money. Mock rail stays the default; NPCI_MODE=payu activates.
+function payuConfig() {
+  const key = process.env.PAYU_MERCHANT_KEY || '';
+  const salt = process.env.PAYU_SALT || '';
+  const base = (process.env.PAYU_BASE_URL || 'https://test.payu.in').replace(/\/$/, '');
+  return {
+    key, salt, base,
+    active: !!(key && salt) && (process.env.NPCI_MODE === 'payu'),
+    test: base.includes('test.payu.in')
+  };
+}
+function payuRequestHash(key, txnid, amount, productinfo, firstname, email, udf, salt) {
+  return crypto.createHash('sha512').update(
+    [key, txnid, amount, productinfo, firstname, email, udf[0], udf[1], udf[2], udf[3], udf[4], '', '', '', '', '', salt].join('|')
+  ).digest('hex');
+}
+function payuResponseHash(salt, status, email, firstname, productinfo, amount, txnid, key, udf) {
+  // sha512(salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
+  return crypto.createHash('sha512').update(
+    [salt, status, '', '', '', '', udf[4], udf[3], udf[2], udf[1], udf[0], email, firstname, productinfo, amount, txnid, key].join('|')
+  ).digest('hex');
+}
+function verifyPayUResponse(params, key, salt) {
+  const g = (k) => String(params[k] ?? '').trim();
+  const udf = [g('udf1'), g('udf2'), g('udf3'), g('udf4'), g('udf5')];
+  const want = payuResponseHash(salt, g('status'), g('email'), g('firstname'), g('productinfo'), g('amount'), g('txnid'), key, udf);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(want), Buffer.from(g('hash'))) &&
+      Buffer.from(want).length === Buffer.from(g('hash')).length;
+  } catch { return false; }
+}
+function buildPayUCheckout(payu, pay, req, cbBase) {
+  const firstname = String(req.payerVpa || 'payer').split('@')[0];
+  const email = firstname + '@aasthichain.demo';
+  const udf = [req.assetId || '', String(req.tokenAmount || ''), pay.upiTxnId || '', req.payeeVpa || '', req.idemKey || ''];
+  const productinfo = req.note || `Buy ${req.tokenAmount} tokens of ${req.assetId}`;
+  const amount = Number(req.amountINR).toFixed(2);
+  const params = {
+    key: payu.key, txnid: pay.paymentId, amount, productinfo, firstname, email,
+    phone: '9999999999', pg: 'UPI', bankcode: 'UPI', vpa: req.payerVpa,
+    // PayU requires ABSOLUTE redirect URLs — derive from request host when not configured
+    surl: process.env.PAYU_SURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
+    furl: process.env.PAYU_FURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
+    udf1: udf[0], udf2: udf[1], udf3: udf[2], udf4: udf[3], udf5: udf[4]
+  };
+  params.hash = payuRequestHash(payu.key, pay.paymentId, amount, productinfo, firstname, email, udf, payu.salt);
+  return { action: payu.base + '/_payment', params };
+}
+function payuCallbackHtml(paymentId, status, base) {
+  const ok = status === 'CONFIRMED';
+  const target = `${base}/payments?paymentId=${encodeURIComponent(paymentId)}&payu=return`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=${target}"><title>AasthiChain — Payment ${status}</title></head>` +
+    `<body style="font-family:Inter,sans-serif;text-align:center;padding:48px;background:#F7F5F0;color:#1E3A5F">` +
+    `<h2 style="margin:0 0 8px">${ok ? '✓ Payment confirmed' : status === 'DECLINED' ? '✗ Payment not completed' : '… Payment pending'}</h2>` +
+    `<p style="color:#5A6B7D">Returning you to AasthiChain…</p><p style="font-size:12px;color:#8B95A1">Ref: ${paymentId}</p></body></html>`;
+}
+async function parsePayUParams(req) {
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) return req.body;
+  const raw = await new Promise((resolve) => {
+    let d = '';
+    req.on && req.on('data', (c) => { d += c; });
+    req.on && req.on('end', () => resolve(d));
+    req.on && req.on('error', () => resolve(''));
+    setTimeout(() => resolve(d), 3000);
+  });
+  const out = {};
+  for (const [k, v] of new URLSearchParams(raw || '')) out[k] = v;
+  return out;
+}
+function payuPublicBase(req) {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:8080';
+  return `${proto}://${host}`;
+}
 function addWebhookAudit(event) {
   try {
     npciWebhooks.push(event);
@@ -669,6 +747,7 @@ export default async function handler(req, res) {
         version: '2.6-drunix-fraud-golang',
         drunixGateway: { mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go' : 'embedded', language: 'golang', source: 'drunix-gateway/ (Go)' },
         fraudEngine: { model: 'aasthichain-rules-v1', theme: 'AI & Fraud Detection', parityOf: 'drunix-gateway/fraud.go' },
+        payuBridge: (() => { const pu = payuConfig(); return { enabled: pu.active, mode: pu.test ? 'test' : 'live', baseUrl: pu.base, callbackPath: '/api/npci/payu/callback' }; })(),
         dbMode,
         dbCounts,
         goImplementation: {
@@ -898,6 +977,14 @@ export default async function handler(req, res) {
           await persistNpciState();
           return res.status(403).json(pay);
         }
+        // PayU test-mode bridge (additive): real PSP checkout form attached to PENDING payment
+        const payu = payuConfig();
+        if (payu.active) {
+          pay.provider = 'payu';
+          pay.payuTestMode = payu.test;
+          pay.isSimulation = payu.test;
+          pay.payuCheckout = buildPayUCheckout(payu, pay, { assetId, tokenAmount, amountINR: amt, payerVpa, payeeVpa, note, idemKey }, payuPublicBase(req));
+        }
         npciPayments[paymentId] = pay;
         if (idemKey) npciIdem[idemKey]=pay;
         globalThis._aasthi_npcipayments = npciPayments;
@@ -907,6 +994,60 @@ export default async function handler(req, res) {
       } catch (e) {
         console.error('npci/collect error', e);
         return res.status(500).json({ error: 'Internal error in collect', message: e.message });
+      }
+    }
+
+    // ===== PayU callback (surl/furl) — browser-redirect POST, form-urlencoded =====
+    if (path === '/api/npci/payu/callback') {
+      try {
+        const payu = payuConfig();
+        if (!payu.active) return res.status(400).send('<html><body><h3>PayU bridge not active</h3></body></html>');
+        const params = method === 'POST' ? await parsePayUParams(req) : Object.fromEntries(new URL(req.url, 'http://x').searchParams);
+        const g = (k) => String(params[k] ?? '').trim();
+        if (!g('txnid')) return res.status(400).send('<html><body><h3>txnid missing</h3></body></html>');
+        if (!verifyPayUResponse(params, payu.key, payu.salt)) {
+          addWebhookAudit({ webhookId: `payu-hashfail-${Date.now()}`, paymentId: g('txnid'), status: g('status'), provider: 'payu', timestamp: new Date(), result: 'HASH_MISMATCH', raw: params });
+          return res.status(403).send('<html><body><h3>✗ Hash verification failed — payload rejected</h3></body></html>');
+        }
+        const pay = npciPayments[g('txnid')];
+        if (!pay) return res.status(404).send('<html><body><h3>Payment not found</h3></body></html>');
+        const webhookId = `payu~${g('txnid')}~${g('status')}~${g('mihpayid')}`;
+        if (npciIdem[webhookId]) return res.status(200).send(payuCallbackHtml(pay.paymentId, pay.status, payuPublicBase(req)));
+        // amount reconciliation — DvP safety
+        const amtPayu = parseFloat(g('amount'));
+        if (!isNaN(amtPayu) && Math.abs(amtPayu - pay.amountINR) > 0.01) {
+          pay.status = 'FAILED_AMOUNT_MISMATCH';
+          pay.failureReason = `Amount mismatch: expected ₹${pay.amountINR} got ₹${amtPayu} — manual review required`;
+          pay.callbackData = params; pay.provider = 'payu'; pay.webhookReceivedAt = new Date();
+          npciPayments[pay.paymentId] = pay;
+          await persistNpciState();
+          return res.status(200).send(payuCallbackHtml(pay.paymentId, pay.status, payuPublicBase(req)));
+        }
+        const statusLower = g('status').toLowerCase();
+        if (statusLower === 'success' && pay.status === 'PENDING') {
+          pay.status = 'CONFIRMED';
+          pay.payuId = g('mihpayid');
+          if (g('bank_ref_num')) { pay.utr = g('bank_ref_num'); pay.utr12 = g('bank_ref_num'); pay.rrn = g('bank_ref_num'); pay.utrPlaceholder = null; pay.rrnPlaceholder = null; }
+          pay.confirmedAt = new Date();
+          pay.callbackReceived = true;
+          pay.failureReason = null;
+        } else if (statusLower === 'failure' && pay.status === 'PENDING') {
+          pay.status = 'DECLINED';
+          pay.failureReason = 'PayU: ' + (g('error_Message') || g('field9') || 'declined at PayU (test fail VPA)');
+          pay.callbackReceived = true;
+        } // pending → stays PENDING until PayU retries / verify_payment
+        pay.provider = 'payu';
+        pay.webhookReceivedAt = new Date();
+        npciIdem[webhookId] = pay;
+        globalThis._aasthi_npci_idem = npciIdem;
+        npciPayments[pay.paymentId] = pay;
+        globalThis._aasthi_npcipayments = npciPayments;
+        addWebhookAudit({ webhookId, paymentId: pay.paymentId, status: pay.status, rrn: pay.rrn, utr: pay.utr, provider: 'payu', amount: pay.amountINR, timestamp: new Date(), result: 'OK', raw: params });
+        await persistNpciState();
+        return res.status(200).send(payuCallbackHtml(pay.paymentId, pay.status, payuPublicBase(req)));
+      } catch (e) {
+        console.error('payu callback error', e);
+        return res.status(500).send('<html><body><h3>Callback processing error</h3></body></html>');
       }
     }
 

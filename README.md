@@ -14,6 +14,7 @@ Live: [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)
 - Persistence: production state in Postgres / GitHub-backed real DB (`frontend/api/lib/db_real.js`), shared across serverless instances
 - Identity & org schema (Neon): `user, account, session, organization, member, invitation, verification, jwt, project_config` — implemented in code (`frontend/api/lib/authstore.js`, Postgres + in-memory dual mode) with tables live in Neon; full lifecycle APIs: login→session→logout, JWKS (Ed25519), OTP-style verification, org→invite→accept→members
 - UPI rail: NPCI UPI Collect simulation with RRN/UTR, idempotency, webhooks + UTR reconciliation — real via Setu/ICICI by flipping `NPCI_MODE=real` (`payment-gateway/real_npcibank.go`)
+- **PayU test-mode UPI** ("feels like real UPI"): real PSP round-trip on `https://test.payu.in/_payment` — SHA-512 request signing, reverse-hash callback verification, `mihpayid`/`bank_ref_num` references, `verify_payment` reconciliation; settlement stays simulated (test VPAs `test@payu` succeeds, `fail@payu` declines — no NPCI, no real money). Enable: `NPCI_MODE=payu` + `PAYU_MERCHANT_KEY` + `PAYU_SALT` (free test keys from PayU Dashboard → Test Mode, no KYC). Go: `payment-gateway/real_payubank.go` (6 tests), JS mirror in both servers + `PayUCheckout.jsx` auto-submit flow
 
 ### Ownership & Data Integrity (recent hardening)
 
@@ -78,7 +79,7 @@ No partial failures: if payment fails, no tokens move. If tokens fail, payment r
 - **Frontend:** React, Vite, Clerk auth, UPI payment UI
 - **Backend:** Vercel serverless mock + Go API gateway (optional live)
 - **Blockchain:** Drunix Fabric — 4 orgs, Raft orderer, property & token chaincode
-- **Payments:** UPI Collect primary (INR), Sepolia escrow secondary experimental
+- **Payments:** UPI Collect primary (INR) — mock rail by default, PayU test-mode PSP option, Sepolia escrow secondary experimental
 - **Identity data:** Neon Postgres schema — user/account/session/organization/member/invitation/verification/jwt/project_config
 
 **Build:** 115 modules, 363KB (gzip 101KB)
@@ -125,7 +126,8 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 - `/api/auth/verification` POST + `/verify` — OTP-style verification (value never returned to client)
 - `/api/orgs` POST/GET · `/api/orgs/:id/members` GET · `/api/orgs/:id/invitations` POST/GET · `/api/invitations/accept` POST — organizations
 - `/api/auth/schema` GET — traceability: schema entities ↔ code
-- `/api/npci/collect` POST — Initiate UPI Collect (fraud-screened: BLOCK ≥70 → 403)
+- `/api/npci/collect` POST — Initiate UPI Collect (fraud-screened: BLOCK ≥70 → 403; returns `payuCheckout` form when PayU rail active)
+- `/api/npci/payu/callback` POST — PayU surl/furl (reverse-hash verified, amount-reconciled, idempotent)
 - `/api/npci/payments/:id/approve` POST — Approve → CONFIRMED (re-screened)
 - `/api/npci/payments/:id/release` POST — Release → RELEASED + UTR
 - `/api/npci/payments/:id/refund` POST — Refund → REFUNDED
@@ -154,8 +156,15 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 ```bash
 cd chaincode && go test -v
 cd drunix-gateway && go test ./...
-cd payment-gateway && go test -v && node gateway.test.js
+cd payment-gateway && go test -v && node gateway.test.js   # incl. 6 PayU tests — suite green
 cd frontend && npm run build
+```
+
+**Try the PayU test UPI locally:**
+```bash
+NPCI_MODE=payu PAYU_MERCHANT_KEY=<test key> PAYU_SALT=<test salt> node mock-api-server.js
+# collect now returns payuCheckout → frontend auto-submits to https://test.payu.in/_payment
+# set PUBLIC_BASE_URL (or PAYU_SURL/PAYU_FURL) so PayU can reach the callback on deployed URLs
 ```
 
 </details>

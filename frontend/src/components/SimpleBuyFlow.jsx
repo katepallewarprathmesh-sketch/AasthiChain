@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react'
 import api from '../lib/api.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
+import PayUCheckout from './PayUCheckout.jsx'
 
 const STATUS_STEPS = [
   { key: 'collect', label: 'Payment Request', desc: 'Secure request created' },
@@ -45,7 +46,7 @@ function StepTrack({ current, doneCount }) {
 export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, propertyTitle, valuationINR, totalTokens, availableTokens, onSuccess }) {
   const [amount, setAmount] = useState(100)
   const [vpa, setVpa] = useState(user?.identityId ? `${user.identityId}@aasthichain` : 'demo.investor@aasthichain')
-  const [step, setStep] = useState('form') // form, paying, pending, confirming, transferring, success, error
+  const [step, setStep] = useState('form') // form, paying, payu, pending, confirming, transferring, success, error
   const [error, setError] = useState('')
   const [advanced, setAdvanced] = useState(false)
   const [payment, setPayment] = useState(null)
@@ -72,6 +73,45 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
     return () => clearInterval(t)
   }, [step, payment])
 
+  // PayU test-mode: resume automatically when the browser returns from PayU
+  // (PayU POSTs the signed callback -> server CONFIRMs -> we poll and continue DvP)
+  useEffect(() => {
+    if (step !== 'form' || payment) return
+    let raw = null
+    try { raw = localStorage.getItem('aasthi_payu_pending') } catch { /* private mode */ }
+    if (!raw) return
+    let pending = null
+    try { pending = JSON.parse(raw) } catch { localStorage.removeItem('aasthi_payu_pending'); return }
+    if (!pending?.paymentId) return
+    let cancelled = false
+    let attempts = 0
+    const poll = async () => {
+      if (cancelled) return
+      attempts++
+      try {
+        const pay = await api.getPayment(pending.paymentId)
+        if (cancelled) return
+        if (pay.status === 'CONFIRMED' && (!pending.assetId || pending.assetId === assetId)) {
+          localStorage.removeItem('aasthi_payu_pending')
+          setPayment(pay)
+          await transferAndRelease(pay)
+          return
+        }
+        if (pay.status !== 'PENDING') {
+          localStorage.removeItem('aasthi_payu_pending')
+          setPayment(pay)
+          setError(pay.failureReason || `Payment ${pay.status} — no tokens moved, nothing was kept`)
+          setStep('error')
+          return
+        }
+        if (attempts < 60) setTimeout(poll, 3000) // keep waiting for the PayU callback (~3 min)
+      } catch { if (attempts < 10) setTimeout(poll, 3000) }
+    }
+    poll()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
+
   const startPayment = async () => {
     setError('')
     setStep('paying')
@@ -86,6 +126,14 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         payerId: user?.identityId || 'investor1',
         payeeId: recipient || 'originator1'
       })
+      if (collectData.payuCheckout) {
+        // PayU rail: hand off to the hosted checkout; the callback CONFIRMs and
+        // the resume effect above completes transfer + release on return.
+        try { localStorage.setItem('aasthi_payu_pending', JSON.stringify({ paymentId: collectData.paymentId, assetId, ts: Date.now() })) } catch { /* private mode */ }
+        setPayment(collectData)
+        setStep('payu')
+        return
+      }
       setPayment(collectData)
       setSecondsLeft(300)
       setStep('pending')
@@ -253,6 +301,23 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         >
           Try Again
         </button>
+      </div>
+    )
+  }
+
+  if (step === 'payu' && payment?.payuCheckout) {
+    return (
+      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 12px' }}>Pay ₹{total.toLocaleString('en-IN')} via UPI</h3>
+        <PayUCheckout
+          checkout={payment.payuCheckout}
+          testMode={!!payment.payuTestMode}
+          onCancel={() => {
+            try { localStorage.removeItem('aasthi_payu_pending') } catch { /* ignore */ }
+            setPayment(null)
+            setStep('form')
+          }}
+        />
       </div>
     )
   }
