@@ -6,7 +6,9 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 
 function SimpleStatus({ status, validationStatus }) {
-  const displayStatus = validationStatus || status
+  // Lifecycle status (DRAFT/TOKENIZED/FROZEN) decides the badge — validation
+  // only fills the gap. Before: validationStatus shadowed status, so a minted
+  // (buyable) property could show "Verified"/"Under Review"/"Coming Soon".
   const statusConfig = {
     'TOKENIZED': { label: 'Available', color: '#059669', bg: '#F0FDF4', border: '#BBF7D0' },
     'VALIDATED': { label: 'Verified', color: '#1E3A5F', bg: '#EFF6FF', border: '#BFDBFE' },
@@ -15,7 +17,7 @@ function SimpleStatus({ status, validationStatus }) {
     'FROZEN': { label: 'Paused', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' }
   }
   
-  const config = statusConfig[displayStatus] || statusConfig['DRAFT']
+  const config = statusConfig[status] || statusConfig[validationStatus] || statusConfig['DRAFT']
   
   return (
     <span style={{

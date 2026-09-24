@@ -50,7 +50,15 @@ export function useProperties(filterStatus = '') {
       
       // Merge with local cache for persistence fix
       const cached = loadLocalCache()
-      const merged = mergeProperties(backendProps, cached)
+      let merged = mergeProperties(backendProps, cached)
+
+      // Re-apply the status filter AFTER merging: cached properties are
+      // status-agnostic, so without this, DRAFT listings leak into
+      // "Available Now" and TOKENIZED ones into "Coming Soon" (same list bug).
+      if (filterStatus) {
+        const want = String(filterStatus).toUpperCase()
+        merged = merged.filter(p => String(p.status || '').toUpperCase() === want)
+      }
       
       setProperties(merged)
     } catch (e) {
