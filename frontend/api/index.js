@@ -517,8 +517,12 @@ function payuRequestHash(key, txnid, amount, productinfo, firstname, email, udf,
 }
 function payuResponseHash(salt, status, email, firstname, productinfo, amount, txnid, key, udf) {
   // sha512(salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
+  // PayU formula: sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
+  // The 6 pipes after `status` = 5 EMPTY slots (udf10..udf6). Verified against docs.payu.in —
+  // a previous 4-slot version rejected every real PayU callback (synthetic tests passed
+  // because signer and verifier shared the same wrong formula).
   return crypto.createHash('sha512').update(
-    [salt, status, '', '', '', '', udf[4], udf[3], udf[2], udf[1], udf[0], email, firstname, productinfo, amount, txnid, key].join('|')
+    [salt, status, '', '', '', '', '', udf[4], udf[3], udf[2], udf[1], udf[0], email, firstname, productinfo, amount, txnid, key].join('|')
   ).digest('hex');
 }
 function verifyPayUResponse(params, key, salt) {
@@ -568,6 +572,57 @@ async function parsePayUParams(req) {
   const out = {};
   for (const [k, v] of new URLSearchParams(raw || '')) out[k] = v;
   return out;
+}
+// PayU verify_payment S2S reconciliation — heals payments whose browser
+// callback was missed or rejected (e.g. hash-formula bug, closed tab).
+// Request hash: sha512(key|verify_payment|var1|salt), var1 = txnid.
+async function payuVerifyPayment(payu, txnid) {
+  const hash = crypto.createHash('sha512').update([payu.key, 'verify_payment', txnid, payu.salt].join('|')).digest('hex');
+  const body = new URLSearchParams({ key: payu.key, command: 'verify_payment', var1: txnid, hash }).toString();
+  const resp = await fetch(payu.base + '/merchant/postservice.php?form=2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+  if (!resp.ok) throw new Error('PayU verify_payment HTTP ' + resp.status);
+  return resp.json();
+}
+async function reconcilePayuPayment(payu, pay) {
+  const txnid = pay.paymentId;
+  const data = await payuVerifyPayment(payu, txnid);
+  const txn = data && data.transaction_details && (data.transaction_details[txnid] || Object.values(data.transaction_details || {})[0]);
+  if (!txn) {
+    return { reconciled: false, state: pay.status, message: (data && data.msg) || 'PayU has no record for this transaction yet' };
+  }
+  if (pay.status !== 'PENDING') {
+    return { reconciled: false, state: pay.status, message: 'Payment already ' + pay.status + ' — nothing to reconcile' };
+  }
+  const st = String(txn.status || '').toLowerCase();
+  const amtPayu = parseFloat(txn.amount);
+  if (!isNaN(amtPayu) && Math.abs(amtPayu - pay.amountINR) > 0.01) {
+    pay.status = 'FAILED_AMOUNT_MISMATCH';
+    pay.failureReason = `Reconcile amount mismatch: expected ₹${pay.amountINR} got ₹${amtPayu}`;
+    pay.webhookReceivedAt = new Date();
+    return { reconciled: true, state: pay.status };
+  }
+  if (st === 'success') {
+    pay.status = 'CONFIRMED';
+    pay.payuId = String(txn.mihpayid || '');
+    if (txn.bank_ref_num) { pay.utr = String(txn.bank_ref_num); pay.utr12 = String(txn.bank_ref_num); pay.rrn = String(txn.bank_ref_num); pay.utrPlaceholder = null; pay.rrnPlaceholder = null; }
+    pay.confirmedAt = new Date();
+    pay.failureReason = null;
+    pay.provider = 'payu';
+    pay.webhookReceivedAt = new Date();
+    return { reconciled: true, state: pay.status, payuId: pay.payuId, utr: pay.utr };
+  }
+  if (st === 'failure') {
+    pay.status = 'DECLINED';
+    pay.failureReason = 'PayU reconcile: ' + (txn.error_message || txn.field9 || 'declined');
+    pay.provider = 'payu';
+    pay.webhookReceivedAt = new Date();
+    return { reconciled: true, state: pay.status };
+  }
+  return { reconciled: false, state: pay.status, message: 'PayU status: ' + (st || 'unknown') };
 }
 function payuPublicBase(req) {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
@@ -1049,6 +1104,23 @@ export default async function handler(req, res) {
       } catch (e) {
         console.error('payu callback error', e);
         return res.status(500).send('<html><body><h3>Callback processing error</h3></body></html>');
+      }
+    }
+
+    // PayU S2S reconciliation — heal PENDING PayU payments (missed/rejected callback)
+    if (path === '/api/npci/payu/reconcile' && method === 'POST') {
+      try {
+        const payu = payuConfig();
+        if (!payu.active) return res.status(400).json({ error: 'PayU bridge not active' });
+        const paymentId = (req.body && req.body.paymentId) || '';
+        const pay = paymentId ? npciPayments[paymentId] : null;
+        if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId });
+        if (pay.provider !== 'payu') return res.status(400).json({ error: 'Payment is not on the PayU rail', provider: pay.provider });
+        const result = await reconcilePayuPayment(payu, pay);
+        if (result.reconciled) addWebhookAudit({ webhookId: `payu-reconcile-${Date.now()}`, paymentId: pay.paymentId, status: pay.status, utr: pay.utr, provider: 'payu-reconcile', timestamp: new Date(), result: 'OK' });
+        return res.json({ paymentId: pay.paymentId, ...result, payment: pay });
+      } catch (e) {
+        return res.status(502).json({ error: 'PayU verify_payment failed', message: e.message });
       }
     }
 
