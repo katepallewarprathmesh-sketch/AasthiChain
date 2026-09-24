@@ -16,3 +16,4 @@ uploads/
 # PayU / provider credentials — never commit
 .env.payu
 .env*
+!.env.payu.example
