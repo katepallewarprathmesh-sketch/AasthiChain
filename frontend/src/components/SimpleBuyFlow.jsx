@@ -16,7 +16,7 @@ const STATUS_STEPS = [
   { key: 'settled', label: 'Complete', desc: 'Money & tokens settled' }
 ]
 
-const DEMO_VPAS = ['demo.investor@aasthichain', 'demo.investor@fakebank']
+const DEMO_VPAS = ['demo.investor@aasthichain', 'demo.investor@fakebank', 'test@payu', 'fail@payu']
 
 function StepTrack({ current, doneCount }) {
   return (
