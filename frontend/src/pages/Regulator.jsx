@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { money } from '../lib/format.js'
 import api from '../lib/api.js'
 
 // SOLID: Single Responsibility — Only regulator audit for layman
@@ -61,7 +62,7 @@ export default function Regulator({ user }) {
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{p.title}</div>
                 <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                  {p.location?.city || '—'} • ₹{(p.valuationINR || 0).toLocaleString('en-IN')} • {p.totalTokens || 0} tokens • {p.status}
+                  {p.location?.city || '—'} • {money(p.valuationINR)} • {p.totalTokens || 0} tokens • {p.status}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>

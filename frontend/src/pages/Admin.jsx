@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { money } from '../lib/format.js'
 import api from '../lib/api.js'
 import { useProperties } from '../hooks/useProperties.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
@@ -263,7 +264,7 @@ export default function Admin({ user }) {
                 required
               />
               <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
-                ₹{(parseInt(form.valuationINR) || 0).toLocaleString('en-IN')} • 1 token = ₹{tokenPrice.toLocaleString('en-IN')}
+                {money(parseInt(form.valuationINR) || 0)} • 1 token = ₹{tokenPrice.toLocaleString('en-IN')}
               </div>
             </div>
 

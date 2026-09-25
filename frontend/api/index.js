@@ -544,6 +544,36 @@ async function settleConfirmedPayment(pay) {
 // ===== Property deletion / delisting =====
 // Originator: own listing — anytime while DRAFT (nothing tokenized), or once fully
 // subscribed (all tokens sold: owner holds 0). Regulator: any listing (compliance).
+// ---- Subscription lifecycle (computed, never stored — can't drift from ledger)
+// primary (buying) -> fully-subscribed (primary closed, phase 'secondary') ->
+// wallet-to-wallet P2P transfers. Drives buy guards + UI progress/badges.
+function subscriptionOf(prop) {
+  const id = prop.assetId;
+  const total = parseInt(prop.totalTokens) || 0;
+  const holderList = Object.values(balances).filter(b => b.assetId === id && parseInt(b.balance) > 0);
+  const ownerBal = holderList.find(b => b.ownerId === prop.originatorId);
+  const availableTokens = ownerBal ? parseInt(ownerBal.balance) : 0;
+  const investors = holderList.filter(b => b.ownerId !== prop.originatorId);
+  const soldTokens = Math.max(0, Math.min(total, total - availableTokens));
+  const fullySubscribed = prop.status === 'TOKENIZED' && total > 0 && availableTokens === 0 && investors.length > 0;
+  let completedAt = null;
+  if (fullySubscribed) {
+    let latest = 0;
+    for (const t of Object.values(transfers)) {
+      if (t.assetId === id) { const ts = new Date(t.txTimestamp || t.createdAt || 0).getTime(); if (ts > latest) latest = ts; }
+    }
+    if (latest > 0) completedAt = new Date(latest).toISOString();
+  }
+  return {
+    totalTokens: total, soldTokens, availableTokens,
+    percentFunded: total ? Math.round((soldTokens / total) * 100) : 0,
+    investorCount: investors.length,
+    fullySubscribed,
+    phase: prop.status !== 'TOKENIZED' ? (prop.status === 'DRAFT' ? 'draft' : String(prop.status).toLowerCase()) : (fullySubscribed ? 'secondary' : 'primary'),
+    completedAt
+  };
+}
+
 function deletePropertyAuthorized(user, prop, assetId) {
   const role = user.role || user.identityId;
   if (role === 'Regulator') return { allowed: true, reason: 'regulator' };
@@ -1034,6 +1064,17 @@ export default async function handler(req, res) {
         if (!isValidVPA(payeeVpa)) return res.status(400).json({ error: 'FAILED_INVALID_VPA', message: `Invalid payeeVpa ${payeeVpa}` });
         if (payerVpa.toLowerCase() === payeeVpa.toLowerCase()) return res.status(400).json({ error: 'FAILED_SELF_TRANSFER', message: 'payer and payee VPA cannot be same' });
         if (!tokenAmount || parseInt(tokenAmount) <= 0) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'tokenAmount must be > 0' });
+  // Supply guard: never accept money for tokens that no longer exist
+  const propSupply = properties[assetId];
+  if (propSupply) {
+    const sub = subscriptionOf(propSupply);
+    if (sub.fullySubscribed) {
+      return res.status(400).json({ error: 'ERR_FULLY_SUBSCRIBED', message: `All ${sub.totalTokens} tokens are owned — primary sale closed. Wallet-to-wallet secondary transfers remain available.`, subscription: sub });
+    }
+    if (parseInt(tokenAmount) > sub.availableTokens) {
+      return res.status(400).json({ error: 'ERR_INSUFFICIENT_SUPPLY', message: `Only ${sub.availableTokens} of ${sub.totalTokens} tokens remain`, subscription: sub });
+    }
+  }
 
         const payeeKycId = payeeId || 'originator1';
         const payeeKyc = kycRecords[payeeKycId] || kycRecords[payeeKycId.toLowerCase()];
@@ -2116,7 +2157,7 @@ export default async function handler(req, res) {
         const status = url.searchParams.get('status');
         let list = Object.values(properties);
         if (status) list = list.filter(p => p.status === status);
-        return res.json({ properties: list, count: list.length });
+        return res.json({ properties: list.map(p => ({ ...p, subscription: subscriptionOf(p) })), count: list.length });
       } catch (e) {
         return res.status(500).json({ error: e.message, properties: [] });
       }
@@ -2208,7 +2249,7 @@ export default async function handler(req, res) {
           .filter(b => b.assetId === (prop.assetId || id) && parseInt(b.balance) > 0)
           .map(b => ({ ownerId: b.ownerId, balance: parseInt(b.balance) }))
           .sort((a, b) => b.balance - a.balance);
-        return res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders });
+        return res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders, subscription: subscriptionOf(prop) });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
@@ -2323,7 +2364,8 @@ export default async function handler(req, res) {
     if (path === '/api/transfers' && method === 'POST') {
       try {
         const { assetId, fromId: reqFrom, toId, amount, clientState } = req.body || {};
-        const fromId = reqFrom || user.identityId;
+        // Identity hardening: you can only spend YOUR tokens (Registrar/Regulator may act on behalf for audit moves)
+        const fromId = (reqFrom && (reqFrom === user.identityId || ['Registrar', 'Regulator'].includes(user.role))) ? reqFrom : user.identityId;
         const amt = parseInt(amount);
         if (amt <= 0) return res.status(400).json({ error: 'ERR_INVALID_AMOUNT' });
         if (fromId === toId) return res.status(400).json({ error: 'ERR_INVALID_TRANSFER' });

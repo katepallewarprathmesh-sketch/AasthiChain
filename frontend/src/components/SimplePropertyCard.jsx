@@ -4,6 +4,7 @@
 
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { money } from '../lib/format.js'
 
 function SimpleStatus({ status, validationStatus }) {
   // Lifecycle status (DRAFT/TOKENIZED/FROZEN) decides the badge — validation
@@ -36,7 +37,6 @@ function SimpleStatus({ status, validationStatus }) {
 
 export default function SimplePropertyCard({ property }) {
   const tokenPrice = property.totalTokens ? Math.floor(property.valuationINR / property.totalTokens) : (property.tokenPrice || 500)
-  const valuationLakh = ((property.valuationINR || 0) / 100000).toFixed(1)
   const city = property.location?.city || 'Pune'
   const state = property.location?.state || 'Maharashtra'
 
@@ -69,7 +69,7 @@ export default function SimplePropertyCard({ property }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Property Value</div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: '#111827' }}>₹{valuationLakh}L</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: '#111827' }}>{money(property.valuationINR)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Per Token</div>
@@ -79,6 +79,19 @@ export default function SimplePropertyCard({ property }) {
         <div style={{ fontSize: 11, color: '#6B7280', marginTop: 8 }}>
           Own from ₹500 — {property.totalTokens?.toLocaleString('en-IN') || '—'} tokens total
         </div>
+        {property.subscription && property.subscription.totalTokens > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#6B7280', marginBottom: 4 }}>
+              <span>{property.subscription.percentFunded}% funded</span>
+              {property.subscription.fullySubscribed
+                ? <span style={{ color: '#16A34A', fontWeight: 700 }}>Fully Subscribed</span>
+                : <span>{Number(property.subscription.availableTokens || 0).toLocaleString('en-IN')} available</span>}
+            </div>
+            <div style={{ height: 5, background: '#E5E7EB', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${property.subscription.percentFunded}%`, height: '100%', background: property.subscription.fullySubscribed ? '#16A34A' : '#1E3A5F', borderRadius: 3 }} />
+            </div>
+          </div>
+        )}
       </div>
 
       <Link 

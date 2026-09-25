@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { money } from '../lib/format.js'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
@@ -33,7 +34,7 @@ function SimpleHoldingCard({ holding }) {
         )}
       </div>
       <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>₹{value.toLocaleString('en-IN')}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>{money(value)}</div>
         <div style={{ fontSize: 11, color: '#6B7280' }}>Value</div>
         <Link to={`/property/${balance.assetId}`} style={{
           fontSize: 11,
@@ -197,7 +198,7 @@ export default function Wallet({ user }) {
       }}>
         <div>
           <div style={{ fontSize: 12, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Total Portfolio Value</div>
-          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6, color: '#111827' }}>₹{totalValue.toLocaleString('en-IN')}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6, color: '#111827' }}>{money(totalValue)}</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>{holdings.length} properties owned</div>
         </div>
         <button onClick={fetchWallet} style={{
