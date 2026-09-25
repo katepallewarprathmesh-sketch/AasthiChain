@@ -44,7 +44,7 @@ function StepTrack({ current, doneCount }) {
 }
 
 export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, propertyTitle, valuationINR, totalTokens, availableTokens, onSuccess }) {
-  const [amount, setAmount] = useState(100)
+  const [amount, setAmount] = useState(10)
   const [vpa, setVpa] = useState(user?.identityId ? `${user.identityId}@aasthichain` : 'demo.investor@aasthichain')
   const [step, setStep] = useState('form') // form, paying, payu, pending, confirming, transferring, success, error
   const [error, setError] = useState('')
@@ -240,7 +240,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             assetId,
             payerId: user?.identityId || 'investor1',
             tokenAmount: moveAmount,
-            amountINR: total,
+            amountINR: confirmed.amountINR ?? total,
             status: released.status || 'RELEASED',
             upiTxnId: released.upiTxnId || collectData.upiTxnId || '',
             createdAt: collectData.createdAt || new Date().toISOString(),
@@ -277,7 +277,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         <div style={{ fontSize: 32 }}>✓</div>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#065F46', margin: '8px 0 0' }}>Payment Successful!</h3>
         <p style={{ fontSize: 13, color: '#374151', marginTop: 8, lineHeight: 1.5 }}>
-          You bought <strong>{clampedAmount} tokens</strong> of this property for <strong>₹{total.toLocaleString('en-IN')}</strong>.<br />
+          You bought <strong>{Number(payment.tokenAmount || clampedAmount).toLocaleString('en-IN')} tokens</strong> of this property for <strong>₹{Number(payment.amountINR || total).toLocaleString('en-IN')}</strong>.<br />
           Money and tokens moved together — nothing partial.
         </p>
         {payment.utr && (
