@@ -18,6 +18,24 @@ export default function PropertyDetail({ user }) {
   const [xferErr, setXferErr] = useState(null)
   const [showBuy, setShowBuy] = useState(false)
 
+  // Returning from PayU hosted checkout: auto-open the buy panel so the
+  // resume logic completes DvP and shows the receipt (UTR) — no extra clicks.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('payu') !== 'return') return
+    const pid = params.get('paymentId')
+    try {
+      if (pid && !localStorage.getItem('aasthi_payu_pending')) {
+        localStorage.setItem('aasthi_payu_pending', JSON.stringify({ paymentId: pid, assetId: id, ts: Date.now() }))
+      }
+    } catch { /* private mode */ }
+    setShowBuy(true)
+    params.delete('payu'); params.delete('paymentId')
+    const qs = params.toString()
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
   useEffect(() => {
     if (!property) return
     const fetchBalances = async () => {

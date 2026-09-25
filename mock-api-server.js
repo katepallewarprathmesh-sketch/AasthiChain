@@ -940,14 +940,28 @@ function buildPayUCheckout(payu, pay, req, cbBase) {
   params.hash = payuRequestHash(payu.key, pay.paymentId, amount, productinfo, firstname, email, udf, payu.salt);
   return { action: payu.base + '/_payment', params };
 }
-function payuCallbackHtml(paymentId, status, base, assetId) {
+function payuCallbackHtml(pay, base) {
+  const paymentId = pay.paymentId, status = pay.status, assetId = pay.assetId;
   const ok = status === 'CONFIRMED';
+  const declined = status === 'DECLINED';
   // Return to the property page (SimpleBuyFlow auto-resumes DvP there); wallet as fallback
   const target = assetId ? `${base}/property/${encodeURIComponent(assetId)}?payu=return&paymentId=${encodeURIComponent(paymentId)}` : `${base}/wallet`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=${target}"><title>AasthiChain — Payment ${status}</title></head>` +
-    `<body style="font-family:Inter,sans-serif;text-align:center;padding:48px;background:#F7F5F0;color:#1E3A5F">` +
-    `<h2 style="margin:0 0 8px">${ok ? '✓ Payment confirmed' : status === 'DECLINED' ? '✗ Payment not completed' : '… Payment pending'}</h2>` +
-    `<p style="color:#5A6B7D">Returning you to AasthiChain…</p><p style="font-size:12px;color:#8B95A1">Ref: ${paymentId}</p></body></html>`;
+  const row = (k, v, mono) => `<div style="display:flex;justify-content:space-between;gap:24px;padding:7px 0;border-bottom:1px solid #EEF1F5"><span style="color:#8B95A1;font-size:12px">${k}</span><span style="font-weight:700;font-size:12.5px;${mono ? 'font-family:monospace' : ''}">${v}</span></div>`;
+  const rows =
+    (pay.amountINR ? row('Amount', '₹' + Number(pay.amountINR).toLocaleString('en-IN')) : '') +
+    (pay.tokenAmount ? row('Tokens', Number(pay.tokenAmount).toLocaleString('en-IN')) : '') +
+    ((pay.utr || pay.utr12) ? row('Bank reference (UTR)', pay.utr12 || pay.utr, true) : '') +
+    row('Payment ID', paymentId, true);
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="3;url=${target}"><title>AasthiChain — Payment ${status}</title></head>` +
+    `<body style="font-family:Inter,sans-serif;text-align:center;padding:48px 16px;background:#F7F5F0;color:#1E3A5F">` +
+    `<div style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:28px 24px">` +
+    `<div style="font-size:36px">${ok ? '✓' : declined ? '✗' : '…'}</div>` +
+    `<h2 style="margin:8px 0 2px">${ok ? 'Payment confirmed' : declined ? 'Payment not completed' : 'Payment pending'}</h2>` +
+    `<p style="color:#5A6B7D;font-size:13px;margin:0 0 16px">${ok ? 'Your tokens are being transferred to your wallet.' : declined ? 'No money was taken. You can try again anytime.' : 'We are confirming with the bank — this page updates automatically.'}</p>` +
+    `<div style="text-align:left;background:#F9FAFB;border:1px solid #F1F4F8;border-radius:10px;padding:6px 14px;margin-bottom:16px">${rows}</div>` +
+    `<p style="font-size:12px;color:#8B95A1;margin:0 0 14px">Returning you to AasthiChain…</p>` +
+    `<a href="${target}" style="display:inline-block;background:#1E3A5F;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:11px 22px;border-radius:9px">Return now</a>` +
+    `</div></body></html>`;
 }
 function parsePayUParams(req) {
   if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) return req.body;
@@ -1137,13 +1151,13 @@ app.all('/api/npci/payu/callback', (req, res) => {
   const pay = npciPayments[g('txnid')];
   if (!pay) return res.status(404).send('<html><body><h3>Payment not found</h3></body></html>');
   const webhookId = `payu~${g('txnid')}~${g('status')}~${g('mihpayid')}`;
-  if (npciIdem[webhookId]) return res.status(200).send(payuCallbackHtml(pay.paymentId, pay.status, payuPublicBase(req), pay.assetId));
+  if (npciIdem[webhookId]) return res.status(200).send(payuCallbackHtml(pay, payuPublicBase(req)));
   const amtPayu = parseFloat(g('amount'));
   if (!isNaN(amtPayu) && Math.abs(amtPayu - pay.amountINR) > 0.01) {
     pay.status = 'FAILED_AMOUNT_MISMATCH';
     pay.failureReason = `Amount mismatch: expected ₹${pay.amountINR} got ₹${amtPayu} — manual review required`;
     pay.callbackData = params; pay.provider = 'payu'; pay.webhookReceivedAt = new Date();
-    return res.status(200).send(payuCallbackHtml(pay.paymentId, pay.status, payuPublicBase(req), pay.assetId));
+    return res.status(200).send(payuCallbackHtml(pay, payuPublicBase(req)));
   }
   const statusLower = g('status').toLowerCase();
   if (statusLower === 'success' && pay.status === 'PENDING') {
@@ -1163,7 +1177,7 @@ app.all('/api/npci/payu/callback', (req, res) => {
   npciIdem[webhookId] = pay;
   npciPayments[pay.paymentId] = pay;
   addWebhookAudit({ webhookId, paymentId: pay.paymentId, status: pay.status, rrn: pay.rrn, utr: pay.utr, provider: 'payu', amount: pay.amountINR, timestamp: new Date(), result: 'OK', raw: params });
-  res.status(200).send(payuCallbackHtml(pay.paymentId, pay.status, payuPublicBase(req), pay.assetId));
+  res.status(200).send(payuCallbackHtml(pay, payuPublicBase(req)));
 });
 
 // PayU verify_payment S2S reconciliation — heals payments whose browser
