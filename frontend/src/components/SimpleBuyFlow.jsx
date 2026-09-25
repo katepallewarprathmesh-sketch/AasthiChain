@@ -487,7 +487,8 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           ))}
         </div>
         <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 6 }}>
-          Test handles only — pre-loaded with demo money. No real bank account is used.
+          Test handles only — pre-loaded with demo money. No real bank account is used.<br />
+          On the next PayU screen, choose <b>UPI ID / VPA</b> and enter the same handle.
         </div>
       </div>
 

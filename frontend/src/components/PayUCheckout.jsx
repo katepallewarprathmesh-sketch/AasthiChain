@@ -40,8 +40,16 @@ export default function PayUCheckout({ checkout, testMode = true, onCancel }) {
         </div>
         <p style={{ fontSize: 12, color: '#6B7280', marginTop: 6, lineHeight: 1.5 }}>
           {testMode ? (
-            <>On the PayU test page use a <strong>test VPA</strong>:<br />
-              <code style={{ background: 'white', padding: '2px 6px', borderRadius: 4, border: '1px solid #E5E7EB' }}>test@payu</code> succeeds · <code style={{ background: 'white', padding: '2px 6px', borderRadius: 4, border: '1px solid #E5E7EB' }}>fail@payu</code> declines</>
+            <>
+              On PayU&apos;s page: choose <strong>UPI ID / VPA</strong> and enter{' '}
+              <code style={{ background: 'white', padding: '2px 6px', borderRadius: 4, border: '1px solid #E5E7EB' }}>test@payu</code>
+              {' '}→ succeeds ·{' '}
+              <code style={{ background: 'white', padding: '2px 6px', borderRadius: 4, border: '1px solid #E5E7EB' }}>fail@payu</code>
+              {' '}→ declines
+              <div style={{ fontSize: 10.5, color: '#B45309', marginTop: 6 }}>
+                Other app icons on this test page are simulated — only the UPI ID option completes on the test rail.
+              </div>
+            </>
           ) : (
             'Approve the collect request in your UPI app.'
           )}
