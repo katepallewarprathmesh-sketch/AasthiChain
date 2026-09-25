@@ -8,11 +8,23 @@ export default function PropertyDetail({ user }) {
   const { id } = useParams()
   const { property, loading, error, refresh } = useProperty(id)
   const [balances, setBalances] = useState([])
+  const [refreshKey, setRefreshKey] = useState(0)
   const [showBuy, setShowBuy] = useState(false)
 
   useEffect(() => {
     if (!property) return
     const fetchBalances = async () => {
+      // Preferred: server-computed holder list (includes the real listing owner,
+      // whatever role they have — registrar-owned listings show correctly)
+      try {
+        const detail = await api.getProperty(property.assetId)
+        const hs = detail?.holders
+        if (Array.isArray(hs) && hs.length > 0) {
+          setBalances(hs)
+          return
+        }
+      } catch {}
+      // Fallback for older servers: known demo identities
       const owners = ['originator1', 'investor1', 'investor2']
       const results = []
       for (const owner of owners) {
@@ -24,7 +36,7 @@ export default function PropertyDetail({ user }) {
       setBalances(results)
     }
     fetchBalances()
-  }, [property?.assetId])
+  }, [property?.assetId, refreshKey])
 
   if (loading && !property) {
     return (
@@ -222,7 +234,9 @@ export default function PropertyDetail({ user }) {
             totalTokens={property.totalTokens}
             availableTokens={availableTokens}
             onSuccess={() => {
-              setTimeout(() => window.location.reload(), 1500)
+              // Soft refresh: holders + availability update without a full reload
+              setRefreshKey(k => k + 1)
+              refresh()
             }}
           />
         </div>

@@ -385,7 +385,12 @@ app.get('/api/properties/:id', authMiddleware, (req, res) => {
   const ownerBal = balances[req.params.id + '~' + prop.originatorId];
   const availableTokens = ownerBal ? Math.max(0, ownerBal.balance) : 0;
   const soldTokens = Math.max(0, (prop.totalTokens || 0) - availableTokens);
-  res.json({ property: prop, tokenPrice, availableTokens, soldTokens, documentHashVerified: true, fabricMode: 'mock' });
+  // Real holder distribution — anyone holding >0 of this asset (owner role irrelevant)
+  const holders = Object.values(balances)
+    .filter(b => b.assetId === req.params.id && parseInt(b.balance) > 0)
+    .map(b => ({ ownerId: b.ownerId, balance: parseInt(b.balance) }))
+    .sort((a, b) => b.balance - a.balance);
+  res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders, documentHashVerified: true, fabricMode: 'mock' });
 });
 
 app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
@@ -833,12 +838,18 @@ async function settleConfirmedPayment(pay) {
 function deletePropertyAuthorized(user, prop, assetId) {
   const role = user.role || user.identityId;
   if (role === 'Regulator') return { allowed: true, reason: 'regulator' };
-  if (role === 'Originator' && prop.originatorId === user.identityId) {
+  // Listing OWNER (identity-gated, any role) — covers registrar-owned listings
+  // created before the owner-only gate existed.
+  if (prop.originatorId === user.identityId) {
     if (prop.status === 'DRAFT') return { allowed: true, reason: 'draft' };
-    const ownerBal = balances[assetId + '~' + user.identityId] || Object.values(balances).find(b => b.assetId === assetId && b.ownerId === user.identityId);
+    // Who besides the owner holds tokens?
+    const others = Object.values(balances).filter(b =>
+      b.assetId === (prop.assetId || assetId) && b.ownerId !== user.identityId && parseInt(b.balance) > 0);
+    if (others.length === 0) return { allowed: true, reason: 'no-investors' };
+    const ownerBal = balances[(prop.assetId || assetId) + '~' + user.identityId] || Object.values(balances).find(b => b.assetId === (prop.assetId || assetId) && b.ownerId === user.identityId);
     const have = ownerBal ? parseInt(ownerBal.balance) : 0;
     if (have === 0) return { allowed: true, reason: 'fully-subscribed' };
-    return { allowed: false, message: `Fully-subscribed listings can be deleted only when all your tokens are sold (you still hold ${have}). Unsold listings can be deleted while in DRAFT — or ask the Regulator.` };
+    return { allowed: false, message: `Investors already hold tokens on this listing (${others.length} holder${others.length > 1 ? 's' : ''}) — only a Regulator can remove it. Investors keep their tokens. NOTE: your ownership here came from the role at listing time; ask the Regulator to remove mistaken listings.` };
   }
   return { allowed: false, message: `Only the listing owner (${prop.originatorId}) or a Regulator can delete this listing.` };
 }
