@@ -82,8 +82,6 @@ No partial failures: if payment fails, no tokens move. If tokens fail, payment r
 - **Payments:** UPI Collect primary (INR) — mock rail by default, PayU test-mode PSP option, Sepolia escrow secondary experimental
 - **Identity data:** Neon Postgres schema — user/account/session/organization/member/invitation/verification/jwt/project_config
 
-**Build:** 115 modules, 363KB (gzip 101KB)
-
 ### For Judges & Developers — Technical Details
 
 <details>
@@ -184,5 +182,3 @@ Secondary market order-matching, custodian org (demat), DILRMP integration, Digi
 Real platforms use SPV per property — tokens = beneficial interest in SPV that holds legal title. Not built for hackathon — documented as Phase-2 legal structure.
 
 ---
-
-**One auth for all + instant demo — Sign in top-right (Clerk) or use demo preset (originator1/registrar1/investor1/regulator1) for instant access, no verification needed — works LIVE https://aasthi-chain.vercel.app + local — Explore Properties → Buy Tokens via UPI → Own instantly**
