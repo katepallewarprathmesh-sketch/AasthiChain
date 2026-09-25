@@ -23,6 +23,14 @@ function useLandingTheme() {
     document.body.style.background = mode === 'dark' ? '#0A0D13' : '#F7F5F0'
     return () => { document.body.style.background = '' }
   }, [mode])
+  // Listen for theme changes from OTHER toggles (e.g. the navbar) so the whole
+  // page reacts instantly — no refresh needed. Same-value setMode bails, so the
+  // echo of our own dispatch causes no re-render loop.
+  useEffect(() => {
+    const onTheme = (e) => { if (e?.detail) setMode(e.detail) }
+    window.addEventListener('aasthi-theme', onTheme)
+    return () => window.removeEventListener('aasthi-theme', onTheme)
+  }, [])
   return [mode, () => setMode(m => (m === 'dark' ? 'light' : 'dark'))]
 }
 
