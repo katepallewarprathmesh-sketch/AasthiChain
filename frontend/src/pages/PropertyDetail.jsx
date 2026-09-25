@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useProperty } from '../hooks/useProperties.js'
 import SimpleBuyFlow from '../components/SimpleBuyFlow.jsx'
 import api from '../lib/api.js'
-import { money } from '../lib/format.js'
+import { money, moneyExact } from '../lib/format.js'
 
 export default function PropertyDetail({ user }) {
   const { id } = useParams()
@@ -136,8 +136,8 @@ export default function PropertyDetail({ user }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 24 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Property Value</h3>
-          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 12, color: '#111827' }}>₹{valuationLakh}L</div>
-          <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>{money(property.valuationINR)} total value</div>
+          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 12, color: '#111827' }}>{money(property.valuationINR)}</div>
+          <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>{moneyExact(property.valuationINR)} total value</div>
 
           <div style={{ height: 1, background: '#F3F4F6', margin: '20px 0' }}></div>
 
