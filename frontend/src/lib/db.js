@@ -1,4 +1,4 @@
-// Database abstraction layer — supports file-backed (hackathon) and Postgres (production)
+// Database abstraction layer supports file-backed (hackathon) and Postgres (production)
 // Phase 4: Persistent production database
 // Usage: const db = getDB(); await db.properties.get(id)
 
@@ -63,7 +63,7 @@ class FileStore {
   }
 }
 
-// Postgres store (production) — lazy loaded only if DATABASE_URL set
+// Postgres store (production) lazy loaded only if DATABASE_URL set
 class PostgresStore {
   constructor(tableName) {
     this.tableName = tableName
@@ -154,11 +154,11 @@ export function getDB() {
     isPersistent: () => isPostgres,
     isFileBacked: () => !isPostgres,
 
-    // Migration helper — init tables
+    // Migration helper init tables
     async init() {
       if (!isPostgres) {
-        console.log('[DB] Using file-backed store (hackathon mode) — /tmp/aasthi_*.json + globalThis')
-        return { mode: 'file-backed', message: 'File-backed persistence — survives warm instances, use Postgres for production' }
+        console.log('[DB] Using file-backed store (hackathon mode) /tmp/aasthi_*.json + globalThis')
+        return { mode: 'file-backed', message: 'File-backed persistence survives warm instances, use Postgres for production' }
       }
       try {
         const pool = await this.properties.getPool()
@@ -178,8 +178,8 @@ export function getDB() {
           CREATE INDEX IF NOT EXISTS idx_npcipayments_status ON npci_payments ((data->>'status'));
           CREATE INDEX IF NOT EXISTS idx_npcipayments_utr ON npci_payments ((data->>'utr'));
         `)
-        console.log('[DB] Postgres initialized — tables created')
-        return { mode: 'postgres', message: 'Postgres persistent — production ready' }
+        console.log('[DB] Postgres initialized tables created')
+        return { mode: 'postgres', message: 'Postgres persistent production ready' }
       } catch (e) {
         console.error('[DB] Postgres init failed', e.message)
         return { mode: 'file-backed-fallback', error: e.message }
@@ -190,7 +190,7 @@ export function getDB() {
   return stores
 }
 
-// For API routes — get store with globalThis fallback (existing behavior, no break)
+// For API routes get store with globalThis fallback (existing behavior, no break)
 export function getStoreWithFallback(name, globalKey, defaultValue) {
   const db = getDB()
   const store = db[name]

@@ -19,7 +19,7 @@ export default function PropertyDetail({ user }) {
   const [showBuy, setShowBuy] = useState(false)
 
   // Returning from PayU hosted checkout: auto-open the buy panel so the
-  // resume logic completes DvP and shows the receipt (UTR) — no extra clicks.
+  // resume logic completes DvP and shows the receipt (UTR) no extra clicks.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('payu') !== 'return') return
@@ -40,7 +40,7 @@ export default function PropertyDetail({ user }) {
     if (!property) return
     const fetchBalances = async () => {
       // Preferred: server-computed holder list (includes the real listing owner,
-      // whatever role they have — registrar-owned listings show correctly)
+      // whatever role they have registrar-owned listings show correctly)
       try {
         const detail = await api.getProperty(property.assetId)
         setSub(detail?.subscription || null)
@@ -116,7 +116,7 @@ export default function PropertyDetail({ user }) {
     setXferMsg(null); setXferErr(null)
     try {
       const r = await api.transferTokens(property.assetId, user.identityId, xferTo, parseInt(xferAmt))
-      setXferMsg(`Transferred ${r.amount} tokens to ${r.toId} — ledger TXN ${r.transferId}`)
+      setXferMsg(`Transferred ${r.amount} tokens to ${r.toId} ledger TXN ${r.transferId}`)
       setXferAmt('')
       setRefreshKey(k => k + 1)
       refresh()
@@ -172,7 +172,7 @@ export default function PropertyDetail({ user }) {
 
           <div style={{ marginTop: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-              <span style={{ color: '#6B7280' }}>{soldPct}% funded{sub?.fullySubscribed ? ' — primary sale closed' : ''}</span>
+              <span style={{ color: '#6B7280' }}>{soldPct}% funded{sub?.fullySubscribed ? ' primary sale closed' : ''}</span>
               <span style={{ color: '#6B7280' }}>{Number(soldShown || 0).toLocaleString('en-IN')} / {(property.totalTokens || 0).toLocaleString('en-IN')} tokens</span>
             </div>
             <div style={{ height: 8, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden' }}>
@@ -180,7 +180,7 @@ export default function PropertyDetail({ user }) {
             </div>
             {sub?.fullySubscribed && (
               <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 6 }}>
-                ✓ 100% Subscribed{sub.investorCount ? ` — ${sub.investorCount} investor${sub.investorCount === 1 ? '' : 's'} own this property` : ''}{sub.completedAt ? ` · completed ${new Date(sub.completedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                ✓ 100% Subscribed{sub.investorCount ? ` ${sub.investorCount} investor${sub.investorCount === 1 ? '' : 's'} own this property` : ''}{sub.completedAt ? ` · completed ${new Date(sub.completedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
               </div>
             )}
           </div>
@@ -188,9 +188,9 @@ export default function PropertyDetail({ user }) {
           {sub?.fullySubscribed ? (
             <div style={{ marginTop: 20 }}>
               <div style={{ padding: '12px 14px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#166534' }}>🏠 Fully Subscribed — primary sale closed</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#166534' }}>🏠 Fully Subscribed primary sale closed</div>
                 <div style={{ fontSize: 12, color: '#3F6212', marginTop: 4, lineHeight: 1.6 }}>
-                  Every token is owned. No new supply — this raise is permanently closed to new buys. Ownership lives on the Aasthi Drunix ledger.
+                  Every token is owned. No new supply this raise is permanently closed to new buys. Ownership lives on the Aasthi Drunix ledger.
                 </div>
               </div>
               <div style={{ marginTop: 10, padding: '12px 14px', border: '1px solid #E5E7EB', borderRadius: 10, background: '#F9FAFB' }}>
@@ -252,7 +252,7 @@ export default function PropertyDetail({ user }) {
                 </button>
               ) : (
                 <div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: '#6B7280', marginBottom: 8 }}>SECONDARY TRANSFER — SETTLES ATOMICALLY ON THE LEDGER</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: '#6B7280', marginBottom: 8 }}>SECONDARY TRANSFER SETTLES ATOMICALLY ON THE LEDGER</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <select value={xferTo} onChange={e => setXferTo(e.target.value)} style={{ flex: 1, fontSize: 12.5, padding: '9px 10px', border: '1px solid #E5E7EB', borderRadius: 8 }}>
                       {identityOptions.map(([id, label]) => <option key={id} value={id}>{label} ({id})</option>)}

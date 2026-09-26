@@ -4,7 +4,7 @@ import api from '../lib/api.js'
 import { useProperties } from '../hooks/useProperties.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
 
-// SOLID: Single Responsibility — Admin flow for layman: Register → Review → Mint
+// SOLID: Single Responsibility Admin flow for layman: Register → Review → Mint
 // Simple language, no jargon, clear steps
 
 function SimpleStep({ number, title, active, done }) {
@@ -71,7 +71,7 @@ export default function Admin({ user }) {
 
   const handleRegister = async (e) => {
     if (!isOwner) {
-      setResult('Only a Property Owner can list a property. You are logged in as ' + (user?.role || 'unknown') + ' — switch to "Property Owner" on the login page, otherwise the property would wrongly belong to you.')
+      setResult('Only a Property Owner can list a property. You are logged in as ' + (user?.role || 'unknown') + ' switch to "Property Owner" on the login page, otherwise the property would wrongly belong to you.')
       return
     }
     e.preventDefault()
@@ -87,7 +87,7 @@ export default function Admin({ user }) {
       })
       
       setLastId(data.assetId)
-      setResult(`✓ Property created: ${data.assetId} — Saved to real database (Postgres/GitHub), won't vanish on refresh, visible to investors`)
+      setResult(`✓ Property created: ${data.assetId} Saved to real database (Postgres/GitHub), won't vanish on refresh, visible to investors`)
       
       saveProperty({
         assetId: data.assetId,
@@ -114,7 +114,7 @@ export default function Admin({ user }) {
     try {
       const data = await api.validateProperty(lastId, decision)
       setValidationStatus(data.validationStatus || decision)
-      setResult(`✓ ${decision}: Property ${data.assetId} is now ${decision} — ${decision === 'VALIDATED' ? 'Ready to create tokens!' : 'Rejected'}`)
+      setResult(`✓ ${decision}: Property ${data.assetId} is now ${decision} ${decision === 'VALIDATED' ? 'Ready to create tokens!' : 'Rejected'}`)
       
       saveProperty({
         assetId: data.assetId,
@@ -134,14 +134,14 @@ export default function Admin({ user }) {
       return
     }
     if (validationStatus !== 'VALIDATED') {
-      setResult(`Cannot create tokens — property status is ${validationStatus}, need VALIDATED. Please get it reviewed first.`)
+      setResult(`Cannot create tokens property status is ${validationStatus}, need VALIDATED. Please get it reviewed first.`)
       return
     }
     
     setResult('Creating tokens... Please wait')
     try {
       const data = await api.mintProperty(lastId, 10000)
-      setResult(`✓ Created ${data.totalTokens} tokens for ${data.assetId} — Now available in Marketplace for investors to buy`)
+      setResult(`✓ Created ${data.totalTokens} tokens for ${data.assetId} Now available in Marketplace for investors to buy`)
       
       saveProperty({
         assetId: data.assetId,
@@ -163,7 +163,7 @@ export default function Admin({ user }) {
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Manage Properties</h1>
       {!isOwner && (
         <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginTop: 12, fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
-          You are logged in as <strong>{user?.role || 'unknown'}</strong>. Listing a property makes you its owner — only Property Owners should list. Switch to <strong>Property Owner</strong> on the login page first.
+          You are logged in as <strong>{user?.role || 'unknown'}</strong>. Listing a property makes you its owner only Property Owners should list. Switch to <strong>Property Owner</strong> on the login page first.
         </div>
       )}
       <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '70ch' }}>
@@ -178,13 +178,13 @@ export default function Admin({ user }) {
         <SimpleStep number={3} title="Create Tokens" active={validationStatus === 'VALIDATED'} done={false} />
       </div>
       <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 1.5 }}>
-        When tokens are created, all of them start with you (the owner). Investors buy from you — your ownership goes down as they buy.
+        When tokens are created, all of them start with you (the owner). Investors buy from you your ownership goes down as they buy.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>1. List Your Property</h3>
-          <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Enter basic details — takes 1 minute</p>
+          <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Enter basic details takes 1 minute</p>
 
           <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
             <div>
@@ -308,7 +308,7 @@ export default function Admin({ user }) {
                 <option value="">Choose property</option>
                 {properties.map(p => (
                   <option key={p.assetId} value={p.assetId}>
-                    {p.title?.slice(0, 30)} — {p.registrarValidationStatus || p.status}
+                    {p.title?.slice(0, 30)} {p.registrarValidationStatus || p.status}
                   </option>
                 ))}
               </select>
@@ -388,7 +388,7 @@ export default function Admin({ user }) {
 
             {validationStatus !== 'VALIDATED' && lastId && (
               <div style={{ fontSize: 11, color: '#D97706', marginTop: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '8px 10px' }}>
-                {validationStatus === 'PENDING' ? 'Waiting for verification — click Approve above' : `Status is ${validationStatus} — need Verified to create tokens`}
+                {validationStatus === 'PENDING' ? 'Waiting for verification click Approve above' : `Status is ${validationStatus} need Verified to create tokens`}
               </div>
             )}
           </div>
@@ -429,8 +429,8 @@ export default function Admin({ user }) {
 
       {showAdvanced && (
         <div style={{ marginTop: 16, background: '#F9FAFB', border: '1px dashed #E5E7EB', borderRadius: 12, padding: 16 }}>
-          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced — For Developers</h4>
-          <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Technical details hidden from layman — only for developers</p>
+          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced For Developers</h4>
+          <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Technical details hidden from layman only for developers</p>
           <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
             Last ID: {lastId || 'none'}<br/>
             Status: {validationStatus || 'none'}<br/>
@@ -451,7 +451,7 @@ export default function Admin({ user }) {
         </div>
       )}
 
-      {/* Your Listings — delete rules: DRAFT anytime; TOKENIZED once fully sold. Regulator can remove any. */}
+      {/* Your Listings delete rules: DRAFT anytime; TOKENIZED once fully sold. Regulator can remove any. */}
       {user?.role === 'Originator' && properties.filter(pp => pp.originatorId === user.identityId).length > 0 && (
         <div style={{ marginTop: 24, background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Your Listings</h3>
@@ -464,12 +464,12 @@ export default function Admin({ user }) {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{pp.title}</div>
                   <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                    {pp.location?.city || '—'} • {pp.status} • {pp.totalTokens?.toLocaleString?.('en-IN') || pp.totalTokens} tokens
+                    {pp.location?.city || ''} • {pp.status} • {pp.totalTokens?.toLocaleString?.('en-IN') || pp.totalTokens} tokens
                   </div>
                 </div>
                 <button
                   onClick={async () => {
-                    if (!confirm(`Delete listing "${pp.title}"? Investors keep their tokens — only the marketplace listing is removed.`)) return
+                    if (!confirm(`Delete listing "${pp.title}"? Investors keep their tokens only the marketplace listing is removed.`)) return
                     try {
                       await api.deleteProperty(pp.assetId)
                       alert('Listing deleted. Marketplace no longer shows it.')

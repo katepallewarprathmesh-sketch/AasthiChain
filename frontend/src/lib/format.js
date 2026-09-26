@@ -1,6 +1,6 @@
 // Indian currency formatting.
-// moneyExact: full precision with Indian digit grouping — ₹1,20,00,000
-// money:      Lakh/Crore compaction per Indian market convention —
+// moneyExact: full precision with Indian digit grouping ₹1,20,00,000
+// money:      Lakh/Crore compaction per Indian market convention
 //             ≥ 1 Cr → ₹1.2 Cr · ≥ 1 L → ₹7.2 L · else exact grouping
 export function moneyExact(n) {
   return '₹' + Math.round(Number(n) || 0).toLocaleString('en-IN')

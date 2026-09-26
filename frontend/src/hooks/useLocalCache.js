@@ -1,5 +1,5 @@
-// SOLID: Single Responsibility — Only handles local cache
-// Interface Segregation — Small focused interface
+// SOLID: Single Responsibility Only handles local cache
+// Interface Segregation Small focused interface
 // Holds: created properties cache + user holdings overlay (receipts) so a
 // cold serverless instance can re-materialize balances via receipts
 
@@ -47,7 +47,7 @@ export function useLocalCache() {
     } catch {}
   }
 
-  // ===== Holdings overlay — per-user token balances with buy receipts =====
+  // ===== Holdings overlay per-user token balances with buy receipts =====
   const loadHoldingsMap = () => {
     try {
       const m = JSON.parse(localStorage.getItem(HOLDINGS_KEY) || '{}')
@@ -107,7 +107,7 @@ export function useLocalCache() {
     return saveHoldingsMap(map)
   }
 
-  // Server is authoritative when it has >= local — sync down after Refresh
+  // Server is authoritative when it has >= local sync down after Refresh
   const syncHoldingFromServer = (identityId, assetId, serverBalance) => {
     const map = loadHoldingsMap()
     const h = map[identityId]?.[assetId]

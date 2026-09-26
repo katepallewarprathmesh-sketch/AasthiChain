@@ -1,6 +1,6 @@
-// SOLID: Single Responsibility — only the UPI buy journey for layman
-// Open/Closed — status config object; new statuses need no component change
-// Dependency Inversion — depends on api abstraction, not fetch
+// SOLID: Single Responsibility only the UPI buy journey for layman
+// Open/Closed status config object; new statuses need no component change
+// Dependency Inversion depends on api abstraction, not fetch
 // UPI Collect journey (NPCI rail, simulation): collect → approve in UPI app → CONFIRMED (UTR)
 //   → token transfer on Drunix ledger → escrow RELEASED. Payment and tokens move together (DvP).
 
@@ -67,7 +67,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
       setSecondsLeft(Math.max(0, Math.ceil(msLeft / 1000)))
       if (msLeft <= 0) {
         clearInterval(t)
-        setError('This payment request expired after 5 minutes. Please start again — no money was taken.')
+        setError('This payment request expired after 5 minutes. Please start again no money was taken.')
         setStep('error')
       }
     }, 1000)
@@ -108,8 +108,8 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         }
         if (pay.status === 'CONFIRMED' && (!pending.assetId || pending.assetId === assetId)) {
           localStorage.removeItem('aasthi_payu_pending')
-          setResumeInfo('Completing your purchase — moving tokens to you…')
-          // Server settles with the payment's OWN data (paid amount, payer, seller) —
+          setResumeInfo('Completing your purchase moving tokens to you…')
+          // Server settles with the payment's OWN data (paid amount, payer, seller)
           // nothing depends on this component's state. Idempotent.
           try {
             const s = await api.settlePayment(pay.paymentId, pay)
@@ -121,8 +121,8 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
               setStep('success')
               return
             }
-            // settle refused (not confirmed / seller broke) — fall through to client DvP
-          } catch { /* older server without settle — fall back below */ }
+            // settle refused (not confirmed / seller broke) fall through to client DvP
+          } catch { /* older server without settle fall back below */ }
           setResumeInfo('')
           setPayment(pay)
           await transferAndRelease(pay, pay.tokenAmount)
@@ -132,12 +132,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           localStorage.removeItem('aasthi_payu_pending')
           setResumeInfo('')
           setPayment(pay)
-          setError(pay.failureReason || `Payment ${pay.status} — no tokens moved, nothing was kept`)
+          setError(pay.failureReason || `Payment ${pay.status} no tokens moved, nothing was kept`)
           setStep('error')
           return
         }
         if (attempts < 60) setTimeout(poll, 3000) // keep waiting for the PayU callback (~3 min)
-        else { setResumeInfo(''); localStorage.removeItem('aasthi_payu_pending'); setError('Could not confirm this payment with PayU within 3 minutes. If your PayU dashboard shows success, re-open this page — the purchase completes automatically. No money moves without tokens.'); setStep('error') }
+        else { setResumeInfo(''); localStorage.removeItem('aasthi_payu_pending'); setError('Could not confirm this payment with PayU within 3 minutes. If your PayU dashboard shows success, re-open this page the purchase completes automatically. No money moves without tokens.'); setStep('error') }
       } catch { if (attempts < 10) setTimeout(poll, 3000) }
     }
     poll()
@@ -171,7 +171,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
       setSecondsLeft(300)
       setStep('pending')
     } catch (e) {
-      setError(e.data?.failureReason || e.message || 'Could not start payment — please try again')
+      setError(e.data?.failureReason || e.message || 'Could not start payment please try again')
       setStep('error')
     }
   }
@@ -184,7 +184,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         confirmed = await api.approvePayment(payment.paymentId, user?.identityId || 'investor1', payment)
       } catch (e) {
         if (e.status === 404 && payment) {
-          // Server lost it (fresh cloud instance) — re-upload our copy and retry once
+          // Server lost it (fresh cloud instance) re-upload our copy and retry once
           await api.reattachPayment(payment.paymentId, payment)
           confirmed = await api.approvePayment(payment.paymentId, user?.identityId || 'investor1', payment)
         } else throw e
@@ -200,19 +200,19 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
     setStep('transferring')
     const moveAmount = parseInt(amountOverride || clampedAmount) // paid amount wins on resume
     try {
-      // Leg 1 — Drunix ledger: tokens move from seller to you
+      // Leg 1 Drunix ledger: tokens move from seller to you
       let tr
       try {
         tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', moveAmount)
       } catch (e) {
         if (e.status === 404 || e.status === 400) {
-          // Balances not on this instance — reattach payment first so state is consistent, then retry
+          // Balances not on this instance reattach payment first so state is consistent, then retry
           await api.reattachPayment(confirmed.paymentId, confirmed)
           tr = await api.transferTokens(assetId, recipient || 'originator1', user?.identityId || 'investor1', moveAmount)
         } else throw e
       }
       setTransfer(tr)
-      // Leg 2 — release escrow to seller (settlement completes)
+      // Leg 2 release escrow to seller (settlement completes)
       let released
       try {
         released = await api.releasePayment(confirmed.paymentId, tr.transferId, confirmed)
@@ -224,7 +224,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
       }
       setPayment(released)
       setStep('success')
-      // Record holdings locally with the payment receipt — lets a cold server
+      // Record holdings locally with the payment receipt lets a cold server
       // instance re-materialize this balance later (self-heal, no lost tokens)
       try {
         recordBuy(user?.identityId || 'investor1', {
@@ -250,7 +250,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
       } catch {}
       if (onSuccess) onSuccess(released, tr)
     } catch (e) {
-      failWithRefund(e, 'Tokens could not be transferred — your money will be refunded')
+      failWithRefund(e, 'Tokens could not be transferred your money will be refunded')
     }
   }
 
@@ -278,7 +278,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#065F46', margin: '8px 0 0' }}>Payment Successful!</h3>
         <p style={{ fontSize: 13, color: '#374151', marginTop: 8, lineHeight: 1.5 }}>
           You bought <strong>{Number(payment.tokenAmount || clampedAmount).toLocaleString('en-IN')} tokens</strong> of this property for <strong>₹{Number(payment.amountINR || total).toLocaleString('en-IN')}</strong>.<br />
-          Money and tokens moved together — nothing partial.
+          Money and tokens moved together nothing partial.
         </p>
         {payment.utr && (
           <div style={{ background: 'white', border: '1px solid #D1FAE5', borderRadius: 8, padding: '8px 12px', margin: '12px auto', maxWidth: 320, fontSize: 12 }}>
@@ -288,7 +288,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         )}
         {payment.risk && (
           <div style={{ fontSize: 12, color: payment.risk.decision === 'APPROVE' ? '#065F46' : '#92400E', marginTop: 10 }}>
-            🛡 Security check {payment.risk.decision === 'APPROVE' ? 'passed' : 'flagged'} — risk {payment.risk.band} ({payment.risk.score}/100)
+            🛡 Security check {payment.risk.decision === 'APPROVE' ? 'passed' : 'flagged'} risk {payment.risk.band} ({payment.risk.score}/100)
           </div>
         )}
         <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>Settled on NPCI Drunix · atomic DvP</div>
@@ -300,12 +300,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         {advanced && (
           <div style={{ textAlign: 'left', background: 'white', border: '1px solid #E2E8F0', borderRadius: 8, padding: 10, margin: '8px auto 0', maxWidth: 320, fontSize: 10, color: '#475569', fontFamily: 'monospace', lineHeight: 1.7 }}>
             <div>paymentId: {payment.paymentId}</div>
-            <div>upiTxnId: {payment.upiTxnId || '—'}</div>
-            <div>RRN: {payment.rrn || '—'}</div>
-            <div>UTR12: {payment.utr12 || payment.utr || '—'}</div>
-            <div>Drunix transfer: {payment.drunixTransferId || (transfer && transfer.transferId) || '—'}</div>
+            <div>upiTxnId: {payment.upiTxnId || ''}</div>
+            <div>RRN: {payment.rrn || ''}</div>
+            <div>UTR12: {payment.utr12 || payment.utr || ''}</div>
+            <div>Drunix transfer: {payment.drunixTransferId || (transfer && transfer.transferId) || ''}</div>
             <div>status: {payment.status}</div>
-            {payment.risk && <div>risk: {payment.risk.score}/100 {payment.risk.band} — {(payment.risk.factors || []).map(f => f.code).join(', ')}</div>}
+            {payment.risk && <div>risk: {payment.risk.score}/100 {payment.risk.band} {(payment.risk.factors || []).map(f => f.code).join(', ')}</div>}
             {payment.risk && <div>fraud model: {payment.risk.model}</div>}
             {payment.utr && <a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{ color: '#1E3A5F' }}>Verify UTR →</a>}
           </div>
@@ -393,7 +393,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         </h3>
         <StepTrack current={step} doneCount={step === 'paying' ? 0 : step === 'confirming' ? 1 : 2} />
         <div style={{ marginTop: 12, fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
-          🔒 Money and tokens move together — never one without the other
+          🔒 Money and tokens move together never one without the other
         </div>
       </div>
     )
@@ -409,13 +409,13 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           {resumeInfo}
         </div>
       )}
-      <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Own a part of this property — pay by UPI</p>
+      <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Own a part of this property pay by UPI</p>
 
       <div style={{ marginTop: 16 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>How many tokens?</label>
         {cap !== null && (
           <div style={{ fontSize: 11, color: cap < 10 ? '#92400E' : '#6B7280', marginTop: 4 }}>
-            {cap.toLocaleString('en-IN')} tokens available now from the owner{cap < 10 ? ' — almost sold out' : ''}
+            {cap.toLocaleString('en-IN')} tokens available now from the owner{cap < 10 ? ' almost sold out' : ''}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
@@ -487,7 +487,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           ))}
         </div>
         <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 6 }}>
-          Test handles only — pre-loaded with demo money. No real bank account is used.<br />
+          Test handles only pre-loaded with demo money. No real bank account is used.<br />
           On the next PayU screen, choose <b>UPI ID / VPA</b> and enter the same handle.
         </div>
       </div>

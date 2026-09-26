@@ -13,16 +13,16 @@ const isClerkConfigured = clerkPubKey &&
   !clerkPubKey.includes('your-key-here') &&
   clerkPubKey.length > 20
 
-// Only log in dev mode — reduces production bundle noise and avoids exposing key prefix in prod console per security best practice
+// Only log in dev mode reduces production bundle noise and avoids exposing key prefix in prod console per security best practice
 const isDev = import.meta.env.DEV
 if (isDev) {
   if (isClerkConfigured) {
-    console.log('[Clerk] Enabled — key:', clerkPubKey.slice(0, 20) + '... — domain:', window.location.hostname)
+    console.log('[Clerk] Enabled key:', clerkPubKey.slice(0, 20) + '... domain:', window.location.hostname)
     if (window.location.hostname.includes('vercel.app')) {
-      console.log('[Clerk] Production Vercel domain detected:', window.location.hostname, '— ensure this domain is in Clerk Dashboard → Domains → Allowed Origins')
+      console.log('[Clerk] Production Vercel domain detected:', window.location.hostname, 'ensure this domain is in Clerk Dashboard → Domains → Allowed Origins')
     }
   } else {
-    console.log('[Clerk] Not configured — using mock auth fallback. Set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk.')
+    console.log('[Clerk] Not configured using mock auth fallback. Set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk.')
   }
 }
 
@@ -71,7 +71,7 @@ function ClerkLoadingSkeleton() {
         <div style={{width:40, height:40, border:'3px solid var(--ink-8)', borderTopColor:'var(--registry-navy)', borderRadius:'50%', animation:'spin 0.8s linear infinite'}}></div>
         <div style={{textAlign:'center'}}>
           <div style={{fontSize:14, fontWeight:600, color:'var(--ink)'}}>Loading secure authentication...</div>
-          <div style={{fontSize:12, color:'var(--ink-60)', marginTop:4}}>Clerk is initializing — this takes 1-2 seconds on first paint</div>
+          <div style={{fontSize:12, color:'var(--ink-60)', marginTop:4}}>Clerk is initializing this takes 1-2 seconds on first paint</div>
         </div>
       </div>
       <style>{`

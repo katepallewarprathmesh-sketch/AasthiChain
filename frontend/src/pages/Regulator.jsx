@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { money } from '../lib/format.js'
 import api from '../lib/api.js'
 
-// SOLID: Single Responsibility — Only regulator audit for layman
+// SOLID: Single Responsibility Only regulator audit for layman
 
 export default function Regulator({ user }) {
   const [transfers, setTransfers] = useState([])
@@ -62,7 +62,7 @@ export default function Regulator({ user }) {
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{p.title}</div>
                 <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                  {p.location?.city || '—'} • {money(p.valuationINR)} • {p.totalTokens || 0} tokens • {p.status}
+                  {p.location?.city || ''} • {money(p.valuationINR)} • {p.totalTokens || 0} tokens • {p.status}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -164,7 +164,7 @@ export default function Regulator({ user }) {
 
       {showAdvanced && (
         <div style={{ marginTop: 16, background: '#F9FAFB', border: '1px dashed #E5E7EB', borderRadius: 12, padding: 16 }}>
-          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced — For Developers</h4>
+          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced For Developers</h4>
           <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Technical audit details</p>
           <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
             Total properties: {properties.length}<br/>

@@ -18,10 +18,10 @@ export default function FailureModeDemo({ user }) {
       setResult(data)
     } catch (e) {
       const mocks = {
-        insufficient_balance: { scenario, expected: 'Insufficient Balance', result: 'Transfer blocked — not enough tokens', passed: true, explanation: 'You tried to send more tokens than you own — no partial transfer, safely rejected.' },
-        self_transfer: { scenario, expected: 'Self Transfer', result: 'Transfer blocked — cannot send to yourself', passed: true, explanation: 'Sending tokens to yourself is blocked.' },
-        kyc_unverified: { scenario, expected: 'KYC Check', result: 'Transfer blocked — receiver not verified', passed: true, explanation: 'Receiver must be KYC verified — safety check.' },
-        zero_amount: { scenario, expected: 'Invalid Amount', result: 'Transfer blocked — amount must be positive', passed: true, explanation: 'Zero or negative amount rejected.' },
+        insufficient_balance: { scenario, expected: 'Insufficient Balance', result: 'Transfer blocked not enough tokens', passed: true, explanation: 'You tried to send more tokens than you own no partial transfer, safely rejected.' },
+        self_transfer: { scenario, expected: 'Self Transfer', result: 'Transfer blocked cannot send to yourself', passed: true, explanation: 'Sending tokens to yourself is blocked.' },
+        kyc_unverified: { scenario, expected: 'KYC Check', result: 'Transfer blocked receiver not verified', passed: true, explanation: 'Receiver must be KYC verified safety check.' },
+        zero_amount: { scenario, expected: 'Invalid Amount', result: 'Transfer blocked amount must be positive', passed: true, explanation: 'Zero or negative amount rejected.' },
       }
       setResult(mocks[scenario] || { scenario, result: 'Unknown scenario', passed: false })
     } finally {
@@ -40,8 +40,8 @@ export default function FailureModeDemo({ user }) {
     <div className="card" style={{marginTop:24, borderColor:'#E5E7EB', background:'white'}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:16, flexWrap:'wrap'}}>
         <div>
-          <h3 style={{fontSize:13, fontWeight:600}}>Safety Checks — Token Transfers</h3>
-          <p style={{fontSize:11, color:'#6B7280', marginTop:4, maxWidth:'60ch'}}>We verify every transfer — no partial moves, no silent failures. Your assets stay safe.</p>
+          <h3 style={{fontSize:13, fontWeight:600}}>Safety Checks Token Transfers</h3>
+          <p style={{fontSize:11, color:'#6B7280', marginTop:4, maxWidth:'60ch'}}>We verify every transfer no partial moves, no silent failures. Your assets stay safe.</p>
         </div>
         <span style={{fontSize:9, background:'#F9FAFB', border:'1px solid #E5E7EB', padding:'3px 8px', borderRadius:12, color:'#6B7280'}}>Developer test</span>
       </div>
@@ -63,7 +63,7 @@ export default function FailureModeDemo({ user }) {
         <div style={{marginTop:14, padding:12, borderRadius:8, background:'#F9FAFB', border:'1px solid #E5E7EB'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
             <span style={{fontSize:11, fontWeight:600, color: result.passed ? '#059669' : '#DC2626'}}>
-              {result.passed ? '✓ Correctly blocked' : '✗ Failed'} — {result.scenario}
+              {result.passed ? '✓ Correctly blocked' : '✗ Failed'} {result.scenario}
             </span>
             <span style={{fontSize:9, background:'white', border:'1px solid #E5E7EB', padding:'2px 6px', borderRadius:4}}>{result.expected}</span>
           </div>

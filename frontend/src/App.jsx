@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import LedgerExplorer from './pages/LedgerExplorer.jsx'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 
-// Error Boundary to catch blank screen errors — shows error instead of blank per §1.4 voice
+// Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
@@ -20,9 +20,9 @@ class ErrorBoundary extends React.Component {
       return (
         <div style={{padding:24, maxWidth:600, margin:'40px auto'}}>
           <div className="card" style={{borderColor:'#FECACA', background:'#FEF2F2'}}>
-            <h3 style={{color:'#991B1B'}}>Something went wrong — but your payment is safe</h3>
+            <h3 style={{color:'#991B1B'}}>Something went wrong but your payment is safe</h3>
             <p style={{fontSize:13, color:'#6B7280', marginTop:8, lineHeight:1.5}}>
-              The screen error was caught to prevent blank screen. Your payment and tokens move together atomically — if one fails, both refunded — no risk. Please refresh or try again.
+              The screen error was caught to prevent blank screen. Your payment and tokens move together atomically if one fails, both refunded no risk. Please refresh or try again.
             </p>
             <pre style={{marginTop:12, background:'white', padding:10, borderRadius:6, fontSize:11, overflow:'auto', maxHeight:200, border:'1px solid #FECACA'}}>
               {String(this.state.error?.message || this.state.error || 'Unknown error')}
@@ -33,7 +33,7 @@ class ErrorBoundary extends React.Component {
               <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>this.setState({hasError:false, error:null, info:null})}>Try Again</button>
               <a href="/marketplace" className="btn btn-secondary" style={{fontSize:12, textDecoration:'none'}}>Back to Marketplace</a>
             </div>
-            <div style={{fontSize:10, color:'#9CA3AF', marginTop:8}}>Error caught by boundary — prevents blank screen — check console for details</div>
+            <div style={{fontSize:10, color:'#9CA3AF', marginTop:8}}>Error caught by boundary prevents blank screen check console for details</div>
           </div>
         </div>
       )
@@ -111,7 +111,7 @@ function Footer() {
               <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: head }}>AasthiChain</span>
             </div>
             <p style={{ fontSize: 12.5, color: mut, lineHeight: 1.7, marginTop: 12, maxWidth: '38ch' }}>
-              Fractional ownership of verified Indian real estate — from ₹500. Secure UPI payments, atomic settlement on NPCI Drunix.
+              Fractional ownership of verified Indian real estate from ₹500. Secure UPI payments, atomic settlement on NPCI Drunix.
             </p>
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
               {['Built on NPCI Drunix', 'UPI · IMPS rails', 'Testnet simulation'].map(t => (
@@ -136,7 +136,7 @@ function Footer() {
             © 2024 AasthiChain • Own property from ₹500 • Settled on NPCI Drunix • Made for everyone
           </div>
           <div style={{ fontSize: 10.5, color: faint, maxWidth: '52ch' }}>
-            UPI rail is a clearly-labeled testnet simulation (no live NPCI credentials). Aligned with the Asset Tokenisation (Regulation) Bill 2026 — pending legislation.
+            UPI rail is a clearly-labeled testnet simulation (no live NPCI credentials). Aligned with the Asset Tokenisation (Regulation) Bill 2026 pending legislation.
           </div>
         </div>
       </div>

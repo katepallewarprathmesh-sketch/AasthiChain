@@ -43,7 +43,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
       if (diff <= 0) {
         setExpiryTimer('EXPIRED')
         setStatus('failed')
-        setError('Payment request expired — please try again')
+        setError('Payment request expired please try again')
       } else {
         const m = Math.floor(diff/60000)
         const s = Math.floor((diff%60000)/1000)
@@ -106,7 +106,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
 
   const approvePayment = async () => {
     if (!payment || !payment.paymentId) {
-      setError('Payment not initialized — please initiate again')
+      setError('Payment not initialized please initiate again')
       setStatus('failed')
       return
     }
@@ -122,12 +122,12 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
       try {
         data = await res.json()
       } catch {
-        throw new Error(`Approve failed — invalid response ${res.status}`)
+        throw new Error(`Approve failed invalid response ${res.status}`)
       }
       if (!res.ok) {
         setPayment(data.payment || data || payment)
         setStatus('failed')
-        setError(data.failureReason || data.error || data.message || 'Payment failed — please try again')
+        setError(data.failureReason || data.error || data.message || 'Payment failed please try again')
         return
       }
       setPayment(data)
@@ -137,7 +137,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
         try {
           setStatus('releasing')
           // FIX: Transfer should be from property owner (originator) to buyer (investor)
-          // For new properties, originator balance may be on different lambda instance — backend now auto-creates fallback to prevent ERR_BALANCE_NOT_FOUND
+          // For new properties, originator balance may be on different lambda instance backend now auto-creates fallback to prevent ERR_BALANCE_NOT_FOUND
           // Try primary fromId = recipient (property originator), fallback to originator1 if fails
           const primaryFromId = recipient || 'originator1'
           const toId = user?.identityId || 'investor1'
@@ -155,7 +155,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           try {
             drunixData = await drunixRes.json()
           } catch {
-            throw new Error(`Transfer failed — invalid response ${drunixRes.status}`)
+            throw new Error(`Transfer failed invalid response ${drunixRes.status}`)
           }
           // If primary fails with ERR_BALANCE_NOT_FOUND, retry with originator1 and also try fetching property to get real originator
           // Guard log with dev check to avoid production noise
@@ -191,9 +191,9 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             await fetch(`/api/npci/payments/${payment.paymentId}/refund`, {
               method: 'POST',
               headers: getHeaders(),
-              body: JSON.stringify({ reason: `Transfer failed: ${drunixData.error} — ${drunixData.message || ''}` })
+              body: JSON.stringify({ reason: `Transfer failed: ${drunixData.error} ${drunixData.message || ''}` })
             })
-            setError(`Transfer failed: ${drunixData.error} ${drunixData.message ? '— '+drunixData.message : ''} — payment refunded. Tips: 1) Property ${(assetId || '').slice(0,16)}... may be on different server instance (Vercel cold start) — backend now auto-creates balance for demo 2) Try again — second attempt should work after auto-fix 3) Check Marketplace balances for ${primaryFromId}. For new properties, originator should have ${tokenAmount} tokens after mint.`)
+            setError(`Transfer failed: ${drunixData.error} ${drunixData.message ? ''+drunixData.message : ''} payment refunded. Tips: 1) Property ${(assetId || '').slice(0,16)}... may be on different server instance (Vercel cold start) backend now auto-creates balance for demo 2) Try again second attempt should work after auto-fix 3) Check Marketplace balances for ${primaryFromId}. For new properties, originator should have ${tokenAmount} tokens after mint.`)
             setStatus('failed')
             return
           }
@@ -266,7 +266,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             {!showDev && <span style={{background:'#F0FDF4', color:'#065F46', fontSize:9, padding:'2px 6px', borderRadius:4, border:'1px solid #BBF7D0'}}>Instant</span>}
           </h3>
           <p style={{fontSize:11, color:'#475569', maxWidth:'65ch', marginTop:6, lineHeight:1.5}}>
-            Pay <strong>₹{amountDisplay}</strong> via UPI — secure, instant, and protected. Your tokens are transferred only after payment succeeds.
+            Pay <strong>₹{amountDisplay}</strong> via UPI secure, instant, and protected. Your tokens are transferred only after payment succeeds.
           </p>
         </div>
         <div style={{display:'flex', gap:6, alignItems:'center'}}>
@@ -287,23 +287,23 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             <div>
               <label style={{fontSize:10, fontWeight:600, color:'#475569', textTransform:'uppercase'}}>Your UPI ID</label>
               <input className="input" value={payerVpa} onChange={e=>setPayerVpa(e.target.value)} placeholder="demo.investor@aasthichain" style={{marginTop:4, fontSize:12}} />
-              <div style={{fontSize:9, color:'#64748B', marginTop:2}}>Fictitious test handle — e.g., demo.investor@aasthichain (NOT real mobile)</div>
+              <div style={{fontSize:9, color:'#64748B', marginTop:2}}>Fictitious test handle e.g., demo.investor@aasthichain (NOT real mobile)</div>
             </div>
             <div>
               <label style={{fontSize:10, fontWeight:600, color:'#475569', textTransform:'uppercase', display:'flex', alignItems:'center', gap:6}}>
                 Pay to
-                <span style={{fontSize:8, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'2px 6px', borderRadius:10}}>Verified owner — Collect P2M locked</span>
+                <span style={{fontSize:8, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'2px 6px', borderRadius:10}}>Verified owner Collect P2M locked</span>
               </label>
               {!showDev ? (
                 <div style={{marginTop:4, background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:'10px 12px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                   <span style={{fontSize:12, fontWeight:600}}>{payeeVpa}</span>
-                  <span style={{fontSize:9, color:'#059669'}}>✓ Locked — seller-initiated Collect, buyer cannot redirect (P2M security)</span>
+                  <span style={{fontSize:9, color:'#059669'}}>✓ Locked seller-initiated Collect, buyer cannot redirect (P2M security)</span>
                 </div>
               ) : (
                 <input className="input" value={payeeVpa} onChange={e=>setPayeeVpa(e.target.value)} placeholder="owner@aasthichain" style={{marginTop:4, fontSize:12}} />
               )}
               <div style={{fontSize:9, color: showDev ? '#D97706' : '#059669', marginTop:2}}>
-                {showDev ? '⚠️ Dev mode: editable for testing — in production Collect P2M payee is fixed, buyer cannot redirect payment' : '🔒 Collect P2M: seller requests, buyer approves — payee fixed to verified property owner, cannot be changed — why Collect chosen over Intent'}
+                {showDev ? '⚠️ Dev mode: editable for testing in production Collect P2M payee is fixed, buyer cannot redirect payment' : '🔒 Collect P2M: seller requests, buyer approves payee fixed to verified property owner, cannot be changed why Collect chosen over Intent'}
               </div>
             </div>
 
@@ -366,18 +366,18 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
                 <div style={{display:'flex', justifyContent:'space-between'}}><span style={{color:'#64748B'}}>Amount</span><span style={{fontWeight:700}}>₹{(payment.amountINR || 0).toLocaleString('en-IN')}</span></div>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Tokens</span><span style={{fontWeight:600}}>{payment.tokenAmount || 0}</span></div>
                 <div style={{display:'flex', justifyContent:'space-between', marginTop:6}}><span style={{color:'#64748B'}}>Status</span><span className={`status-chip ${payment.status==='RELEASED' ? 'status-tokenized' : payment.status==='PENDING' ? 'status-pending' : payment.status==='CONFIRMED' ? 'status-validated' : 'status-frozen'}`} style={{fontSize:10}}>{payment.status}</span></div>
-                {/* UTR — always show after CONFIRMED for bank reconciliation */}
+                {/* UTR always show after CONFIRMED for bank reconciliation */}
                 {(payment.utr || payment.utr12 || payment.rrn) && (
                   <div style={{marginTop:8, background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:6, padding:8}}>
                     <div style={{fontSize:9, fontWeight:700, color:'#64748B', textTransform:'uppercase', marginBottom:4, display:'flex', justifyContent:'space-between'}}>
-                      <span>Bank Reconciliation — UTR</span>
+                      <span>Bank Reconciliation UTR</span>
                       <span style={{background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'1px 6px', borderRadius:10, fontSize:8}}>Real bank ref</span>
                     </div>
                     {payment.utr && <div style={{display:'flex', justifyContent:'space-between', marginTop:4}}><span style={{color:'#64748B', fontSize:10}}>UTR (12-digit)</span><span style={{fontFamily:'monospace', fontSize:10, fontWeight:700, color:'#1E3A5F'}}>{payment.utr}</span></div>}
                     {payment.utr12 && payment.utr12 !== payment.utr && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UTR12</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.utr12}</span></div>}
                     {payment.rrn && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>RRN</span><span style={{fontFamily:'monospace', fontSize:9}}>{payment.rrn}</span></div>}
                     {payment.upiTxnId && <div style={{display:'flex', justifyContent:'space-between', marginTop:2}}><span style={{color:'#64748B', fontSize:9}}>UPI Txn ID</span><span style={{fontFamily:'monospace', fontSize:9}}>{(payment.upiTxnId || '').slice(0,18)}...</span></div>}
-                    <div style={{fontSize:8, color:'#94A3B8', marginTop:6, lineHeight:1.4}}>UTR = Unique Transaction Reference from NPCI/bank — use for bank statement reconciliation. Verify at /api/npci/utr/{utr}. Webhook: {payment.webhookReceivedAt ? new Date(payment.webhookReceivedAt).toLocaleTimeString() : 'pending'} via {payment.provider || 'mock'}</div>
+                    <div style={{fontSize:8, color:'#94A3B8', marginTop:6, lineHeight:1.4}}>UTR = Unique Transaction Reference from NPCI/bank use for bank statement reconciliation. Verify at /api/npci/utr/{utr}. Webhook: {payment.webhookReceivedAt ? new Date(payment.webhookReceivedAt).toLocaleTimeString() : 'pending'} via {payment.provider || 'mock'}</div>
                   </div>
                 )}
                 {showDev && (
@@ -408,9 +408,9 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
 
               {payment.status==='RELEASED' && (
                 <div style={{background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:8, padding:10}}>
-                  <div style={{fontSize:11, fontWeight:700, color:'#059669'}}>✓ Payment Successful — UTR {payment.utr ? payment.utr.slice(-4) : ''}</div>
+                  <div style={{fontSize:11, fontWeight:700, color:'#059669'}}>✓ Payment Successful UTR {payment.utr ? payment.utr.slice(-4) : ''}</div>
                   <div style={{fontSize:10, color:'#475569', marginTop:4, lineHeight:1.5}}>
-                    ₹{(payment.amountINR || 0).toLocaleString('en-IN')} paid · {payment.tokenAmount || 0} tokens transferred to you · UTR {payment.utr || payment.utr12 || '—'} for bank statement · Secure & instant settlement · Webhook {payment.webhookReceivedAt ? '✓' : 'pending'} via {payment.provider || 'mock'} — atomic DvP, no partial
+                    ₹{(payment.amountINR || 0).toLocaleString('en-IN')} paid · {payment.tokenAmount || 0} tokens transferred to you · UTR {payment.utr || payment.utr12 || ''} for bank statement · Secure & instant settlement · Webhook {payment.webhookReceivedAt ? '✓' : 'pending'} via {payment.provider || 'mock'} atomic DvP, no partial
                   </div>
                   {payment.utr && <div style={{marginTop:6, display:'flex', gap:6}}><a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#065F46'}}>Verify UTR →</a><a href="/api/npci/reconcile" target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #E2E8F0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#475569'}}>Reconciliation Dashboard</a></div>}
                 </div>
@@ -419,12 +419,12 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           )}
 
           <div style={{marginTop:12, fontSize:10, color:'#6B7280', background:'white', border:'1px solid #E5E7EB', borderRadius:6, padding:8, lineHeight:1.5}}>
-            🔒 <strong>Secure & Protected:</strong> Payment and tokens move together — if one fails, both are refunded. No risk of partial settlement.
+            🔒 <strong>Secure & Protected:</strong> Payment and tokens move together if one fails, both are refunded. No risk of partial settlement.
           </div>
 
           {showDev && (
             <div style={{marginTop:10, fontSize:9, color:'#94A3B8', background:'white', border:'1px dashed #E2E8F0', borderRadius:6, padding:8, lineHeight:1.5}}>
-              <strong>Dev:</strong> VPA regex handle@psp · RRN 12-digit 418... · UTR IMPS+RRN · paise int64 · X-Idempotency-Key · PENDING to RELEASED · SIMULATION — No live NPCI
+              <strong>Dev:</strong> VPA regex handle@psp · RRN 12-digit 418... · UTR IMPS+RRN · paise int64 · X-Idempotency-Key · PENDING to RELEASED · SIMULATION No live NPCI
             </div>
           )}
         </div>

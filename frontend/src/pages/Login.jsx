@@ -44,10 +44,10 @@ function DemoPresets({ onLogin, title }) {
   return (
     <div style={{marginTop:24}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
-        <h3 style={{fontSize:13, fontWeight:700}}>{title || 'Quick Demo Access — Instant, no verification'}</h3>
+        <h3 style={{fontSize:13, fontWeight:700}}>{title || 'Quick Demo Access Instant, no verification'}</h3>
         <span style={{fontSize:9, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:20, fontWeight:600}}>LIVE + LOCAL</span>
       </div>
-      <p style={{fontSize:11, color:'#64748B', marginBottom:12}}>Works on LIVE https://aasthi-chain.vercel.app + local npm run dev — mock JWT, no Clerk network, &lt;1s, no email verification</p>
+      <p style={{fontSize:11, color:'#64748B', marginBottom:12}}>Works on LIVE https://aasthi-chain.vercel.app + local npm run dev mock JWT, no Clerk network, &lt;1s, no email verification</p>
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
         {ROLES.map(r => (
           <button key={r.id} onClick={()=>handleDemo(r)} disabled={!!loadingId} style={{textAlign:'left', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:12, cursor:'pointer'}}>
@@ -118,7 +118,7 @@ function ClerkLogin({ onLogin }) {
               <span style={{fontFamily:'Fraunces', fontWeight:700, fontSize:20, color:'#111827'}}>AasthiChain</span>
             </Link>
             <h1 style={{fontSize:24, fontWeight:700, color:'#111827'}}>Sign in to AasthiChain</h1>
-            <p style={{fontSize:13, color:'#6B7280', marginTop:6}}>Clerk auth available — or use instant demo presets below (no verification, works LIVE + local)</p>
+            <p style={{fontSize:13, color:'#6B7280', marginTop:6}}>Clerk auth available or use instant demo presets below (no verification, works LIVE + local)</p>
           </div>
 
           <div className="card" style={{padding:20}}>
@@ -143,19 +143,19 @@ function ClerkLogin({ onLogin }) {
               </Show>
               <Show when="signed-in">
                 <div style={{textAlign:'center', padding:24}}>
-                  <div style={{fontSize:14, fontWeight:600}}>Already signed in — redirecting to marketplace...</div>
+                  <div style={{fontSize:14, fontWeight:600}}>Already signed in redirecting to marketplace...</div>
                   <div style={{width:20, height:20, border:'2px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'16px auto 0'}}></div>
                 </div>
               </Show>
             </div>
 
             <div style={{borderTop:'1px solid #F1F5F9', paddingTop:16}}>
-              <DemoPresets onLogin={onLogin} title="Or — Quick Demo Access (bypass Clerk, instant)" />
+              <DemoPresets onLogin={onLogin} title="Or Quick Demo Access (bypass Clerk, instant)" />
             </div>
           </div>
 
           <div style={{textAlign:'center', marginTop:16}}>
-            <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home — https://aasthi-chain.vercel.app</Link>
+            <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home https://aasthi-chain.vercel.app</Link>
           </div>
         </div>
       </ClerkLoaded>
@@ -174,19 +174,19 @@ function SimpleLogin({ onLogin }) {
           <span style={{fontFamily:'Fraunces', fontWeight:700, fontSize:22}}>AasthiChain</span>
         </div>
         <h1 style={{fontSize:24, fontWeight:700}}>Sign in</h1>
-        <p style={{fontSize:13, color:'#6B7280', marginTop:8}}>One easy auth — demo presets work LIVE + local, no verification</p>
+        <p style={{fontSize:13, color:'#6B7280', marginTop:8}}>One easy auth demo presets work LIVE + local, no verification</p>
       </div>
       
       <div className="card" style={{padding:20}}>
-        <p style={{fontSize:11, color:'#6B7280', marginBottom:8}}>Clerk not configured in this env (.env missing VITE_CLERK_PUBLISHABLE_KEY) — using demo auth. On LIVE https://aasthi-chain.vercel.app Clerk IS configured, but demo presets still work instantly below.</p>
-        <DemoPresets onLogin={onLogin} title="Quick Demo Access — Click any role" />
+        <p style={{fontSize:11, color:'#6B7280', marginBottom:8}}>Clerk not configured in this env (.env missing VITE_CLERK_PUBLISHABLE_KEY) using demo auth. On LIVE https://aasthi-chain.vercel.app Clerk IS configured, but demo presets still work instantly below.</p>
+        <DemoPresets onLogin={onLogin} title="Quick Demo Access Click any role" />
         <div style={{marginTop:16, textAlign:'center'}}>
-          <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home — https://aasthi-chain.vercel.app</Link>
+          <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home https://aasthi-chain.vercel.app</Link>
         </div>
       </div>
 
       <div style={{marginTop:12, fontSize:11, color:'#9CA3AF', textAlign:'center'}}>
-        LIVE: https://aasthi-chain.vercel.app — presets work live + local · No email verification · &lt;2s from page load
+        LIVE: https://aasthi-chain.vercel.app presets work live + local · No email verification · &lt;2s from page load
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
-// PayU hosted-checkout bridge — auto-submits the server-signed form to PayU.
-// The form params + SHA-512 hash come from the API (server-side salt — never
+// PayU hosted-checkout bridge auto-submits the server-signed form to PayU.
+// The form params + SHA-512 hash come from the API (server-side salt never
 // exposed to the client). On the test server this is a full PSP round-trip:
 // PayU page → test VPA (test@payu succeeds, fail@payu declines) → browser is
 // redirected back to /api/npci/payu/callback which verifies the reverse hash.
@@ -24,7 +24,7 @@ export default function PayUCheckout({ checkout, testMode = true, onCancel }) {
 
   return (
     <div>
-      {/* Hidden form — server-computed hash travels with it */}
+      {/* Hidden form server-computed hash travels with it */}
       <form ref={formRef} method="POST" action={checkout.action} style={{ display: 'none' }}>
         {Object.entries(checkout.params || {}).map(([k, v]) => (
           <input key={k} type="hidden" name={k} value={String(v ?? '')} readOnly />
@@ -33,7 +33,7 @@ export default function PayUCheckout({ checkout, testMode = true, onCancel }) {
 
       <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 16, textAlign: 'center' }}>
         <span style={{ display: 'inline-block', background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E', fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, letterSpacing: 0.5 }}>
-          {testMode ? 'PAYU · TEST MODE — NO REAL MONEY' : 'PAYU · SECURE UPI'}
+          {testMode ? 'PAYU · TEST MODE NO REAL MONEY' : 'PAYU · SECURE UPI'}
         </span>
         <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', marginTop: 10 }}>
           Opening PayU secure UPI checkout…
@@ -47,7 +47,7 @@ export default function PayUCheckout({ checkout, testMode = true, onCancel }) {
               <code style={{ background: 'white', padding: '2px 6px', borderRadius: 4, border: '1px solid #E5E7EB' }}>fail@payu</code>
               {' '}→ declines
               <div style={{ fontSize: 10.5, color: '#B45309', marginTop: 6 }}>
-                Other app icons on this test page are simulated — only the UPI ID option completes on the test rail.
+                Other app icons on this test page are simulated only the UPI ID option completes on the test rail.
               </div>
             </>
           ) : (

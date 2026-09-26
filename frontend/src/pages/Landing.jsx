@@ -4,7 +4,7 @@ import { SignInButton } from '@clerk/react'
 import { isClerkConfigured } from '../App.jsx'
 
 /* ============================================================
-   AasthiChain — premium landing (dark-first, light option)
+   AasthiChain premium landing (dark-first, light option)
    Brand preserved: registry navy → azure accent, Fraunces + Inter,
    registry-office trust language, honest simulation labeling.
    ============================================================ */
@@ -24,7 +24,7 @@ function useLandingTheme() {
     return () => { document.body.style.background = '' }
   }, [mode])
   // Listen for theme changes from OTHER toggles (e.g. the navbar) so the whole
-  // page reacts instantly — no refresh needed. Same-value setMode bails, so the
+  // page reacts instantly no refresh needed. Same-value setMode bails, so the
   // echo of our own dispatch causes no re-render loop.
   useEffect(() => {
     const onTheme = (e) => { if (e?.detail) setMode(e.detail) }
@@ -92,7 +92,7 @@ function NetworkViz() {
     </g>
   )
   return (
-    <svg viewBox="0 0 560 480" style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="AasthiChain network — owners, registrar, investors and regulator settling on the Drunix ledger">
+    <svg viewBox="0 0 560 480" style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="AasthiChain network owners, registrar, investors and regulator settling on the Drunix ledger">
       <defs>
         <radialGradient id="core" cx="50%" cy="42%" r="65%">
           <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
@@ -141,7 +141,7 @@ function Pipeline() {
   return (
     <div className="acx-card-glass rv rv-d2" style={{ padding: '26px 26px 22px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-        <span className="acx-eyebrow">Atomic settlement — live pipeline</span>
+        <span className="acx-eyebrow">Atomic settlement live pipeline</span>
         <span className="acx-chip" style={{ padding: '4px 10px', fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> money &amp; tokens move together</span>
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', marginTop: 20 }}>
@@ -165,7 +165,7 @@ function Pipeline() {
         ))}
       </div>
       <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--line)', fontSize: 11, color: 'var(--faint)', lineHeight: 1.6 }}>
-        If the payment fails — no tokens move. If the transfer fails — the payment is refunded. No partial failures, ever.
+        If the payment fails no tokens move. If the transfer fails the payment is refunded. No partial failures, ever.
       </div>
     </div>
   )
@@ -223,8 +223,8 @@ export default function Landing({ user }) {
                 <em>From ₹500.</em>
               </h1>
               <p className="rv in rv-d1" style={{ fontSize: 16.5, lineHeight: 1.65, color: 'var(--muted)', marginTop: 22, maxWidth: '56ch' }}>
-                AasthiChain turns verified properties into fractional tokens. Pay by UPI, own instantly, trade anytime —
-                registry-office trust — a permissioned ledger, not a speculative cryptocurrency. No paperwork. No ₹75 lakh barrier.
+                AasthiChain turns verified properties into fractional tokens. Pay by UPI, own instantly, trade anytime
+                registry-office trust a permissioned ledger, not a speculative cryptocurrency. No paperwork. No ₹75 lakh barrier.
               </p>
               <div className="rv in rv-d2" style={{ display: 'flex', gap: 12, marginTop: 30, flexWrap: 'wrap' }}>
                 {ctaPrimary}
@@ -279,13 +279,13 @@ export default function Landing({ user }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18, marginTop: 36 }}>
           {[
             {
-              ico: I.eye(), t: 'The problem', d: 'Premium properties cost ₹75L+ — out of reach for most. Selling takes months, paperwork is messy, and you can\u2019t own just 0.1% of a villa. No transparency, no liquidity.',
+              ico: I.eye(), t: 'The problem', d: 'Premium properties cost ₹75L+ out of reach for most. Selling takes months, paperwork is messy, and you can\u2019t own just 0.1% of a villa. No transparency, no liquidity.',
             },
             {
-              ico: I.swap(), t: 'The AasthiChain way', d: 'Each property becomes fixed tokens — like shares. A ₹75L villa becomes 15,000 tokens at ₹500. Buy 100 tokens for ₹50,000, hold fractional ownership, trade instantly.',
+              ico: I.swap(), t: 'The AasthiChain way', d: 'Each property becomes fixed tokens like shares. A ₹75L villa becomes 15,000 tokens at ₹500. Buy 100 tokens for ₹50,000, hold fractional ownership, trade instantly.',
             },
             {
-              ico: I.shield(), t: 'Why you can trust it', d: 'Every property is verified, every transfer is recorded, every payment is atomic — money and tokens move together or both refunded. Registry-office grade trust — a permissioned ledger, not a speculative cryptocurrency.',
+              ico: I.shield(), t: 'Why you can trust it', d: 'Every property is verified, every transfer is recorded, every payment is atomic money and tokens move together or both refunded. Registry-office grade trust a permissioned ledger, not a speculative cryptocurrency.',
             },
           ].map((c, i) => (
             <div key={c.t} className={`acx-card rv rv-d${i + 1}`} style={{ padding: 26 }}>
@@ -308,18 +308,18 @@ export default function Landing({ user }) {
               </h2>
             </div>
             <p className="rv rv-d2" style={{ fontSize: 13.5, color: 'var(--muted)', maxWidth: '40ch', lineHeight: 1.7 }}>
-              Everything serious about the plumbing — hidden behind one familiar action: pay by UPI.
+              Everything serious about the plumbing hidden behind one familiar action: pay by UPI.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginTop: 40 }}>
             {[
               { ico: I.rupee(), t: 'Fractional from ₹500', d: 'Own 0.1% of a villa, not a 30-year loan. Tokens are fixed-supply and priced from the verified valuation.' },
-              { ico: I.zap(), t: 'UPI Collect payments', d: 'The seller requests, you approve in your UPI app — merchant-grade collect with RRN and IMPS UTR proof on every payment.' },
+              { ico: I.zap(), t: 'UPI Collect payments', d: 'The seller requests, you approve in your UPI app merchant-grade collect with RRN and IMPS UTR proof on every payment.' },
               { ico: I.swap(), t: 'Atomic DvP settlement', d: 'Delivery-versus-payment on the Drunix ledger: SettleDvP moves tokens and escrow together, with the UTR anchored on-chain.' },
-              { ico: I.badge(), t: 'Registrar-verified titles', d: 'No listing goes live without document hash anchoring and a Registrar review — fraud is stopped before tokenization.' },
+              { ico: I.badge(), t: 'Registrar-verified titles', d: 'No listing goes live without document hash anchoring and a Registrar review fraud is stopped before tokenization.' },
               { ico: I.shield(), t: 'Regulator guardrails', d: 'A full audit view with emergency freeze. Cap table, transfers and payment trails are inspectable end-to-end.' },
-              { ico: I.spark(), t: 'AI fraud shield', d: 'An explainable risk engine screens every collect — velocity, structuring, high-value patterns — and re-screens at approval.' },
+              { ico: I.spark(), t: 'AI fraud shield', d: 'An explainable risk engine screens every collect velocity, structuring, high-value patterns and re-screens at approval.' },
             ].map((f, i) => (
               <div key={f.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 26 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -342,16 +342,16 @@ export default function Landing({ user }) {
             Four roles. One secure flow.
           </h2>
           <p className="rv rv-d2" style={{ fontSize: 14, color: 'var(--muted)', marginTop: 12, lineHeight: 1.7 }}>
-            From listing to ownership — every step permissioned, every step recorded.
+            From listing to ownership every step permissioned, every step recorded.
           </p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 40 }}>
           {[
-            { role: 'Property Owner', n: '01', desc: 'Lists property with documents — hash anchored, verified before tokenization', steps: ['List property', 'Upload documents', 'Get verified', 'Tokens created'] },
-            { role: 'Registrar', n: '02', desc: 'Checks legal title and approves — prevents fraud before it starts', steps: ['Review documents', 'Verify title', 'Approve', 'Monitor'] },
-            { role: 'You — Investor', n: '03', desc: 'Browse, pay via UPI, own instantly — trade anytime', steps: ['Browse properties', 'Pay via UPI', 'Own tokens', 'Trade or hold'] },
-            { role: 'Regulator', n: '04', desc: 'Audits everything — can pause markets if needed for safety', steps: ['Audit properties', 'Check ownership', 'Review transfers', 'Ensure safety'] },
+            { role: 'Property Owner', n: '01', desc: 'Lists property with documents hash anchored, verified before tokenization', steps: ['List property', 'Upload documents', 'Get verified', 'Tokens created'] },
+            { role: 'Registrar', n: '02', desc: 'Checks legal title and approves prevents fraud before it starts', steps: ['Review documents', 'Verify title', 'Approve', 'Monitor'] },
+            { role: 'You Investor', n: '03', desc: 'Browse, pay via UPI, own instantly trade anytime', steps: ['Browse properties', 'Pay via UPI', 'Own tokens', 'Trade or hold'] },
+            { role: 'Regulator', n: '04', desc: 'Audits everything can pause markets if needed for safety', steps: ['Audit properties', 'Check ownership', 'Review transfers', 'Ensure safety'] },
           ].map((item, i) => (
             <div key={item.role} className={`acx-card rv rv-d${(i % 4) + 1}`} style={{ padding: 22, position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 14, right: 18, fontFamily: 'Fraunces, Georgia, serif', fontSize: 30, fontWeight: 600, color: 'var(--line-2)' }}>{item.n}</div>
@@ -379,7 +379,7 @@ export default function Landing({ user }) {
               Secure payments,<br /><em>instant</em> ownership.
             </h2>
             <p className="rv rv-d2" style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.75, marginTop: 16, maxWidth: '52ch' }}>
-              Pay via UPI — just like you pay for anything. Your payment is verified with a bank UTR, then tokens transfer
+              Pay via UPI just like you pay for anything. Your payment is verified with a bank UTR, then tokens transfer
               instantly on the Drunix ledger. Both happen together or both are reversed.
             </p>
             <div className="rv rv-d3" style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
@@ -404,12 +404,12 @@ export default function Landing({ user }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginTop: 40 }}>
             {[
-              { t: 'Hash-chained Drunix ledger', d: 'Every settlement is a block — SHA-512 chained, merkle-committed, publicly verifiable by anyone, agent or DPI stack. Open the Ledger Explorer and prove it.' },
+              { t: 'Hash-chained Drunix ledger', d: 'Every settlement is a block SHA-512 chained, merkle-committed, publicly verifiable by anyone, agent or DPI stack. Open the Ledger Explorer and prove it.' },
               { t: 'Permissioned identity', d: 'Every actor signs with JWT + MSP identity across four organizations. No anonymous actors can touch the ledger.' },
-              { t: 'Double-spend protection', d: 'MVCC versioning on the Fabric state DB plus composite-key balances — the same token cannot be sold twice.' },
-              { t: 'Idempotent everything', d: 'Payments, webhooks and settlements are idempotent — retries and refreshes can never double-credit an investor.' },
+              { t: 'Double-spend protection', d: 'MVCC versioning on the Fabric state DB plus composite-key balances the same token cannot be sold twice.' },
+              { t: 'Idempotent everything', d: 'Payments, webhooks and settlements are idempotent retries and refreshes can never double-credit an investor.' },
               { t: 'Auditable cap table', d: 'Who owns what is a ledger query, not a spreadsheet. Regulators see the same truth investors see.' },
-              { t: 'Honest by labeling', d: 'The UPI rail is a clearly-labeled testnet simulation — no live NPCI credentials exist for hackathons. Production swap is one config line.' },
+              { t: 'Honest by labeling', d: 'The UPI rail is a clearly-labeled testnet simulation no live NPCI credentials exist for hackathons. Production swap is one config line.' },
               { t: 'Aligned with regulation', d: 'Designed around the Asset Tokenisation (Regulation) Bill 2026: KYC/AML gates, registrar validation, custodian pathway, regulator freeze.' },
             ].map((c, i) => (
               <div key={c.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 24 }}>
@@ -434,9 +434,9 @@ export default function Landing({ user }) {
         <div className="acx-card-glass rv" style={{ padding: 28 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Try every role — instantly</h3>
+              <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Try every role instantly</h3>
               <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-                One-click demo identities with instant mock sign-in. Works on the live deployment and locally — no verification, under 2 seconds.
+                One-click demo identities with instant mock sign-in. Works on the live deployment and locally no verification, under 2 seconds.
               </p>
             </div>
             <span className="acx-chip" style={{ fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> LIVE + LOCAL</span>
@@ -485,7 +485,7 @@ export default function Landing({ user }) {
             <a href="#demo" className="acx-btn acx-btn-ghost acx-btn-lg">Use a demo role</a>
           </div>
           <div style={{ marginTop: 18, fontSize: 11.5, color: 'var(--faint)', position: 'relative' }}>
-            Sign in with Clerk top-right, or use a demo preset — both work on the live site and locally.
+            Sign in with Clerk top-right, or use a demo preset both work on the live site and locally.
           </div>
         </div>
       </section>
@@ -499,19 +499,19 @@ export default function Landing({ user }) {
               className="acx-chip"
               style={{ cursor: 'pointer', padding: '9px 18px', background: 'transparent' }}
             >
-              {showDev ? 'Hide' : 'Show'} Technical Details — For Judges &amp; Developers
+              {showDev ? 'Hide' : 'Show'} Technical Details For Judges &amp; Developers
             </button>
           </div>
 
           {showDev && (
             <div className="rv in" style={{ marginTop: 24 }}>
               <div className="acx-card" style={{ padding: 22, marginBottom: 16, borderColor: 'var(--accent-deep)' }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-2)' }}>NPCI Drunix — Core Platform (Golang)</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-2)' }}>NPCI Drunix Core Platform (Golang)</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 1.75 }}>
                   Built ON Drunix (NPCI's open-source Fabric fork for tokenization), not just integrated:
-                  Go chaincode (property.go / token.go / kyc.go — RecordSettlement + SettleDvP atomic DvP with UTR proof),
-                  Go Drunix gateway (<code style={{ color: 'var(--accent-2)' }}>drunix-gateway/</code>: PROPOSED → ENDORSED → COMMITTED lifecycle, deterministic txIDs, read/write sets, SettlementRecorded events — <code style={{ color: 'var(--accent-2)' }}>go test ./...</code> green),
-                  Go AI fraud engine (<code style={{ color: 'var(--accent-2)' }}>fraud.go</code> — explainable weights, ML-pluggable).
+                  Go chaincode (property.go / token.go / kyc.go RecordSettlement + SettleDvP atomic DvP with UTR proof),
+                  Go Drunix gateway (<code style={{ color: 'var(--accent-2)' }}>drunix-gateway/</code>: PROPOSED → ENDORSED → COMMITTED lifecycle, deterministic txIDs, read/write sets, SettlementRecorded events <code style={{ color: 'var(--accent-2)' }}>go test ./...</code> green),
+                  Go AI fraud engine (<code style={{ color: 'var(--accent-2)' }}>fraud.go</code> explainable weights, ML-pluggable).
                   Demo flow: <code style={{ color: 'var(--accent-2)' }}>/api/drunix/ledger</code> shows the full Drunix transaction flow per payment.
                   Themes: Real-Time Payments + Financial Inclusion (₹500 entry) + AI &amp; Fraud Detection + Open Finance APIs (<code style={{ color: 'var(--accent-2)' }}>/api/openfinance/capabilities</code>).
                 </div>
@@ -519,34 +519,34 @@ export default function Landing({ user }) {
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                 <span className="acx-chip" style={{ borderColor: 'var(--warn)', color: 'var(--warn)', fontSize: 10 }}>SIMULATION</span>
-                <span style={{ fontSize: 11, color: 'var(--faint)' }}>NPCI UPI rail is a testnet simulation — no live NPCI sandbox credentials available for hackathons. Honest labeling per Track A6.</span>
+                <span style={{ fontSize: 11, color: 'var(--faint)' }}>NPCI UPI rail is a testnet simulation no live NPCI sandbox credentials available for hackathons. Honest labeling per Track A6.</span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                 <div className="acx-card" style={{ padding: 22 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Primary Rail — UPI Collect P2M + IMPS UTR (INR)</h4>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Primary Rail UPI Collect P2M + IMPS UTR (INR)</h4>
                   <ul style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, paddingLeft: 18, lineHeight: 1.8 }}>
-                    <li>VPA: investor@aasthichain, originator@aasthichain — regex validated</li>
+                    <li>VPA: investor@aasthichain, originator@aasthichain regex validated</li>
                     <li>IDs: PaymentID NPCI-XXXXXXXXXXXX, RRN 12-digit 418…, UTR IMPS+RRN</li>
-                    <li>Flow: PENDING (5 min) → CONFIRMED (KYC+balance) → RELEASED / REFUNDED — atomic DvP</li>
+                    <li>Flow: PENDING (5 min) → CONFIRMED (KYC+balance) → RELEASED / REFUNDED atomic DvP</li>
                     <li>INR in paise (int64), X-Idempotency-Key, webhook callbacks + UTR reconciliation</li>
-                    <li>Optional PayU test-mode bridge — real PSP hash contract, simulated settlement</li>
+                    <li>Optional PayU test-mode bridge real PSP hash contract, simulated settlement</li>
                     <li>8 payment tests: success→transfer, timeout→refund, idempotency, KYC, funds, VPA, zero, formats</li>
                   </ul>
                 </div>
                 <div className="acx-card" style={{ padding: 22 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Secondary — Sepolia + Drunix + Regulatory</h4>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Secondary Sepolia + Drunix + Regulatory</h4>
                   <ul style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, paddingLeft: 18, lineHeight: 1.8 }}>
-                    <li>Sepolia PaymentEscrow.sol — experimental cross-chain pattern behind Advanced toggle</li>
+                    <li>Sepolia PaymentEscrow.sol experimental cross-chain pattern behind Advanced toggle</li>
                     <li>Drunix: 4 orgs, Raft 3 orderers, Postgres state with 4 SQL indexes, MVCC double-spend protection</li>
                     <li>Chaincode: 9 funcs, JWT+MSP auth, rate limit 100/min, persistent idempotency, 216+ tests</li>
-                    <li>Regulatory: Asset Tokenisation (Regulation) Bill 2026 — registrar validation, regulator freeze, auditable cap table, KYC payment gate</li>
+                    <li>Regulatory: Asset Tokenisation (Regulation) Bill 2026 registrar validation, regulator freeze, auditable cap table, KYC payment gate</li>
                   </ul>
                 </div>
               </div>
 
               <div className="acx-card" style={{ marginTop: 16, padding: 20 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>LIVE vs MOCKED — Honest Scoping (Track A6 Extended)</div>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>LIVE vs MOCKED Honest Scoping (Track A6 Extended)</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>
                   <div><strong style={{ color: 'var(--ok)' }}>LIVE:</strong> Chaincode 9 funcs, JWT+MSP, Raft 3, SQL 4 indexes, payment-gateway module, Drunix TransferTokens, atomic DvP, 216+ tests + 8 payment tests</div>
                   <div><strong style={{ color: 'var(--warn)' }}>MOCKED (pluggable):</strong> KYC DigiLocker stub, DILRMP hash anchored, NPCI UPI testnet simulation (no live credentials), Sepolia secondary experimental</div>

@@ -1,9 +1,9 @@
-// Drunix Ledger Explorer — the blockchain, visible.
+// Drunix Ledger Explorer the blockchain, visible.
 // Every settlement (mint / token transfer / escrow release) is a block:
 // SHA-512 chained (prevHash) + merkle-committed (txnsRoot). This page replays
-// and verifies the chain live, and demonstrates tamper-evidence — the core of
-// decentralized trust — with a clearly-labeled SIMULATION.
-// The read endpoints are an open layer: no auth, no PII — usable by agents & DPI.
+// and verifies the chain live, and demonstrates tamper-evidence the core of
+// decentralized trust with a clearly-labeled SIMULATION.
+// The read endpoints are an open layer: no auth, no PII usable by agents & DPI.
 
 import React, { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -16,7 +16,7 @@ const TYPE_STYLES = {
   ESCROW_RELEASED: { label: 'Escrow Released', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' }
 }
 
-function shortHash(h) { return h ? `${h.slice(0, 10)}…${h.slice(-8)}` : '—' }
+function shortHash(h) { return h ? `${h.slice(0, 10)}…${h.slice(-8)}` : '' }
 
 function txnSummary(t) {
   if (!t) return ''
@@ -53,14 +53,14 @@ export default function LedgerExplorer() {
 
   const runVerify = async () => {
     setBusy(true)
-    try { setVerify(await api.verifyChain()); setLabMsg({ kind: 'ok', text: 'Chain replayed from genesis — linkage, merkle roots and hashes recomputed.' }) }
+    try { setVerify(await api.verifyChain()); setLabMsg({ kind: 'ok', text: 'Chain replayed from genesis linkage, merkle roots and hashes recomputed.' }) }
     finally { setBusy(false) }
   }
   const simulateTamper = async () => {
     setBusy(true)
     try {
       const r = await api.tamperChain()
-      setLabMsg({ kind: 'warn', text: `SIMULATION: altered block #${r.height} behind the chain's back (txn: ${JSON.stringify(r.altered)}). Now hit "Verify chain" — watch anyone detect it.` })
+      setLabMsg({ kind: 'warn', text: `SIMULATION: altered block #${r.height} behind the chain's back (txn: ${JSON.stringify(r.altered)}). Now hit "Verify chain" watch anyone detect it.` })
       setVerify(await api.verifyChain())
       const c = await api.getChain(60); setChain(c)
     } finally { setBusy(false) }
@@ -69,7 +69,7 @@ export default function LedgerExplorer() {
     setBusy(true)
     try {
       await api.restoreChain(-1)
-      setLabMsg({ kind: 'ok', text: 'Restored the original committed contents — the recorded hash matches again.' })
+      setLabMsg({ kind: 'ok', text: 'Restored the original committed contents the recorded hash matches again.' })
       setVerify(await api.verifyChain())
       const c = await api.getChain(60); setChain(c)
     } finally { setBusy(false) }
@@ -77,11 +77,11 @@ export default function LedgerExplorer() {
 
   const stats = [
     ['Chain', chain?.chainId || 'aasthi-drunix'],
-    ['Height', chain ? `#${chain.height}` : '—'],
-    ['Blocks', chain?.blocks ?? '—'],
+    ['Height', chain ? `#${chain.height}` : ''],
+    ['Blocks', chain?.blocks ?? ''],
     ['Hash algo', 'SHA-512'],
     ['Contract', chain?.contract || 'aasthi.dvp-v1'],
-    ['Orgs (MSP)', chain?.orgs ? chain.orgs.map(o => o.msp.replace('MSP', '')).join(' · ') : '—'],
+    ['Orgs (MSP)', chain?.orgs ? chain.orgs.map(o => o.msp.replace('MSP', '')).join(' · ') : ''],
   ]
 
   return (
@@ -93,7 +93,7 @@ export default function LedgerExplorer() {
           <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Ledger Explorer</h1>
           <p style={{ fontSize: 13.5, color: '#6B7280', maxWidth: '64ch', lineHeight: 1.6 }}>
             Distributed ledgers and decentralized trust as the open layer for digitization, agents, DPI and programmable finance.
-            Every settlement is a block — verify it yourself, no account needed.
+            Every settlement is a block verify it yourself, no account needed.
           </p>
         </div>
         {verify && (
@@ -123,7 +123,7 @@ export default function LedgerExplorer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: '#111827' }}>Integrity Lab</div>
-            <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>Recompute the whole chain from genesis — or prove tamper-evidence live.</div>
+            <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>Recompute the whole chain from genesis or prove tamper-evidence live.</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={runVerify} disabled={busy} style={{ padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Verify chain</button>
@@ -138,7 +138,7 @@ export default function LedgerExplorer() {
             border: `1px solid ${labMsg.kind === 'err' ? '#FECACA' : labMsg.kind === 'warn' ? '#FDE68A' : '#BBF7D0'}`,
             color: labMsg.kind === 'err' ? '#991B1B' : labMsg.kind === 'warn' ? '#92400E' : '#065F46'
           }}>
-            {verify && !verify.valid && labMsg.kind === 'warn' ? `✗ Chain INVALID at block #${verify.brokenAt} — ${verify.reason} · ${verify.note}` : labMsg.text}
+            {verify && !verify.valid && labMsg.kind === 'warn' ? `✗ Chain INVALID at block #${verify.brokenAt} ${verify.reason} · ${verify.note}` : labMsg.text}
           </div>
         )}
       </div>
@@ -148,7 +148,7 @@ export default function LedgerExplorer() {
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Programmable finance on-chain</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 1.6 }}>
-            Contract <b>aasthi.dvp-v1</b>: delivery-versus-payment as code — money CONFIRMED ⇄ tokens moved atomically, escrow then RELEASED. Watch any purchase appear as a linked <b>Token Transferred</b> + <b>Escrow Released</b> pair below.
+            Contract <b>aasthi.dvp-v1</b>: delivery-versus-payment as code money CONFIRMED ⇄ tokens moved atomically, escrow then RELEASED. Watch any purchase appear as a linked <b>Token Transferred</b> + <b>Escrow Released</b> pair below.
           </div>
           {chain && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -163,7 +163,7 @@ export default function LedgerExplorer() {
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Open by design</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 1.6 }}>
-            The ledger is a <b>public notice-board, not a private database</b>. Auditors, government stacks, apps — or anyone —
+            The ledger is a <b>public notice-board, not a private database</b>. Auditors, government stacks, apps or anyone
             can read the same ownership truth at the same moment, with no special access and no personal data on the chain.
             Trust comes from the math, not from taking our word for it.
           </div>

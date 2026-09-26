@@ -1,6 +1,6 @@
-// SOLID: Single Responsibility — Only fetches properties
-// Interface Segregation — Returns only needed data
-// Dependency Inversion — Depends on api abstraction, not concrete fetch
+// SOLID: Single Responsibility Only fetches properties
+// Interface Segregation Returns only needed data
+// Dependency Inversion Depends on api abstraction, not concrete fetch
 
 import { useState, useEffect, useCallback } from 'react'
 import api from '../lib/api.js'

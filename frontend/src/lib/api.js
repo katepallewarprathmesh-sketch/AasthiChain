@@ -1,6 +1,6 @@
-// SOLID: Single Responsibility — API abstraction
-// Dependency Inversion — Pages depend on this abstraction, not concrete fetch
-// Open/Closed — Open for extension via new methods, closed for modification
+// SOLID: Single Responsibility API abstraction
+// Dependency Inversion Pages depend on this abstraction, not concrete fetch
+// Open/Closed Open for extension via new methods, closed for modification
 
 class ApiClient {
   constructor() {
@@ -33,7 +33,7 @@ class ApiClient {
     try {
       data = await res.json()
     } catch {
-      throw new Error(`Request failed ${res.status} — ${path}`)
+      throw new Error(`Request failed ${res.status} ${path}`)
     }
     
     if (!res.ok) {
@@ -46,7 +46,7 @@ class ApiClient {
     return data
   }
 
-  // Properties — SRP: Single responsibility for property operations
+  // Properties SRP: Single responsibility for property operations
   async listProperties(status = '') {
     const url = status ? `/api/properties?status=${status}` : '/api/properties'
     return this.request(url)
@@ -86,7 +86,7 @@ class ApiClient {
     })
   }
 
-  // Balances — SRP
+  // Balances SRP
   async getBalance(assetId, ownerId) {
     return this.request(`/api/balances/${encodeURIComponent(assetId)}/${encodeURIComponent(ownerId)}`)
   }
@@ -95,8 +95,8 @@ class ApiClient {
     return this.request(`/api/balances/wallet/${encodeURIComponent(ownerId)}`)
   }
 
-  // Transfers — SRP
-  // clientState (optional): { property, receipts, claimedBalance } — lets a cold
+  // Transfers SRP
+  // clientState (optional): { property, receipts, claimedBalance } lets a cold
   // serverless instance re-materialize the sender's balance from verified receipts
   // ---- Drunix block ledger (public open-layer endpoints) ----
   async getChain(limit = 50) { return this.request(`/api/chain?limit=${limit}`) }
@@ -125,7 +125,7 @@ class ApiClient {
     return this.request(`/api/transfers/history?${params}`)
   }
 
-  // NPCI UPI — SRP: Single responsibility for payments
+  // NPCI UPI SRP: Single responsibility for payments
   async initiateCollect(payload) {
     return this.request('/api/npci/collect', {
       method: 'POST',
@@ -166,7 +166,7 @@ class ApiClient {
     return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}`)
   }
 
-  // Self-heal for serverless multi-instance races — re-upload payment state the client holds
+  // Self-heal for serverless multi-instance races re-upload payment state the client holds
   async reattachPayment(paymentId, payment) {
     return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}/reattach`, {
       method: 'POST',
@@ -174,7 +174,7 @@ class ApiClient {
     })
   }
 
-  // Ensure server knows this payment — GET, and reattach on 404 (SRP: one place for the retry policy)
+  // Ensure server knows this payment GET, and reattach on 404 (SRP: one place for the retry policy)
   async ensurePayment(payment) {
     if (!payment || !payment.paymentId) return payment
     try {
@@ -208,7 +208,7 @@ class ApiClient {
     return this.request('/api/npci/reconcile')
   }
 
-  // Auth & organization (Neon schema entities — additive, Open/Closed)
+  // Auth & organization (Neon schema entities additive, Open/Closed)
   async getSession() {
     return this.request('/api/auth/session')
   }
@@ -237,13 +237,13 @@ class ApiClient {
     return this.request(`/api/orgs/${encodeURIComponent(orgId)}/invitations`, { method: 'POST', body: JSON.stringify(payload) })
   }
 
-  // PayU S2S reconciliation — asks PayU (verify_payment) for the real status
+  // PayU S2S reconciliation asks PayU (verify_payment) for the real status
   // of a PENDING payment and heals it server-side (CONFIRMED/DECLINED)
   async reconcilePayu(paymentId) {
     return this.request('/api/npci/payu/reconcile', { method: 'POST', body: JSON.stringify({ paymentId }) })
   }
 
-  // Server-side settlement — completes a CONFIRMED payment (tokens move server-side;
+  // Server-side settlement completes a CONFIRMED payment (tokens move server-side;
   // survives closed tabs / lost browser state). Idempotent.
   async settlePayment(paymentId, paymentCopy) {
     return this.request(`/api/npci/payments/${encodeURIComponent(paymentId)}/settle`, { method: 'POST', body: JSON.stringify({ payment: paymentCopy || null }) })
@@ -265,7 +265,7 @@ class ApiClient {
     return this.request('/api/auth/verification/verify', { method: 'POST', body: JSON.stringify({ identifier, value }) })
   }
 
-  // KYC — SRP
+  // KYC SRP
   async getKYC(identityId) {
     return this.request(`/api/kyc/${encodeURIComponent(identityId)}`)
   }
@@ -277,7 +277,7 @@ class ApiClient {
     })
   }
 
-  // DigiLocker — SRP
+  // DigiLocker SRP
   async initDigiLocker(identityId) {
     return this.request('/api/kyc/digilocker/init', {
       method: 'POST',
@@ -299,7 +299,7 @@ class ApiClient {
     })
   }
 
-  // Property verification — SRP
+  // Property verification SRP
   async verifyProperty(assetId, source = 'bhoomi') {
     return this.request(`/api/properties/${encodeURIComponent(assetId)}/verify`, {
       method: 'POST',
@@ -308,6 +308,6 @@ class ApiClient {
   }
 }
 
-// Singleton — DIP: Depend on abstraction, single instance
+// Singleton DIP: Depend on abstraction, single instance
 export const api = new ApiClient()
 export default api

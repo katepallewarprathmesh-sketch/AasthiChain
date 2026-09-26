@@ -69,7 +69,7 @@ export default function UTRReconciliation() {
         </button>
       </div>
       <p style={{fontSize:11, color:'#475569', marginTop:6, lineHeight:1.5, maxWidth:'70ch'}}>
-        UTR = Unique Transaction Reference from NPCI/bank — 12-digit numeric for IMPS. Every CONFIRMED payment gets UTR via webhook from Setu/ICICI. Use for bank statement reconciliation — ensures our ledger matches bank. No partial settlement per atomic DvP.
+        UTR = Unique Transaction Reference from NPCI/bank 12-digit numeric for IMPS. Every CONFIRMED payment gets UTR via webhook from Setu/ICICI. Use for bank statement reconciliation ensures our ledger matches bank. No partial settlement per atomic DvP.
       </p>
 
       <div style={{marginTop:16, display:'flex', gap:8, flexWrap:'wrap'}}>
@@ -90,7 +90,7 @@ export default function UTRReconciliation() {
                 <span style={{color:'#64748B'}}>Amount</span><span>₹{utrResult.payment?.amountINR?.toLocaleString('en-IN')}</span>
                 <span style={{color:'#64748B'}}>Status</span><span className={`status-chip ${utrResult.payment?.status==='RELEASED' ? 'status-tokenized' : 'status-pending'}`} style={{fontSize:10}}>{utrResult.payment?.status}</span>
                 <span style={{color:'#64748B'}}>Provider</span><span>{utrResult.payment?.provider || 'mock'} {utrResult.payment?.webhookReceivedAt ? '✓ webhook' : ''}</span>
-                <span style={{color:'#64748B'}}>Confirmed</span><span>{utrResult.payment?.confirmedAt ? new Date(utrResult.payment.confirmedAt).toLocaleString() : '—'}</span>
+                <span style={{color:'#64748B'}}>Confirmed</span><span>{utrResult.payment?.confirmedAt ? new Date(utrResult.payment.confirmedAt).toLocaleString() : ''}</span>
               </div>
             </>
           )}
@@ -120,7 +120,7 @@ export default function UTRReconciliation() {
 
           <div style={{marginTop:12, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
             <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10}}>
-              <div style={{fontSize:11, fontWeight:700, color:'#DC2626'}}>Issues — Requires Attention</div>
+              <div style={{fontSize:11, fontWeight:700, color:'#DC2626'}}>Issues Requires Attention</div>
               <div style={{marginTop:8, fontSize:10, display:'flex', flexDirection:'column', gap:6}}>
                 <div>Pending without UTR: <strong>{data.issues?.pendingWithoutUTR?.length || 0}</strong> {data.issues?.pendingWithoutUTR?.length ? '⚠️' : '✓'}</div>
                 <div>Amount mismatches: <strong>{data.issues?.amountMismatches?.length || 0}</strong> {data.issues?.amountMismatches?.length ? '⚠️ Manual review' : '✓'}</div>
@@ -130,23 +130,23 @@ export default function UTRReconciliation() {
               {data.issues?.amountMismatches?.length > 0 && (
                 <div style={{marginTop:8, background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, padding:8, fontSize:10}}>
                   {data.issues.amountMismatches.slice(0,3).map(m => (
-                    <div key={m.paymentId} style={{marginBottom:4}}>{m.paymentId.slice(0,12)}... — {m.failureReason}</div>
+                    <div key={m.paymentId} style={{marginBottom:4}}>{m.paymentId.slice(0,12)}... {m.failureReason}</div>
                   ))}
                 </div>
               )}
             </div>
             <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10}}>
-              <div style={{fontSize:11, fontWeight:700}}>Recent Webhooks — Audit Log</div>
+              <div style={{fontSize:11, fontWeight:700}}>Recent Webhooks Audit Log</div>
               <div style={{marginTop:8, maxHeight:150, overflowY:'auto', display:'flex', flexDirection:'column', gap:4}}>
                 {(data.recentWebhooks || webhooks).slice(0,10).map((wh, i) => (
                   <div key={i} style={{fontSize:9, display:'flex', justifyContent:'space-between', borderBottom:'1px solid #F1F5F9', paddingBottom:3}}>
                     <span style={{fontFamily:'monospace'}}>{wh.paymentId?.slice(0,10)}...</span>
                     <span style={{background: wh.result==='SUCCESS' ? '#F0FDF4' : '#FEF2F2', padding:'1px 6px', borderRadius:10, fontSize:8}}>{wh.status}</span>
-                    <span style={{fontFamily:'monospace'}}>{wh.utr?.slice(-4) || '—'}</span>
+                    <span style={{fontFamily:'monospace'}}>{wh.utr?.slice(-4) || ''}</span>
                     <span style={{color:'#94A3B8'}}>{wh.provider}</span>
                   </div>
                 ))}
-                {(data.recentWebhooks || []).length === 0 && <div style={{fontSize:10, color:'#94A3B8', textAlign:'center', padding:'12px 0'}}>No webhooks yet — approve a payment to see webhook audit</div>}
+                {(data.recentWebhooks || []).length === 0 && <div style={{fontSize:10, color:'#94A3B8', textAlign:'center', padding:'12px 0'}}>No webhooks yet approve a payment to see webhook audit</div>}
               </div>
             </div>
           </div>
@@ -154,7 +154,7 @@ export default function UTRReconciliation() {
       )}
 
       <div style={{marginTop:12, fontSize:10, color:'#6B7280', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:6, padding:8, lineHeight:1.5}}>
-        <strong>How UTR Reconciliation Works:</strong> 1) User pays via UPI → 2) NPCI switch assigns RRN → 3) Bank assigns 12-digit UTR → 4) Setu/ICICI POSTs webhook to /api/npci/webhook with UTR → 5) We verify signature, check amount matches, store UTR in utrIndex → 6) Frontend releases tokens only after UTR confirmed → 7) Regulator can lookup UTR at /api/npci/utr/:utr to match bank statement. Amount mismatch → FAILED_AMOUNT_MISMATCH, manual review, no auto-release. Idempotent — duplicate webhook returns same, no double credit.
+        <strong>How UTR Reconciliation Works:</strong> 1) User pays via UPI → 2) NPCI switch assigns RRN → 3) Bank assigns 12-digit UTR → 4) Setu/ICICI POSTs webhook to /api/npci/webhook with UTR → 5) We verify signature, check amount matches, store UTR in utrIndex → 6) Frontend releases tokens only after UTR confirmed → 7) Regulator can lookup UTR at /api/npci/utr/:utr to match bank statement. Amount mismatch → FAILED_AMOUNT_MISMATCH, manual review, no auto-release. Idempotent duplicate webhook returns same, no double credit.
       </div>
     </div>
   )

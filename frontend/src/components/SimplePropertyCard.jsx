@@ -1,13 +1,13 @@
-// SOLID: Single Responsibility — Only displays property card for layman
-// Open/Closed — Open for extension via props, closed for modification
-// Liskov — Can be substituted anywhere property card needed
+// SOLID: Single Responsibility Only displays property card for layman
+// Open/Closed Open for extension via props, closed for modification
+// Liskov Can be substituted anywhere property card needed
 
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { money } from '../lib/format.js'
 
 function SimpleStatus({ status, validationStatus }) {
-  // Lifecycle status (DRAFT/TOKENIZED/FROZEN) decides the badge — validation
+  // Lifecycle status (DRAFT/TOKENIZED/FROZEN) decides the badge validation
   // only fills the gap. Before: validationStatus shadowed status, so a minted
   // (buyable) property could show "Verified"/"Under Review"/"Coming Soon".
   const statusConfig = {
@@ -77,7 +77,7 @@ export default function SimplePropertyCard({ property }) {
           </div>
         </div>
         <div style={{ fontSize: 11, color: '#6B7280', marginTop: 8 }}>
-          Own from ₹500 — {property.totalTokens?.toLocaleString('en-IN') || '—'} tokens total
+          Own from ₹500 {property.totalTokens?.toLocaleString('en-IN') || ''} tokens total
         </div>
         {property.subscription && property.subscription.totalTokens > 0 && (
           <div style={{ marginTop: 10 }}>

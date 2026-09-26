@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
 
-// SOLID: Single Responsibility — Only wallet display + transfer for layman
+// SOLID: Single Responsibility Only wallet display + transfer for layman
 
 function SimpleHoldingCard({ holding }) {
   const balance = holding.balance
@@ -76,7 +76,7 @@ export default function Wallet({ user }) {
     setError('')
     try {
       const data = await api.getWallet(identityId)
-      // Merge server holdings with local receipts — a cold server instance may not
+      // Merge server holdings with local receipts a cold server instance may not
       // have balances yet, but your verified purchases on this device still count
       const local = loadHoldings(identityId)
       const byAsset = {}
@@ -93,7 +93,7 @@ export default function Wallet({ user }) {
               fromDevice: true
             }
           } else {
-            // Server authoritative — sync local down
+            // Server authoritative sync local down
             syncHoldingFromServer(identityId, assetId, byAsset[assetId].balance?.balance || 0)
           }
         } else {
@@ -131,7 +131,7 @@ export default function Wallet({ user }) {
     const effectiveBalance = Math.max(holding?.balance?.balance || 0, h?.balance || 0)
 
     if (amount > effectiveBalance) {
-      setTransferMsg(`You own ${effectiveBalance} tokens of this property — you cannot send ${amount}.`)
+      setTransferMsg(`You own ${effectiveBalance} tokens of this property you cannot send ${amount}.`)
       return
     }
 
@@ -166,7 +166,7 @@ export default function Wallet({ user }) {
       )
       // Move local overlay down so the next screen agrees
       adjustHolding(identityId, transferForm.assetId, -amount)
-      setTransferMsg(`✓ Sent ${result.amount} tokens to ${result.toId} — done!`)
+      setTransferMsg(`✓ Sent ${result.amount} tokens to ${result.toId} done!`)
       setTransferForm({ assetId: '', toId: '', amount: '' })
       fetchWallet()
     } catch (err) {
@@ -292,7 +292,7 @@ export default function Wallet({ user }) {
               <option value="">Which property?</option>
               {holdings.map((h, i) => (
                 <option key={i} value={h.balance.assetId}>
-                  {h.propertyTitle} — you own {(h.balance.balance || 0).toLocaleString('en-IN')}
+                  {h.propertyTitle} you own {(h.balance.balance || 0).toLocaleString('en-IN')}
                 </option>
               ))}
             </select>

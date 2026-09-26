@@ -18,12 +18,12 @@ export default function NPCIFailureModeDemo() {
       setResult(data)
     } catch (e) {
       const mocks = {
-        insufficient_funds: { scenario, expected: 'FAILED_INSUFFICIENT_FUNDS', result: 'Payment failed — insufficient funds', passed: true, explanation: 'Payer has ₹1, needs ₹50k — correctly rejected, no tokens moved.' },
-        kyc_unverified: { scenario, expected: 'FAILED_KYC_NOT_VERIFIED', result: 'Payment failed — KYC not verified', passed: true, explanation: 'Unverified user cannot pay — KYC gate enforced.' },
-        timeout: { scenario, expected: 'EXPIRED', result: 'Payment expired — time limit exceeded', passed: true, explanation: 'UPI request has 5-min window — if not approved, it expires.' },
-        declined: { scenario, expected: 'DECLINED', result: 'Payment declined by user', passed: true, explanation: 'User declined in UPI app — payment cancelled.' },
+        insufficient_funds: { scenario, expected: 'FAILED_INSUFFICIENT_FUNDS', result: 'Payment failed insufficient funds', passed: true, explanation: 'Payer has ₹1, needs ₹50k correctly rejected, no tokens moved.' },
+        kyc_unverified: { scenario, expected: 'FAILED_KYC_NOT_VERIFIED', result: 'Payment failed KYC not verified', passed: true, explanation: 'Unverified user cannot pay KYC gate enforced.' },
+        timeout: { scenario, expected: 'EXPIRED', result: 'Payment expired time limit exceeded', passed: true, explanation: 'UPI request has 5-min window if not approved, it expires.' },
+        declined: { scenario, expected: 'DECLINED', result: 'Payment declined by user', passed: true, explanation: 'User declined in UPI app payment cancelled.' },
         invalid_vpa: { scenario, expected: 'FAILED_INVALID_VPA', result: 'Invalid payment ID', passed: true, explanation: 'Malformed UPI ID blocked.' },
-        duplicate_idempotency: { scenario, expected: 'IDEMPOTENT_SAME_PAYMENT', result: 'Same payment returned — no double charge', passed: true, explanation: 'Duplicate request returns same payment — prevents double payment.' },
+        duplicate_idempotency: { scenario, expected: 'IDEMPOTENT_SAME_PAYMENT', result: 'Same payment returned no double charge', passed: true, explanation: 'Duplicate request returns same payment prevents double payment.' },
       }
       setResult(mocks[scenario] || { scenario, result: 'Unknown', passed: false })
     } finally {
@@ -32,7 +32,7 @@ export default function NPCIFailureModeDemo() {
   }
 
   const scenarios = [
-    { id: 'insufficient_funds', label: 'Insufficient Funds', desc: 'Payer has ₹1, needs ₹50k — rejected', color: '#DC2626' },
+    { id: 'insufficient_funds', label: 'Insufficient Funds', desc: 'Payer has ₹1, needs ₹50k rejected', color: '#DC2626' },
     { id: 'kyc_unverified', label: 'KYC Not Verified', desc: 'Unverified user cannot pay', color: '#1E3A5F' },
     { id: 'timeout', label: 'Payment Timeout', desc: '5 min window expired', color: '#D97706' },
     { id: 'declined', label: 'User Declined', desc: 'Declined in UPI app', color: '#6B7280' },
@@ -45,7 +45,7 @@ export default function NPCIFailureModeDemo() {
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap'}}>
         <div>
           <h3 style={{fontSize:13, fontWeight:600}}>Payment Safety Checks</h3>
-          <p style={{fontSize:11, color:'#6B7280', marginTop:4}}>We test failure cases to ensure your money is safe — no partial transfers</p>
+          <p style={{fontSize:11, color:'#6B7280', marginTop:4}}>We test failure cases to ensure your money is safe no partial transfers</p>
         </div>
         <span style={{fontSize:9, background:'#F9FAFB', border:'1px solid #E5E7EB', padding:'3px 8px', borderRadius:12, color:'#6B7280'}}>Developer test</span>
       </div>
@@ -67,7 +67,7 @@ export default function NPCIFailureModeDemo() {
         <div style={{marginTop:14, padding:12, borderRadius:8, background:'#F9FAFB', border:'1px solid #E5E7EB'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
             <span style={{fontSize:11, fontWeight:600, color: result.passed ? '#059669' : '#DC2626'}}>
-              {result.passed ? '✓ Correctly handled' : '✗ Failed'} — {result.scenario}
+              {result.passed ? '✓ Correctly handled' : '✗ Failed'} {result.scenario}
             </span>
             <span style={{fontSize:9, background:'white', border:'1px solid #E5E7EB', padding:'2px 6px', borderRadius:4}}>{result.expected}</span>
           </div>
