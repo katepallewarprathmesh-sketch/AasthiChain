@@ -161,19 +161,12 @@ export default function LedgerExplorer() {
           )}
         </div>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>For agents &amp; DPI — open JSON API</div>
-          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4, marginBottom: 8 }}>No auth, no PII. Machine-readable truth for agents, UPI-stack tooling and public dashboards.</div>
-          {[
-            ['Verify the chain', 'curl /api/chain/verify'],
-            ['Chain head (latest block hash)', 'curl /api/chain/head'],
-            ['Full ledger', 'curl "/api/chain?limit=20"'],
-            ['Lookup by TXN id', 'curl /api/chain/block/TXN-…-S1'],
-          ].map(([label, cmd]) => (
-            <div key={cmd} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '6px 0', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
-              <span style={{ fontSize: 11.5, color: '#374151' }}>{label}</span>
-              <code style={{ fontSize: 10.5, fontFamily: 'monospace', color: '#1E3A5F', background: '#F8FAFC', padding: '3px 8px', borderRadius: 6, border: '1px solid #E2E8F0', whiteSpace: 'nowrap' }}>{cmd}</code>
-            </div>
-          ))}
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Open by design</div>
+          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 1.6 }}>
+            The ledger is a <b>public notice-board, not a private database</b>. Auditors, government stacks, apps — or anyone —
+            can read the same ownership truth at the same moment, with no special access and no personal data on the chain.
+            Trust comes from the math, not from taking our word for it.
+          </div>
         </div>
       </div>
 

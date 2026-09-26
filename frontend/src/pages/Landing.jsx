@@ -224,7 +224,7 @@ export default function Landing({ user }) {
               </h1>
               <p className="rv in rv-d1" style={{ fontSize: 16.5, lineHeight: 1.65, color: 'var(--muted)', marginTop: 22, maxWidth: '56ch' }}>
                 AasthiChain turns verified properties into fractional tokens. Pay by UPI, own instantly, trade anytime —
-                registry-office trust, not crypto hype. No paperwork. No ₹75 lakh barrier.
+                registry-office trust — a permissioned ledger, not a speculative cryptocurrency. No paperwork. No ₹75 lakh barrier.
               </p>
               <div className="rv in rv-d2" style={{ display: 'flex', gap: 12, marginTop: 30, flexWrap: 'wrap' }}>
                 {ctaPrimary}
@@ -285,7 +285,7 @@ export default function Landing({ user }) {
               ico: I.swap(), t: 'The AasthiChain way', d: 'Each property becomes fixed tokens — like shares. A ₹75L villa becomes 15,000 tokens at ₹500. Buy 100 tokens for ₹50,000, hold fractional ownership, trade instantly.',
             },
             {
-              ico: I.shield(), t: 'Why you can trust it', d: 'Every property is verified, every transfer is recorded, every payment is atomic — money and tokens move together or both refunded. Registry-office grade trust, not crypto hype.',
+              ico: I.shield(), t: 'Why you can trust it', d: 'Every property is verified, every transfer is recorded, every payment is atomic — money and tokens move together or both refunded. Registry-office grade trust — a permissioned ledger, not a speculative cryptocurrency.',
             },
           ].map((c, i) => (
             <div key={c.t} className={`acx-card rv rv-d${i + 1}`} style={{ padding: 26 }}>
