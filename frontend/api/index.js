@@ -1800,6 +1800,43 @@ export default async function handler(req, res) {
       }
     }
 
+    // UTR lookup: browsers get a verification certificate, API clients get JSON
+    function utrVerifyRespond(req, res, utr, pay, payload, errCode) {
+      const wantsHtml = String(req.headers.accept || '').includes('text/html') && req.query.format !== 'json';
+      if (!wantsHtml || !pay) {
+        if (payload) return res.json(payload);
+        return res.status(404).json({ error: errCode || 'UTR not found', utr });
+      }
+      const row = (k, v, mono) => `<tr><td style="padding:9px 0;color:#64748B;font-size:12.5px;white-space:nowrap;padding-right:24px">${k}</td><td style="padding:9px 0;font-weight:700;font-size:13px;color:#0F172A;text-align:right;${mono ? 'font-family:monospace' : ''}">${v}</td></tr>`;
+      const settled = pay.status === 'RELEASED';
+      const dt = (t) => t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Payment Verification ${utr}</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>` +
+        `<body style="margin:0;font-family:Inter,Arial,sans-serif;background:#F7F5F0;padding:32px 12px">` +
+        `<div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden">` +
+        `<div style="background:#1E3A5F;color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center">` +
+        `<div><div style="font-size:15px;font-weight:800;letter-spacing:.02em">AasthiChain</div><div style="font-size:10.5px;opacity:.75;letter-spacing:.14em">PAYMENT VERIFICATION</div></div>` +
+        `<div style="background:${settled ? '#63BE94' : '#D9A85C'};color:#0A1422;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px">${settled ? '✓ VERIFIED · SETTLED' : 'PENDING'}</div></div>` +
+        `<div style="padding:20px 24px">` +
+        `<div style="font-size:11px;color:#94A3B8;font-weight:700;letter-spacing:.1em;margin-bottom:2px">BANK REFERENCE (UTR)</div>` +
+        `<div style="font-family:monospace;font-size:15px;font-weight:800;color:#1E3A5F;word-break:break-all">${utr}</div>` +
+        `<table style="width:100%;border-collapse:collapse;margin-top:12px">` +
+        row('Amount', '₹' + Number(pay.amountINR || 0).toLocaleString('en-IN')) +
+        row('Tokens', Number(pay.tokenAmount || 0).toLocaleString('en-IN')) +
+        row('Status', pay.status) +
+        row('Paid from', pay.payerVpa || '—', true) +
+        row('Paid to', pay.payeeVpa || '—', true) +
+        row('Provider', (pay.provider === 'payu' ? 'PayU' : 'NPCI mock rail') + (pay.payuTestMode || pay.isSimulation ? ' · test mode, no real money' : '')) +
+        row('Confirmed at', dt(pay.confirmedAt)) +
+        row('Released at', dt(pay.releasedAt)) +
+        row('Drunix ledger TXN', pay.drunixTransferId || '—', true) +
+        `</table>` +
+        `<div style="margin-top:14px;padding:10px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:11px;color:#065F46;line-height:1.6">` +
+        `This certificate reflects the committed state of the Aasthi Drunix hash-chained ledger at the time of verification. Amount, tokens and ownership moved together atomically.</div>` +
+        (pay.drunixTransferId ? `<a href="/ledger?tx=${encodeURIComponent(pay.drunixTransferId)}" style="display:block;text-align:center;margin-top:14px;background:#1E3A5F;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:11px 20px;border-radius:9px">View this transfer in the Ledger Explorer →</a>` : '') +
+        `<div style="text-align:center;font-size:10px;color:#94A3B8;margin-top:12px">Machine-readable copy: append <code>?format=json</code></div>` +
+        `</div></div></body></html>`;
+      res.status(200).send(html);
+    }
     // GET /api/npci/utr/:utr — UTR reconciliation lookup
     if (path.match(/^\/api\/npci\/utr\/[^\/]+$/) && method === 'GET') {
       try {
@@ -1808,8 +1845,8 @@ export default async function handler(req, res) {
         if (!paymentId) {
           // Try search in payments directly (for legacy IMPS+RRN format)
           const found = Object.values(npciPayments).find(p => p.utr === utr || p.utr12 === utr || p.utrImps === utr || p.rrn === utr);
-          if (!found) return res.status(404).json({ error: 'UTR not found', utr, note: 'UTR may not yet be assigned — check if payment is still PENDING, or try RRN lookup' });
-          return res.json({
+          if (!found) return utrVerifyRespond(req, res, utr, null, null, 'UTR not found');
+          return utrVerifyRespond(req, res, utr, found, {
             utr,
             paymentId: found.paymentId,
             payment: found,
@@ -1823,8 +1860,8 @@ export default async function handler(req, res) {
           });
         }
         const pay = npciPayments[paymentId];
-        if (!pay) return res.status(404).json({ error: 'PaymentId from UTR index not found', utr, paymentId });
-        return res.json({
+        if (!pay) return utrVerifyRespond(req, res, utr, null, null, 'PaymentId from UTR index not found');
+        return utrVerifyRespond(req, res, utr, pay, {
           utr,
           paymentId,
           payment: pay,
