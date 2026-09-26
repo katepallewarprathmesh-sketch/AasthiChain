@@ -404,6 +404,7 @@ export default function Landing({ user }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginTop: 40 }}>
             {[
+              { t: 'Hash-chained Drunix ledger', d: 'Every settlement is a block — SHA-512 chained, merkle-committed, publicly verifiable by anyone, agent or DPI stack. Open the Ledger Explorer and prove it.' },
               { t: 'Permissioned identity', d: 'Every actor signs with JWT + MSP identity across four organizations. No anonymous actors can touch the ledger.' },
               { t: 'Double-spend protection', d: 'MVCC versioning on the Fabric state DB plus composite-key balances — the same token cannot be sold twice.' },
               { t: 'Idempotent everything', d: 'Payments, webhooks and settlements are idempotent — retries and refreshes can never double-credit an investor.' },
@@ -422,6 +423,9 @@ export default function Landing({ user }) {
               </div>
             ))}
           </div>
+            <div className="rv" style={{ marginTop: 24, textAlign: 'center' }}>
+              <a href="/ledger" style={{ color: 'var(--accent)', fontSize: 13.5, fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid var(--accent-30)' }}>Open the Drunix Ledger Explorer →</a>
+            </div>
         </div>
       </section>
 

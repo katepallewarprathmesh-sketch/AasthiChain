@@ -98,6 +98,17 @@ class ApiClient {
   // Transfers — SRP
   // clientState (optional): { property, receipts, claimedBalance } — lets a cold
   // serverless instance re-materialize the sender's balance from verified receipts
+  // ---- Drunix block ledger (public open-layer endpoints) ----
+  async getChain(limit = 50) { return this.request(`/api/chain?limit=${limit}`) }
+  async verifyChain() { return this.request('/api/chain/verify') }
+  async chainHead() { return this.request('/api/chain/head') }
+  async tamperChain(height) {
+    return this.request('/api/chain/tamper', { method: 'POST', body: JSON.stringify({ height }) })
+  }
+  async restoreChain(height = -1) {
+    return this.request('/api/chain/restore', { method: 'POST', body: JSON.stringify({ height }) })
+  }
+
   async transferTokens(assetId, fromId, toId, amount, clientState) {
     return this.request('/api/transfers', {
       method: 'POST',

@@ -419,7 +419,8 @@ app.post('/api/properties/:id/mint', authMiddleware, (req, res) => {
   const key = req.params.id + '~' + prop.originatorId;
   if (balances[key]) return res.status(409).json({ error: 'ERR_DUPLICATE_MINT' });
   balances[key] = { docType: 'balance', assetId: req.params.id, ownerId: prop.originatorId, balance: totalTokens, updatedAt: new Date() };
-  const resp = { assetId: req.params.id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock', endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer') enforced" };
+  drunixAppend('TOKEN_MINTED', [{ kind: 'mint', assetId: req.params.id, to: prop.originatorId, msp: 'OriginatorMSP', totalTokens, endorsedBy: ['OriginatorMSP.peer', 'RegistrarMSP.peer'] }]);
+  const resp = { assetId: req.params.id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock', blockHeight: drunixChain.length - 1, endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer') enforced" };
   if (idemKey) idempotency[idemKey] = resp;
   res.json(resp);
 });
@@ -536,7 +537,8 @@ app.post('/api/transfers', authMiddleware, (req, res) => {
   const transferId = 'TXN-' + crypto.randomUUID();
   const transfer = { docType: 'transfer', transferId, assetId, fromId, toId, amount: amt, txTimestamp: new Date(), status: 'COMPLETED' };
   transfers[transferId] = transfer;
-  res.json({ transferId, assetId, fromId, toId, amount: amt, status: 'COMPLETED', fabricMode: 'mock' });
+  drunixAppend('TOKEN_TRANSFERRED', [{ kind: 'transfer', transferId, assetId, from: fromId, to: toId, tokens: amt, commitType: 'propose-endorse-commit' }]);
+  res.json({ transferId, assetId, fromId, toId, amount: amt, status: 'COMPLETED', blockHeight: drunixChain.length - 1, fabricMode: 'mock' });
 });
 
 // FIX: wallet route BEFORE balance/:assetId/:ownerId — otherwise "wallet" is captured as assetId
@@ -818,9 +820,11 @@ async function settleConfirmedPayment(pay) {
   balances[bKey] = { docType: 'balance', assetId, ownerId: buyer, balance: ((bBal ? parseInt(bBal.balance) : 0)) + amt, updatedAt: now };
   const tid = `TXN-${(typeof safeUUID === 'function' ? safeUUID() : crypto.randomUUID()).slice(0, 8)}-S1`;
   transfers[tid] = { docType: 'transfer', transferId: tid, assetId, fromId: seller, toId: buyer, amount: amt, txTimestamp: now, status: 'COMPLETED', paymentId: pay.paymentId, settledServerSide: true };
+  drunixAppend('TOKEN_TRANSFERRED', [{ kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, atomic: 'DvP-leg-1' }]);
   pay.drunixTransferId = tid;
   pay.status = 'RELEASED';
   pay.releasedAt = now;
+  drunixAppend('ESCROW_RELEASED', [{ kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, tokens: amt, seller, buyer, atomic: 'DvP-leg-2' }]);
   if (typeof globalThis !== 'undefined') {
     globalThis._aasthi_balances = balances;
     globalThis._aasthi_transfers = transfers;
@@ -839,6 +843,81 @@ async function settleConfirmedPayment(pay) {
 // ---- Subscription lifecycle (computed, never stored — can't drift from ledger)
 // primary (buying) -> fully-subscribed (primary closed, phase 'secondary') ->
 // wallet-to-wallet P2P transfers. Drives buy guards + UI progress/badges.
+// ================= AASTHI DRUNIX — HASH-CHAINED BLOCK LEDGER =================
+// Every state change (mint / token transfer / escrow release) is committed as a
+// block: SHA-512 chained (prevHash) + merkle-committed (txnsRoot). Anyone —
+// people, agents, or DPI stacks — can verify the whole chain without trusting
+// the server: GET /api/chain/verify (open layer, no auth, no PII).
+const DRUNIX_CHAIN_ID = 'aasthi-drunix';
+const DRUNIX_GENESIS_PREV = '0'.repeat(128);
+const DRUNIX_ORGS = [
+  { msp: 'AasthiChainMSP', role: 'platform' },
+  { msp: 'OriginatorMSP', role: 'property-owner' },
+  { msp: 'RegistrarMSP', role: 'registrar' },
+  { msp: 'InvestorMSP', role: 'investor' },
+  { msp: 'RegulatorMSP', role: 'regulator' }
+];
+function drunixHash(s) { return crypto.createHash('sha512').update(String(s)).digest('hex'); }
+function drunixTxnsRoot(txns) {
+  if (!txns || !txns.length) return drunixHash('');
+  let layer = txns.map(t => drunixHash(JSON.stringify(t)));
+  while (layer.length > 1) {
+    const next = [];
+    for (let i = 0; i < layer.length; i += 2) next.push(drunixHash(layer[i] + (layer[i + 1] || layer[i])));
+    layer = next;
+  }
+  return layer[0];
+}
+function drunixCanonical(b) { return [b.height, b.timestamp, b.type, b.txnsRoot, b.prevHash].join('|'); }
+let drunixChain = (typeof globalThis !== 'undefined' && globalThis._aasthi_chain) || [];
+function drunixAppend(type, txns) {
+  const prev = drunixChain[drunixChain.length - 1] || null;
+  const b = {
+    height: drunixChain.length,
+    timestamp: new Date().toISOString(),
+    type, txns,
+    contract: 'aasthi.dvp-v1',
+    txnsRoot: null, prevHash: prev ? prev.hash : DRUNIX_GENESIS_PREV, hash: null
+  };
+  b.txnsRoot = drunixTxnsRoot(b.txns);
+  b.hash = drunixHash(drunixCanonical(b));
+  drunixChain.push(b);
+  if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+  return b;
+}
+if (drunixChain.length === 0) {
+  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
+}
+function drunixVerify() {
+  for (let i = 0; i < drunixChain.length; i++) {
+    const b = drunixChain[i];
+    const expectPrev = i === 0 ? DRUNIX_GENESIS_PREV : drunixChain[i - 1].hash;
+    if (b.prevHash !== expectPrev) return { valid: false, brokenAt: b.height, reason: 'prevHash linkage broken — block ' + b.height + ' no longer follows ' + (i - 1) };
+    if (drunixTxnsRoot(b.txns) !== b.txnsRoot) return { valid: false, brokenAt: b.height, reason: 'merkle root mismatch — block ' + b.height + ' transactions were altered after commit' };
+    if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
+  }
+  return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+}
+// Judge/demo only (clearly labeled SIMULATION in UI): alter a committed txn so
+// verify() can detect it — proof of tamper-evidence, the core of decentralized trust.
+function drunixTamper(height) {
+  const b = drunixChain[height];
+  if (!b || b.type === 'GENESIS' || !b.txns.length) return null;
+  if (!b._pristine) b._pristine = JSON.stringify(b.txns);
+  const t = b.txns[0];
+  if (t.amount) t.amount = Number(t.amount) * 10 + 1;
+  else if (t.totalTokens) t.totalTokens = Number(t.totalTokens) + 999999;
+  else if (t.tokens) t.tokens = Number(t.tokens) * 10 + 1;
+  else t.TAMPERED = true;
+  return { height, altered: t };
+}
+function drunixRestore(height) {
+  const b = drunixChain[height];
+  if (b && b._pristine) { b.txns = JSON.parse(b._pristine); delete b._pristine; return true; }
+  return false;
+}
+// ============ END HASH-CHAINED BLOCK LEDGER ============
+
 function subscriptionOf(prop) {
   const id = prop.assetId;
   const total = parseInt(prop.totalTokens) || 0;
@@ -1558,6 +1637,48 @@ app.get('/api/npci/webhooks', authMiddleware, (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
+
+// ---- Drunix chain explorer API — OPEN LAYER (public, read-only, no PII):
+// people, agents and DPI stacks verify the ledger without an account ----
+app.get('/api/chain', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const head = drunixChain[drunixChain.length - 1] || null;
+  res.json({
+    chainId: DRUNIX_CHAIN_ID, channel: DRUNIX_CHAIN_ID, hashAlgo: 'SHA-512',
+    height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length,
+    head: head ? head.hash : null,
+    orgs: DRUNIX_ORGS, contract: 'aasthi.dvp-v1', fabricMode: 'mock',
+    blocksList: drunixChain.slice(-limit).reverse().map(b => ({ ...b, txns: b.txns }))
+  });
+});
+app.get('/api/chain/verify', (req, res) => {
+  const v = drunixVerify();
+  res.json({ ...v, note: v.valid ? 'Recomputed SHA-512 chain + merkle roots from genesis — every block intact.' : 'Any participant (or agent) recomputing the chain detects this. Trust is in the math, not the operator.' });
+});
+app.get('/api/chain/head', (req, res) => {
+  const head = drunixChain[drunixChain.length - 1] || null;
+  res.json({ chainId: DRUNIX_CHAIN_ID, height: head ? head.height : -1, head: head ? head.hash : null, blocks: drunixChain.length });
+});
+app.get('/api/chain/block/:n', (req, res) => {
+  const key = req.params.n;
+  const b = /^\d+$/.test(key) ? drunixChain[parseInt(key)] : drunixChain.find(x => x.hash === key || (x.txns || []).some(t => Object.values(t).includes(key)));
+  if (!b) return res.status(404).json({ error: 'ERR_BLOCK_NOT_FOUND', query: key });
+  res.json({ ...b });
+});
+// Demo-only (SIMULATION label in UI): mutate a committed block, then verify() proves detection.
+app.post('/api/chain/tamper', (req, res) => {
+  const height = parseInt(req.body?.height ?? Math.max(1, drunixChain.length - 1));
+  const r = drunixTamper(height);
+  if (!r) return res.status(400).json({ error: 'ERR_CANNOT_TAMPER', message: 'Pick a committed, non-genesis block' });
+  res.json({ simulated: true, warning: 'SIMULATION — demonstrating tamper-evidence', ...r, next: 'GET /api/chain/verify' });
+});
+app.post('/api/chain/restore', (req, res) => {
+  const height = parseInt(req.body?.height ?? -1);
+  if (height >= 0) return res.json({ restored: drunixRestore(height), height });
+  let n = 0; for (const b of drunixChain) if (b._pristine && drunixRestore(b.height)) n++;
+  res.json({ restoredBlocks: n, next: 'GET /api/chain/verify' });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`AasthiChain Mock API Gateway + Frontend (Node.js live demo) listening on :${PORT} | FabricMode: mock | Tracks A1-A7 + Fintech UI per spec`);
   console.log(`Seed property: ${propId} | Balances: ${Object.keys(balances).length} | Transfers: ${Object.keys(transfers).length} (25 for pagination demo)`);

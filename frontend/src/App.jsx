@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import LedgerExplorer from './pages/LedgerExplorer.jsx'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 
 // Error Boundary to catch blank screen errors — shows error instead of blank per §1.4 voice
@@ -175,6 +176,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
               ? [
                   { path: '/marketplace', label: 'Marketplace' },
                   { path: '/wallet', label: 'Wallet' },
+                  { path: '/ledger', label: 'Ledger' },
                   ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
                   ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
                 ]
@@ -329,6 +331,7 @@ function AppContent({ user, setUser }) {
           <Route path="/login" element={<Login onLogin={setUser} />} />
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
+          <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/property/:id" element={effectiveUser ? <PropertyDetail user={effectiveUser} /> : <Navigate to="/login" />} />
