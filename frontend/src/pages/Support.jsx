@@ -4,13 +4,14 @@
 //
 // MAINTAINER: paste your UPI ID here to activate the UPI card (QR + deep link
 // render automatically). Example: 'yourname@oksbi'
-const UPI_ID = ''
+const UPI_ID = '80105301033@axl'
 
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import qrcode from 'qrcode-generator'
 
 const SPONSORS_URL = 'https://github.com/sponsors/katepallewarprathmesh-sketch'
+const BMC_URL = 'https://buymeacoffee.com/prathmesh_1903'
 
 function upiLink(vpa) {
   return `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent('AasthiChain OSS')}&cu=INR&tn=${encodeURIComponent('AasthiChain open-source support')}`
@@ -95,6 +96,16 @@ export default function Support() {
         </div>
 
         <QrCard />
+
+        <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Buy Me a Coffee</h3>
+          <p style={{ fontSize: 12.5, color: '#6B7280', lineHeight: 1.6, marginTop: 8 }}>
+            enjoyed the demo? bought tokens with test money? send a real coffee. one-time, card or UPI, international friendly.
+          </p>
+          <a href={BMC_URL} target="_blank" rel="noopener" style={{ display: 'block', textAlign: 'center', marginTop: 14, padding: '11px 16px', background: '#FFDD00', color: '#0D0C22', textDecoration: 'none', fontSize: 13, fontWeight: 700, borderRadius: 8 }}>
+            &#9749; buymeacoffee.com/prathmesh_1903
+          </a>
+        </div>
       </div>
 
       <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 14 }}>
