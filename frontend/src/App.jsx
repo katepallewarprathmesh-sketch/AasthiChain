@@ -166,6 +166,8 @@ function Nav({ user, onLogout, onRoleSwitch }) {
   const theme = useChromeTheme(isLanding)
   const dark = isLanding && theme === 'dark'
   const isMobile = useIsMobile()
+  // Signed-in phones get a two-row navbar so role + sign out are always reachable
+  const twoRow = isMobile && !!user
 
   const bg = dark ? 'transparent' : '#FFFFFF'
   const border = dark ? 'rgba(255,255,255,0.07)' : '#E5E7EB'
@@ -181,8 +183,8 @@ function Nav({ user, onLogout, onRoleSwitch }) {
 
   return (
     <nav className="site-nav" data-look={dark ? 'dark' : 'light'} style={{ position: 'sticky', top: 0, zIndex: 100, background: bg, borderBottom: `1px solid ${border}` }}>
-      <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: isMobile ? 56 : 64, gap: isMobile ? 10 : 24, padding: isMobile ? '0 12px' : undefined }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+      <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: twoRow ? 'flex-start' : 'center', flexWrap: twoRow ? 'wrap' : undefined, height: twoRow ? undefined : (isMobile ? 56 : 64), gap: isMobile ? 10 : 24, rowGap: twoRow ? 0 : undefined, padding: twoRow ? '2px 12px' : (isMobile ? '0 12px' : undefined) }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: twoRow ? 10 : 22, flex: twoRow ? '1 1 100%' : undefined, minHeight: twoRow ? 50 : undefined }}>
           <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
             {!isMobile && <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>}
@@ -207,7 +209,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexShrink: 0, flex: twoRow ? '1 1 100%' : undefined, justifyContent: twoRow ? 'space-between' : undefined, borderTop: twoRow ? `1px solid ${border}` : undefined, padding: twoRow ? '7px 0' : undefined }}>
           {isLanding && (
             <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} style={{ color: mut }} title="Toggle light / dark">
               {dark ? (
@@ -221,7 +223,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 8, padding: '4px 8px' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: dark ? '#64718A' : '#9CA3AF' }}>ROLE</span>
-                <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: isMobile ? 110 : undefined }}>
+                <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: twoRow ? 130 : isMobile ? 110 : undefined }}>
                   {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>
               </div>
