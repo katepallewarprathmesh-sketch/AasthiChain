@@ -83,7 +83,7 @@ export default function Marketplace({ user }) {
           }}
         />
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: '#9CA3AF' }}>{filtered.length} properties</span>
           <button
             onClick={refresh}

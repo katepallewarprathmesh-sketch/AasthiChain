@@ -54,6 +54,8 @@ export default function Regulator({ user }) {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10,
               background: '#F9FAFB',
               border: '1px solid #F3F4F6',
               borderRadius: 8,
@@ -65,7 +67,7 @@ export default function Regulator({ user }) {
                   {p.location?.city || ''} • {money(p.valuationINR)} • {p.totalTokens || 0} tokens • {p.status}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => handleFreeze(p.assetId)}
                   style={{

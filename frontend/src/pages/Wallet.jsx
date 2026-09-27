@@ -194,7 +194,9 @@ export default function Wallet({ user }) {
         marginTop: 20,
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 10
       }}>
         <div>
           <div style={{ fontSize: 12, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Total Portfolio Value</div>

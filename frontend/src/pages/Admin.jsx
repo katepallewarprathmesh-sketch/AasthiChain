@@ -319,7 +319,7 @@ export default function Admin({ user }) {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
               <button
                 onClick={() => handleValidate('VALIDATED')}
                 style={{
@@ -460,7 +460,7 @@ export default function Admin({ user }) {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
             {properties.filter(pp => pp.originatorId === user.identityId).map(pp => (
-              <div key={pp.assetId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12 }}>
+              <div key={pp.assetId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12 }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{pp.title}</div>
                   <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>

@@ -310,7 +310,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             {payment.utr && <a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{ color: '#1E3A5F' }}>Verify UTR →</a>}
           </div>
         )}
-        <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'center' }}>
+        <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
           <a href="/wallet" className="btn btn-primary" style={{ fontSize: 13, textDecoration: 'none', padding: '10px 16px' }}>
             View Wallet →
           </a>

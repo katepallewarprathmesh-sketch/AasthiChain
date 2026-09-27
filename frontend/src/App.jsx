@@ -29,7 +29,7 @@ class ErrorBoundary extends React.Component {
               {String(this.state.error?.message || this.state.error || 'Unknown error')}
               {this.state.info?.componentStack ? '\n' + this.state.info.componentStack.slice(0,500) : ''}
             </pre>
-            <div style={{marginTop:12, display:'flex', gap:8}}>
+            <div style={{marginTop:12, display:'flex', gap:8, flexWrap:'wrap'}}>
               <button className="btn btn-primary" style={{fontSize:12}} onClick={()=>window.location.reload()}>Refresh Page</button>
               <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>this.setState({hasError:false, error:null, info:null})}>Try Again</button>
               <a href="/marketplace" className="btn btn-secondary" style={{fontSize:12, textDecoration:'none'}}>Back to Marketplace</a>

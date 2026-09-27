@@ -153,7 +153,7 @@ export default function DigiLockerKYC({ user }) {
                 <button className="btn btn-secondary" onClick={simulateCallback} disabled={loading} style={{width:'100%', marginTop:8, fontSize:11, padding:'8px'}}>
                   Simulate DigiLocker Callback (OTP Verified) →
                 </button>
-                <div style={{display:'flex', gap:6, marginTop:8}}>
+                <div style={{display:'flex', gap:6, marginTop:8, flexWrap:'wrap'}}>
                   <button onClick={()=>pullDocument('AADHAAR')} style={{flex:1, fontSize:10, padding:'6px', borderRadius:6, border:'1px solid #E5E7EB', background:'white'}}>Pull Aadhaar</button>
                   <button onClick={()=>pullDocument('PAN')} style={{flex:1, fontSize:10, padding:'6px', borderRadius:6, border:'1px solid #E5E7EB', background:'white'}}>Pull PAN</button>
                 </div>

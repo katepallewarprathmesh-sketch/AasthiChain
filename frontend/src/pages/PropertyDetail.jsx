@@ -259,7 +259,7 @@ export default function PropertyDetail({ user }) {
                     </select>
                     <input type="number" min="1" max={myHeld} value={xferAmt} onChange={e => setXferAmt(e.target.value)} placeholder="Tokens" style={{ width: 90, fontSize: 12.5, padding: '9px 10px', border: '1px solid #E5E7EB', borderRadius: 8 }} />
                   </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     <button onClick={doXfer} disabled={!xferTo || !(parseInt(xferAmt) > 0)} style={{ flex: 1, padding: 10, background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', opacity: !xferTo || !(parseInt(xferAmt) > 0) ? 0.5 : 1 }}>Transfer</button>
                     <button onClick={() => setShowXfer(false)} style={{ padding: 10, background: 'white', color: '#6B7280', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12.5, cursor: 'pointer' }}>Cancel</button>
                   </div>

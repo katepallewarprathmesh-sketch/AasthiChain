@@ -269,7 +269,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             Pay <strong>₹{amountDisplay}</strong> via UPI secure, instant, and protected. Your tokens are transferred only after payment succeeds.
           </p>
         </div>
-        <div style={{display:'flex', gap:6, alignItems:'center'}}>
+        <div style={{display:'flex', gap:6, alignItems:'center', flexWrap:'wrap'}}>
           <div style={{fontSize:10, background:'#F1F5F9', border:'1px solid #E2E8F0', padding:'4px 8px', borderRadius:6, color:'#475569'}}>
             ₹{amountDisplay} for {tokenAmount || 0} tokens
           </div>
@@ -335,7 +335,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
               <button className="btn btn-primary" onClick={approvePayment} disabled={status!=='pending'} style={{width:'100%', padding:'12px', fontSize:13, fontWeight:600}}>
                 {status==='pending' ? `✓ Confirm & Pay ₹${amountDisplay}` : status==='confirming' ? 'Processing payment...' : 'Completing transfer...'}
               </button>
-              <div style={{display:'flex', gap:8}}>
+              <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
                 <button className="btn btn-secondary" onClick={declinePayment} style={{flex:1, fontSize:11, padding:'8px'}}>Cancel</button>
                 {showDev && <button className="btn btn-secondary" onClick={timeoutPayment} style={{flex:1, fontSize:10, padding:'8px', background:'#FEF2F2', color:'#991B1B', borderColor:'#FECACA'}}>Timeout (dev)</button>}
               </div>

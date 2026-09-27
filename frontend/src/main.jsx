@@ -99,7 +99,7 @@ function ClerkFailedState({ error }) {
         <p style={{fontSize:11, color:'var(--ink-40)', marginTop:12, fontFamily:'ui-monospace, monospace'}}>
           {String(error?.message || error || 'Unknown error')}
         </p>
-        <div style={{marginTop:16, display:'flex', gap:8}}>
+        <div style={{marginTop:16, display:'flex', gap:8, flexWrap:'wrap'}}>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>Retry</button>
           <button className="btn btn-secondary" onClick={() => {
             localStorage.removeItem('aasthi_user')
