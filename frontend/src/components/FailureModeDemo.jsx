@@ -46,7 +46,7 @@ export default function FailureModeDemo({ user }) {
         <span style={{fontSize:9, background:'#F9FAFB', border:'1px solid #E5E7EB', padding:'3px 8px', borderRadius:12, color:'#6B7280'}}>Developer test</span>
       </div>
       
-      <div style={{display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginTop:14}}>
+      <div className="acx-r2x" style={{gap:10, marginTop:14}}>
         {scenarios.map(s => (
           <button key={s.id} onClick={() => runScenario(s.id)} disabled={loading}
             style={{textAlign:'left', padding:'12px', borderRadius:8, border:`1px solid #E5E7EB`, background:'#F9FAFB', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>

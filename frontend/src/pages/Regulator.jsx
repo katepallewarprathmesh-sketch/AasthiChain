@@ -121,7 +121,8 @@ export default function Regulator({ user }) {
         </div>
 
         <div style={{ overflowX: 'auto', marginTop: 16 }}>
-          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', minWidth: 560 }}>
             <thead>
               <tr style={{ color: '#9CA3AF', borderBottom: '1px solid #F3F4F6', textAlign: 'left', fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>
                 <th style={{ padding: '10px 8px' }}>From → To</th>
@@ -139,6 +140,7 @@ export default function Regulator({ user }) {
               ))}
             </tbody>
           </table>
+          </div>
           {transfers.length === 0 && (
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#9CA3AF', fontSize: 13 }}>No transfers yet</div>
           )}

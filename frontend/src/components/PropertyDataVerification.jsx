@@ -68,7 +68,7 @@ export default function PropertyDataVerification({ assetId }) {
         Verify property against government land records (Bhoomi, Dharani, e-Property) encumbrance check, valuation, ownership. Mock for hackathon, real toggle via PROPERTY_DATA_API_KEY.
       </p>
 
-      <div style={{marginTop:16, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+      <div className="acx-r2x" style={{marginTop:16}}>
         <div style={{background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:10, padding:12}}>
           <div style={{fontSize:11, fontWeight:700, textTransform:'uppercase', color:'#64748B', marginBottom:8}}>Property Our Records</div>
           {data ? (

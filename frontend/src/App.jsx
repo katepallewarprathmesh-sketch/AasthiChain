@@ -71,6 +71,19 @@ function getStoredUser() {
   try { const s=localStorage.getItem('aasthi_user'); return s?JSON.parse(s):null } catch { return null }
 }
 
+function useIsMobile(breakpoint = 860) {
+  const [m, setM] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(`(max-width: ${breakpoint}px)`).matches : false))
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`)
+    const on = () => setM(mq.matches)
+    if (mq.addEventListener) mq.addEventListener('change', on)
+    else mq.addListener(on)
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on) }
+  }, [])
+  return m
+}
+
 function getChromeTheme() {
   try { return localStorage.getItem('aasthi_theme') || 'dark' } catch { return 'dark' }
 }
@@ -92,6 +105,7 @@ function Footer() {
   const location = useLocation()
   const look = useChromeTheme(location.pathname === '/')
   const dark = look === 'dark'
+  const isMobileF = useIsMobile()
   const line = dark ? 'rgba(255,255,255,0.08)' : '#E5E7EB'
   const head = dark ? '#EAEEF5' : '#111827'
   const mut = dark ? '#9DA9BC' : '#6B7280'
@@ -105,7 +119,7 @@ function Footer() {
   return (
     <footer className="site-footer" data-look={look} style={{ padding: '44px 0 28px', marginTop: 0 }}>
       <div className="container">
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr', gap: 32, flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobileF ? '1fr' : '1.6fr 1fr 1fr', gap: isMobileF ? 26 : 32 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800 }}>A</div>
@@ -151,6 +165,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
   const isLanding = location.pathname === '/'
   const theme = useChromeTheme(isLanding)
   const dark = isLanding && theme === 'dark'
+  const isMobile = useIsMobile()
 
   const bg = dark ? 'transparent' : '#FFFFFF'
   const border = dark ? 'rgba(255,255,255,0.07)' : '#E5E7EB'
@@ -166,13 +181,13 @@ function Nav({ user, onLogout, onRoleSwitch }) {
 
   return (
     <nav className="site-nav" data-look={dark ? 'dark' : 'light'} style={{ position: 'sticky', top: 0, zIndex: 100, background: bg, borderBottom: `1px solid ${border}` }}>
-      <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 64, gap: 24 }}>
+      <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: isMobile ? 56 : 64, gap: isMobile ? 10 : 24, padding: isMobile ? '0 12px' : undefined }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
-          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800 }}>A</div>
-            <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>
+          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
+            {!isMobile && <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>}
           </Link>
-          <div style={{ display: 'flex', gap: 2 }}>
+          <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0 }}>
             {(user
               ? [
                   { path: '/marketplace', label: 'Marketplace' },
@@ -184,7 +199,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
               : [{ path: '/', label: 'Home' }]
             ).map(item => (
               <Link key={item.path} to={item.path} style={{
-                textDecoration: 'none', fontSize: 13, fontWeight: 500, padding: '8px 12px', borderRadius: 8,
+                textDecoration: 'none', fontSize: isMobile ? 12.5 : 13, fontWeight: 500, padding: isMobile ? '6px 9px' : '8px 12px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
                 color: isActive(item.path) ? (dark ? '#EAEEF5' : '#1E3A5F') : mut,
                 background: isActive(item.path) ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent',
               }}>{item.label}</Link>
@@ -192,7 +207,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexShrink: 0 }}>
           {isLanding && (
             <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} style={{ color: mut }} title="Toggle light / dark">
               {dark ? (
@@ -206,7 +221,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 8, padding: '4px 8px' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: dark ? '#64718A' : '#9CA3AF' }}>ROLE</span>
-                <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: '4px 8px' }}>
+                <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: isMobile ? 110 : undefined }}>
                   {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>
               </div>
@@ -216,10 +231,10 @@ function Nav({ user, onLogout, onRoleSwitch }) {
                   <ClerkLoaded><UserButton afterSignOutUrl="/" /></ClerkLoaded>
                 </>
               )}
-              <button onClick={onLogout} style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: 'transparent', color: mut, border: `1px solid ${chipBorder}` }}>Sign out</button>
+              <button onClick={onLogout} style={{ padding: isMobile ? '6px 8px' : '8px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: 'transparent', color: mut, border: `1px solid ${chipBorder}` }}>Sign out</button>
             </>
           ) : (
-            <Link to="/login" style={{ textDecoration: 'none', padding: '9px 16px', fontSize: 13, fontWeight: 600, borderRadius: 9, background: dark ? 'linear-gradient(180deg,#A9C6F4,#7FA8E8)' : '#1E3A5F', color: dark ? '#0A1422' : 'white', boxShadow: dark ? '0 8px 24px -8px rgba(127,168,232,0.5)' : 'none' }}>
+            <Link to="/login" style={{ textDecoration: 'none', padding: isMobile ? '8px 12px' : '9px 16px', fontSize: isMobile ? 12 : 13, fontWeight: 600, borderRadius: 9, background: dark ? 'linear-gradient(180deg,#A9C6F4,#7FA8E8)' : '#1E3A5F', color: dark ? '#0A1422' : 'white', boxShadow: dark ? '0 8px 24px -8px rgba(127,168,232,0.5)' : 'none', flexShrink: 0 }}>
               Sign in
             </Link>
           )}

@@ -151,7 +151,7 @@ export default function PropertyDetail({ user }) {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 24 }}>
+      <div className="acx-r2" style={{ marginTop: 24 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Property Value</h3>
           <div style={{ fontSize: 32, fontWeight: 800, marginTop: 12, color: '#111827' }}>{money(property.valuationINR)}</div>
@@ -159,7 +159,7 @@ export default function PropertyDetail({ user }) {
 
           <div style={{ height: 1, background: '#F3F4F6', margin: '20px 0' }}></div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="acx-r2x" style={{ gap: 16 }}>
             <div>
               <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Total Tokens</div>
               <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{(property.totalTokens || 0).toLocaleString('en-IN')}</div>

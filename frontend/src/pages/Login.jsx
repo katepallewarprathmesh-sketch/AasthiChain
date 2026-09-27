@@ -48,7 +48,7 @@ function DemoPresets({ onLogin, title }) {
         <span style={{fontSize:9, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:20, fontWeight:600}}>LIVE + LOCAL</span>
       </div>
       <p style={{fontSize:11, color:'#64748B', marginBottom:12}}>Works on LIVE https://aasthi-chain.vercel.app + local npm run dev mock JWT, no Clerk network, &lt;1s, no email verification</p>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+      <div className="acx-r2x" style={{gap:10}}>
         {ROLES.map(r => (
           <button key={r.id} onClick={()=>handleDemo(r)} disabled={!!loadingId} style={{textAlign:'left', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:12, cursor:'pointer'}}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>

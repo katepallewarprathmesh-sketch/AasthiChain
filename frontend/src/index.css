@@ -597,3 +597,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* nav link look on dark */
 .nav-link-d { color: #9DA9BC; } .nav-link-d:hover { color: #EAEEF5; }
+
+
+/* ================= RESPONSIVE LAYER ================= */
+/* Collapsible grids: 2-col cards, tight 2-col, 3-col, hero/split layouts.
+   Swap inline grids for these classes so media queries can take over. */
+.acx-r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.acx-r2x { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.acx-r3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.acx-rhero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 48px; align-items: center; }
+.acx-rsplit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 40px; align-items: center; }
+@media (max-width: 920px) {
+  .acx-rhero { grid-template-columns: 1fr; gap: 36px; }
+  .acx-rsplit { grid-template-columns: 1fr; gap: 30px; }
+}
+@media (max-width: 720px) {
+  .acx-r2 { grid-template-columns: 1fr; }
+  .acx-r2x { grid-template-columns: 1fr; }
+  .acx-r3 { grid-template-columns: 1fr 1fr; }
+}
+/* Nav link row: horizontal scroll on narrow screens, no scrollbar */
+.site-nav-links { display: flex; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%; }
+.site-nav-links::-webkit-scrollbar { display: none; }

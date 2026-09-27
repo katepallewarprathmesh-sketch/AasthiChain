@@ -118,7 +118,7 @@ export default function UTRReconciliation() {
             </div>
           </div>
 
-          <div style={{marginTop:12, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+          <div className="acx-r2x" style={{marginTop:12}}>
             <div style={{background:'white', border:'1px solid #E2E8F0', borderRadius:8, padding:10}}>
               <div style={{fontSize:11, fontWeight:700, color:'#DC2626'}}>Issues Requires Attention</div>
               <div style={{marginTop:8, fontSize:10, display:'flex', flexDirection:'column', gap:6}}>

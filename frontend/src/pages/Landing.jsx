@@ -212,7 +212,7 @@ export default function Landing({ user }) {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,0.95fr)', gap: 48, alignItems: 'center' }}>
+          <div className="acx-rhero">
             <div>
               <div className="rv in acx-chip" style={{ marginBottom: 22 }}>
                 <span className="acx-dot" />
@@ -230,7 +230,7 @@ export default function Landing({ user }) {
                 {ctaPrimary}
                 <a href="#how-it-works" className="acx-btn acx-btn-ghost acx-btn-lg">How it works</a>
               </div>
-              <div className="rv in rv-d3" style={{ display: 'flex', gap: 34, marginTop: 40, flexWrap: 'wrap' }}>
+              <div className="rv in rv-d3" style={{ display: 'flex', gap: '18px 26px', marginTop: 40, flexWrap: 'wrap' }}>
                 {[['₹500', 'entry, not ₹75L'], ['T+0', 'UPI settlement'], ['4 orgs', 'permissioned network'], ['100%', 'atomic transfers']].map(([k, v]) => (
                   <div key={k}>
                     <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 24, fontWeight: 600, color: 'var(--text)' }}>{k}</div>
@@ -372,7 +372,7 @@ export default function Landing({ user }) {
 
       {/* ================= PAYMENTS / PIPELINE (preserved anchor #payments) ================= */}
       <section id="payments" className="acx-wrap" style={{ paddingTop: 40, paddingBottom: 80 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr)', gap: 40, alignItems: 'center' }}>
+        <div className="acx-rsplit">
           <div>
             <div className="acx-eyebrow rv">Payments</div>
             <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(24px, 3vw, 34px)', marginTop: 12 }}>

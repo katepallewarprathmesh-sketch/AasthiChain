@@ -115,7 +115,7 @@ export default function DigiLockerKYC({ user }) {
         DigiLocker integration for KYC per Asset Tokenisation Bill 2026 verify Aadhaar, PAN, etc. via government source. Real flow: OAuth → DigiLocker → pull document → verify. Mock for hackathon, real toggle via DIGILOCKER_CLIENT_ID.
       </p>
 
-      <div style={{marginTop:16, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+      <div className="acx-r2x" style={{marginTop:16}}>
         <div style={{background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:10, padding:12}}>
           <div style={{fontSize:11, fontWeight:700, textTransform:'uppercase', color:'#64748B', marginBottom:8}}>Current KYC Status</div>
           {kycStatus ? (

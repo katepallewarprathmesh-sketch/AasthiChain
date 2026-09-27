@@ -181,7 +181,7 @@ export default function Admin({ user }) {
         When tokens are created, all of them start with you (the owner). Investors buy from you your ownership goes down as they buy.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="acx-r2">
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>1. List Your Property</h3>
           <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Enter basic details takes 1 minute</p>
@@ -205,7 +205,7 @@ export default function Admin({ user }) {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="acx-r2x">
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>City</label>
                 <input
