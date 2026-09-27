@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import Support from './pages/Support.jsx'
 import LedgerExplorer from './pages/LedgerExplorer.jsx'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 
@@ -98,7 +99,7 @@ function Footer() {
 
   const cols = [
     { h: 'Product', links: [['Marketplace', '/marketplace'], ['My Wallet', '/wallet'], ['List a Property', '/admin'], ['Regulator Audit', '/regulator']] },
-    { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Payments & Settlement', '/#payments'], ['Trust & Transparency', '/#trust'], ['Demo Access', '/#demo']] },
+    { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Payments & Settlement', '/#payments'], ['Trust & Transparency', '/#trust'], ['Support the project', '/support']] },
   ]
 
   return (
@@ -332,6 +333,7 @@ function AppContent({ user, setUser }) {
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
+          <Route path="/support" element={<Support />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/property/:id" element={effectiveUser ? <PropertyDetail user={effectiveUser} /> : <Navigate to="/login" />} />
