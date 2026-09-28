@@ -178,6 +178,45 @@ export default function Wallet({ user }) {
 
   const totalValue = wallet?.totalPortfolioValue || 0
   const holdings = wallet?.balances || []
+  const [nav, setNav] = useState(null)
+  const [loans, setLoans] = useState([])
+  const [allProps, setAllProps] = useState([])
+  const [swapForm, setSwapForm] = useState({ giveAssetId: '', giveTokens: '', getAssetId: '', getTokens: '', counterparty: 'investor2' })
+  const [swapMsg, setSwapMsg] = useState(null)
+  const [swapErr, setSwapErr] = useState(null)
+  const [repayMsg, setRepayMsg] = useState(null)
+
+  const loadOwnership = async () => {
+    try { setNav(await api.portfolioNav(identityId)) } catch {}
+    try { setLoans((await api.getLoans(identityId)).loans || []) } catch {}
+  }
+  useEffect(() => { loadOwnership() }, [identityId])
+  useEffect(() => {
+    api.listProperties().then(d => setAllProps(d.properties || [])).catch(() => {})
+  }, [])
+
+  const handleSwap = async (e) => {
+    e.preventDefault(); setSwapMsg(null); setSwapErr(null)
+    try {
+      const r = await api.atomicSwap(swapForm.giveAssetId, parseInt(swapForm.giveTokens), swapForm.getAssetId, parseInt(swapForm.getTokens), swapForm.counterparty)
+      setSwapMsg(`✓ Swap ${r.swapId} settled atomically on block #${r.blockHeight}: gave ${r.gave.tokens} of ${r.gave.assetId.slice(0,14)}…, received ${r.received.tokens} of ${r.received.assetId.slice(0,14)}…`)
+      setSwapForm({ giveAssetId: '', giveTokens: '', getAssetId: '', getTokens: '', counterparty: 'investor2' })
+      loadOwnership(); fetchWallet()
+    } catch (err) {
+      setSwapErr(err.data?.message || err.message || 'Swap failed, nothing moved')
+    }
+  }
+
+  const handleRepay = async (loanId) => {
+    setRepayMsg(null)
+    try {
+      const r = await api.repayLoan(loanId)
+      setRepayMsg(`✓ ${r.message} (block #${r.blockHeight})`)
+      loadOwnership()
+    } catch (err) {
+      setRepayMsg(err.data?.message || err.message || 'Repay failed')
+    }
+  }
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
@@ -274,6 +313,71 @@ export default function Wallet({ user }) {
       </div>
 
       <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 24 }}>
+        {nav && (
+          <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Portfolio NAV</h3>
+                <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Continuous net asset value, marked to last trade price</p>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#1E3A5F' }}>{money(nav.navINR)}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+              {[['Assets', money(nav.assetsValueINR), '#111827'], ['Yield earned', '+' + money(nav.yieldEarnedINR), '#065F46'], ['Loan due', '-' + money(nav.outstandingDebtINR), '#991B1B'], ['Active loans', String(nav.activeLoans), '#374151']].map(([k, v, c]) => (
+                <div key={k} style={{ flex: 1, minWidth: 110, background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: c, marginTop: 3 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loans.filter(l => l.status === 'ACTIVE').length > 0 && (
+          <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Credit against your tokens</h3>
+            {repayMsg && <div style={{ fontSize: 12, color: '#065F46', marginTop: 8 }}>{repayMsg}</div>}
+            {loans.filter(l => l.status === 'ACTIVE').map(l => (
+              <div key={l.loanId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12, marginTop: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{money(l.principalINR)} borrowed · {l.tokens} tokens pledged</div>
+                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Repay {money(Math.round(l.principalINR * 1.01 * 100) / 100)} (1% fee) to unlock · {l.loanId}</div>
+                </div>
+                <button onClick={() => handleRepay(l.loanId)} style={{ padding: '8px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Repay now</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 16 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Multi-property swap</h3>
+          <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Exchange tokens across two properties in one atomic transaction. Either both legs move, or neither.</p>
+          {swapMsg && <div style={{ fontSize: 12, color: '#065F46', marginTop: 8, wordBreak: 'break-all' }}>{swapMsg}</div>}
+          {swapErr && <div style={{ fontSize: 12, color: '#991B1B', marginTop: 8 }}>{swapErr}</div>}
+          <form onSubmit={handleSwap} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+            <div className="acx-r2x" style={{ gap: 10 }}>
+              <select required value={swapForm.giveAssetId} onChange={e => setSwapForm({ ...swapForm, giveAssetId: e.target.value })} style={{ padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}>
+                <option value="">You give (your property)</option>
+                {holdings.map((h, i) => <option key={i} value={h.balance.assetId}>{h.propertyTitle} (you own {(h.balance.balance || 0).toLocaleString('en-IN')})</option>)}
+              </select>
+              <input required type="number" min="1" placeholder="Tokens you give" value={swapForm.giveTokens} onChange={e => setSwapForm({ ...swapForm, giveTokens: e.target.value })} style={{ padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13 }} />
+            </div>
+            <div className="acx-r2x" style={{ gap: 10 }}>
+              <select required value={swapForm.getAssetId} onChange={e => setSwapForm({ ...swapForm, getAssetId: e.target.value })} style={{ padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}>
+                <option value="">You get (their property)</option>
+                {allProps.filter(p2 => p2.status === 'TOKENIZED' && p2.assetId !== swapForm.giveAssetId).map(p2 => <option key={p2.assetId} value={p2.assetId}>{p2.title}</option>)}
+              </select>
+              <input required type="number" min="1" placeholder="Tokens you get" value={swapForm.getTokens} onChange={e => setSwapForm({ ...swapForm, getTokens: e.target.value })} style={{ padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13 }} />
+            </div>
+            <div className="acx-r2x" style={{ gap: 10 }}>
+              <select value={swapForm.counterparty} onChange={e => setSwapForm({ ...swapForm, counterparty: e.target.value })} style={{ padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}>
+                {['investor1', 'investor2', 'originator1', 'registrar1'].filter(x => x !== identityId).map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+              <button type="submit" style={{ padding: '11px 16px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Swap atomically →</button>
+            </div>
+          </form>
+        </div>
+
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Transfer Tokens</h3>
         <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Send tokens to another person</p>
 

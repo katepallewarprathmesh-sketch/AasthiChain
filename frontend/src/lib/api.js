@@ -108,6 +108,28 @@ class ApiClient {
   async restoreChain(height = -1) {
     return this.request('/api/chain/restore', { method: 'POST', body: JSON.stringify({ height }) })
   }
+  // ---- Programmable ownership: NAV, yield, governance, credit, swaps ----
+  async portfolioNav(identityId) { return this.request(`/api/portfolio/${encodeURIComponent(identityId)}/nav`) }
+  async distributeYield(assetId, amountINR) {
+    return this.request(`/api/properties/${encodeURIComponent(assetId)}/yield/distribute`, { method: 'POST', body: JSON.stringify({ amountINR }) })
+  }
+  async getProposals(assetId) { return this.request(`/api/properties/${encodeURIComponent(assetId)}/governance`) }
+  async createProposal(assetId, title, description) {
+    return this.request(`/api/properties/${encodeURIComponent(assetId)}/governance`, { method: 'POST', body: JSON.stringify({ title, description }) })
+  }
+  async voteProposal(assetId, govId, choice) {
+    return this.request(`/api/governance/${encodeURIComponent(assetId)}/${encodeURIComponent(govId)}/vote`, { method: 'POST', body: JSON.stringify({ choice }) })
+  }
+  async pledgeCollateral(assetId, tokens) {
+    return this.request('/api/credit/pledge', { method: 'POST', body: JSON.stringify({ assetId, tokens }) })
+  }
+  async repayLoan(loanId) {
+    return this.request('/api/credit/repay', { method: 'POST', body: JSON.stringify({ loanId }) })
+  }
+  async getLoans(identityId) { return this.request(`/api/credit/loans/${encodeURIComponent(identityId)}`) }
+  async atomicSwap(giveAssetId, giveTokens, getAssetId, getTokens, counterparty) {
+    return this.request('/api/swap', { method: 'POST', body: JSON.stringify({ giveAssetId, giveTokens, getAssetId, getTokens, counterparty }) })
+  }
 
   async transferTokens(assetId, fromId, toId, amount, clientState) {
     return this.request('/api/transfers', {

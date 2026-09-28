@@ -16,6 +16,12 @@ export default function PropertyDetail({ user }) {
   const [xferAmt, setXferAmt] = useState('')
   const [xferMsg, setXferMsg] = useState(null)
   const [xferErr, setXferErr] = useState(null)
+  const [proposals, setProposals] = useState([])
+  const [govTitle, setGovTitle] = useState('')
+  const [yieldAmt, setYieldAmt] = useState('')
+  const [borrowTokens, setBorrowTokens] = useState('')
+  const [ownMsg, setOwnMsg] = useState(null)
+  const [myLoansHere, setMyLoansHere] = useState([])
   const [showBuy, setShowBuy] = useState(false)
 
   // Returning from PayU hosted checkout: auto-open the buy panel so the
@@ -44,6 +50,10 @@ export default function PropertyDetail({ user }) {
       try {
         const detail = await api.getProperty(property.assetId)
         setSub(detail?.subscription || null)
+        if (user) {
+          api.getProposals(property.assetId).then(d => setProposals(d.proposals || [])).catch(() => {})
+          api.getLoans(user.identityId).then(d => setMyLoansHere((d.loans || []).filter(l => l.assetId === property.assetId && l.status === 'ACTIVE'))).catch(() => {})
+        }
         const hs = detail?.holders
         if (Array.isArray(hs) && hs.length > 0) {
           setBalances(hs)
@@ -111,6 +121,50 @@ export default function PropertyDetail({ user }) {
   const soldPct = property.totalTokens ? Math.min(100, Math.round((soldShown / property.totalTokens) * 100)) : 0
   const myHeld = user ? (balances.find(b => b.ownerId === user.identityId)?.balance || 0) : 0
   const identityOptions = [['originator1', 'Property Owner'], ['registrar1', 'Registrar'], ['investor1', 'Investor 1'], ['investor2', 'Investor 2']].filter(([id]) => id !== user?.identityId)
+
+  const canManage = user && (property.originatorId === user.identityId || user.role === 'Regulator')
+
+  const doYield = async () => {
+    setOwnMsg(null)
+    try {
+      const r = await api.distributeYield(property.assetId, parseFloat(yieldAmt))
+      setOwnMsg({ ok: true, text: `Distributed ${money(r.amountINR)} to ${r.distribution.length} holder(s) on block #${r.blockHeight}. ` + r.distribution.map(d => `${d.identityId}: ${money(d.shareINR)}`).join(', ') })
+      setYieldAmt(''); setRefreshKey(k => k + 1)
+    } catch (e) { setOwnMsg({ ok: false, text: e.data?.message || e.message }) }
+  }
+  const doCreateProposal = async () => {
+    setOwnMsg(null)
+    try {
+      const r = await api.createProposal(property.assetId, govTitle, '')
+      setProposals(p => [r.proposal, ...p]); setGovTitle('')
+      setOwnMsg({ ok: true, text: `Proposal ${r.proposal.id} created. Token-weighted voting is open below.` })
+    } catch (e) { setOwnMsg({ ok: false, text: e.data?.message || e.message }) }
+  }
+  const doVote = async (govId, choice) => {
+    setOwnMsg(null)
+    try {
+      const r = await api.voteProposal(property.assetId, govId, choice)
+      setProposals(p => p.map(x => x.id === govId ? r.proposal : x))
+      setOwnMsg({ ok: true, text: `Vote recorded with ${r.yourWeight} tokens.` + (r.proposal.status !== 'OPEN' ? ` Proposal ${r.proposal.status} and committed to the ledger.` : '') })
+    } catch (e) { setOwnMsg({ ok: false, text: e.data?.message || e.message }) }
+  }
+  const doBorrow = async () => {
+    setOwnMsg(null)
+    try {
+      const r = await api.pledgeCollateral(property.assetId, parseInt(borrowTokens))
+      setOwnMsg({ ok: true, text: r.message + ` (block #${r.blockHeight})` })
+      setBorrowTokens(''); setRefreshKey(k => k + 1)
+      api.getLoans(user.identityId).then(d => setMyLoansHere((d.loans || []).filter(l => l.assetId === property.assetId && l.status === 'ACTIVE'))).catch(() => {})
+    } catch (e) { setOwnMsg({ ok: false, text: e.data?.message || e.message }) }
+  }
+  const doRepayHere = async (loanId) => {
+    setOwnMsg(null)
+    try {
+      const r = await api.repayLoan(loanId)
+      setOwnMsg({ ok: true, text: r.message + ` (block #${r.blockHeight})` })
+      setMyLoansHere(l => l.filter(x => x.loanId !== loanId)); setRefreshKey(k => k + 1)
+    } catch (e) { setOwnMsg({ ok: false, text: e.data?.message || e.message }) }
+  }
 
   const doXfer = async () => {
     setXferMsg(null); setXferErr(null)
@@ -198,7 +252,7 @@ export default function PropertyDetail({ user }) {
                 <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12, color: '#374151', lineHeight: 1.8 }}>
                   <li><b>Live:</b> wallet-to-wallet secondary transfers on the same atomic ledger</li>
                   <li><b>Live:</b> every buy/sell TXN lands in the Regulator's audit trail</li>
-                  <li><b>Planned:</b> pro-rata rental yield distribution to token holders</li>
+                  <li><b>Live:</b> pro-rata rental yield distribution to token holders (owner panel below)</li>
                   <li><b>Planned:</b> registrar re-title with the full investor cap table</li>
                 </ul>
               </div>
@@ -310,6 +364,94 @@ export default function PropertyDetail({ user }) {
           )}
         </div>
       </div>
+
+      {user && property.status === 'TOKENIZED' && (
+        <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 16 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Programmable ownership</h3>
+          <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Rent distribution, governance, credit and swaps settle as blocks on the same Drunix ledger.</p>
+          {ownMsg && (
+            <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.6, background: ownMsg.ok ? '#F0FDF4' : '#FEF2F2', border: `1px solid ${ownMsg.ok ? '#BBF7D0' : '#FECACA'}`, color: ownMsg.ok ? '#065F46' : '#991B1B', wordBreak: 'break-word' }}>
+              {ownMsg.ok ? '✓ ' : '✗ '}{ownMsg.text}
+            </div>
+          )}
+
+          <div className="acx-r2x" style={{ gap: 14, marginTop: 14 }}>
+            {canManage && (
+              <div style={{ background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 10, padding: 14 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827' }}>Distribute rental yield</div>
+                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 3, marginBottom: 8 }}>Pro-rata to every token holder, credited instantly.</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input type="number" min="1" placeholder="Amount ₹" value={yieldAmt} onChange={e => setYieldAmt(e.target.value)} style={{ flex: 1, minWidth: 90, padding: '9px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12.5 }} />
+                  <button onClick={doYield} disabled={!(parseFloat(yieldAmt) > 0)} style={{ padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: !(parseFloat(yieldAmt) > 0) ? 0.5 : 1 }}>Distribute</button>
+                </div>
+                <div style={{ marginTop: 12, borderTop: '1px solid #F3F4F6', paddingTop: 10 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827' }}>Create governance proposal</div>
+                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 3, marginBottom: 8 }}>Holders vote with their tokens (20% quorum).</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <input placeholder="e.g., Refurbish lobby from yield" value={govTitle} onChange={e => setGovTitle(e.target.value)} style={{ flex: 1, minWidth: 90, padding: '9px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12.5 }} />
+                    <button onClick={doCreateProposal} disabled={!govTitle.trim()} style={{ padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: !govTitle.trim() ? 0.5 : 1 }}>Create</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827' }}>Borrow against your tokens</div>
+              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 3, marginBottom: 8 }}>
+                {myHeld > 0
+                  ? `Pledge up to 50% of your ${Number(myHeld).toLocaleString('en-IN')} tokens. Get 50% LTV in INR instantly, 1% fee to repay.`
+                  : 'Acquire tokens first, then borrow against them.'}
+              </div>
+              {myLoansHere.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  {myLoansHere.map(l => (
+                    <div key={l.loanId} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', background: 'white', border: '1px solid #E5E7EB', borderRadius: 8, padding: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11.5, color: '#374151' }}>{money(l.principalINR)} on {l.tokens} tokens</span>
+                      <button onClick={() => doRepayHere(l.loanId)} style={{ padding: '6px 10px', background: 'white', border: '1px solid #E5E7EB', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Repay {money(Math.round(l.principalINR * 1.01 * 100) / 100)}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {myHeld > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input type="number" min="1" max={Math.floor((myHeld - myLoansHere.reduce((s, l) => s + l.tokens, 0)) * 0.5) || 1} placeholder="Tokens to pledge" value={borrowTokens} onChange={e => setBorrowTokens(e.target.value)} style={{ flex: 1, minWidth: 90, padding: '9px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12.5 }} />
+                  <button onClick={doBorrow} disabled={!(parseInt(borrowTokens) > 0)} style={{ padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: !(parseInt(borrowTokens) > 0) ? 0.5 : 1 }}>Pledge & borrow</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {proposals.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Governance {myHeld > 0 ? '(your vote weighs ' + Number(myHeld).toLocaleString('en-IN') + ' tokens)' : ''}</div>
+              {proposals.map(g => {
+                const yes = Object.values(g.votes || {}).filter(v => v.choice === 'YES').reduce((s, v) => s + v.weight, 0)
+                const no = Object.values(g.votes || {}).filter(v => v.choice === 'NO').reduce((s, v) => s + v.weight, 0)
+                return (
+                  <div key={g.id} style={{ background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{g.title}</div>
+                        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>by {g.createdBy} · YES {yes.toLocaleString('en-IN')} / NO {no.toLocaleString('en-IN')} · quorum {g.quorumPct}%</div>
+                      </div>
+                      {g.status === 'OPEN' ? (
+                        myHeld > 0 ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => doVote(g.id, 'YES')} style={{ padding: '7px 12px', background: '#059669', color: 'white', border: 'none', borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Vote YES</button>
+                            <button onClick={() => doVote(g.id, 'NO')} style={{ padding: '7px 12px', background: 'white', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>Vote NO</button>
+                          </div>
+                        ) : <span style={{ fontSize: 11, color: '#9CA3AF' }}>OPEN</span>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 800, color: g.status === 'ACCEPTED' ? '#065F46' : '#991B1B', background: g.status === 'ACCEPTED' ? '#ECFDF5' : '#FEF2F2', border: `1px solid ${g.status === 'ACCEPTED' ? '#A7F3D0' : '#FECACA'}`, padding: '4px 10px', borderRadius: 999 }}>{g.status}</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {showBuy && (
         <div style={{ marginTop: 20 }}>

@@ -526,6 +526,8 @@ app.post('/api/transfers', authMiddleware, (req, res) => {
     }
   }
   if (fromBal.balance < amt) return res.status(400).json({ error: `ERR_INSUFFICIENT_BALANCE: have ${fromBal.balance} need ${amt}` });
+  const lockedNow = drunixLockedTokens(assetId, fromId);
+  if (fromBal.balance - lockedNow < amt) return res.status(400).json({ error: 'ERR_TOKENS_LOCKED', message: `${lockedNow} tokens are pledged as loan collateral. Repay the loan or transfer less.` });
   const toKey = assetId + '~' + toId;
   let toBal = balances[toKey] || { docType: 'balance', assetId, ownerId: toId, balance: 0, updatedAt: new Date() };
   fromBal.balance -= amt;
@@ -917,6 +919,32 @@ function drunixRestore(height) {
   return false;
 }
 // ============ END HASH-CHAINED BLOCK LEDGER ============
+
+// ---- Programmable ownership: yield servicing, governance, credit, swaps ----
+// Shared Drunix transaction layer: every primitive below commits to the same
+// hash-chained ledger, so investors, owners and financial participants all see
+// one truth (the UMI/Demat-2.0 pattern: DLT assets + programmable servicing).
+const yieldBalances = (typeof globalThis !== 'undefined' && globalThis._aasthi_yield) || {};
+const governance = (typeof globalThis !== 'undefined' && globalThis._aasthi_gov) || {};
+const creditLoans = (typeof globalThis !== 'undefined' && globalThis._aasthi_loans) || {};
+if (typeof globalThis !== 'undefined') { globalThis._aasthi_yield = yieldBalances; globalThis._aasthi_gov = governance; globalThis._aasthi_loans = creditLoans; }
+function drunixTokenPrice(assetId) { const p = properties[assetId]; return p && p.totalTokens ? Math.floor(p.valuationINR / p.totalTokens) : 0; }
+function drunixLockedTokens(assetId, identityId) { let l = 0; for (const L of Object.values(creditLoans)) if (L.status === 'ACTIVE' && L.assetId === assetId && L.identityId === identityId) l += parseInt(L.tokens); return l; }
+function drunixNav(identityId) {
+  const holdings = []; let assetsValue = 0;
+  for (const b of Object.values(balances)) {
+    if (b.ownerId !== identityId || !(parseInt(b.balance) > 0)) continue;
+    const price = drunixTokenPrice(b.assetId);
+    const value = parseInt(b.balance) * price; assetsValue += value;
+    holdings.push({ assetId: b.assetId, tokens: parseInt(b.balance), tokenPrice: price, valueINR: value, lockedTokens: drunixLockedTokens(b.assetId, identityId) });
+  }
+  const yieldEarned = Math.round((yieldBalances[identityId] || 0) * 100) / 100;
+  let debt = 0; let activeLoans = 0;
+  for (const L of Object.values(creditLoans)) if (L.identityId === identityId && L.status === 'ACTIVE') { debt += Math.round(L.principalINR * 1.01 * 100) / 100; activeLoans++; }
+  const nav = Math.round((assetsValue + yieldEarned - debt) * 100) / 100;
+  return { identityId, asOf: new Date().toISOString(), assetsValueINR: assetsValue, yieldEarnedINR: yieldEarned, outstandingDebtINR: debt, navINR: nav, holdings, activeLoans, method: 'last-trade-price mark', currency: 'INR' };
+}
+// ========= end programmable ownership module =========
 
 function subscriptionOf(prop) {
   const id = prop.assetId;
@@ -1723,6 +1751,128 @@ app.post('/api/chain/restore', (req, res) => {
   if (height >= 0) return res.json({ restored: drunixRestore(height), height });
   let n = 0; for (const b of drunixChain) if (b._pristine && drunixRestore(b.height)) n++;
   res.json({ restoredBlocks: n, next: 'GET /api/chain/verify' });
+});
+
+
+// ---- Programmable ownership API: continuous NAV, yield servicing, governance, credit, swaps ----
+app.get('/api/portfolio/:identityId/nav', authMiddleware, (req, res) => {
+  res.json(drunixNav(req.params.identityId));
+});
+
+app.post('/api/properties/:id/yield/distribute', authMiddleware, (req, res) => {
+  const prop = properties[req.params.id];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  if (prop.originatorId !== req.user.identityId && req.user.role !== 'Regulator') return res.status(403).json({ error: 'ERR_NOT_ALLOWED', message: 'Only the listing owner or a Regulator can distribute yield' });
+  const amount = Math.round(parseFloat(req.body.amountINR) * 100) / 100;
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'ERR_INVALID_AMOUNT', message: 'amountINR must be > 0' });
+  const holders = Object.values(balances).filter(b => b.assetId === req.params.id && parseInt(b.balance) > 0);
+  if (!holders.length) return res.status(400).json({ error: 'ERR_NO_HOLDERS' });
+  const totalTokens = holders.reduce((s, h) => s + parseInt(h.balance), 0);
+  let distributed = 0; const distribution = [];
+  for (const h of holders) {
+    const share = Math.floor(amount * (parseInt(h.balance) / totalTokens) * 100) / 100;
+    if (share <= 0) continue;
+    yieldBalances[h.ownerId] = Math.round(((yieldBalances[h.ownerId] || 0) + share) * 100) / 100;
+    distributed = Math.round((distributed + share) * 100) / 100;
+    distribution.push({ identityId: h.ownerId, tokens: parseInt(h.balance), shareINR: share });
+  }
+  const blk = drunixAppend('YIELD_DISTRIBUTED', [{ kind: 'yield', assetId: req.params.id, amountINR: distributed, holders: distribution.length, contract: 'aasthi.servicing-v1' }]);
+  res.json({ ok: true, assetId: req.params.id, amountINR: distributed, distribution, blockHeight: blk.height, message: `Rent distributed pro-rata to ${distribution.length} holders and credited to their wallets` });
+});
+
+app.post('/api/properties/:id/governance', authMiddleware, (req, res) => {
+  const prop = properties[req.params.id];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  if (prop.originatorId !== req.user.identityId && req.user.role !== 'Regulator') return res.status(403).json({ error: 'ERR_NOT_ALLOWED', message: 'Only the listing owner or a Regulator can create proposals' });
+  const title = String(req.body.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'title required' });
+  const list = governance[req.params.id] = governance[req.params.id] || [];
+  const g = { id: 'GOV-' + crypto.randomUUID().slice(0, 8), assetId: req.params.id, title, description: String(req.body.description || ''), createdBy: req.user.identityId, createdAt: new Date().toISOString(), status: 'OPEN', votes: {}, quorumPct: 20 };
+  list.unshift(g);
+  res.json({ ok: true, proposal: g });
+});
+
+app.get('/api/properties/:id/governance', authMiddleware, (req, res) => {
+  res.json({ proposals: governance[req.params.id] || [] });
+});
+
+app.post('/api/governance/:assetId/:govId/vote', authMiddleware, (req, res) => {
+  const list = governance[req.params.assetId] || [];
+  const g = list.find(x => x.id === req.params.govId);
+  if (!g) return res.status(404).json({ error: 'ERR_PROPOSAL_NOT_FOUND' });
+  if (g.status !== 'OPEN') return res.status(400).json({ error: 'ERR_ALREADY_RESOLVED' });
+  const bal = balances[req.params.assetId + '~' + req.user.identityId];
+  const weight = bal ? parseInt(bal.balance) : 0;
+  if (weight <= 0) return res.status(403).json({ error: 'ERR_NO_VOTING_POWER', message: 'Only token holders vote, weighted by tokens held' });
+  const choice = String(req.body.choice || '').toUpperCase() === 'NO' ? 'NO' : 'YES';
+  g.votes[req.user.identityId] = { choice, weight, at: new Date().toISOString() };
+  const prop = properties[req.params.assetId];
+  const supply = prop && prop.totalTokens ? parseInt(prop.totalTokens) : Object.values(g.votes).reduce((s, v) => s + v.weight, 0);
+  let yes = 0, no = 0;
+  for (const v of Object.values(g.votes)) (v.choice === 'YES' ? yes += v.weight : no += v.weight);
+  if (((yes + no) / supply) * 100 >= g.quorumPct) {
+    g.status = yes > no ? 'ACCEPTED' : 'REJECTED';
+    g.resolvedAt = new Date().toISOString();
+    g.tally = { yes, no };
+    drunixAppend('GOVERNANCE_RESOLVED', [{ kind: 'governance', assetId: req.params.assetId, govId: g.id, title: g.title, yes, no, status: g.status, quorumPct: g.quorumPct }]);
+  }
+  res.json({ ok: true, proposal: g, yourWeight: weight });
+});
+
+app.post('/api/credit/pledge', authMiddleware, (req, res) => {
+  const assetId = req.body.assetId, identityId = req.user.identityId;
+  const tokens = parseInt(req.body.tokens);
+  const price = drunixTokenPrice(assetId);
+  if (!price) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  if (!tokens || tokens <= 0) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'tokens must be > 0' });
+  const bal = balances[assetId + '~' + identityId];
+  const have = bal ? parseInt(bal.balance) : 0;
+  const already = drunixLockedTokens(assetId, identityId);
+  if (already + tokens > Math.floor(have * 0.5)) return res.status(400).json({ error: 'ERR_LTV_LIMIT', message: `Collateral capped at 50% of your ${have} tokens (${already} already pledged). Loan-locked tokens cannot be sold or swapped.` });
+  const principalINR = Math.floor(tokens * price * 0.5);
+  const loan = { loanId: 'LOAN-' + crypto.randomUUID().slice(0, 8), identityId, assetId, tokens, principalINR, ratePct: 1, ltvPct: 50, status: 'ACTIVE', createdAt: new Date().toISOString(), isSimulation: true };
+  creditLoans[loan.loanId] = loan;
+  const blk = drunixAppend('COLLATERAL_PLEDGED', [{ kind: 'credit', loanId: loan.loanId, assetId, identityId, tokens, principalINR, ltvPct: 50 }]);
+  res.json({ ok: true, loan, blockHeight: blk.height, message: `${principalINR} INR credited against ${tokens} pledged tokens (50% LTV, repay with 1% fee). Simulation credit line.` });
+});
+
+app.post('/api/credit/repay', authMiddleware, (req, res) => {
+  const L = creditLoans[req.body.loanId];
+  if (!L || L.identityId !== req.user.identityId) return res.status(404).json({ error: 'ERR_LOAN_NOT_FOUND' });
+  if (L.status !== 'ACTIVE') return res.status(400).json({ error: 'ERR_ALREADY_REPAID' });
+  L.status = 'REPAID';
+  L.repaidAt = new Date().toISOString();
+  L.totalPaidINR = Math.round(L.principalINR * 1.01 * 100) / 100;
+  const blk = drunixAppend('LOAN_REPAID', [{ kind: 'credit', loanId: L.loanId, identityId: L.identityId, assetId: L.assetId, tokensUnlocked: L.tokens, totalPaidINR: L.totalPaidINR }]);
+  res.json({ ok: true, loan: L, blockHeight: blk.height, message: 'Loan repaid, collateral unlocked' });
+});
+
+app.get('/api/credit/loans/:identityId', authMiddleware, (req, res) => {
+  res.json({ loans: Object.values(creditLoans).filter(L => L.identityId === req.params.identityId) });
+});
+
+app.post('/api/swap', authMiddleware, (req, res) => {
+  const { giveAssetId, giveTokens, getAssetId, getTokens, counterparty } = req.body || {};
+  const me = req.user.identityId;
+  const gt = parseInt(giveTokens), rt = parseInt(getTokens);
+  if (!giveAssetId || !getAssetId || !(gt > 0) || !(rt > 0)) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'giveAssetId, giveTokens, getAssetId, getTokens required' });
+  if (giveAssetId === getAssetId) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'Pick two different properties' });
+  if (!counterparty || counterparty === me) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'counterparty identity required' });
+  const mine = balances[giveAssetId + '~' + me];
+  const theirs = balances[getAssetId + '~' + counterparty];
+  const mineLocked = drunixLockedTokens(giveAssetId, me);
+  const theirsLocked = drunixLockedTokens(getAssetId, counterparty);
+  if (!mine || mine.balance < gt + mineLocked) return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', message: 'You lack enough unlocked tokens on ' + giveAssetId });
+  if (!theirs || theirs.balance < rt + theirsLocked) return res.status(400).json({ error: 'ERR_COUNTERPARTY_SHORT', message: counterparty + ' lacks enough unlocked tokens on ' + getAssetId });
+  mine.balance -= gt; mine.updatedAt = new Date();
+  const toMe = balances[getAssetId + '~' + me] || (balances[getAssetId + '~' + me] = { docType: 'balance', assetId: getAssetId, ownerId: me, balance: 0, updatedAt: new Date() });
+  toMe.balance += rt; toMe.updatedAt = new Date();
+  theirs.balance -= rt; theirs.updatedAt = new Date();
+  const toThem = balances[giveAssetId + '~' + counterparty] || (balances[giveAssetId + '~' + counterparty] = { docType: 'balance', assetId: giveAssetId, ownerId: counterparty, balance: 0, updatedAt: new Date() });
+  toThem.balance += gt; toThem.updatedAt = new Date();
+  const swapId = 'SWAP-' + crypto.randomUUID().slice(0, 8);
+  const blk = drunixAppend('ATOMIC_SWAP', [{ kind: 'swap', swapId, leg1: { assetId: giveAssetId, from: me, to: counterparty, tokens: gt }, leg2: { assetId: getAssetId, from: counterparty, to: me, tokens: rt }, atomic: 'all-or-nothing' }]);
+  res.json({ ok: true, swapId, blockHeight: blk.height, gave: { assetId: giveAssetId, tokens: gt }, received: { assetId: getAssetId, tokens: rt }, counterparty, message: 'Both legs settled together. Either both moved, or neither.' });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
