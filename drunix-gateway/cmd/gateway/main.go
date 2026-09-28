@@ -34,6 +34,13 @@ func main() {
 	}
 
 	srv := drunix.NewServer(ledger)
+
+	// Embedded Drunix pipeline: LP → Orderer(RAFT) → VS(VSCC) → CP(MVCC+commit)
+	state := drunix.NewStateDB()
+	transient := drunix.NewTransientStore()
+	chain := drunix.NewChain()
+	srv.Pipeline = drunix.NewPipeline(state, transient, chain)
+	log.Printf("Drunix pipeline wired: LitePeer + Orderer(3, RAFT sim) + ValidationService + CommittingPeer on hash-chained ledger")
 	addr := ":" + envOr("DRUNIX_PORT", "21100")
 	log.Printf("AasthiChain Drunix Gateway (Golang) listening on %s — channel %s, chaincode %s",
 		addr, drunix.Channel, drunix.ChaincodeName)

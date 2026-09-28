@@ -13,6 +13,9 @@ import (
 type Server struct {
 	Ledger     DrunixClient
 	Thresholds Thresholds
+	// Pipeline is the full Drunix LP→Orderer→VS→CP transaction path
+	// (optional; wired by main when running the embedded pipeline demo).
+	Pipeline *Pipeline
 	// HistoryLookup returns the payer's recent-activity summary (wired by main
 	// from the payments store; nil means zero-history).
 	HistoryLookup func(payerID string) HistorySummary
@@ -34,6 +37,8 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/drunix/recent", s.handleRecent)
 	mux.HandleFunc("/fraud/score", s.handleFraudScore)
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
+	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
+	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
 	return logCORS(mux)
 }
 
@@ -191,5 +196,68 @@ func (s *Server) handleFraudConfig(w http.ResponseWriter, r *http.Request) {
 		"thresholds":  s.Thresholds,
 		"explainable": "every factor carries its weight — regulator-auditable decisions",
 		"theme":       "AI & Fraud Detection (NPCI x Citi Drunix Hackathon)",
+	})
+}
+
+// handlePipeline runs a transaction through the full Drunix path:
+// LP endorse → RAFT order → VS validate → CP MVCC + commit.
+// Body: {"fn":"TransferTokens","args":["PROP-1","alice","bob","5"],
+//
+//	"private":{"InvestorMSP":{"pan":"ABCPX1234F"}}}
+func (s *Server) handlePipeline(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipeline not wired"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST required"})
+		return
+	}
+	var body struct {
+		Fn      string                       `json:"fn"`
+		Args    []string                     `json:"args"`
+		Private map[string]map[string]string `json:"private"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Fn == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body must be {fn, args, private?}"})
+		return
+	}
+	// plain-string private fields (JSON []byte would demand base64)
+	priv := map[string]map[string][]byte{}
+	for org, fields := range body.Private {
+		priv[org] = map[string][]byte{}
+		for f, v := range fields {
+			priv[org][f] = []byte(v)
+		}
+	}
+	res, err := s.Pipeline.Submit(body.Fn, body.Args, priv)
+	code := http.StatusOK
+	if err != nil {
+		code = http.StatusUnprocessableEntity
+	}
+	writeJSON(w, code, map[string]interface{}{"result": res, "error": errStr(err)})
+}
+
+func errStr(err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// handlePipelineStats reports live pipeline state (judge dashboard).
+func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipeline not wired"})
+		return
+	}
+	p := s.Pipeline
+	v := p.CP.Ledger.Verify()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"stateDB":        map[string]interface{}{"keys": p.CP.State.Size(), "engine": "in-memory (YugabyteDB in production)"},
+		"transientStore": map[string]interface{}{"entries": p.CP.Transient.Size(), "engine": "KeyDB (in-memory, never persisted)"},
+		"ledger":         map[string]interface{}{"blocks": len(p.CP.Ledger.Blocks), "height": v.Height, "valid": v.Valid, "chainId": DrunixChainID},
+		"orderer":        map[string]interface{}{"nodes": p.Order.Nodes, "sequence": p.Order.Seq, "leader": p.Order.Leader(), "consensus": "RAFT (simulated)"},
+		"roles":          []string{"LitePeer (endorsement, stateless)", "Orderer (RAFT)", "ValidationService (VSCC)", "CommittingPeer (MVCC + commit)"},
 	})
 }
