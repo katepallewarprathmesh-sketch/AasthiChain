@@ -6,10 +6,12 @@
 
 Live: [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)
 
+Support the project: UPI `80105301033@axl` and GitHub Sponsors/BMC links are on the in-app **Support** page (donations, not investments).
+
 ### NPCI Drunix Tokenization
 
 - Ledger: Drunix-compatible Fabric chaincode in Go (`chaincode/`) — properties, fractional token balances, KYC, transfers, `SettleDvP` (atomic delivery-versus-payment with UTR proof) + `SettlementRecorded` chaincode events. **Duplicate deeds rejected on-chain**: `ERR_DUPLICATE_PROPERTY` if a documentHash is already registered — each document tokenizes exactly once
-- Drunix Gateway (Golang): `drunix-gateway/` — Drunix transaction lifecycle (PROPOSED → ENDORSED → COMMITTED, deterministic txIDs, read/write sets, chaincode events) + explainable AI fraud engine (`fraud.go`, ML-pluggable): 11 weighted signals, BLOCK ≥70 / REVIEW ≥40, re-screened at approve. `go test ./...` green. Run: `cd drunix-gateway && go run ./cmd/gateway` (:21100). Real network: `go build -tags real`
+- Drunix Gateway (Golang): `drunix-gateway/` — the **LP/CP pipeline implementing NPCI's 5-phase transaction flow** (below) + Drunix transaction lifecycle (PROPOSED → ENDORSED → COMMITTED, deterministic txIDs, read/write sets, chaincode events) + explainable AI fraud engine (`fraud.go`, ML-pluggable): 11 weighted signals, BLOCK ≥70 / REVIEW ≥40, re-screened at approve. `go test ./...` green (27 tests). Run: `cd drunix-gateway && go run ./cmd/gateway` (:21100). Real network: `go build -tags real`
 - Settlement: UPI Collect escrow → payment CONFIRMED (bank UTR) → Drunix token transfer → escrow RELEASED — atomic DvP (`drunixTransferId` on every payment)
 - Persistence: production state in Postgres / GitHub-backed real DB (`frontend/api/lib/db_real.js`), shared across serverless instances
 - Identity & org schema (Neon): `user, account, session, organization, member, invitation, verification, jwt, project_config` — implemented in code (`frontend/api/lib/authstore.js`, Postgres + in-memory dual mode) with tables live in Neon; full lifecycle APIs: login→session→logout, JWKS (Ed25519), OTP-style verification, org→invite→accept→members
@@ -22,6 +24,36 @@ Live: [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)
 - **Owner-only listing** — properties can only be listed by the **Property Owner (Originator)** role; tokens mint 100% to the lister by design, so an Investor can never end up "owning" a property it merely created. Investors buy tokens *from* the owner
 - **Real token availability** — `GET /api/properties/:id` returns `availableTokens` / `soldTokens`; the buy UI caps purchases at actual availability (Max preset, "Only N left"), and the server re-checks balance on transfer (`ERR_INSUFFICIENT_BALANCE`)
 - **Fraud-gated collect** — every UPI collect is risk-screened before approval; velocity burst (≥8 txns/10 min) → `403 FAILED_FRAUD_BLOCKED`; blocked attempts never feed velocity counters
+
+### Drunix LP/CP Pipeline — 5-Phase Transaction Flow (Go)
+
+AasthiChain's Drunix layer (`drunix-gateway/peer.go`, all Go) follows NPCI's transaction flow exactly. The traditional Fabric peer is split into two specialized roles — Lite Peer (LP) for endorsement, Committing Peer (CP) for validation & ledger commitment — connected via a shared StateDB and transient store:
+
+| Phase | Slide spec | Go implementation | Guardrail proven in tests |
+|---|---|---|---|
+| **1 Endorsement** | Client → LP: chaincode execution, RW Set generation, KeyDB storage | `LitePeer.Endorse()` + `simulateChaincode()` + `TransientStore` | double-spend rejected at the LP, before ordering |
+| **2 Submit Txn** | Client collects endorsements, signs & submits to Orderer | `Client.Sign()` → signed `Envelope` (HMAC-SHA512) | forged client signature → VS rejection |
+| **3 Ordering** | Orderer batches txns into blocks; CP pulls consecutive blocks | `Orderer` (3 nodes, Raft-simulated leader rotation, `BatchMax`, `Cut()`, `PullNext()`) | 3 buffered txns land in ONE ledger block; leaders rotate 1→2→3 |
+| **4 Validation** | CP → VS (round-robin): policy check, sig verify; CP: MVCC validation | `ValidationPool` (2 stateless VSCC instances, round-robin) + `mvccValidate` | same-block and cross-block `READ_CONFLICT` both caught; missing endorser → rejected |
+| **5 Commit** | CP commits block to ledger; applies write sets to StateDB | `ProcessBlock()`: `Ledger.Append` first, `StateDB.Apply` after | ledger carries only the private-data hash, never the values |
+
+- Private data travels LP → CP through the transient store (KeyDB, in-memory, consumed on apply); the signed proposal and the committed block record only its SHA-512 hash
+- Endorsement policies per function: mint = AND(OriginatorMSP, RegistrarMSP), freeze = RegulatorMSP, transfers = AND(AasthiChainMSP, InvestorMSP)
+- Every committed txn lands on the same hash-chained ledger (SHA-512, merkle txns root) that powers the Ledger Explorer UI
+- Endpoints (open verification layer, never advertised in the UI): `POST /drunix/pipeline` (returns the per-txn phase trace `1-endorsed → 2-signed → 3-ordered → 4-validated → 5-committed`), `GET /drunix/pipeline/stats` (orderer batch/leader state, VS pool, StateDB, chain verification)
+- Run: `cd drunix-gateway && go test ./...` then `go run ./cmd/gateway` (:21100)
+
+### Programmable Ownership (beyond tokenization)
+
+Tokens behave like real ownership, not just receipts — every action commits to the Drunix chain:
+
+- **Automated yield/rental distribution** — `POST /api/properties/:id/yield/distribute` splits pro-rata across holders (proven: ₹6000 → ₹4800/₹800/₹400 for 12000/2000/1000 tokens), `YIELD_DISTRIBUTED` block
+- **On-chain governance** — create proposal (`POST /api/properties/:id/governance`), 1 token = 1 vote, 20% quorum, auto-resolve at `GOVERNANCE_RESOLVED`
+- **Lending against fractions** — pledge up to 50% of holdings as collateral (`ERR_LTV_LIMIT` enforced), borrow instantly, repay ×1.01, tokens unlock on `LOAN_REPAID`
+- **Continuous NAV** — `GET /api/portfolio/:identityId/nav` = Σ tokens × price + yield received − loan obligations
+- **Multi-property atomic swap** — `POST /api/swap` settles both sides in one block (`ATOMIC_SWAP`) or not at all
+- Guardrail errors surfaced to the UI: `ERR_TOKENS_LOCKED`, `ERR_LTV_LIMIT`, `ERR_NO_VOTING_POWER`, `ERR_COUNTERPARTY_SHORT`, `ERR_ALREADY_RESOLVED`, `ERR_ALREADY_REPAID`, and more
+- Alignment with SEBI's Demat 2.0 / UMI pattern (DLT asset records + atomic settlement + programmable servicing): Drunix fractions ↔ DLT asset tokens, UPI/PayU money leg ↔ CBDC wallet slot — the same trusted-transaction-layer thesis
 
 ---
 
@@ -107,7 +139,7 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 - Flow: `PENDING (5min) → CONFIRMED (KYC+balance) → RELEASED (after TransferTokens) / REFUNDED`
 - Paise int64 to avoid float, X-Idempotency-Key, webhook callback simulation
 - Why Collect P2M not Intent? Seller requests, buyer approves — merchant collect + UTR reconciliation
-- Simulation honesty: No live NPCI sandbox — PPRO "Sandbox Not Available from UPI", API Setu sandbox-only per Jan 2022 note, direct NPCI requires bank partnership. Inspired by `upi-mock-engine`. UI badge `SIMULATION — No live NPCI` — honest labeling per Track A6. **Real path:** Direct access via NPCI-certified switch Setu (Pine Labs) — certified as UPI switch with direct NPCI systems access — or PSP Bank ICICI/Decentro/Razorpay. Same state machine PENDING→CONFIRMED→RELEASED, same RRN/UTR, 1-line toggle NPCI_MODE=real + SETU_API_KEY. See `/api/npci/real-config` and `docs/NPCI_REAL_API_INTEGRATION.md` + `payment-gateway/real_npcibank.go`
+- Simulation honesty: No live NPCI sandbox — PPRO "Sandbox Not Available from UPI", API Setu sandbox-only per Jan 2022 note, direct NPCI requires bank partnership. Inspired by `upi-mock-engine`. UI badge `SIMULATION — No live NPCI` — honest labeling per Track A6. **Real path:** Direct access via NPCI-certified switch Setu (Pine Labs) — certified as UPI switch with direct NPCI systems access — or PSP Bank ICICI/Decentro/Razorpay. Same state machine PENDING→CONFIRMED→RELEASED, same RRN/UTR, 1-line toggle NPCI_MODE=real + SETU_API_KEY. See `/api/npci/real-config` + `payment-gateway/real_npcibank.go`
 - Tests: 8 tests — success→transfer, timeout→refund, duplicate idempotency, KYC rejection, insufficient funds, invalid VPA, zero amount, ID formats
 
 **Secondary Rail — Sepolia:**
@@ -136,6 +168,13 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 - `/api/balances/wallet/:ownerId` GET — Portfolio (fixed v2.1 wallet 500)
 - `/api/transfers/history?bookmark` GET — Pagination bookmark pattern
 - `/api/drunix/ledger` GET — Drunix settlement trail (7 stages, PROPOSED→COMMITTED)
+- `/api/properties/:id/yield/distribute` POST — pro-rata yield to all holders (chain block `YIELD_DISTRIBUTED`)
+- `/api/properties/:id/governance` POST/GET + `/api/governance/:assetId/:govId/vote` POST — proposals, 1 token = 1 vote, 20% quorum
+- `/api/credit/pledge` POST + `/api/credit/repay` POST + `/api/credit/loans/:identityId` GET — borrow against locked fractions (50% LTV cap, repay ×1.01)
+- `/api/portfolio/:identityId/nav` GET — continuous NAV (tokens×price + yield − obligations)
+- `/api/swap` POST — atomic multi-property token swap (both sides or nothing)
+- `/drunix/pipeline` POST (Go gateway :21100) — full 5-phase LP→Orderer→VS→CP run with per-phase trace
+- `/drunix/pipeline/stats` GET (Go gateway :21100) — live pipeline state: orderer batch/leader, VS pool, StateDB keys, chain verification
 - `/api/fraud/config` GET · `/api/openfinance/capabilities` GET — fraud engine + Open Finance exposure
 - `/api/health` GET — v2.6: mode, `drunixGateway` (golang), `fraudEngine`
 
@@ -152,8 +191,8 @@ payment-gateway/ — UPI Collect P2M + IMPS UTR primary + PaymentEscrow.sol seco
 
 **Testing:**
 ```bash
-cd chaincode && go test -v
-cd drunix-gateway && go test ./...
+cd chaincode && go test -v          # 216+ tests
+cd drunix-gateway && go test ./...  # 27 tests incl. the 5-phase pipeline (batching, round-robin VS, MVCC, KeyDB, signatures)
 cd payment-gateway && go test -v && node gateway.test.js   # incl. 6 PayU tests — suite green
 cd frontend && npm run build
 ```
@@ -175,7 +214,7 @@ API & Split Payments — not required for this merchant-hosted UPI Collect flow.
 
 ### Production Roadmap (Not Built — Roadmap Only)
 
-Secondary market order-matching, custodian org (demat), DILRMP integration, DigiLocker KYC, real UPI AutoCollect (ICICI/Yes Bank), channel-per-asset-class, SPV legal wrapper (token = beneficial interest in SPV per Registration Act 1908 + Bill 2026), rental income via UPI
+Secondary market order-matching, custodian org (demat), DILRMP integration, DigiLocker KYC, real UPI AutoCollect (ICICI/Yes Bank), channel-per-asset-class, SPV legal wrapper (token = beneficial interest in SPV per Registration Act 1908 + Bill 2026). Rental yield distribution is already on-chain (Programmable Ownership above); what remains on the payments side is collecting real rent via UPI AutoCollect mandates
 
 ### SPV Note
 

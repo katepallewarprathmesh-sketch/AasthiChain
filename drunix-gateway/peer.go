@@ -3,6 +3,19 @@ package drunix
 // Drunix LP/CP pipeline — faithful implementation of the Drunix architecture
 // (NPCI's Hyperledger Fabric enterprise fork), in Go, as Drunix is.
 //
+// Transaction Flow (NPCI spec, 5 phases):
+//
+//	1 Endorsement   Client -> LP: chaincode execution, RW Set generation,
+//	                KeyDB (transient store) storage.
+//	2 Submit Txn    Client collects endorsements, signs the envelope and
+//	                submits it to the Orderer.
+//	3 Ordering      Orderer batches txns into blocks; CP pulls consecutive
+//	                blocks.
+//	4 Validation    CP -> VS (round-robin): policy check, signature verify;
+//	                CP: MVCC validation.
+//	5 Commit        CP commits the block to the ledger, then applies the
+//	                write sets to the State DB.
+//
 // Drunix splits the traditional Fabric peer into two specialized roles:
 //
 //	Lite Peer (LP)          stateless endorser: executes chaincode, generates
@@ -365,71 +378,234 @@ func (lp *LitePeer) Endorse(fn string, args []string, private map[string]map[str
 	return proposal, rw, endorsements, refs, privateDigest, nil
 }
 
-// ---------- Orderer (RAFT, simulated) ----------
+// ---------- Client (Phase 2: collects endorsements, signs, submits) ----------
 
-// Orderer orders endorsed envelopes. Real Drunix runs Raft; this simulation
-// elects a deterministic leader and stamps cluster-unique sequence numbers.
-type Orderer struct {
-	Nodes int
-	Seq   uint64
+// Envelope is what the client hands to the Orderer: the endorsed proposal
+// (with its RW set and endorsements) plus the client's own signature.
+type Envelope struct {
+	TxID          string        `json:"txId"`
+	Fn            string        `json:"fn"`
+	Args          []string      `json:"args"`
+	Proposal      string        `json:"proposal"`
+	RW            *RWSet        `json:"rwSet"`
+	RWDigest      string        `json:"rwDigest"`
+	PrivateDigest string        `json:"privateDigest,omitempty"`
+	PrivateRefs   []PrivateRef  `json:"privateRefs,omitempty"`
+	Endorsements  []Endorsement `json:"endorsements"`
+	ClientID      string        `json:"clientId"`
+	ClientSig     string        `json:"clientSig"`
+	Seq           uint64        `json:"seq"`
+	Leader        int           `json:"leader"`
 }
 
-// NewOrderer creates a cluster of n orderers.
-func NewOrderer(n int) *Orderer { return &Orderer{Nodes: n} }
+// clientKey derives a client signing key (simulated PKI; stateless verify).
+func clientKey(id string) []byte {
+	sum := sha512.Sum512([]byte("drunix-client-signing-key|" + id))
+	return sum[:]
+}
+
+func signEnvelope(id, proposal string) string {
+	mac := hmac.New(sha512.New, clientKey(id))
+	mac.Write([]byte(proposal))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// verifyClientSig re-derives the key from the envelope's client ID, so any
+// stateless VS instance can check it.
+func verifyClientSig(env *Envelope) bool {
+	return hmac.Equal([]byte(signEnvelope(env.ClientID, env.Proposal)), []byte(env.ClientSig))
+}
+
+// Client is the transaction submitter (the DLT-Gateway signs on the user's
+// behalf). Phase 2: collect endorsements, sign the envelope, submit to Orderer.
+type Client struct{ ID string }
+
+// NewClient creates a client identity.
+func NewClient(id string) *Client { return &Client{ID: id} }
+
+// Sign builds the signed envelope (Phase 2 of the transaction flow).
+func (c *Client) Sign(fn string, args []string, proposal string, rw *RWSet, endorsements []Endorsement, refs []PrivateRef, privateDigest string) *Envelope {
+	return &Envelope{
+		Fn: fn, Args: args, Proposal: proposal, RW: rw, RWDigest: rw.Digest(),
+		PrivateDigest: privateDigest, PrivateRefs: refs, Endorsements: endorsements,
+		ClientID: c.ID, ClientSig: signEnvelope(c.ID, proposal),
+	}
+}
+
+// ---------- Orderer (Phase 3: RAFT, batches txns into blocks) ----------
+
+// OrderedBlock is a batch of ordered envelopes cut by the Orderer; the CP
+// pulls these consecutively.
+type OrderedBlock struct {
+	Seq       uint64      `json:"seq"`
+	Leader    int         `json:"leader"`
+	Nodes     int         `json:"nodes"`
+	Envelopes []*Envelope `json:"envelopes"`
+}
+
+// Orderer stamps each envelope with cluster-unique sequence + leader (Raft
+// simulated: deterministic election) and batches them into blocks. Real
+// Drunix runs Raft.
+type Orderer struct {
+	Nodes    int
+	BatchMax int // max txns per block
+	Seq      uint64
+
+	mu      sync.Mutex
+	pending []*Envelope
+	blocks  map[uint64]*OrderedBlock
+	cut     uint64
+}
+
+// NewOrderer creates a cluster of n orderers with a default batch size of 4.
+func NewOrderer(n int) *Orderer {
+	return &Orderer{Nodes: n, BatchMax: 4, blocks: map[uint64]*OrderedBlock{}}
+}
 
 // Leader returns the current Raft leader (1-based).
 func (o *Orderer) Leader() int { return int(((o.Seq + uint64(o.Nodes) - 1) % uint64(o.Nodes)) + 1) }
 
-// Order stamps the envelope with the next sequence under the current leader.
-func (o *Orderer) Order() (seq uint64, leader int) {
+// Submit stamps the envelope (sequence, leader, deterministic txID) and adds
+// it to the pending batch.
+func (o *Orderer) Submit(env *Envelope) (seq uint64, leader int) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	o.Seq++
-	return o.Seq, o.Leader()
+	env.Seq, env.Leader = o.Seq, o.Leader()
+	env.TxID = mockTxID(Channel, ChaincodeName, env.Fn, env.Args, env.Seq)
+	o.pending = append(o.pending, env)
+	return env.Seq, env.Leader
 }
 
-// ---------- Validation Service (VS / VSCC) ----------
+// Full reports whether the pending batch reached BatchMax (auto-cut point).
+func (o *Orderer) Full() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return len(o.pending) >= o.BatchMax
+}
 
-// ValidationService is stateless and horizontally scalable: endorsement-policy
-// acceptance checks + cryptographic signature verification.
+// Cut drains the pending batch into one ordered block.
+func (o *Orderer) Cut() *OrderedBlock {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if len(o.pending) == 0 {
+		return nil
+	}
+	o.cut++
+	blk := &OrderedBlock{Seq: o.cut, Leader: o.Leader(), Nodes: o.Nodes, Envelopes: o.pending}
+	o.blocks[o.cut] = blk
+	o.pending = nil
+	return blk
+}
+
+// Block returns the ordered block with the given sequence (CP pull path).
+func (o *Orderer) Block(n uint64) (*OrderedBlock, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	blk, ok := o.blocks[n]
+	return blk, ok
+}
+
+// Pending reports how many txns sit in the un-cut batch (observability).
+func (o *Orderer) Pending() int { o.mu.Lock(); defer o.mu.Unlock(); return len(o.pending) }
+
+// BlocksCut reports how many ordered blocks exist (observability).
+func (o *Orderer) BlocksCut() uint64 { o.mu.Lock(); defer o.mu.Unlock(); return o.cut }
+
+// ---------- Validation Service (Phase 4: VS / VSCC, round-robin pool) ----------
+
+// ValidationService is stateless and horizontally scalable: client-signature
+// check, endorsement-policy acceptance, endorsement signature verification.
 type ValidationService struct{}
 
-// Validate returns nil when the endorsement set satisfies the policy.
-func (vs *ValidationService) Validate(fn, proposal string, endorsements []Endorsement) error {
-	if ok, reason := policyFor(fn).SatisfiedBy(proposal, endorsements); !ok {
+// Validate runs the full VSCC check on a signed envelope.
+func (vs *ValidationService) Validate(env *Envelope) error {
+	if !verifyClientSig(env) {
+		return fmt.Errorf("VSCC: invalid client signature from %s (envelope modified after client signing)", env.ClientID)
+	}
+	if ok, reason := policyFor(env.Fn).SatisfiedBy(env.Proposal, env.Endorsements); !ok {
 		return fmt.Errorf("VSCC: %s", reason)
 	}
 	return nil
 }
 
-// ---------- Committing Peer (CP) ----------
+// ValidationPool is a pool of stateless VS instances; the CP dispatches to
+// them round-robin (Phase 4: "CP -> VS (round-robin)").
+type ValidationPool struct {
+	Names     []string
+	Instances []*ValidationService
 
-// CommitResult reports one pipeline run stage by stage (judge-readable).
-type CommitResult struct {
-	TxID          string   `json:"txId"`
-	Fn            string   `json:"fn"`
-	Committed     bool     `json:"committed"`
-	BlockHeight   int64    `json:"blockHeight,omitempty"`
-	Stage         string   `json:"stage"` // where the tx ended: lite-peer | validation-service | committing-peer-mvcc | committed
-	Reason        string   `json:"reason,omitempty"`
-	OrdererLeader int      `json:"ordererLeader"`
-	Seq           uint64   `json:"seq"`
-	RWDigest      string   `json:"rwDigest"`
-	PrivateHash   string   `json:"privateHash,omitempty"`
-	EndorsedBy    []string `json:"endorsedBy"`
-	DurationMs    int64    `json:"durationMs"`
+	next uint64
+	mu   sync.Mutex
 }
 
-// CommittingPeer performs MVCC validation, verifies the private-data hash from
-// the transient store, applies the write set to the State DB and commits.
+// NewValidationPool creates n VS instances (vs-1 .. vs-n).
+func NewValidationPool(n int) *ValidationPool {
+	vp := &ValidationPool{}
+	for i := 1; i <= n; i++ {
+		vp.Names = append(vp.Names, fmt.Sprintf("vs-%d", i))
+		vp.Instances = append(vp.Instances, &ValidationService{})
+	}
+	return vp
+}
+
+// Validate dispatches to the next VS instance (round-robin) and returns which
+// node ran the check.
+func (vp *ValidationPool) Validate(env *Envelope) (string, error) {
+	vp.mu.Lock()
+	i := int(vp.next % uint64(len(vp.Instances)))
+	vp.next++
+	vp.mu.Unlock()
+	return vp.Names[i], vp.Instances[i].Validate(env)
+}
+
+// ---------- Committing Peer (Phases 4-5: MVCC, then block commit) ----------
+
+// TxOutcome is the per-transaction result of processing an ordered block.
+type TxOutcome struct {
+	Env         *Envelope
+	Committed   bool
+	Stage       string // validation-service | committing-peer-mvcc | committing-peer-private | committed
+	Reason      string
+	VSNode      string
+	BlockHeight int64
+}
+
+// CommittingPeer pulls consecutive ordered blocks, validates every txn
+// (VS round-robin, MVCC), then commits the block to the ledger and applies
+// the write sets to the State DB.
 type CommittingPeer struct {
 	State     *StateDB
 	Transient *TransientStore
 	Ledger    *DrunixChain
+	VS        *ValidationPool
+	Ord       *Orderer
+
+	nextBlock uint64
+	mu        sync.Mutex
 }
 
-// mvccValidate: every key read during simulation must still sit at the same version.
-func (cp *CommittingPeer) mvccValidate(rw *RWSet) (bool, string) {
+// PullNext fetches the next consecutive ordered block (Phase 3 pull path).
+func (cp *CommittingPeer) PullNext() *OrderedBlock {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	blk, ok := cp.Ord.Block(cp.nextBlock + 1)
+	if !ok {
+		return nil
+	}
+	cp.nextBlock++
+	return blk
+}
+
+// mvccValidate: every key read during simulation must still sit at the
+// version the transaction saw. overlay carries same-block writes from
+// earlier valid txns (Fabric marks the second conflicting txn in a block invalid).
+func (cp *CommittingPeer) mvccValidate(rw *RWSet, overlay map[string]uint64) (bool, string) {
 	for _, k := range rw.ReadsOrder {
-		cur := cp.State.GetVersion(k).Version
+		cur, inOverlay := overlay[k]
+		if !inOverlay {
+			cur = cp.State.GetVersion(k).Version
+		}
 		if rw.Reads[k] != cur {
 			return false, fmt.Sprintf("MVCC READ_CONFLICT on %s: simulated version %d, current version %d. Resubmit with fresh state.", k, rw.Reads[k], cur)
 		}
@@ -437,100 +613,230 @@ func (cp *CommittingPeer) mvccValidate(rw *RWSet) (bool, string) {
 	return true, ""
 }
 
-// Commit runs VS → MVCC → private-data apply → state apply → ledger append.
-func (cp *CommittingPeer) Commit(fn string, args []string, proposal string, rw *RWSet, endorsements []Endorsement, refs []PrivateRef, privateDigest string, leader, seq uint64) CommitResult {
-	start := time.Now()
-	txID := mockTxID(Channel, ChaincodeName, fn, args, seq)
-	res := CommitResult{TxID: txID, Fn: fn, OrdererLeader: int(leader), Seq: seq, RWDigest: rw.Digest(), PrivateHash: privateDigest}
-	for _, e := range endorsements {
-		res.EndorsedBy = append(res.EndorsedBy, e.MSP)
-	}
-
-	// 1) VSCC: endorsement policy acceptance + signature verification
-	vs := &ValidationService{}
-	if err := vs.Validate(fn, proposal, endorsements); err != nil {
-		res.Stage, res.Reason = "validation-service", err.Error()
-		return res
-	}
-
-	// 2) MVCC: simulated read versions must match current state versions
-	if ok, reason := cp.mvccValidate(rw); !ok {
-		res.Stage, res.Reason = "committing-peer-mvcc", reason
-		return res
-	}
-
-	// 3) Private data: pull from the transient store, verify the hash matches
-	//    the one in the signed proposal, record only the hash in the block.
+// verifyPrivate pulls the private data from the transient store and checks it
+// against the hash inside the endorsed proposal.
+func (cp *CommittingPeer) verifyPrivate(env *Envelope) error {
 	ph := sha512.New()
-	for _, ref := range refs {
+	for _, ref := range env.PrivateRefs {
 		val, ok := cp.Transient.Take(ref.Org, ref.Key)
 		if !ok {
-			res.Stage, res.Reason = "committing-peer-private", fmt.Sprintf("private data %s (org %s) missing from transient store", ref.Key, ref.Org)
-			return res
+			return fmt.Errorf("private data %s (org %s) missing from transient store", ref.Key, ref.Org)
 		}
 		fmt.Fprintf(ph, "%s|%s|%s;", ref.Org, ref.Key, val)
 	}
-	if len(refs) > 0 && hex.EncodeToString(ph.Sum(nil)) != privateDigest {
-		res.Stage, res.Reason = "committing-peer-private", "private data hash mismatch against endorsed proposal"
-		return res
+	if len(env.PrivateRefs) > 0 && hex.EncodeToString(ph.Sum(nil)) != env.PrivateDigest {
+		return fmt.Errorf("private data hash mismatch against endorsed proposal")
 	}
-
-	// 4) Apply the write set to the State DB (versions bump)
-	cp.State.Apply(rw.Writes)
-
-	// 5) Commit the block to the hash-chained ledger
-	blk := cp.Ledger.Append("TX_COMMITTED", []map[string]interface{}{{
-		"kind":       "pipeline",
-		"txId":       txID,
-		"chaincode":  ChaincodeName,
-		"fn":         fn,
-		"args":       args,
-		"rwDigest":   rw.Digest(),
-		"endorsedBy": res.EndorsedBy,
-		"orderer":    fmt.Sprintf("raft-leader-%d-of-%d", leader, 3),
-		"mvcc":       "validated",
-		"vscc":       "policy-accepted",
-	}})
-	res.BlockHeight = blk.Height
-	res.Committed = true
-	res.Stage = "committed"
-	res.DurationMs = time.Since(start).Milliseconds()
-	return res
+	return nil
 }
 
-// ---------- Pipeline: Client → DLT-Gateway → LP → Orderer → VS → CP ----------
+// ProcessBlock runs Phase 4 (validation) for every envelope, then Phase 5
+// (commit): the block goes to the ledger FIRST, write sets hit the State DB
+// after — exactly the Drunix commit semantics.
+func (cp *CommittingPeer) ProcessBlock(blk *OrderedBlock) map[*Envelope]*TxOutcome {
+	out := map[*Envelope]*TxOutcome{}
+	overlay := map[string]uint64{}
+	var valid []*Envelope
+
+	// Phase 4 — CP -> VS (round-robin) + CP MVCC validation
+	for _, env := range blk.Envelopes {
+		oc := &TxOutcome{Env: env}
+		out[env] = oc
+		node, err := cp.VS.Validate(env)
+		oc.VSNode = node
+		if err != nil {
+			oc.Stage, oc.Reason = "validation-service", err.Error()
+			continue
+		}
+		if ok, reason := cp.mvccValidate(env.RW, overlay); !ok {
+			oc.Stage, oc.Reason = "committing-peer-mvcc", reason
+			continue
+		}
+		if err := cp.verifyPrivate(env); err != nil {
+			oc.Stage, oc.Reason = "committing-peer-private", err.Error()
+			continue
+		}
+		for k := range env.RW.Writes {
+			overlay[k] = cp.State.GetVersion(k).Version + 1
+		}
+		valid = append(valid, env)
+	}
+
+	// Phase 5 — commit block to ledger, THEN apply write sets to State DB
+	if len(valid) > 0 {
+		txns := []map[string]interface{}{}
+		for _, env := range valid {
+			endorsedBy := []string{}
+			for _, e := range env.Endorsements {
+				endorsedBy = append(endorsedBy, e.MSP)
+			}
+			txns = append(txns, map[string]interface{}{
+				"kind":       "pipeline",
+				"txId":       env.TxID,
+				"chaincode":  ChaincodeName,
+				"fn":         env.Fn,
+				"args":       env.Args,
+				"rwDigest":   env.RWDigest,
+				"endorsedBy": endorsedBy,
+				"orderer":    fmt.Sprintf("raft-leader-%d-of-%d", blk.Leader, blk.Nodes),
+				"vs":         out[env].VSNode,
+				"client":     env.ClientID,
+				"mvcc":       "validated",
+				"vscc":       "policy-accepted",
+			})
+		}
+		ledgerBlk := cp.Ledger.Append("TX_COMMITTED", txns)
+		for _, env := range valid {
+			cp.State.Apply(env.RW.Writes)
+			out[env].Committed = true
+			out[env].Stage = "committed"
+			out[env].BlockHeight = ledgerBlk.Height
+		}
+	}
+	return out
+}
+
+// ---------- Pipeline: Client -> DLT-Gateway -> LP -> Orderer -> VS -> CP ----------
+
+// CommitResult reports one pipeline run stage by stage (judge-readable).
+type CommitResult struct {
+	TxID          string   `json:"txId"`
+	Fn            string   `json:"fn"`
+	Committed     bool     `json:"committed"`
+	BlockHeight   int64    `json:"blockHeight,omitempty"`
+	BlockSeq      uint64   `json:"blockSeq,omitempty"`
+	Stage         string   `json:"stage"` // lite-peer | ordered | validation-service | committing-peer-mvcc | committing-peer-private | committed
+	Reason        string   `json:"reason,omitempty"`
+	OrdererLeader int      `json:"ordererLeader"`
+	Seq           uint64   `json:"seq"`
+	VSNode        string   `json:"vsNode,omitempty"`
+	RWDigest      string   `json:"rwDigest"`
+	PrivateHash   string   `json:"privateHash,omitempty"`
+	EndorsedBy    []string `json:"endorsedBy"`
+	Phases        []string `json:"phases"` // completed phases of the 5-phase flow
+	DurationMs    int64    `json:"durationMs"`
+}
 
 // Pipeline is the full Drunix transaction path, wired once and reused.
 type Pipeline struct {
-	LP    *LitePeer
-	Order *Orderer
-	CP    *CommittingPeer
-	mu    sync.Mutex // serializes simulation/commit on the single-channel demo
+	Client *Client
+	LP     *LitePeer
+	Order  *Orderer
+	VS     *ValidationPool
+	CP     *CommittingPeer
+	mu     sync.Mutex // serializes simulation/commit on the single-channel demo
 }
 
 // NewPipeline wires the components over shared state, transient store and ledger.
 func NewPipeline(state *StateDB, transient *TransientStore, ledger *DrunixChain) *Pipeline {
+	vs := NewValidationPool(2)
+	orderer := NewOrderer(3)
+	cp := &CommittingPeer{State: state, Transient: transient, Ledger: ledger, VS: vs, Ord: orderer}
 	return &Pipeline{
-		LP:    &LitePeer{State: state, Transient: transient},
-		Order: NewOrderer(3),
-		CP:    &CommittingPeer{State: state, Transient: transient, Ledger: ledger},
+		Client: NewClient("aasthi-gateway"),
+		LP:     &LitePeer{State: state, Transient: transient},
+		Order:  orderer,
+		VS:     vs,
+		CP:     cp,
 	}
 }
 
-// Submit runs the full lifecycle: endorse (LP) → order (RAFT) → validate (VS)
-// → MVCC + commit (CP). privateData maps org → field → value and travels only
-// through the transient store.
+// Submit runs the full 5-phase lifecycle synchronously:
+// 1 endorse (LP) -> 2 client signs -> 3 order (batch cut) -> 4 validate (VS
+// round-robin + MVCC) -> 5 commit (ledger, then State DB). privateData maps
+// org -> field -> value and travels only through the transient store.
 func (p *Pipeline) Submit(fn string, args []string, private map[string]map[string][]byte) (CommitResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.submit(fn, args, private, false)
+}
+
+// SubmitBuffered runs phases 1-3 WITHOUT cutting a block: the txn waits in
+// the orderer batch and commits together with the next flush (or when the
+// batch fills) — the Drunix "Orderer batches txns into blocks" behavior.
+func (p *Pipeline) SubmitBuffered(fn string, args []string, private map[string]map[string][]byte) (CommitResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.submit(fn, args, private, true)
+}
+
+// Flush cuts the pending batch into one ordered block and processes every
+// block the CP has not pulled yet. Returns the number of committed txns.
+func (p *Pipeline) Flush() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.flush()
+}
+
+func (p *Pipeline) submit(fn string, args []string, private map[string]map[string][]byte, buffered bool) (CommitResult, error) {
+	start := time.Now()
+	res := CommitResult{Fn: fn}
+	finish := func(err error) (CommitResult, error) {
+		res.DurationMs = time.Since(start).Milliseconds()
+		return res, err
+	}
+
+	// Phase 1 — Endorsement: Client -> LP (chaincode execution, RW Set, KeyDB)
 	proposal, rw, endorsements, refs, privateDigest, err := p.LP.Endorse(fn, args, private)
 	if err != nil {
-		return CommitResult{Fn: fn, Stage: "lite-peer", Reason: err.Error()}, err
+		res.Stage, res.Reason = "lite-peer", err.Error()
+		return finish(err)
 	}
-	seq, leader := p.Order.Order()
-	res := p.CP.Commit(fn, args, proposal, rw, endorsements, refs, privateDigest, uint64(leader), seq)
-	if !res.Committed {
-		return res, fmt.Errorf("%s: %s", res.Stage, res.Reason)
+	res.RWDigest, res.PrivateHash = rw.Digest(), privateDigest
+	for _, e := range endorsements {
+		res.EndorsedBy = append(res.EndorsedBy, e.MSP)
 	}
-	return res, nil
+	res.Phases = []string{"1-endorsed"}
+
+	// Phase 2 — Submit Txn: client collects endorsements, signs the envelope
+	env := p.Client.Sign(fn, args, proposal, rw, endorsements, refs, privateDigest)
+	res.Phases = append(res.Phases, "2-signed")
+
+	// Phase 3 — Ordering: orderer stamps + batches; CP pulls consecutive blocks
+	p.Order.Submit(env)
+	res.TxID = env.TxID
+	res.Seq, res.OrdererLeader = env.Seq, env.Leader
+	res.Phases = append(res.Phases, "3-ordered")
+
+	if buffered && !p.Order.Full() {
+		res.Stage = "ordered" // waiting in the batch; Flush commits it
+		return finish(nil)
+	}
+	p.Order.Cut() // synchronous demo path: flush the batch into a block now
+
+	var oc *TxOutcome
+	var blockSeq uint64
+	for b := p.CP.PullNext(); b != nil; b = p.CP.PullNext() {
+		blockSeq = b.Seq
+		for e, o := range p.CP.ProcessBlock(b) {
+			if e == env {
+				oc = o
+			}
+		}
+	}
+	if oc == nil {
+		res.Stage, res.Reason = "committing-peer", "no outcome for envelope"
+		return finish(fmt.Errorf("no outcome for envelope"))
+	}
+	res.BlockSeq, res.VSNode = blockSeq, oc.VSNode
+	res.BlockHeight, res.Stage, res.Reason = oc.BlockHeight, oc.Stage, oc.Reason
+	if !oc.Committed {
+		return finish(fmt.Errorf("%s: %s", oc.Stage, oc.Reason))
+	}
+	res.Committed = true
+	res.Phases = append(res.Phases, "4-validated", "5-committed")
+	return finish(nil)
+}
+
+func (p *Pipeline) flush() int {
+	committed := 0
+	p.Order.Cut() // drain the pending batch into an ordered block
+	for b := p.CP.PullNext(); b != nil; b = p.CP.PullNext() {
+		for _, oc := range p.CP.ProcessBlock(b) {
+			if oc.Committed {
+				committed++
+			}
+		}
+	}
+	return committed
 }

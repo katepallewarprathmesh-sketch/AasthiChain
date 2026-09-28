@@ -257,7 +257,14 @@ func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 		"stateDB":        map[string]interface{}{"keys": p.CP.State.Size(), "engine": "in-memory (YugabyteDB in production)"},
 		"transientStore": map[string]interface{}{"entries": p.CP.Transient.Size(), "engine": "KeyDB (in-memory, never persisted)"},
 		"ledger":         map[string]interface{}{"blocks": len(p.CP.Ledger.Blocks), "height": v.Height, "valid": v.Valid, "chainId": DrunixChainID},
-		"orderer":        map[string]interface{}{"nodes": p.Order.Nodes, "sequence": p.Order.Seq, "leader": p.Order.Leader(), "consensus": "RAFT (simulated)"},
-		"roles":          []string{"LitePeer (endorsement, stateless)", "Orderer (RAFT)", "ValidationService (VSCC)", "CommittingPeer (MVCC + commit)"},
+		"orderer": map[string]interface{}{
+			"nodes": p.Order.Nodes, "sequence": p.Order.Seq, "leader": p.Order.Leader(),
+			"consensus": "RAFT (simulated)", "batchMax": p.Order.BatchMax,
+			"pending": p.Order.Pending(), "blocksCut": p.Order.BlocksCut(),
+		},
+		"validation":      map[string]interface{}{"instances": len(p.VS.Instances), "dispatch": "round-robin (CP to VS)"},
+		"client":          map[string]interface{}{"id": p.Client.ID, "phase2": "collects endorsements, signs envelope"},
+		"transactionFlow": []string{"1-endorsement", "2-submit-txn", "3-ordering", "4-validation", "5-commit"},
+		"roles":           []string{"Client (signs envelope)", "LitePeer (endorsement, stateless)", "Orderer (RAFT, batches txns into blocks)", "ValidationService (VSCC, round-robin)", "CommittingPeer (MVCC + commit)"},
 	})
 }
