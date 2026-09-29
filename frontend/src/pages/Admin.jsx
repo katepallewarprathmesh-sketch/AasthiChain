@@ -9,7 +9,7 @@ import { useLocalCache } from '../hooks/useLocalCache.js'
 
 function SimpleStep({ number, title, active, done }) {
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', minWidth: 0 }}>
       <div style={{
         width: 28,
         height: 28,
@@ -25,8 +25,8 @@ function SimpleStep({ number, title, active, done }) {
       }}>
         {done ? '✓' : number}
       </div>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: active || done ? '#111827' : '#6B7280' }}>{title}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: active || done ? '#111827' : '#6B7280', overflowWrap: 'anywhere' }}>{title}</div>
       </div>
     </div>
   )
@@ -170,11 +170,11 @@ export default function Admin({ user }) {
         For property owners: List your property, get it verified, and create tokens for investors.
       </p>
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 20, marginBottom: 24 }}>
+      <div className="admin-stepper" style={{ display: 'flex', gap: 16, marginTop: 20, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
         <SimpleStep number={1} title="List Property" active={!lastId} done={!!lastId} />
-        <div style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
+        <div className="admin-step-line" style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
         <SimpleStep number={2} title="Get Verified" active={lastId && validationStatus !== 'VALIDATED'} done={validationStatus === 'VALIDATED'} />
-        <div style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
+        <div className="admin-step-line" style={{ width: 40, height: 1, background: '#E5E7EB', marginTop: 14 }}></div>
         <SimpleStep number={3} title="Create Tokens" active={validationStatus === 'VALIDATED'} done={false} />
       </div>
       <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 1.5 }}>
@@ -404,7 +404,7 @@ export default function Admin({ user }) {
           padding: 14,
           fontSize: 13,
           color: result.includes('Failed') ? '#991B1B' : '#065F46',
-          whiteSpace: 'pre-wrap'
+          whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'
         }}>
           {result}
         </div>
@@ -431,7 +431,7 @@ export default function Admin({ user }) {
         <div style={{ marginTop: 16, background: '#F9FAFB', border: '1px dashed #E5E7EB', borderRadius: 12, padding: 16 }}>
           <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced For Developers</h4>
           <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Technical details hidden from layman only for developers</p>
-          <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
+          <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', overflowX: 'auto', overflowWrap: 'anywhere', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
             Last ID: {lastId || 'none'}<br/>
             Status: {validationStatus || 'none'}<br/>
             Properties: {properties.length}<br/>
@@ -460,9 +460,9 @@ export default function Admin({ user }) {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
             {properties.filter(pp => pp.originatorId === user.identityId).map(pp => (
-              <div key={pp.assetId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{pp.title}</div>
+              <div key={pp.assetId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12, minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: '1 1 180px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflowWrap: 'anywhere' }}>{pp.title}</div>
                   <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
                     {pp.location?.city || ''} • {pp.status} • {pp.totalTokens?.toLocaleString?.('en-IN') || pp.totalTokens} tokens
                   </div>

@@ -144,20 +144,20 @@ function Pipeline() {
         <span className="acx-eyebrow">Atomic settlement live pipeline</span>
         <span className="acx-chip" style={{ padding: '4px 10px', fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> money &amp; tokens move together</span>
       </div>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', marginTop: 20 }}>
+      <div className="acx-pipeline" style={{ display: 'flex', gap: 10, alignItems: 'stretch', marginTop: 20 }}>
         {steps.map((s, i) => (
           <React.Fragment key={s.k}>
-            <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-              <div style={{
+            <div className="acx-pipeline-step" style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+              <div className="acx-pipeline-num" style={{
                 width: 34, height: 34, margin: '0 auto', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: i >= 2 ? 'var(--accent-deep)' : 'var(--panel-2)', border: '1px solid var(--line-2)',
                 color: i >= 2 ? 'var(--accent-2)' : 'var(--muted)', fontSize: 12, fontWeight: 700,
               }}>{i + 1}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8, color: 'var(--text)' }}>{s.k}</div>
-              <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{s.d}</div>
+              <div className="acx-pipeline-title" style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8, color: 'var(--text)' }}>{s.k}</div>
+              <div className="acx-pipeline-desc" style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{s.d}</div>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: '0 0 26px', display: 'flex', alignItems: 'center' }}>
+              <div className="acx-pipeline-connector" style={{ flex: '0 0 26px', display: 'flex', alignItems: 'center' }}>
                 <div className="acx-pipe-line" style={{ width: '100%' }} />
               </div>
             )}

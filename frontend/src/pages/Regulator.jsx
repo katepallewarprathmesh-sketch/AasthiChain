@@ -39,7 +39,7 @@ export default function Regulator({ user }) {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 16px' }}>
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 16px', minWidth: 0 }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Audit & Safety</h1>
       <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '70ch' }}>
         Monitor all properties and transfers. Freeze if fraud detected.
@@ -59,15 +59,16 @@ export default function Regulator({ user }) {
               background: '#F9FAFB',
               border: '1px solid #F3F4F6',
               borderRadius: 8,
-              padding: 14
+              padding: 14,
+              minWidth: 0
             }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{p.title}</div>
+              <div style={{ minWidth: 0, flex: '1 1 220px' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', overflowWrap: 'anywhere' }}>{p.title}</div>
                 <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
                   {p.location?.city || ''} • {money(p.valuationINR)} • {p.totalTokens || 0} tokens • {p.status}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0 }}>
                 <button
                   onClick={() => handleFreeze(p.assetId)}
                   style={{
@@ -122,9 +123,8 @@ export default function Regulator({ user }) {
           </select>
         </div>
 
-        <div style={{ overflowX: 'auto', marginTop: 16 }}>
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', minWidth: 560 }}>
+        <div className="audit-scroll" style={{ overflowX: 'auto', marginTop: 16, WebkitOverflowScrolling: 'touch' }}>
+          <table className="audit-table" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', minWidth: 520 }}>
             <thead>
               <tr style={{ color: '#9CA3AF', borderBottom: '1px solid #F3F4F6', textAlign: 'left', fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>
                 <th style={{ padding: '10px 8px' }}>From → To</th>
@@ -135,14 +135,13 @@ export default function Regulator({ user }) {
             <tbody>
               {transfers.map(t => (
                 <tr key={t.transferId} style={{ borderBottom: '1px solid #F9FAFB' }}>
-                  <td style={{ padding: '10px 8px' }}>{t.fromId} → {t.toId}</td>
+                  <td style={{ padding: '10px 8px', overflowWrap: 'anywhere' }}>{t.fromId} → {t.toId}</td>
                   <td style={{ padding: '10px 8px', fontWeight: 600 }}>{t.amount}</td>
                   <td style={{ padding: '10px 8px', color: '#6B7280', fontSize: 12 }}>{new Date(t.txTimestamp).toLocaleDateString()}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          </div>
           {transfers.length === 0 && (
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#9CA3AF', fontSize: 13 }}>No transfers yet</div>
           )}
@@ -170,7 +169,7 @@ export default function Regulator({ user }) {
         <div style={{ marginTop: 16, background: '#F9FAFB', border: '1px dashed #E5E7EB', borderRadius: 12, padding: 16 }}>
           <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Advanced For Developers</h4>
           <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Technical audit details</p>
-          <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
+          <div style={{ marginTop: 12, fontSize: 11, color: '#6B7280', fontFamily: 'monospace', background: 'white', overflowX: 'auto', overflowWrap: 'anywhere', padding: 10, borderRadius: 6, border: '1px solid #E5E7EB' }}>
             Total properties: {properties.length}<br/>
             Total transfers: {transfers.length}<br/>
             User: {user?.identityId} ({user?.role})<br/>

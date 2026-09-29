@@ -20,10 +20,13 @@ function SimpleHoldingCard({ holding }) {
       padding: 16,
       display: 'flex',
       justifyContent: 'space-between',
-      alignItems: 'center'
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 12,
+      minWidth: 0
     }}>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{propertyTitle}</div>
+      <div style={{ minWidth: 0, flex: '1 1 180px' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{propertyTitle}</div>
         <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
           {(balance.balance || 0).toLocaleString('en-IN')} tokens • ₹{tokenPrice.toLocaleString('en-IN')} each
         </div>
@@ -33,8 +36,8 @@ function SimpleHoldingCard({ holding }) {
           </div>
         )}
       </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>{money(value)}</div>
+      <div style={{ textAlign: 'right', marginLeft: 'auto', minWidth: 120 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#111827', overflowWrap: 'anywhere' }}>{money(value)}</div>
         <div style={{ fontSize: 11, color: '#6B7280' }}>Value</div>
         <Link to={`/property/${balance.assetId}`} style={{
           fontSize: 11,
@@ -219,7 +222,7 @@ export default function Wallet({ user }) {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px', minWidth: 0 }}>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>My Wallet</h1>
       <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6 }}>
         Your property tokens and portfolio value
@@ -235,11 +238,12 @@ export default function Wallet({ user }) {
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 10
+        gap: 10,
+        minWidth: 0
       }}>
-        <div>
+        <div style={{ minWidth: 0, flex: '1 1 220px' }}>
           <div style={{ fontSize: 12, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Total Portfolio Value</div>
-          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6, color: '#111827' }}>{money(totalValue)}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6, color: '#111827', overflowWrap: 'anywhere' }}>{money(totalValue)}</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>{holdings.length} properties owned</div>
         </div>
         <button onClick={fetchWallet} style={{
@@ -312,15 +316,15 @@ export default function Wallet({ user }) {
         )}
       </div>
 
-      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 24 }}>
+      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 24, minWidth: 0 }}>
         {nav && (
           <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-              <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: '1 1 220px' }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Portfolio NAV</h3>
                 <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Continuous net asset value, marked to last trade price</p>
               </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#1E3A5F' }}>{money(nav.navINR)}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#1E3A5F', overflowWrap: 'anywhere' }}>{money(nav.navINR)}</div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
               {[['Assets', money(nav.assetsValueINR), '#111827'], ['Yield earned', '+' + money(nav.yieldEarnedINR), '#065F46'], ['Loan due', '-' + money(nav.outstandingDebtINR), '#991B1B'], ['Active loans', String(nav.activeLoans), '#374151']].map(([k, v, c]) => (
@@ -338,10 +342,10 @@ export default function Wallet({ user }) {
             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Credit against your tokens</h3>
             {repayMsg && <div style={{ fontSize: 12, color: '#065F46', marginTop: 8 }}>{repayMsg}</div>}
             {loans.filter(l => l.status === 'ACTIVE').map(l => (
-              <div key={l.loanId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12, marginTop: 10 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{money(l.principalINR)} borrowed · {l.tokens} tokens pledged</div>
-                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Repay {money(Math.round(l.principalINR * 1.01 * 100) / 100)} (1% fee) to unlock · {l.loanId}</div>
+              <div key={l.loanId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 12, marginTop: 10, minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: '1 1 220px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{money(l.principalINR)} borrowed · {l.tokens} tokens pledged</div>
+                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2, overflowWrap: 'anywhere' }}>Repay {money(Math.round(l.principalINR * 1.01 * 100) / 100)} (1% fee) to unlock · {l.loanId}</div>
                 </div>
                 <button onClick={() => handleRepay(l.loanId)} style={{ padding: '8px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Repay now</button>
               </div>

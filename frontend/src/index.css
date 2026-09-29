@@ -624,3 +624,144 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 html, body { overflow-x: hidden; max-width: 100%; }
 button, input, select, textarea, .acx-btn, .btn { max-width: 100%; }
 img, svg, video { max-width: 100%; }
+
+/* ================= MOBILE VISIBILITY PATCH ================= */
+/* Flex/grid children default to min-width:auto, which can make cards, forms and
+   audit tables wider than a phone viewport. Keep content contained and let the
+   specific scroll containers own horizontal scrolling where needed. */
+#root, main, .container, .card, .card-elevated,
+.acx-card, .acx-card-glass,
+.acx-r2 > *, .acx-r2x > *, .acx-r3 > *, .acx-rhero > *, .acx-rsplit > * {
+  min-width: 0;
+}
+
+input, select, textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+
+pre, code, kbd, samp,
+.card, .card-elevated,
+.acx-card, .acx-card-glass {
+  overflow-wrap: anywhere;
+}
+
+.audit-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.audit-table th,
+.audit-table td {
+  white-space: nowrap;
+}
+
+.audit-table td:first-child,
+.audit-table td:last-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .container {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .card, .card-elevated {
+    padding: 16px;
+  }
+
+  input, select, textarea {
+    width: 100%;
+  }
+
+  .acx-pipeline {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px !important;
+    width: 100%;
+  }
+
+  .acx-pipeline-step {
+    min-width: 0 !important;
+    padding: 12px 10px;
+    border: 1px solid var(--line-2);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.035);
+  }
+
+  .acx-pipeline-connector {
+    display: none !important;
+  }
+
+  .acx-pipeline-title,
+  .acx-pipeline-desc,
+  .acx-eyebrow,
+  .acx-chip {
+    overflow-wrap: anywhere;
+  }
+
+  .admin-stepper {
+    align-items: stretch !important;
+  }
+
+  .admin-stepper > div:not(.admin-step-line) {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .admin-step-line {
+    display: none !important;
+  }
+
+  .btn {
+    white-space: normal;
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  h1 { font-size: clamp(24px, 8vw, 32px) !important; }
+  h2 { font-size: clamp(20px, 6.5vw, 28px) !important; }
+
+  .acx {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: hidden;
+  }
+
+  .acx-pipeline {
+    grid-template-columns: 1fr;
+  }
+
+  .acx-pipeline-step {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    column-gap: 10px;
+    text-align: left !important;
+    align-items: center;
+  }
+
+  .acx-pipeline-num {
+    margin: 0 !important;
+    grid-row: span 2;
+  }
+
+  .acx-pipeline-title,
+  .acx-pipeline-desc {
+    margin-top: 0 !important;
+  }
+
+  .audit-table {
+    min-width: 460px !important;
+    font-size: 12px !important;
+  }
+}
