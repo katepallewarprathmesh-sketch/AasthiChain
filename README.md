@@ -92,7 +92,7 @@ cd api-gateway && FABRIC_MODE=mock go run main.go  # :8080
 ```
 
 **Demo Access — Works LIVE + Local, No Verification, <2s:**
-- **LIVE:** https://aasthi-chain.vercel.app — verified 200 OK + /api/health OK — `aasthichain.vercel.app` (no hyphen) returns 404, correct is `aasthi-chain.vercel.app` (with hyphen)
+- **LIVE:** https://aasthi-chain.vercel.app
 - **Quick Demo Presets (instant mock JWT, no Clerk, no email):** On landing page `/` you see 4 cards — Owner `originator1`, Registrar `registrar1`, Investor `investor1`, Regulator `regulator1` — click any → mock JWT stored → `/marketplace` in <1s — works on LIVE Vercel + local `npm run dev` — no network call
 - **Clerk Auth (optional):** Sign in top-right corner — Google/Email via Clerk — after Clerk sign-in you can still switch roles via ROLE dropdown in nav — one auth for all
 - Both paths work on deployed site: demo presets reachable from landing without Clerk, and Clerk sign-in also available — no friction for judges
