@@ -1,0 +1,110 @@
+name: CI
+
+# This repository contains FOUR independent Go modules plus a Vite frontend.
+# A root-level `go build ./...` or `go test ./...` cannot work here — there is no
+# single module graph — which is why the Go checks were failing. Each module is
+# therefore built and tested from its own directory.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go · ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [chaincode, api-gateway, drunix-gateway, payment-gateway]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Verify formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  settlement-conformance:
+    name: UMI pattern conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: payment-gateway/go.sum
+      - name: Run the published conformance suite
+        working-directory: payment-gateway
+        run: go test ./settlement/ -v
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  api-smoke:
+    name: Mock API smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+      - name: Boot the API and exercise the UMI rail
+        run: |
+          node mock-api-server.js &
+          server_pid=$!
+          for i in $(seq 1 30); do
+            if curl -fsS localhost:8080/api/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS localhost:8080/api/umi/capabilities >/dev/null
+          conformance="$(curl -fsS localhost:8080/api/umi/conformance)"
+          echo "$conformance"
+          echo "$conformance" | grep -q '"allPassed":true'
+          kill "$server_pid"

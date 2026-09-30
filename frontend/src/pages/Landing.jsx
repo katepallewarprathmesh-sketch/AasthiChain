@@ -522,6 +522,17 @@ export default function Landing({ user }) {
                 <span style={{ fontSize: 11, color: 'var(--faint)' }}>NPCI UPI rail is a testnet simulation no live NPCI sandbox credentials available for hackathons. Honest labeling per Track A6.</span>
               </div>
 
+              {/* Regulatory honesty: the ₹500 figure demonstrates divisibility, it is not a
+                  lawful retail minimum. Real fractional real estate in India is an SM REIT. */}
+              <div style={{ fontSize: 11, color: 'var(--faint)', lineHeight: 1.7, marginBottom: 16, maxWidth: 760 }}>
+                The ₹500 entry point demonstrates how far a property can be divided on-ledger. Under the SEBI
+                SM REIT framework the current retail minimum for a real fractional real-estate investment is
+                ₹10 lakh. AasthiChain also simulates the SEBI Demat 2.0 / RBI Unified Market Interface
+                settlement pattern it is not connected to RBI, SEBI, NPCI, NSDL or CDSL. See{' '}
+                <Link to="/settlement" style={{ color: 'var(--accent-2)' }}>Settlement</Link> for the full
+                claim-by-claim breakdown.
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                 <div className="acx-card" style={{ padding: 22 }}>
                   <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Primary Rail UPI Collect P2M + IMPS UTR (INR)</h4>

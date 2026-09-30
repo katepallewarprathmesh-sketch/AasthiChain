@@ -31,23 +31,23 @@ type DigiLockerDocument struct {
 }
 
 type DigiLockerSession struct {
-	IdentityID  string    `json:"identityId"`
-	State       string    `json:"state"`
-	AuthURL     string    `json:"authUrl"`
-	AccessToken string    `json:"accessToken,omitempty"`
+	IdentityID  string               `json:"identityId"`
+	State       string               `json:"state"`
+	AuthURL     string               `json:"authUrl"`
+	AccessToken string               `json:"accessToken,omitempty"`
 	Documents   []DigiLockerDocument `json:"documents"`
-	CreatedAt   time.Time `json:"createdAt"`
-	VerifiedAt  *time.Time `json:"verifiedAt,omitempty"`
-	Mode        DigiLockerMode `json:"mode"`
+	CreatedAt   time.Time            `json:"createdAt"`
+	VerifiedAt  *time.Time           `json:"verifiedAt,omitempty"`
+	Mode        DigiLockerMode       `json:"mode"`
 }
 
 type DigiLockerProvider struct {
-	mu       sync.RWMutex
-	sessions map[string]*DigiLockerSession // state -> session
-	kyc      map[string]KYCStatus          // identityId -> KYC status (for integration with existing MockKYCProvider)
-	records  map[string]*DigiLockerSession // identityId -> session
-	mode     DigiLockerMode
-	clientID string
+	mu          sync.RWMutex
+	sessions    map[string]*DigiLockerSession // state -> session
+	kyc         map[string]KYCStatus          // identityId -> KYC status (for integration with existing MockKYCProvider)
+	records     map[string]*DigiLockerSession // identityId -> session
+	mode        DigiLockerMode
+	clientID    string
 	redirectURI string
 }
 
@@ -142,12 +142,12 @@ func (d *DigiLockerProvider) Callback(identityID, code, state string) (*DigiLock
 			VerifiedAt: now,
 		},
 		{
-			DocType:  "PAN",
-			Status:   "VERIFIED",
-			Name:     fmt.Sprintf("%s Kumar", identityID),
-			IDNumber: "ABCDE1234F",
-			DOB:      "1990-01-15",
-			IssuedBy: "Income Tax Dept",
+			DocType:    "PAN",
+			Status:     "VERIFIED",
+			Name:       fmt.Sprintf("%s Kumar", identityID),
+			IDNumber:   "ABCDE1234F",
+			DOB:        "1990-01-15",
+			IssuedBy:   "Income Tax Dept",
 			PulledAt:   now,
 			VerifiedAt: now,
 		},

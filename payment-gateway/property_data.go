@@ -23,25 +23,25 @@ const (
 type PropertySource string
 
 const (
-	SourceBhoomi     PropertySource = "bhoomi"
-	SourceDharani    PropertySource = "dharani"
+	SourceBhoomi      PropertySource = "bhoomi"
+	SourceDharani     PropertySource = "dharani"
 	SourceMahabhulekh PropertySource = "mahabhulekh"
-	SourceEProperty  PropertySource = "e-property"
+	SourceEProperty   PropertySource = "e-property"
 )
 
 type GovernmentRecord struct {
-	SurveyNumber       string    `json:"surveyNumber"`
-	OwnerName          string    `json:"ownerName"`
-	OwnerAadhaar       string    `json:"ownerAadhaar"`
-	Location           struct {
+	SurveyNumber string `json:"surveyNumber"`
+	OwnerName    string `json:"ownerName"`
+	OwnerAadhaar string `json:"ownerAadhaar"`
+	Location     struct {
 		State   string `json:"state"`
 		City    string `json:"city"`
 		Pincode string `json:"pincode"`
 	} `json:"location"`
-	AreaSqFt           int       `json:"areaSqFt"`
-	GovernmentValuation int64    `json:"governmentValuation"`
-	LastTransaction    time.Time `json:"lastTransaction"`
-	Source             PropertySource `json:"source"`
+	AreaSqFt            int            `json:"areaSqFt"`
+	GovernmentValuation int64          `json:"governmentValuation"`
+	LastTransaction     time.Time      `json:"lastTransaction"`
+	Source              PropertySource `json:"source"`
 }
 
 type Encumbrance struct {
@@ -58,31 +58,31 @@ type Litigation struct {
 }
 
 type EncumbranceCheck struct {
-	HasEncumbrance bool         `json:"hasEncumbrance"`
+	HasEncumbrance bool          `json:"hasEncumbrance"`
 	Encumbrances   []Encumbrance `json:"encumbrances"`
 	Litigation     []Litigation  `json:"litigation"`
-	CheckedAt      time.Time    `json:"checkedAt"`
+	CheckedAt      time.Time     `json:"checkedAt"`
 }
 
 type ValuationSource struct {
-	OurValuation        int64   `json:"ourValuation"`
-	GovernmentValuation int64   `json:"governmentValuation"`
-	DifferencePercent   float64 `json:"differencePercent"`
-	Source              string  `json:"source"`
+	OurValuation        int64     `json:"ourValuation"`
+	GovernmentValuation int64     `json:"governmentValuation"`
+	DifferencePercent   float64   `json:"differencePercent"`
+	Source              string    `json:"source"`
 	LastUpdated         time.Time `json:"lastUpdated"`
 }
 
 type PropertyVerification struct {
-	AssetID            string            `json:"assetId"`
-	Verified           bool              `json:"verified"`
-	MatchScore         int               `json:"matchScore"` // 0-100
-	GovernmentRecord   GovernmentRecord  `json:"governmentRecord"`
-	EncumbranceCheck   EncumbranceCheck  `json:"encumbranceCheck"`
-	ValuationSource    ValuationSource   `json:"valuationSource"`
-	Source             PropertySource    `json:"source"`
-	Mode               PropertyDataMode  `json:"mode"`
-	VerifiedAt         time.Time         `json:"verifiedAt"`
-	Message            string            `json:"message"`
+	AssetID          string           `json:"assetId"`
+	Verified         bool             `json:"verified"`
+	MatchScore       int              `json:"matchScore"` // 0-100
+	GovernmentRecord GovernmentRecord `json:"governmentRecord"`
+	EncumbranceCheck EncumbranceCheck `json:"encumbranceCheck"`
+	ValuationSource  ValuationSource  `json:"valuationSource"`
+	Source           PropertySource   `json:"source"`
+	Mode             PropertyDataMode `json:"mode"`
+	VerifiedAt       time.Time        `json:"verifiedAt"`
+	Message          string           `json:"message"`
 }
 
 type PropertyDataProvider struct {
@@ -124,13 +124,13 @@ func (p *PropertyDataProvider) Verify(assetID string, ourValuation int64, origin
 	govValuation := int64(float64(ourValuation) * (0.9 + rand.Float64()*0.2)) // 90-110% of our valuation
 
 	govRecord := GovernmentRecord{
-		SurveyNumber:       fmt.Sprintf("SY-%04d/%d", rand.Intn(9000)+1000, rand.Intn(9)+1),
-		OwnerName:          fmt.Sprintf("%s Kumar", originatorID),
-		OwnerAadhaar:       "XXXX-XXXX-1234",
-		AreaSqFt:           rand.Intn(2000) + 500,
+		SurveyNumber:        fmt.Sprintf("SY-%04d/%d", rand.Intn(9000)+1000, rand.Intn(9)+1),
+		OwnerName:           fmt.Sprintf("%s Kumar", originatorID),
+		OwnerAadhaar:        "XXXX-XXXX-1234",
+		AreaSqFt:            rand.Intn(2000) + 500,
 		GovernmentValuation: govValuation,
-		LastTransaction:    time.Now().AddDate(0, -rand.Intn(12), -rand.Intn(30)),
-		Source:             source,
+		LastTransaction:     time.Now().AddDate(0, -rand.Intn(12), -rand.Intn(30)),
+		Source:              source,
 	}
 	govRecord.Location.State = state
 	govRecord.Location.City = city

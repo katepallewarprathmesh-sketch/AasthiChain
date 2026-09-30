@@ -729,6 +729,12 @@ app.use((req, res, next) => {
     return next();
   }
   if (req.method !== 'GET') return next();
+  // Vercel-only endpoints (analytics/insights) and favicon must not fall through to
+  // index.html — the browser would try to execute HTML as JavaScript and throw
+  // "Unexpected token '<'" in the console on every local page load.
+  if (req.path.startsWith('/_vercel/') || req.path === '/favicon.ico') {
+    return res.status(204).end();
+  }
   const distPath = path.join(__dirname, 'frontend', 'dist');
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
@@ -1419,6 +1425,59 @@ app.get('/api/drunix/ledger', authMiddleware, (req, res) => {
 app.get('/api/fraud/config', authMiddleware, (req, res) => {
   res.json({ model: 'aasthichain-rules-v1 (ML-pluggable)', thresholds: FRAUD_T, sourceOfTruth: 'drunix-gateway/fraud.go (Golang)', theme: 'AI & Fraud Detection' });
 });
+
+// ---------------------------------------------------------------------------
+// UMI-pattern settlement simulation — same module the Vercel API uses, so both
+// servers cannot drift. Models the SEBI Demat 2.0 / RBI Unified Market Interface
+// shape: cash leg reserved, then both legs commit atomically or neither does.
+//
+// NOT connected to RBI, SEBI, NPCI, NSDL or CDSL. Every response is stamped
+// simulated:true, centralBankMoney:false, regulatoryStatus:SIMULATED_NOT_CONNECTED.
+// ---------------------------------------------------------------------------
+let _umiSimPromise = null;
+function umiSim() {
+  if (!_umiSimPromise) {
+    _umiSimPromise = import('./frontend/api/lib/umi_sim.js').then(m => m.getSharedUMISim());
+  }
+  return _umiSimPromise;
+}
+
+// Wraps a UMI handler so thrown rail errors become honest HTTP responses.
+function umiRoute(handler) {
+  return async (req, res) => {
+    try {
+      const umi = await umiSim();
+      await handler(umi, req, res);
+    } catch (e) {
+      res.status(e.http || 400).json({
+        error: e.code || 'ERR_UMI',
+        message: e.message,
+        settlementRail: 'UMI_SIM',
+        simulated: true,
+      });
+    }
+  };
+}
+
+app.get('/api/umi/capabilities', umiRoute(async (umi, req, res) => res.json(umi.capabilities())));
+app.get('/api/umi/conformance', umiRoute(async (umi, req, res) => res.json(umi.conformance())));
+app.get('/api/umi/wallets', umiRoute(async (umi, req, res) => res.json({ wallets: umi.listWallets(), settlementRail: 'UMI_SIM', simulated: true })));
+app.post('/api/umi/wallet', umiRoute(async (umi, req, res) => {
+  const b = req.body || {};
+  res.status(201).json(umi.openWallet({
+    participantId: b.participantId,
+    participantClass: b.participantClass,
+    bank: b.participatingBank,
+    openingPaise: b.openingPaise,
+  }));
+}));
+app.get('/api/umi/wallet/:participantId', umiRoute(async (umi, req, res) => res.json(umi.getWallet(req.params.participantId))));
+app.post('/api/umi/dvp/reserve', umiRoute(async (umi, req, res) => res.status(201).json(umi.reserve(req.body || {}))));
+app.post('/api/umi/dvp/settle', umiRoute(async (umi, req, res) => res.json(umi.atomicSettle(req.body || {}))));
+app.post('/api/umi/dvp/unwind', umiRoute(async (umi, req, res) => res.json(umi.unwind(req.body || {}))));
+app.get('/api/umi/dvp/:dvpId', umiRoute(async (umi, req, res) => res.json(umi.getDvP(req.params.dvpId))));
+app.post('/api/umi/corporate-action', umiRoute(async (umi, req, res) => res.status(201).json(umi.distributeCorporateAction(req.body || {}))));
+app.get('/api/umi/corporate-actions', umiRoute(async (umi, req, res) => res.json({ actions: umi.listCorporateActions(req.query.assetId), simulated: true })));
 
 app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
   res.json({

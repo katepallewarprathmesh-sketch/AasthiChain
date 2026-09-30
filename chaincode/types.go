@@ -43,19 +43,19 @@ type Location struct {
 
 // PropertyAsset - on-chain state
 type PropertyAsset struct {
-	AssetID                    string    `json:"assetId"`
-	DocType                    string    `json:"docType"`
-	OriginatorID               string    `json:"originatorId"`
-	Title                      string    `json:"title"`
-	Location                   Location  `json:"location"`
-	ValuationINR               int64     `json:"valuationINR"`
-	TotalTokens                int64     `json:"totalTokens"`
-	DocumentHash               string    `json:"documentHash"`
-	RegistrarValidationStatus  string    `json:"registrarValidationStatus"`
-	Status                     string    `json:"status"`
-	CreatedAt                  time.Time `json:"createdAt"`
-	UpdatedAt                  time.Time `json:"updatedAt"`
-	Version                    int       `json:"version"` // schema version for migration
+	AssetID                   string    `json:"assetId"`
+	DocType                   string    `json:"docType"`
+	OriginatorID              string    `json:"originatorId"`
+	Title                     string    `json:"title"`
+	Location                  Location  `json:"location"`
+	ValuationINR              int64     `json:"valuationINR"`
+	TotalTokens               int64     `json:"totalTokens"`
+	DocumentHash              string    `json:"documentHash"`
+	RegistrarValidationStatus string    `json:"registrarValidationStatus"`
+	Status                    string    `json:"status"`
+	CreatedAt                 time.Time `json:"createdAt"`
+	UpdatedAt                 time.Time `json:"updatedAt"`
+	Version                   int       `json:"version"` // schema version for migration
 }
 
 // TokenBalance
@@ -83,17 +83,17 @@ type TransferRecord struct {
 // SettlementRecord — on-chain DvP proof: tokens moved against a bank-settled
 // UPI payment (UTR). This is the Drunix-native settlement audit trail (PS2).
 type SettlementRecord struct {
-	DocType        string    `json:"docType"`        // "settlement"
+	DocType        string    `json:"docType"` // "settlement"
 	SettlementID   string    `json:"settlementId"`
-	PaymentID      string    `json:"paymentId"`      // NPCI-XXXXXXXXXXXX
-	UTR            string    `json:"utr"`            // bank UTR (12-digit IMPS)
+	PaymentID      string    `json:"paymentId"` // NPCI-XXXXXXXXXXXX
+	UTR            string    `json:"utr"`       // bank UTR (12-digit IMPS)
 	AssetID        string    `json:"assetId"`
 	FromID         string    `json:"fromId"`
 	ToID           string    `json:"toId"`
 	TokenAmount    int64     `json:"tokenAmount"`
 	AmountINRPaise int64     `json:"amountINRPaise"`
 	SettledAt      time.Time `json:"settledAt"`
-	Status         string    `json:"status"`         // SETTLED / REVERSED
+	Status         string    `json:"status"` // SETTLED / REVERSED
 }
 
 // KYCRecord
@@ -107,10 +107,10 @@ type KYCRecord struct {
 
 // Business caps
 const (
-	MaxTotalTokens          = 10_000_000
-	MinValuationINR         = 100_000 // 1L minimum for demo sanity
-	CompositeBalancePrefix  = "balance"
-	CompositeSettlePrefix   = "settlement"
-	SettlementSettled       = "SETTLED"
-	SettlementReversed      = "REVERSED"
+	MaxTotalTokens         = 10_000_000
+	MinValuationINR        = 100_000 // 1L minimum for demo sanity
+	CompositeBalancePrefix = "balance"
+	CompositeSettlePrefix  = "settlement"
+	SettlementSettled      = "SETTLED"
+	SettlementReversed     = "REVERSED"
 )

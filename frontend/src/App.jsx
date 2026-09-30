@@ -55,6 +55,7 @@ const Regulator = lazy(() => import('./pages/Regulator.jsx'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
 const Support = lazy(() => import('./pages/Support.jsx'))
 const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
+const SettlementPage = lazy(() => import('./pages/Settlement.jsx'))
 
 function RouteFallback() {
   return (
@@ -220,6 +221,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
                   { path: '/marketplace', label: 'Marketplace' },
                   { path: '/wallet', label: 'Wallet' },
                   { path: '/ledger', label: 'Ledger' },
+                  { path: '/settlement', label: 'Settlement' },
                   ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
                   ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
                 ]
@@ -359,7 +361,7 @@ function AppContent({ user, setUser }) {
 
   // Public pages must never wait on the auth SDK — they render immediately and
   // Clerk finishes initialising in the background. Only auth-gated routes pause.
-  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support']
+  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/settlement', '/support']
   const isPublicPath = PUBLIC_PATHS.includes(location.pathname)
 
   if (isClerkConfigured && !isLoaded && !isPublicPath) {
@@ -384,6 +386,7 @@ function AppContent({ user, setUser }) {
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
+          <Route path="/settlement" element={<SettlementPage />} />
           <Route path="/support" element={<Support />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />

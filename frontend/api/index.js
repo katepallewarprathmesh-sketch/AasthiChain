@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import { realDB } from './lib/db_real.js';
 import { authStore } from './lib/authstore.js';
+import { getSharedUMISim } from './lib/umi_sim.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -1072,6 +1073,65 @@ export default async function handler(req, res) {
 
     if (path === '/api/fraud/config' && method === 'GET') {
       return res.json({ model: 'aasthichain-rules-v1 (ML-pluggable)', thresholds: FRAUD_T, sourceOfTruth: 'drunix-gateway/fraud.go (Golang)', theme: 'AI & Fraud Detection' });
+    }
+
+    // ------------------------------------------------------------------
+    // UMI-pattern settlement simulation (SEBI Demat 2.0 / RBI UMI shape).
+    // Every response carries settlementRail, simulated:true, centralBankMoney:false
+    // and regulatoryStatus:SIMULATED_NOT_CONNECTED — enforced inside the module.
+    // Nothing here is connected to RBI, SEBI, NPCI, NSDL or CDSL.
+    // ------------------------------------------------------------------
+    if (path.startsWith('/api/umi/')) {
+      const umi = getSharedUMISim();
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      try {
+        if (path === '/api/umi/capabilities' && method === 'GET') {
+          return res.json(umi.capabilities());
+        }
+        if (path === '/api/umi/conformance' && method === 'GET') {
+          return res.json(umi.conformance());
+        }
+        if (path === '/api/umi/wallets' && method === 'GET') {
+          return res.json({ wallets: umi.listWallets(), settlementRail: 'UMI_SIM', simulated: true });
+        }
+        if (path === '/api/umi/wallet' && method === 'POST') {
+          return res.status(201).json(umi.openWallet({
+            participantId: body.participantId,
+            participantClass: body.participantClass,
+            bank: body.participatingBank,
+            openingPaise: body.openingPaise,
+          }));
+        }
+        if (path.startsWith('/api/umi/wallet/') && method === 'GET') {
+          return res.json(umi.getWallet(decodeURIComponent(path.split('/')[4] || '')));
+        }
+        if (path === '/api/umi/dvp/reserve' && method === 'POST') {
+          return res.status(201).json(umi.reserve(body));
+        }
+        if (path === '/api/umi/dvp/settle' && method === 'POST') {
+          return res.json(umi.atomicSettle(body));
+        }
+        if (path === '/api/umi/dvp/unwind' && method === 'POST') {
+          return res.json(umi.unwind(body));
+        }
+        if (path.startsWith('/api/umi/dvp/') && method === 'GET') {
+          return res.json(umi.getDvP(decodeURIComponent(path.split('/')[4] || '')));
+        }
+        if (path === '/api/umi/corporate-action' && method === 'POST') {
+          return res.status(201).json(umi.distributeCorporateAction(body));
+        }
+        if (path === '/api/umi/corporate-actions' && method === 'GET') {
+          return res.json({ actions: umi.listCorporateActions(url.searchParams.get('assetId') || undefined), simulated: true });
+        }
+        return res.status(404).json({ error: 'ERR_UNKNOWN_UMI_ROUTE', path, simulated: true });
+      } catch (e) {
+        return res.status(e.http || 400).json({
+          error: e.code || 'ERR_UMI',
+          message: e.message,
+          settlementRail: 'UMI_SIM',
+          simulated: true,
+        });
+      }
     }
 
     if (path === '/api/openfinance/capabilities' && method === 'GET') {
