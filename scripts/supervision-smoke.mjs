@@ -5,12 +5,22 @@
 const BASE = process.argv[2] || process.env.BASE_URL || 'http://localhost:8080'
 const ASSET = 'PROP-GREEN-VALLEY-PUNE-001'
 
-// Mock JWT, same base64 shape the server issues for its demo identities.
-const tok = (id, msp, role) =>
-  Buffer.from(JSON.stringify({ identityId: id, mspId: msp, role })).toString('base64')
+// Tokens are HMAC-signed by the server, so they must be obtained from
+// /api/auth/login rather than minted here.
+async function login(identityId, role) {
+  const res = await fetch(BASE + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identityId, role })
+  })
+  if (!res.ok) throw new Error(`login failed for ${identityId}: HTTP ${res.status}`)
+  const { token } = await res.json()
+  if (!token) throw new Error(`login returned no token for ${identityId}`)
+  return token
+}
 
-const REGULATOR = tok('regulator1', 'RegulatorMSP', 'Regulator')
-const INVESTOR = tok('investor1', 'InvestorMSP', 'Investor')
+const REGULATOR = await login('regulator1', 'Regulator')
+const INVESTOR = await login('investor1', 'Investor')
 
 let passed = 0
 const failures = []

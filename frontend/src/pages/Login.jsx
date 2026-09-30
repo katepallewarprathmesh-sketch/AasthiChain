@@ -18,10 +18,20 @@ function DemoPresets({ onLogin, title }) {
   const navigate = useNavigate()
   const [loadingId, setLoadingId] = React.useState(null)
 
-  const handleDemo = (roleData) => {
+  // Tokens are issued and signed by the server. This used to mint one client-side
+  // with btoa(), which the server accepted unsigned — so any identity, including
+  // registrar1 and regulator1, could be self-assigned from the browser console.
+  const handleDemo = async (roleData) => {
     setLoadingId(roleData.id)
     try {
-      const token = btoa(JSON.stringify({ identityId: roleData.id, role: roleData.role, mspId: roleData.mspId, exp: Date.now()+3600000 }))
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identityId: roleData.id, role: roleData.role })
+      })
+      if (!res.ok) throw new Error(`login failed (${res.status})`)
+      const { token } = await res.json()
+      if (!token) throw new Error('server returned no token')
       const demoUser = {
         token,
         identityId: roleData.id,

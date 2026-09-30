@@ -3,6 +3,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const app = express();
 app.use(cors({ origin: '*', allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key'] }));
@@ -107,79 +108,70 @@ for (let i = 0; i < 25; i++) {
 }
 
 // JWT mock - just base64
+// ===================== AUTH: SIGNED TOKENS =====================
+// Tokens used to be unsigned base64 JSON, so anyone could mint an identity:
+//     echo -n '{"identityId":"registrar1","role":"Registrar"}' | base64
+// ...and every downstream role check was decorative. Worse, authMiddleware had a
+// catch-all `catch { req.user = roleMap[header] ; next() }` that ADMITTED the
+// request when the token failed to parse, taking the identity from the
+// attacker-supplied x-fabric-identity header.
+//
+// Tokens are now HMAC-signed and verified. An unsigned or tampered token is a
+// 401, and there is no fallback that lets a bad token through.
+//
+// Threat model, stated honestly: /api/auth/login is open by design — this is a
+// demo with no passwords, so anyone can obtain a valid token for any demo
+// identity. Signing fixes tampering and the fallback hole; it does not turn the
+// demo into an authenticated system. What it does make real is AUTHORISATION:
+// a valid investor2 token can no longer read investor1's data.
+const TOKEN_SECRET = process.env.AASTHI_TOKEN_SECRET || 'aasthi-demo-secret-change-me';
+if (!process.env.AASTHI_TOKEN_SECRET) {
+  console.warn('[auth] AASTHI_TOKEN_SECRET is not set — using the built-in demo secret. Set it for any shared deployment.');
+}
+
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(s) {
+  return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+}
+function signPayload(payloadB64) {
+  return b64url(crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest());
+}
+
+// Issues a signed token: <base64url(payload)>.<base64url(hmac)>
 function mockJWT(identityId, mspId, role) {
-  return Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
+  const payloadB64 = b64url(JSON.stringify({ identityId, mspId, role, exp: Date.now() + 3600000 }));
+  return payloadB64 + '.' + signPayload(payloadB64);
 }
 
-function decodeClerkOrMockToken(token) {
-  // Try mock base64 JSON first
+// Verifies a signed mock token. Returns the payload, or null.
+function verifySignedToken(token) {
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;                   // 3 parts => Clerk JWT, handled elsewhere
+  const [payloadB64, sig] = parts;
+  const expected = signPayload(payloadB64);
+  // Constant-time compare; lengths must match or timingSafeEqual throws.
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
-    if (payload.identityId) return payload;
-  } catch {}
-  // Try JWT (Clerk) — decode without verification for mock server
-  try {
-    const parts = token.split('.');
-    if (parts.length === 3) {
-      const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = payloadB64 + '='.repeat((4 - payloadB64.length % 4) % 4);
-      const payload = JSON.parse(Buffer.from(padded, 'base64').toString());
-      // Clerk JWT has sub, sid, etc.
-      const identityId = payload.fabricIdentity || payload.identityId || (payload.sub ? 'investor1' : null);
-      // If Clerk token, map to demo identity from header or default
-      // Check for custom claims or use fallback
-      if (payload.sub) {
-        // Clerk user — use demo identity from localStorage mapping or default investor1
-        // For mock, we accept any Clerk token and map to investor1 unless x-fabric-identity header present
-        return {
-          identityId: payload.fabricIdentity || 'investor1',
-          mspId: payload.mspId || 'InvestorMSP',
-          role: payload.role || 'Investor',
-          clerkId: payload.sub,
-          clerk: true
-        };
-      }
-      if (payload.identityId) return payload;
-    }
-  } catch (e) {
-    // console.warn('Token decode failed', e.message)
-  }
-  return null;
+    const payload = JSON.parse(b64urlDecode(payloadB64));
+    if (!payload || !payload.identityId) return null;
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
 }
 
-function authMiddleware(req, res, next) {
-  const auth = req.headers.authorization;
-  const fabricIdentityHeader = req.headers['x-fabric-identity'] || req.headers['x-fabric-role'];
-  if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+// Clerk session tokens are 3-part JWTs. We do not hold Clerk's JWKS here, so we
+// cannot verify their signature; a Clerk session therefore maps to the demo
+// identity chosen in the UI. This is a known gap, recorded in
+// docs/DATA_ACCESS_AND_LEDGER_AUDIT.md.
+function decodeClerkToken(token, fabricIdentityHeader) {
+  const parts = String(token).split('.');
+  if (parts.length !== 3) return null;
   try {
-    const token = auth.split(' ')[1];
-    let payload = decodeClerkOrMockToken(token);
-    
-    // If token is Clerk JWT and we have fabric identity header, use it
-    if (payload && payload.clerk && fabricIdentityHeader) {
-      const roleMap = {
-        originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
-        registrar1: { identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar' },
-        investor1: { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' },
-        investor2: { identityId: 'investor2', mspId: 'InvestorMSP', role: 'Investor' },
-        regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
-      };
-      const mapped = roleMap[fabricIdentityHeader.toLowerCase()] || roleMap['investor1'];
-      payload = { ...payload, ...mapped };
-    }
-
-    if (payload && payload.identityId) {
-      req.user = payload;
-      return next();
-    }
-
-    // Fallback: try direct base64
-    const fallback = JSON.parse(Buffer.from(token, 'base64').toString());
-    req.user = fallback;
-    next();
-  } catch {
-    // Allow mock token format from frontend fallback + Clerk placeholder tokens
-    const headerIdentity = fabricIdentityHeader || 'investor1';
+    const payload = JSON.parse(b64urlDecode(parts[1]));
+    if (!payload || !payload.sub) return null;
     const roleMap = {
       originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
       registrar1: { identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar' },
@@ -187,9 +179,54 @@ function authMiddleware(req, res, next) {
       investor2: { identityId: 'investor2', mspId: 'InvestorMSP', role: 'Investor' },
       regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
     };
-    req.user = roleMap[headerIdentity.toLowerCase()] || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
-    next();
+    const mapped = roleMap[String(fabricIdentityHeader || 'investor1').toLowerCase()] || roleMap.investor1;
+    return { ...mapped, clerkId: payload.sub, via: 'clerk' };
+  } catch { return null; }
+}
+
+function decodeClerkOrMockToken(token, fabricIdentityHeader) {
+  return verifySignedToken(token) || decodeClerkToken(token, fabricIdentityHeader);
+}
+
+function authMiddleware(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+  const token = auth.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+  const payload = decodeClerkOrMockToken(token, req.headers['x-fabric-identity'] || req.headers['x-fabric-role']);
+  if (!payload || !payload.identityId) {
+    // No fallback. A token we cannot verify is not a login.
+    return res.status(401).json({ error: 'ERR_INVALID_TOKEN', message: 'Token is missing, malformed, expired or not signed by this server.' });
   }
+  req.user = payload;
+  next();
+}
+
+// ===================== AUTHORISATION HELPERS =====================
+// authMiddleware answers "are you logged in?". These answer "is this yours?".
+const PRIVILEGED_READERS = ['Regulator'];
+
+// Guards a route whose target identity is in the path. The caller must BE that
+// identity, or hold a role allowed to look across users.
+function requireSelfOrRole(paramNames, roles = PRIVILEGED_READERS) {
+  const names = Array.isArray(paramNames) ? paramNames : [paramNames];
+  return (req, res, next) => {
+    const target = names.map(n => req.params[n]).find(Boolean);
+    if (!target) return next();
+    if (req.user && req.user.identityId === target) return next();
+    if (req.user && roles.includes(req.user.role)) return next();
+    return res.status(403).json({
+      error: 'ERR_FORBIDDEN',
+      message: `This belongs to ${target}. You are signed in as ${req.user ? req.user.identityId : 'nobody'}.`
+    });
+  };
+}
+
+// True when the caller is a party to this payment, or may supervise it.
+function canSeePayment(user, pay) {
+  if (!user || !pay) return false;
+  if (PRIVILEGED_READERS.includes(user.role)) return true;
+  return pay.payerId === user.identityId || pay.payeeId === user.identityId;
 }
 
 app.get('/health', (req, res) => {
@@ -561,7 +598,7 @@ app.post('/api/transfers', authMiddleware, (req, res) => {
 });
 
 // FIX: wallet route BEFORE balance/:assetId/:ownerId — otherwise "wallet" is captured as assetId
-app.get('/api/balances/wallet/:ownerId', authMiddleware, (req, res) => {
+app.get('/api/balances/wallet/:ownerId', authMiddleware, requireSelfOrRole('ownerId'), (req, res) => {
   const ownerId = req.params.ownerId;
   const bals = Object.values(balances).filter(b => b.ownerId === ownerId && (b.balance || 0) > 0);
   let total = 0;
@@ -580,7 +617,7 @@ app.get('/api/balances/wallet/:ownerId', authMiddleware, (req, res) => {
   res.json({ ownerId, balances: enriched, totalPortfolioValue: total, fabricMode: 'mock', indexUsed: 'idx_balance_owner' });
 });
 
-app.get('/api/balances/:assetId/:ownerId', authMiddleware, (req, res) => {
+app.get('/api/balances/:assetId/:ownerId', authMiddleware, requireSelfOrRole('ownerId'), (req, res) => {
   // Safety: wallet handled above; never treat it as an asset
   if (req.params.assetId === 'wallet') {
     return res.json({ ownerId: req.params.ownerId, balances: [], totalPortfolioValue: 0 });
@@ -617,9 +654,15 @@ app.put('/api/kyc/:identityId', authMiddleware, (req, res) => {
   res.json({ identityId: id, kycStatus: req.body.status, fabricMode: 'mock' });
 });
 
+// A counterparty needs to know THAT you are verified, never your documents.
+// Self and regulators get the full record; everyone else gets the boolean.
 app.get('/api/kyc/:identityId', authMiddleware, (req, res) => {
-  const rec = kycRecords[req.params.identityId] || { docType: 'kyc', identityId: req.params.identityId, kycStatus: 'UNVERIFIED', provider: 'mock' };
-  res.json(rec);
+  const id = req.params.identityId;
+  const rec = kycRecords[id] || { docType: 'kyc', identityId: id, kycStatus: 'UNVERIFIED', provider: 'mock' };
+  const isSelf = req.user.identityId === id;
+  const privileged = PRIVILEGED_READERS.includes(req.user.role);
+  if (isSelf || privileged) return res.json(rec);
+  res.json({ docType: 'kyc', identityId: id, kycStatus: rec.kycStatus, scope: 'counterparty-view' });
 });
 
 app.post('/api/payments/confirm', authMiddleware, (req, res) => {
@@ -934,10 +977,48 @@ function drunixAppend(type, txns, meta) {
   b.hash = drunixHash(drunixCanonical(b));
   drunixChain.push(b);
   if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+  try { if (typeof saveAllPersisted === 'function') saveAllPersisted(); } catch {}
   return b;
 }
-if (drunixChain.length === 0) {
-  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
+// ---------------- Ledger persistence ----------------
+// The chain used to live only in memory. mock-api-server.js called
+// saveAllPersisted() behind a `typeof ... === 'function'` guard, but that
+// function is defined only in frontend/api/index.js — so the call silently did
+// nothing and every restart began again at GENESIS. That is why the ledger view
+// always showed a single block. The function is defined here now.
+const CHAIN_FILE = path.join(os.tmpdir(), 'aasthi_chain.json');
+
+function saveAllPersisted() {
+  try {
+    fs.writeFileSync(CHAIN_FILE, JSON.stringify(drunixChain), 'utf8');
+  } catch (e) {
+    console.error('[chain] save failed:', e.message);
+  }
+}
+
+// Only accept a stored chain that still verifies. This deliberately delegates to
+// drunixVerify() — the same function /api/chain/verify uses — rather than
+// re-implementing the checks. A first cut of this loader hand-rolled them and
+// omitted the merkle-root comparison, so an edit to a transaction's contents
+// inside a committed block was silently accepted on restart. Two
+// implementations of an integrity check will always drift; there is now one.
+function loadPersistedChain() {
+  let previous = drunixChain;
+  try {
+    if (!fs.existsSync(CHAIN_FILE)) return false;
+    const parsed = JSON.parse(fs.readFileSync(CHAIN_FILE, 'utf8'));
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    drunixChain = parsed;
+    const v = drunixVerify();
+    if (!v.valid) throw new Error(`${v.reason} (block ${v.brokenAt})`);
+    if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+    console.log(`[chain] restored ${parsed.length} block(s) from ${CHAIN_FILE}`);
+    return true;
+  } catch (e) {
+    drunixChain = previous;
+    console.error('[chain] stored chain REJECTED, starting fresh:', e.message);
+    return false;
+  }
 }
 function drunixVerify() {
   for (let i = 0; i < drunixChain.length; i++) {
@@ -948,6 +1029,12 @@ function drunixVerify() {
     if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
   }
   return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+}
+
+// Restore the ledger, then create genesis only if there was nothing valid to restore.
+loadPersistedChain();
+if (drunixChain.length === 0) {
+  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
 // Judge/demo only (clearly labeled SIMULATION in UI): alter a committed txn so
 // verify() can detect it — proof of tamper-evidence, the core of decentralized trust.
@@ -1248,7 +1335,7 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
       payerVpa: payerVpa.toLowerCase(), payeeVpa: payeeVpa.toLowerCase(), note: note || '',
       status: 'FAILED_KYC_NOT_VERIFIED', failureReason: `payee ${payeeKycId} KYC not verified`,
       createdAt: new Date(), expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-      isSimulation: true, payerId: payerId || 'investor1', payeeId: payeeKycId
+      isSimulation: true, payerId: req.user.identityId, payeeId: payeeKycId
     };
     npciPayments[paymentId] = pay;
     if (idemKey) npciIdem[idemKey] = pay;
@@ -1269,7 +1356,9 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
     status: 'PENDING', createdAt: now, expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
     confirmedAt: null, releasedAt: null, drunixTransferId: null,
     idempotencyKey: idemKey, isSimulation: true,
-    payerId: payerId || 'investor1', payeeId: payeeId || 'originator1',
+    // payerId is the authenticated caller. Taking it from the body let a client
+    // assign its payments to someone else, defeating any ownership check.
+    payerId: req.user.identityId, payeeId: payeeId || 'originator1',
     callbackReceived: false, provider: 'mock', webhookReceivedAt: null
   };
   // AI & Fraud Detection screen (parity with drunix-gateway/fraud.go, Golang)
@@ -1675,15 +1764,23 @@ app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
 });
 
 app.get('/api/npci/payments', authMiddleware, (req, res) => {
-  const list = Object.values(npciPayments)
+  // Used to return every payment in the system to any logged-in user.
+  // Now scoped to the legs the caller is a party to; regulators see all.
+  const visible = Object.values(npciPayments).filter(p => canSeePayment(req.user, p));
+  const list = visible
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, parseInt(req.query.limit) || 20);
-  res.json({ payments: list, count: list.length });
+  res.json({ payments: list, count: list.length, scope: PRIVILEGED_READERS.includes(req.user.role) ? 'all' : 'own' });
 });
 
 app.get('/api/npci/payments/:id', authMiddleware, (req, res) => {
   const pay = npciPayments[req.params.id];
   if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId: req.params.id });
+  // Any logged-in user could previously read any payment, including the
+  // counterparty VPAs, amount and UTR.
+  if (!canSeePayment(req.user, pay)) {
+    return res.status(403).json({ error: 'ERR_FORBIDDEN', message: 'You are not a party to this payment.' });
+  }
   if (pay.status === 'PENDING' && new Date() > new Date(pay.expiresAt)) {
     pay.status = 'EXPIRED';
     pay.failureReason = 'collect request expired after 5 min';
@@ -1993,7 +2090,7 @@ app.post('/api/chain/restore', (req, res) => {
 
 
 // ---- Programmable ownership API: continuous NAV, yield servicing, governance, credit, swaps ----
-app.get('/api/portfolio/:identityId/nav', authMiddleware, (req, res) => {
+app.get('/api/portfolio/:identityId/nav', authMiddleware, requireSelfOrRole('identityId'), (req, res) => {
   res.json(drunixNav(req.params.identityId));
 });
 

@@ -30,9 +30,16 @@ function check(name, cond, detail = '') {
   }
 }
 
-const TOKEN = Buffer.from(
-  JSON.stringify({ identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' })
-).toString('base64')
+// Tokens are HMAC-signed by the server; obtain one rather than minting it.
+const TOKEN = await (async () => {
+  const res = await fetch(BASE + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identityId: 'investor1', role: 'Investor' })
+  })
+  if (!res.ok) throw new Error(`login failed: HTTP ${res.status}`)
+  return (await res.json()).token
+})()
 
 async function post(path, body) {
   const res = await fetch(BASE + path, {

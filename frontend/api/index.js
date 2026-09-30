@@ -20,6 +20,7 @@ const PERSIST_FILES = {
   npci: path.join(TMP_DIR, 'aasthi_npci.json'),
   utrIndex: path.join(TMP_DIR, 'aasthi_utr_index.json'),
   webhooks: path.join(TMP_DIR, 'aasthi_webhooks.json'),
+  chain: path.join(TMP_DIR, 'aasthi_chain.json'),
 };
 
 function loadFromFile(filePath, fallback) {
@@ -114,6 +115,7 @@ function saveAllPersisted() {
     saveToFile(PERSIST_FILES.npci, { payments: npciPayments, idem: npciIdem, balances: npciBalances, utrIndex });
     saveToFile(PERSIST_FILES.utrIndex, utrIndex);
     saveToFile(PERSIST_FILES.webhooks, npciWebhooks);
+    saveToFile(PERSIST_FILES.chain, drunixChain);   // the ledger was the one thing never saved
     
     // Also save to real DB if available — fire and forget for performance
     try {
@@ -610,9 +612,6 @@ function drunixAppend(type, txns, meta) {
   if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
   return b;
 }
-if (drunixChain.length === 0) {
-  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
-}
 function drunixVerify() {
   for (let i = 0; i < drunixChain.length; i++) {
     const b = drunixChain[i];
@@ -622,6 +621,31 @@ function drunixVerify() {
     if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
   }
   return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+}
+
+// Restore the ledger before creating genesis. The chain was previously the only
+// collection never persisted, so every cold start reset the explorer to a single
+// GENESIS block. Restoration is gated on drunixVerify() — the same check
+// /api/chain/verify runs — so a chain that no longer hashes is refused.
+function loadPersistedChain() {
+  const previous = drunixChain;
+  try {
+    const stored = loadFromFile(PERSIST_FILES.chain, null);
+    if (!Array.isArray(stored) || stored.length === 0) return false;
+    drunixChain = stored;
+    const v = drunixVerify();
+    if (!v.valid) throw new Error(v.reason);
+    if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+    return true;
+  } catch (e) {
+    drunixChain = previous;
+    console.error('[chain] stored chain REJECTED, starting fresh:', e.message);
+    return false;
+  }
+}
+loadPersistedChain();
+if (drunixChain.length === 0) {
+  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
 // Judge/demo only (clearly labeled SIMULATION in UI): alter a committed txn so
 // verify() can detect it — proof of tamper-evidence, the core of decentralized trust.
@@ -934,12 +958,38 @@ function isValidVPA(vpa) {
   } catch { return false; }
 }
 
+// ---- Signed tokens (mirrors mock-api-server.js) ----
+// Tokens were unsigned base64, so any identity could be self-minted.
+const TOKEN_SECRET = process.env.AASTHI_TOKEN_SECRET || 'aasthi-demo-secret-change-me';
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(s) {
+  return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+}
+function signPayload(payloadB64) {
+  return b64url(crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest());
+}
 function mockJWT(identityId, mspId, role) {
   try {
-    return Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
+    const payloadB64 = b64url(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 }));
+    return payloadB64 + '.' + signPayload(payloadB64);
   } catch {
     return `mock-${identityId}-${Date.now()}`;
   }
+}
+function verifySignedToken(token) {
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  const [payloadB64, sig] = parts;
+  try {
+    const a = Buffer.from(sig), b = Buffer.from(signPayload(payloadB64));
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    const payload = JSON.parse(b64urlDecode(payloadB64));
+    if (!payload || !payload.identityId) return null;
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
 }
 
 function decodeToken(token) {
@@ -981,7 +1031,15 @@ function getUser(req) {
 
     try {
       const token = auth.split(' ')[1] || '';
+      // A signed token is authoritative.
+      const signed = verifySignedToken(token);
+      if (signed) return signed;
       const payload = decodeToken(token);
+      if (payload && !payload.clerk) {
+        // Unsigned mock token: previously trusted outright. Now refused, so it
+        // cannot be used to self-assign an identity.
+        return null;
+      }
       if (payload) {
         if (payload.clerk) {
           const mapped = roleMap[(fabricHeader || '').toLowerCase()];
@@ -1774,6 +1832,12 @@ export default async function handler(req, res) {
     }
 
     if (path === '/api/npci/payments' && method === 'GET') {
+      // Scope to the caller's own legs; regulators see everything.
+      if (!user) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+      if (user.role !== 'Regulator') {
+        const own = Object.values(npciPayments).filter(p => p.payerId === user.identityId || p.payeeId === user.identityId);
+        return res.json({ payments: own.slice(0, 20), count: own.length, scope: 'own' });
+      }
       try {
         const list = Object.values(npciPayments).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
         return res.json({ payments: list, count: list.length, isSimulation: true });
@@ -2482,6 +2546,9 @@ export default async function handler(req, res) {
 
     // ---- Programmable ownership API: continuous NAV, yield servicing, governance, credit, swaps ----
     const navMatch = path.match(/^\/api\/portfolio\/([^/]+)\/nav$/);
+    if (navMatch && !(user && (user.identityId === navMatch[1] || user.role === 'Regulator'))) {
+      return res.status(403).json({ error: 'ERR_FORBIDDEN', message: `Portfolio belongs to ${navMatch[1]}.` });
+    }
     if (navMatch && method === 'GET') {
       return res.json(drunixNav(decodeURIComponent(navMatch[1])));
     }
@@ -3386,8 +3453,12 @@ export default async function handler(req, res) {
 
     if (path === '/api/kyc/digilocker/pull-document' && method === 'POST') {
       try {
-        const { identityId, docType } = req.body || {};
-        if (!identityId || !docType) return res.status(400).json({ error: 'identityId and docType required' });
+        const { docType } = req.body || {};
+        // identityId used to come from the request body, so any caller could pull
+        // another person's Aadhaar/PAN. It is the authenticated subject now.
+        if (!user || !user.identityId) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+        const identityId = user.identityId;
+        if (!docType) return res.status(400).json({ error: 'docType required' });
         
         const kyc = kycRecords[identityId];
         if (!kyc || kyc.kycStatus !== 'VERIFIED') {
