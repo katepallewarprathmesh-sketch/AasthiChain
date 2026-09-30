@@ -3198,16 +3198,22 @@ export default async function handler(req, res) {
     // Testnet (secondary)
     if (path === '/api/testnet/payments/initiate' && method === 'POST') {
       try {
-        const { assetId, tokenAmount, estimatedEth, txHash, paymentId, from, to, isSimulated } = req.body || {};
-        const pid = paymentId || (isSimulated ? 'SIM-' + safeUUID().slice(0,8).toUpperCase() : '0x' + safeUUID().replace(/-/g,'').slice(0,16));
-        const finalTxHash = isSimulated ? '' : (txHash || '0x' + (crypto.randomBytes ? crypto.randomBytes(32).toString('hex') : safeUUID().replace(/-/g,'')));
+        const { assetId, tokenAmount, estimatedEth, txHash, paymentId, from, to } = req.body || {};
+        // INVARIANT: a transaction hash exists only if a chain gave us one.
+        // This used to fabricate a random hash whenever isSimulated was falsy and
+        // then build an Etherscan link from it, publishing proof of a transaction
+        // that never happened. Never fabricate.
+        const realHash = (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) ? txHash : '';
+        // No hash means nothing was broadcast. The client cannot override this.
+        const simulated = !realHash;
+        const pid = paymentId || 'SIM-' + safeUUID().slice(0,8).toUpperCase();
         testnetPayments[pid] = {
-          paymentId: pid, assetId, tokenAmount, estimatedEth, txHash: finalTxHash, from, to,
-          status: 'PENDING', createdAt: new Date(), drunixTransferId: null, isSimulated: !!isSimulated,
-          sepoliaExplorer: isSimulated ? '' : `https://sepolia.etherscan.io/tx/${finalTxHash}`,
+          paymentId: pid, assetId, tokenAmount, estimatedEth, txHash: realHash, from, to,
+          status: 'PENDING', createdAt: new Date(), drunixTransferId: null, isSimulated: simulated,
+          sepoliaExplorer: realHash ? `https://sepolia.etherscan.io/tx/${realHash}` : '',
         };
         globalThis._aasthi_testnet = testnetPayments;
-        return res.json({ paymentId: pid, status: 'PENDING', txHash: finalTxHash, isSimulated: !!isSimulated, sepoliaExplorer: testnetPayments[pid].sepoliaExplorer });
+        return res.json({ paymentId: pid, status: 'PENDING', txHash: realHash, isSimulated: simulated, sepoliaExplorer: testnetPayments[pid].sepoliaExplorer });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
@@ -3265,7 +3271,9 @@ export default async function handler(req, res) {
         chainName: 'Sepolia Testnet',
         explorer: 'https://sepolia.etherscan.io',
         faucet: 'https://sepoliafaucet.com/',
-        isSecondary: true
+        isSecondary: true,
+        escrowDeployed: false,
+        message: 'PaymentEscrow.sol is written but not deployed. No Sepolia transaction is broadcast and no transaction hash is ever generated. The Drunix token transfer is real.'
       });
     }
 
