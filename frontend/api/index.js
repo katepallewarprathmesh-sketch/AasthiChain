@@ -3610,15 +3610,6 @@ export default async function handler(req, res) {
               implementation: 'frontend/api/lib/db_real.js + @vercel/kv',
               persistent: 'Yes — shared via Upstash Redis'
             },
-            github: {
-              enabled: realMode === 'github',
-              requiredEnv: 'GITHUB_TOKEN (optional, for write) — reading via raw.githubusercontent.com works without token',
-              files: ['data/properties.json', 'data/balances.json', 'data/transfers.json', 'data/kyc.json', 'data/npci_payments.json', 'data/utr_index.json', 'data/webhooks.json'],
-              implementation: 'frontend/api/lib/github_db.js + GitHub Contents API + raw.githubusercontent.com',
-              persistent: 'Yes — shared via GitHub repo, survives cold start, visible to all via raw URL',
-              howItFixes: 'Property created by originator → saved to GitHub data/properties.json → raw URL shared across lambdas → investor sees in Marketplace',
-              currentData: `https://raw.githubusercontent.com/katepallewarprathmesh-sketch/AasthiChain/main/data/properties.json`
-            },
             fileBacked: {
               enabled: realMode === 'file-backed',
               location: '/tmp/aasthi_*.json + globalThis',
@@ -3678,13 +3669,10 @@ export default async function handler(req, res) {
         const realMode = realDB.getMode()
         await realDB.init()
         
-        // Try to get real counts from realDB if postgres/github
+        // Try to get real counts from realDB when a shared store is configured
         let realCounts = null
         try {
-          if (realMode === 'github') {
-            const all = await githubDB.getAll()
-            realCounts = all.count
-          } else if (realMode === 'postgres') {
+          if (realMode === 'postgres') {
             const props = await realDB.getProperties()
             const bals = await realDB.getBalances()
             const trans = await realDB.getTransfers()
@@ -3724,12 +3712,8 @@ export default async function handler(req, res) {
               balances: !!globalThis._aasthi_balances,
               utrIndex: !!globalThis._aasthi_utr_index
             },
-            github: {
-              rawUrl: `https://raw.githubusercontent.com/katepallewarprathmesh-sketch/AasthiChain/main/data/properties.json`,
-              note: 'GitHub raw is persistent shared across lambdas'
-            }
           },
-          message: realMode === 'postgres' ? 'Using Postgres — persistent, shared, never vanishes' : realMode === 'github' ? 'Using GitHub as real DB — persistent via repo, shared across lambdas' : 'Using file-backed + localStorage — per lambda, use postgres/github for true persistence'
+          message: realMode === 'postgres' ? 'Using Postgres (Neon) — persistent and shared across instances' : 'Using file-backed storage — per instance and NOT shared; set DATABASE_URL to a Neon connection string for real persistence'
         });
       } catch (e) {
         return res.status(500).json({ error: e.message });
