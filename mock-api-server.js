@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const fraudModel = require('./lib/fraud-model.js');
 
 const app = express();
 app.use(cors({ origin: '*', allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key'] }));
@@ -234,7 +235,7 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'aasthichain-api-gateway', version: '2.6-drunix-fraud-golang', fabricMode: 'mock', drunixGateway: { mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go' : 'embedded', language: 'golang', source: 'drunix-gateway/ (Go)' }, fraudEngine: { model: 'aasthichain-rules-v1', theme: 'AI & Fraud Detection', parityOf: 'drunix-gateway/fraud.go' }, payuBridge: (() => { const pu = payuConfig(); return { enabled: pu.active, mode: pu.test ? 'test' : 'live', baseUrl: pu.base, callbackPath: '/api/npci/payu/callback' }; })() });
+  res.json({ status: 'ok', service: 'aasthichain-api-gateway', version: '2.6-drunix-fraud-golang', fabricMode: 'mock', drunixGateway: { mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go' : 'embedded', language: 'golang', source: 'drunix-gateway/ (Go)' }, fraudEngine: (() => { try { const i = fraudModel.modelInfo(); return { engine: 'trained-model', model: i.name, kind: i.kind, nTrees: i.nTrees, features: i.features.length, trainedOn: i.trainedOn }; } catch (e) { return { engine: 'unavailable', error: e.message }; } })(), payuBridge: (() => { const pu = payuConfig(); return { enabled: pu.active, mode: pu.test ? 'test' : 'live', baseUrl: pu.base, callbackPath: '/api/npci/payu/callback' }; })() });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -1225,7 +1226,43 @@ const FRAUD_T = { blockScore: 70, reviewScore: 40, highValue: 500000, elevated: 
   structFloor: 180000, structCeil: 200000, structCount: 3, velBlock: 8, velWarn: 5,
   total24h: 1000000, riskyFragments: ['fraud','scam','thief','steal','phish','xxx','darkweb'] };
 
-function computeRiskScore(payment, history) {
+// Screens a payment with the TRAINED model (ml/model/fraud_model.json), not
+// with hand-tuned thresholds. The rules version below is kept and still
+// exposed at /api/fraud/config so the two can be compared
+// on the same payment — the model beat it 0.869 PR-AUC to 0.407 on held-out
+// synthetic data, and that comparison should stay reproducible rather than
+// being a claim in a README.
+function computeRiskScore(payment, history, opts) {
+  const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
+  if (!(opts && opts.engine === 'rules')) {
+    try {
+      const at = (opts && opts.at) ? new Date(opts.at) : new Date();
+      const r = fraudModel.scorePaymentML({
+        amountINR: parseFloat(payment.amountINR) || 0,
+        payerVpa: payment.payerVpa,
+        recentINR: h.recentINR || [],
+        txnCount10m: h.txnCount10m || 0,
+        txnCount24h: h.txnCount24h || 0,
+        totalINR24h: h.totalINR24h || 0,
+        accountAgeMin: h.accountAgeMin != null ? h.accountAgeMin : 100000,
+        kycVerified: h.kycVerified !== false,
+        hourOfDay: at.getHours(),
+      });
+      return { score: r.score, band: r.band, decision: r.decision, factors: r.factors,
+               model: r.model, modelKind: r.modelKind, probability: r.probability,
+               explainer: r.explainer, dataCaveat: r.dataCaveat, engine: 'model' };
+    } catch (e) {
+      // A missing or corrupt model must not silently become "no fraud
+      // screening". Fall back to the rules and say so in the response.
+      console.error('[fraud] model scoring failed, falling back to rules:', e.message);
+      const viaRules = computeRiskScoreRules(payment, h);
+      return { ...viaRules, engine: 'rules-fallback', fallbackReason: e.message };
+    }
+  }
+  return computeRiskScoreRules(payment, h);
+}
+
+function computeRiskScoreRules(payment, history) {
   const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
   const factors = [];
   let score = 0;
@@ -1555,7 +1592,18 @@ app.get('/api/drunix/ledger', authMiddleware, (req, res) => {
 });
 
 app.get('/api/fraud/config', authMiddleware, (req, res) => {
-  res.json({ model: 'aasthichain-rules-v1 (ML-pluggable)', thresholds: FRAUD_T, sourceOfTruth: 'drunix-gateway/fraud.go (Golang)', theme: 'AI & Fraud Detection' });
+  let info = null;
+  try { info = fraudModel.modelInfo(); } catch (e) { info = { error: e.message }; }
+  res.json({
+    engine: 'trained-model',
+    model: info,
+    scoredIn: ['lib/fraud-model.js (JS)', 'drunix-gateway/model.go (Go)'],
+    trainedBy: 'ml/train.py (scikit-learn GradientBoostingClassifier)',
+    parity: 'scripts/fraud-model-parity.mjs + Go TestGoldenVectors pin all three to 1e-9',
+    legacyRules: { model: 'aasthichain-rules-v1', thresholds: FRAUD_T,
+                   note: 'retained for comparison; no longer the decision engine' },
+    theme: 'AI & Fraud Detection'
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -109,6 +109,23 @@ jobs:
           echo "$conformance" | grep -q '"allPassed":true'
           kill "$server_pid"
 
+  fraud-model:
+    name: Fraud model parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+      - name: JS scorer must match scikit-learn to 1e-9
+        run: node scripts/fraud-model-parity.mjs
+      - name: Model shipped to Go must be identical to the canonical one
+        run: |
+          diff -q ml/model/fraud_model.json drunix-gateway/fraudmodel/fraud_model.json
+          diff -q ml/model/golden_vectors.json drunix-gateway/fraudmodel/golden_vectors.json
+
   access-control:
     name: Access control
     runs-on: ubuntu-latest

@@ -1,0 +1,55 @@
+{
+  "comparison": [
+    {
+      "model": "rules-v1 (existing, replaced)",
+      "roc_auc": 0.7902,
+      "pr_auc": 0.4073,
+      "brier": 0.05663,
+      "threshold": 0.85,
+      "precision": 0.929,
+      "recall": 0.274,
+      "false_positive_rate": 0.00069,
+      "confusion": {
+        "tn": 34672,
+        "fp": 24,
+        "fn": 832,
+        "tp": 314
+      }
+    },
+    {
+      "model": "logistic-regression (rejected)",
+      "roc_auc": 0.9587,
+      "pr_auc": 0.7647,
+      "brier": 0.05278,
+      "threshold": 0.993775,
+      "precision": 0.9002,
+      "recall": 0.4799,
+      "false_positive_rate": 0.00176,
+      "confusion": {
+        "tn": 34635,
+        "fp": 61,
+        "fn": 596,
+        "tp": 550
+      }
+    },
+    {
+      "model": "gradient-boosting (SHIPPED)",
+      "roc_auc": 0.9791,
+      "pr_auc": 0.8691,
+      "brier": 0.00649,
+      "threshold": 0.470179,
+      "precision": 0.9006,
+      "recall": 0.8621,
+      "false_positive_rate": 0.00314,
+      "confusion": {
+        "tn": 34587,
+        "fp": 109,
+        "fn": 158,
+        "tp": 988
+      }
+    }
+  ],
+  "rows": 143367,
+  "fraud_rate": 0.03188320882769396,
+  "min_precision": 0.9
+}
