@@ -425,13 +425,30 @@ app.post('/api/properties/:id/mint', authMiddleware, (req, res) => {
   res.json(resp);
 });
 
-app.post('/api/properties/:id/freeze', authMiddleware, (req, res) => {
+app.post('/api/properties/:id/freeze', authMiddleware, async (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  // A freeze with no recorded reason or actor is not reviewable after the fact,
+  // so this legacy route now writes to the same supervisory log as
+  // POST /api/regulator/freeze. Neither path can bypass the record.
+  let record = null;
+  try {
+    const sup = await import('./frontend/api/lib/supervision.js');
+    record = sup.recordAction({
+      assetId: req.params.id,
+      action: 'FREEZE',
+      reason: req.body.reason,
+      actor: req.user.identityId,
+      actorRole: req.user.role,
+    });
+  } catch (e) {
+    return res.status(e.http || 400).json({ error: e.code || 'ERR_SUPERVISION', message: e.message });
+  }
+  prop.previousStatus = prop.status;
   prop.status = 'FROZEN';
   prop.updatedAt = new Date();
   properties[req.params.id] = prop;
-  res.json({ assetId: req.params.id, status: 'FROZEN', reason: req.body.reason, fabricMode: 'mock' });
+  res.json({ assetId: req.params.id, status: 'FROZEN', reason: record.reason, actionId: record.actionId, actor: record.actor, fabricMode: 'mock' });
 });
 
 app.post('/api/transfers', authMiddleware, (req, res) => {
@@ -1478,6 +1495,142 @@ app.post('/api/umi/dvp/unwind', umiRoute(async (umi, req, res) => res.json(umi.u
 app.get('/api/umi/dvp/:dvpId', umiRoute(async (umi, req, res) => res.json(umi.getDvP(req.params.dvpId))));
 app.post('/api/umi/corporate-action', umiRoute(async (umi, req, res) => res.status(201).json(umi.distributeCorporateAction(req.body || {}))));
 app.get('/api/umi/corporate-actions', umiRoute(async (umi, req, res) => res.json({ actions: umi.listCorporateActions(req.query.assetId), simulated: true })));
+
+// ---------------------------------------------------------------------------
+// Supervisory reporting — the evidence a securities regulator consumes.
+//
+// A regulator does not expose an API you can connect to; supervision runs the
+// other way, with the supervised entity producing evidence in a defined shape.
+// Nothing below is filed with or acknowledged by SEBI, RBI, NPCI, NSDL or CDSL.
+// Every response carries simulated:true and regulatoryStatus per the module.
+// ---------------------------------------------------------------------------
+let _supervisionPromise = null;
+function supervision() {
+  if (!_supervisionPromise) {
+    _supervisionPromise = import('./frontend/api/lib/supervision.js');
+  }
+  return _supervisionPromise;
+}
+
+// Reports are drawn from live server state, never from a separate copy.
+function supervisionState() {
+  return { properties, balances, transfers, payments: npciPayments, kyc: kycRecords, chain: drunixChain };
+}
+
+// Supervisory reports expose every holder's position across the whole book.
+// Only the regulator role may read them.
+function regulatorOnly(handler) {
+  return async (req, res) => {
+    if (req.user.role !== 'Regulator') {
+      return res.status(403).json({
+        error: 'ERR_NOT_A_REGULATOR',
+        message: 'Supervisory reports are restricted to the Regulator role. Sign in as regulator1.',
+        yourRole: req.user.role,
+      });
+    }
+    try {
+      const sup = await supervision();
+      await handler(sup, req, res);
+    } catch (e) {
+      res.status(e.http || 400).json({
+        error: e.code || 'ERR_SUPERVISION',
+        message: e.message,
+        simulated: true,
+        regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+      });
+    }
+  };
+}
+
+// Public: describes the surface, discloses what is not modelled. No data.
+app.get('/api/regulator/capabilities', async (req, res) => {
+  try {
+    const sup = await supervision();
+    res.json(sup.capabilities());
+  } catch (e) {
+    res.status(500).json({ error: 'ERR_SUPERVISION', message: e.message });
+  }
+});
+
+app.get('/api/regulator/cap-table', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.capTable(supervisionState(), { assetId: req.query.assetId, asOf: req.query.asOf }));
+}));
+
+app.get('/api/regulator/audit-export', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const report = sup.auditExport(supervisionState(), {
+    assetId: req.query.assetId,
+    from: req.query.from,
+    to: req.query.to,
+  });
+  if ((req.query.format || 'json').toLowerCase() === 'csv') {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="aasthichain-audit-${Date.now()}.csv"`);
+    return res.send(sup.auditExportCSV(report));
+  }
+  res.json(report);
+}));
+
+// Re-derives the hash chain from the document alone — edit one row and this fails.
+app.post('/api/regulator/audit-verify', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.verifyAuditExport(req.body || {}));
+}));
+
+app.get('/api/regulator/alerts', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.suspiciousActivity(supervisionState(), { assetId: req.query.assetId }));
+}));
+
+app.post('/api/regulator/alerts/disposition', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const b = req.body || {};
+  res.json(sup.setDisposition(b.alertId, b.disposition, b.note, req.user.identityId));
+}));
+
+app.get('/api/regulator/scheme-report', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.schemeReport(supervisionState(), { assetId: req.query.assetId }));
+}));
+
+app.get('/api/regulator/actions', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json({
+    reportType: 'SUPERVISORY_ACTION_LOG',
+    actions: sup.listActions(req.query.assetId),
+    simulated: true,
+    regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+  });
+}));
+
+// Freeze and unfreeze both demand a written reason and record the named actor.
+app.post('/api/regulator/freeze', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const b = req.body || {};
+  const prop = properties[b.assetId];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  const record = sup.recordAction({
+    assetId: b.assetId, action: 'FREEZE', reason: b.reason,
+    actor: req.user.identityId, actorRole: req.user.role,
+  });
+  prop.previousStatus = prop.status;
+  prop.status = 'FROZEN';
+  prop.updatedAt = new Date();
+  properties[b.assetId] = prop;
+  drunixAppend('ASSET_FROZEN', [{ kind: 'supervisory', assetId: b.assetId, actionId: record.actionId, actor: record.actor }]);
+  res.json({ ...record, assetStatus: 'FROZEN', simulated: true, regulatoryStatus: 'SIMULATED_NOT_CONNECTED' });
+}));
+
+app.post('/api/regulator/unfreeze', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const b = req.body || {};
+  const prop = properties[b.assetId];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  if (prop.status !== 'FROZEN') {
+    return res.status(409).json({ error: 'ERR_NOT_FROZEN', message: `${b.assetId} is ${prop.status}, not FROZEN` });
+  }
+  const record = sup.recordAction({
+    assetId: b.assetId, action: 'UNFREEZE', reason: b.reason,
+    actor: req.user.identityId, actorRole: req.user.role,
+  });
+  prop.status = prop.previousStatus || 'TOKENIZED';
+  prop.updatedAt = new Date();
+  properties[b.assetId] = prop;
+  drunixAppend('ASSET_UNFROZEN', [{ kind: 'supervisory', assetId: b.assetId, actionId: record.actionId, actor: record.actor }]);
+  res.json({ ...record, assetStatus: prop.status, simulated: true, regulatoryStatus: 'SIMULATED_NOT_CONNECTED' });
+}));
 
 app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
   res.json({

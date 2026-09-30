@@ -108,3 +108,24 @@ jobs:
           echo "$conformance"
           echo "$conformance" | grep -q '"allPassed":true'
           kill "$server_pid"
+
+  supervision:
+    name: Supervisory reporting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+      - name: Boot the API and run the supervisory suite
+        run: |
+          node mock-api-server.js &
+          server_pid=$!
+          for i in $(seq 1 30); do
+            if curl -fsS localhost:8080/api/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node scripts/supervision-smoke.mjs
+          kill "$server_pid"

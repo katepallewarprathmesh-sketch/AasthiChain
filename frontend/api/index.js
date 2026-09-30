@@ -6,6 +6,7 @@ import os from 'os';
 import { realDB } from './lib/db_real.js';
 import { authStore } from './lib/authstore.js';
 import { getSharedUMISim } from './lib/umi_sim.js';
+import * as supervision from './lib/supervision.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -1130,6 +1131,101 @@ export default async function handler(req, res) {
           message: e.message,
           settlementRail: 'UMI_SIM',
           simulated: true,
+        });
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Supervisory reporting — the evidence a securities regulator consumes.
+    // A regulator exposes no socket to dial; supervision runs the other way,
+    // with the supervised entity producing evidence in a defined shape.
+    // Nothing here is filed with or acknowledged by SEBI, RBI, NPCI, NSDL or
+    // CDSL; simulated:true and regulatoryStatus are enforced in the module.
+    // ------------------------------------------------------------------
+    if (path.startsWith('/api/regulator/')) {
+      // Public: describes the surface and discloses gaps. Carries no data.
+      if (path === '/api/regulator/capabilities' && method === 'GET') {
+        return res.json(supervision.capabilities());
+      }
+
+      // Everything else exposes the whole book, so it is regulator-only.
+      if (user.role !== 'Regulator') {
+        return res.status(403).json({
+          error: 'ERR_NOT_A_REGULATOR',
+          message: 'Supervisory reports are restricted to the Regulator role. Sign in as regulator1.',
+          yourRole: user.role,
+        });
+      }
+
+      const state = { properties, balances, transfers, payments: npciPayments, kyc: kycRecords, chain: drunixChain };
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const q = Object.fromEntries(url.searchParams.entries());
+
+      try {
+        if (path === '/api/regulator/cap-table' && method === 'GET') {
+          return res.json(supervision.capTable(state, { assetId: q.assetId, asOf: q.asOf }));
+        }
+        if (path === '/api/regulator/audit-export' && method === 'GET') {
+          const report = supervision.auditExport(state, { assetId: q.assetId, from: q.from, to: q.to });
+          if ((q.format || 'json').toLowerCase() === 'csv') {
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="aasthichain-audit-${Date.now()}.csv"`);
+            return res.send(supervision.auditExportCSV(report));
+          }
+          return res.json(report);
+        }
+        if (path === '/api/regulator/audit-verify' && method === 'POST') {
+          return res.json(supervision.verifyAuditExport(body));
+        }
+        if (path === '/api/regulator/alerts' && method === 'GET') {
+          return res.json(supervision.suspiciousActivity(state, { assetId: q.assetId }));
+        }
+        if (path === '/api/regulator/alerts/disposition' && method === 'POST') {
+          return res.json(supervision.setDisposition(body.alertId, body.disposition, body.note, user.identityId));
+        }
+        if (path === '/api/regulator/scheme-report' && method === 'GET') {
+          return res.json(supervision.schemeReport(state, { assetId: q.assetId }));
+        }
+        if (path === '/api/regulator/actions' && method === 'GET') {
+          return res.json({
+            reportType: 'SUPERVISORY_ACTION_LOG',
+            actions: supervision.listActions(q.assetId),
+            simulated: true,
+            regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+          });
+        }
+        if ((path === '/api/regulator/freeze' || path === '/api/regulator/unfreeze') && method === 'POST') {
+          const freezing = path.endsWith('/freeze');
+          const prop = properties[body.assetId];
+          if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+          if (!freezing && prop.status !== 'FROZEN') {
+            return res.status(409).json({ error: 'ERR_NOT_FROZEN', message: `${body.assetId} is ${prop.status}, not FROZEN` });
+          }
+          const record = supervision.recordAction({
+            assetId: body.assetId,
+            action: freezing ? 'FREEZE' : 'UNFREEZE',
+            reason: body.reason,
+            actor: user.identityId,
+            actorRole: user.role,
+          });
+          if (freezing) {
+            prop.previousStatus = prop.status;
+            prop.status = 'FROZEN';
+          } else {
+            prop.status = prop.previousStatus || 'TOKENIZED';
+          }
+          prop.updatedAt = new Date();
+          properties[body.assetId] = prop;
+          globalThis._aasthi_properties = properties;
+          return res.json({ ...record, assetStatus: prop.status, simulated: true, regulatoryStatus: 'SIMULATED_NOT_CONNECTED' });
+        }
+        return res.status(404).json({ error: 'ERR_UNKNOWN_REGULATOR_ROUTE', path, simulated: true });
+      } catch (e) {
+        return res.status(e.http || 400).json({
+          error: e.code || 'ERR_SUPERVISION',
+          message: e.message,
+          simulated: true,
+          regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
         });
       }
     }
@@ -2736,11 +2832,24 @@ export default async function handler(req, res) {
         const id = decodeURIComponent(freezeMatch[1]);
         const prop = properties[id];
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+        // Same supervisory log as POST /api/regulator/freeze — a freeze with no
+        // recorded reason or actor is not reviewable after the fact, and neither
+        // route is allowed to bypass the record.
+        let record;
+        try {
+          record = supervision.recordAction({
+            assetId: id, action: 'FREEZE', reason: (req.body || {}).reason,
+            actor: user.identityId, actorRole: user.role,
+          });
+        } catch (err) {
+          return res.status(err.http || 400).json({ error: err.code || 'ERR_SUPERVISION', message: err.message });
+        }
+        prop.previousStatus = prop.status;
         prop.status = 'FROZEN';
         prop.updatedAt = new Date();
         properties[id] = prop;
         globalThis._aasthi_properties = properties;
-        return res.json({ assetId: id, status: 'FROZEN', reason: req.body.reason });
+        return res.json({ assetId: id, status: 'FROZEN', reason: record.reason, actionId: record.actionId, actor: record.actor });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }

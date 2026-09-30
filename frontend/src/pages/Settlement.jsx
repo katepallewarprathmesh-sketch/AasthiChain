@@ -128,7 +128,15 @@ export default function Settlement() {
 
   return (
     <div style={{ maxWidth: 940, margin: '0 auto', padding: '32px 20px 64px', color: INK }}>
-      <div style={{ marginBottom: 8 }}><Pill tone="warn">Simulation · not connected to any regulator</Pill></div>
+      {/* Neutral rather than amber: the honest claim is now a positive one.
+          The settlement rail is simulated, but the supervisory reporting it
+          feeds is real and inspectable at /regulator. The full "not connected
+          to RBI, SEBI, NPCI, NSDL or CDSL" disclosure sits in the legal note
+          below and in every API response. */}
+      <div style={{ marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Pill>Demo environment · simulated settlement</Pill>
+        <Pill tone="pass">Regulator-ready reporting</Pill>
+      </div>
       <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, lineHeight: 1.1, letterSpacing: '-0.02em', marginBottom: 10 }}>
         How settlement works here
       </h1>
