@@ -2,8 +2,8 @@ import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
-import { ClerkProvider, ClerkLoading, ClerkLoaded, ClerkFailed } from '@clerk/react'
-import { Analytics } from '@vercel/analytics/react'
+import { ClerkProvider, ClerkFailed } from '@clerk/react'
+const Analytics = lazy(() => import('@vercel/analytics/react').then(m => ({ default: m.Analytics })))
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -57,29 +57,6 @@ window.fetch = async (input, init = {}) => {
     if (import.meta.env.DEV) console.warn('[fetch interceptor] failed', e)
   }
   return originalFetch(input, init)
-}
-
-function ClerkLoadingSkeleton() {
-  return (
-    <div style={{minHeight:'100vh', background:'var(--paper)', display:'flex', flexDirection:'column'}}>
-      <div style={{height:64, background:'var(--surface)', borderBottom:'1px solid var(--ink-8)', display:'flex', alignItems:'center', padding:'0 24px', gap:12}}>
-        <div style={{width:32, height:32, background:'var(--ink-8)', borderRadius:6, animation:'pulse 1.5s infinite'}}></div>
-        <div style={{width:120, height:20, background:'var(--ink-8)', borderRadius:4, animation:'pulse 1.5s infinite'}}></div>
-        <div style={{marginLeft:'auto', width:80, height:32, background:'var(--ink-8)', borderRadius:6, animation:'pulse 1.5s infinite'}}></div>
-      </div>
-      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16, padding:24}}>
-        <div style={{width:40, height:40, border:'3px solid var(--ink-8)', borderTopColor:'var(--registry-navy)', borderRadius:'50%', animation:'spin 0.8s linear infinite'}}></div>
-        <div style={{textAlign:'center'}}>
-          <div style={{fontSize:14, fontWeight:600, color:'var(--ink)'}}>Loading secure authentication...</div>
-          <div style={{fontSize:12, color:'var(--ink-60)', marginTop:4}}>Clerk is initializing this takes 1-2 seconds on first paint</div>
-        </div>
-      </div>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
-      `}</style>
-    </div>
-  )
 }
 
 function ClerkFailedState({ error }) {
@@ -141,16 +118,15 @@ function Root() {
             }
           }}
         >
-          <ClerkLoading>
-            <ClerkLoadingSkeleton />
-          </ClerkLoading>
+          {/* The app renders straight away; Clerk finishes booting in the
+              background and auth-gated routes wait on it individually. This
+              removes the full-screen "Loading secure authentication" delay
+              that every first-time visitor used to sit through. */}
           <ClerkFailed>
             {(error) => <ClerkFailedState error={error} />}
           </ClerkFailed>
-          <ClerkLoaded>
-            <App />
-            <Analytics />
-          </ClerkLoaded>
+          <App />
+          <Suspense fallback={null}><Analytics /></Suspense>
         </ClerkProvider>
       </React.StrictMode>
     )
@@ -158,7 +134,7 @@ function Root() {
   return (
     <React.StrictMode>
       <App />
-      <Analytics />
+      <Suspense fallback={null}><Analytics /></Suspense>
     </React.StrictMode>
   )
 }

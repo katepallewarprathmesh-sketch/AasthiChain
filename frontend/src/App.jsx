@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react'
-import Support from './pages/Support.jsx'
-import LedgerExplorer from './pages/LedgerExplorer.jsx'
+import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
@@ -44,13 +42,40 @@ class ErrorBoundary extends React.Component {
 }
 import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
+// Landing is the first screen for almost every visitor, so it stays in the
+// initial bundle. Everything else is fetched on demand, which keeps the first
+// download small and the site interactive almost immediately.
 import Landing from './pages/Landing.jsx'
-import Login from './pages/Login.jsx'
-import Marketplace from './pages/Marketplace.jsx'
-import Wallet from './pages/Wallet.jsx'
-import Admin from './pages/Admin.jsx'
-import Regulator from './pages/Regulator.jsx'
-import PropertyDetail from './pages/PropertyDetail.jsx'
+
+const Login = lazy(() => import('./pages/Login.jsx'))
+const Marketplace = lazy(() => import('./pages/Marketplace.jsx'))
+const Wallet = lazy(() => import('./pages/Wallet.jsx'))
+const Admin = lazy(() => import('./pages/Admin.jsx'))
+const Regulator = lazy(() => import('./pages/Regulator.jsx'))
+const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
+const Support = lazy(() => import('./pages/Support.jsx'))
+const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
+
+function RouteFallback() {
+  return (
+    <div style={{minHeight:'60vh', display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div style={{width:28, height:28, border:'3px solid rgba(127,127,127,0.25)', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite'}} />
+    </div>
+  )
+}
+
+// Warm the most likely next screens once the browser is idle, so the first
+// click after landing feels instant instead of triggering a cold fetch.
+function prefetchLikelyRoutes() {
+  const run = () => {
+    import('./pages/Marketplace.jsx')
+    import('./pages/Login.jsx')
+    import('./pages/PropertyDetail.jsx')
+  }
+  if (typeof window === 'undefined') return
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2500 })
+  else setTimeout(run, 1200)
+}
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 export const isClerkConfigured = clerkPubKey && 
@@ -252,8 +277,11 @@ function AppContent({ user, setUser }) {
   const { getToken } = isClerkConfigured ? useAuth() : { getToken: async () => null }
 
   const [internalUser, setInternalUser] = useState(user)
+  const location = useLocation()
 
   useEffect(() => { setInternalUser(user) }, [user])
+
+  useEffect(() => { prefetchLikelyRoutes() }, [])
 
   useEffect(() => {
     if (!isClerkConfigured) return
@@ -329,7 +357,12 @@ function AppContent({ user, setUser }) {
 
   const effectiveUser = internalUser || user
 
-  if (isClerkConfigured && !isLoaded) {
+  // Public pages must never wait on the auth SDK — they render immediately and
+  // Clerk finishes initialising in the background. Only auth-gated routes pause.
+  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support']
+  const isPublicPath = PUBLIC_PATHS.includes(location.pathname)
+
+  if (isClerkConfigured && !isLoaded && !isPublicPath) {
     return (
       <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>
         <div style={{textAlign:'center'}}>
@@ -344,6 +377,7 @@ function AppContent({ user, setUser }) {
     <ErrorBoundary>
       <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
       <main className="container" style={{paddingTop:0, paddingBottom:0}}>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Landing user={effectiveUser} />} />
           <Route path="/login" element={<Login onLogin={setUser} />} />
@@ -355,6 +389,7 @@ function AppContent({ user, setUser }) {
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/property/:id" element={effectiveUser ? <PropertyDetail user={effectiveUser} /> : <Navigate to="/login" />} />
         </Routes>
+        </Suspense>
       </main>
       <Footer />
     </ErrorBoundary>
