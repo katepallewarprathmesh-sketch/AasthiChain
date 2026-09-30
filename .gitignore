@@ -1,0 +1,19 @@
+node_modules/
+go/
+*.tgz
+nohup.out
+frontend/.env
+
+# local caches & build output
+.cache/
+frontend/dist/
+.npm/
+.gitconfig
+
+# local reference material (not part of the app)
+uploads/
+
+# PayU / provider credentials — never commit
+.env.payu
+.env*
+!.env.payu.example

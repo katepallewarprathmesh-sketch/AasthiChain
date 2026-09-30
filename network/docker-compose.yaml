@@ -1,0 +1,278 @@
+# AasthiChain Drunix Network - 4 Orgs + Raft Orderer + PostgreSQL SQL State Store
+# Target: Local docker-compose for hackathon demo
+# Drunix is Fabric fork with SQL state - we simulate with Postgres + Fabric 2.5 images
+
+version: '3.7'
+
+networks:
+  aasthichain:
+    name: aasthichain
+
+volumes:
+  orderer1:
+  orderer2:
+  orderer3:
+  peerOriginator:
+  peerRegistrar:
+  peerInvestor:
+  peerRegulator:
+  pgdata:
+
+services:
+  # PostgreSQL - Drunix on-chain SQL store (per spec §3)
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres.drunix.aasthichain
+    environment:
+      POSTGRES_DB: drunix_state
+      POSTGRES_USER: drunix
+      POSTGRES_PASSWORD: drunix_pw
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - aasthichain
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drunix"]
+      interval: 5s
+      retries: 5
+
+  # CA for each org
+  ca_originator:
+    image: hyperledger/fabric-ca:1.5.6
+    container_name: ca_originator.aasthichain
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-originator
+      - FABRIC_CA_SERVER_TLS_ENABLED=false
+      - FABRIC_CA_SERVER_PORT=7054
+    ports:
+      - "7054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    networks:
+      - aasthichain
+
+  ca_registrar:
+    image: hyperledger/fabric-ca:1.5.6
+    container_name: ca_registrar.aasthichain
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-registrar
+    ports:
+      - "8054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    networks:
+      - aasthichain
+
+  ca_investor:
+    image: hyperledger/fabric-ca:1.5.6
+    container_name: ca_investor.aasthichain
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-investor
+    ports:
+      - "9054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    networks:
+      - aasthichain
+
+  ca_regulator:
+    image: hyperledger/fabric-ca:1.5.6
+    container_name: ca_regulator.aasthichain
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-regulator
+    ports:
+      - "10054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    networks:
+      - aasthichain
+
+  # Raft Orderer - 3 nodes (tolerates 1 failure per spec §8)
+  orderer1:
+    image: hyperledger/fabric-orderer:2.5.4
+    container_name: orderer1.aasthichain
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=false
+      - ORDERER_KAFKA_TOPIC_REPLICATIONFACTOR=1
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_CHANNELPARTICIPATION_ENABLED=true
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric
+    command: orderer
+    volumes:
+      - orderer1:/var/hyperledger/production/orderer
+    ports:
+      - "7050:7050"
+    networks:
+      - aasthichain
+
+  orderer2:
+    image: hyperledger/fabric-orderer:2.5.4
+    container_name: orderer2.aasthichain
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=false
+    command: orderer
+    volumes:
+      - orderer2:/var/hyperledger/production/orderer
+    ports:
+      - "8050:7050"
+    networks:
+      - aasthichain
+
+  orderer3:
+    image: hyperledger/fabric-orderer:2.5.4
+    container_name: orderer3.aasthichain
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=false
+    command: orderer
+    volumes:
+      - orderer3:/var/hyperledger/production/orderer
+    ports:
+      - "9050:7050"
+    networks:
+      - aasthichain
+
+  # Peers - 4 orgs
+  peer0_originator:
+    image: hyperledger/fabric-peer:2.5.4
+    container_name: peer0.originator.aasthichain
+    environment:
+      - CORE_PEER_ID=peer0.originator.aasthichain
+      - CORE_PEER_ADDRESS=peer0.originator.aasthichain:7051
+      - CORE_PEER_LOCALMSPID=OriginatorMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/msp/peer/
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=aasthichain
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=false
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_PROFILE_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      # Drunix SQL state store config (Postgres)
+      - CORE_LEDGER_STATE_STATEDATABASE=Postgres
+      - CORE_LEDGER_STATE_POSTGRES_HOST=postgres.drunix.aasthichain
+      - CORE_LEDGER_STATE_POSTGRES_PORT=5432
+      - CORE_LEDGER_STATE_POSTGRES_DATABASE=drunix_state
+      - CORE_LEDGER_STATE_POSTGRES_USERNAME=drunix
+      - CORE_LEDGER_STATE_POSTGRES_PASSWORD=drunix_pw
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - peerOriginator:/var/hyperledger/production
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    ports:
+      - "7051:7051"
+    networks:
+      - aasthichain
+    depends_on:
+      - postgres
+
+  peer0_registrar:
+    image: hyperledger/fabric-peer:2.5.4
+    container_name: peer0.registrar.aasthichain
+    environment:
+      - CORE_PEER_ID=peer0.registrar.aasthichain
+      - CORE_PEER_ADDRESS=peer0.registrar.aasthichain:7051
+      - CORE_PEER_LOCALMSPID=RegistrarMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/msp/peer/
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=aasthichain
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=false
+      - CORE_LEDGER_STATE_STATEDATABASE=Postgres
+      - CORE_LEDGER_STATE_POSTGRES_HOST=postgres.drunix.aasthichain
+      - CORE_LEDGER_STATE_POSTGRES_PORT=5432
+      - CORE_LEDGER_STATE_POSTGRES_DATABASE=drunix_state
+      - CORE_LEDGER_STATE_POSTGRES_USERNAME=drunix
+      - CORE_LEDGER_STATE_POSTGRES_PASSWORD=drunix_pw
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - peerRegistrar:/var/hyperledger/production
+    command: peer node start
+    ports:
+      - "8051:7051"
+    networks:
+      - aasthichain
+
+  peer0_investor:
+    image: hyperledger/fabric-peer:2.5.4
+    container_name: peer0.investor.aasthichain
+    environment:
+      - CORE_PEER_ID=peer0.investor.aasthichain
+      - CORE_PEER_ADDRESS=peer0.investor.aasthichain:7051
+      - CORE_PEER_LOCALMSPID=InvestorMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/msp/peer/
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=aasthichain
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=false
+      - CORE_LEDGER_STATE_STATEDATABASE=Postgres
+      - CORE_LEDGER_STATE_POSTGRES_HOST=postgres.drunix.aasthichain
+      - CORE_LEDGER_STATE_POSTGRES_PORT=5432
+      - CORE_LEDGER_STATE_POSTGRES_DATABASE=drunix_state
+      - CORE_LEDGER_STATE_POSTGRES_USERNAME=drunix
+      - CORE_LEDGER_STATE_POSTGRES_PASSWORD=drunix_pw
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - peerInvestor:/var/hyperledger/production
+    command: peer node start
+    ports:
+      - "9051:7051"
+    networks:
+      - aasthichain
+
+  peer0_regulator:
+    image: hyperledger/fabric-peer:2.5.4
+    container_name: peer0.regulator.aasthichain
+    environment:
+      - CORE_PEER_ID=peer0.regulator.aasthichain
+      - CORE_PEER_ADDRESS=peer0.regulator.aasthichain:7051
+      - CORE_PEER_LOCALMSPID=RegulatorMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/msp/peer/
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=aasthichain
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=false
+      - CORE_LEDGER_STATE_STATEDATABASE=Postgres
+      - CORE_LEDGER_STATE_POSTGRES_HOST=postgres.drunix.aasthichain
+      - CORE_LEDGER_STATE_POSTGRES_PORT=5432
+      - CORE_LEDGER_STATE_POSTGRES_DATABASE=drunix_state
+      - CORE_LEDGER_STATE_POSTGRES_USERNAME=drunix
+      - CORE_LEDGER_STATE_POSTGRES_PASSWORD=drunix_pw
+      # Regulator is non-endorsing observer for transfers (per spec §2)
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - peerRegulator:/var/hyperledger/production
+    command: peer node start
+    ports:
+      - "10051:7051"
+    networks:
+      - aasthichain

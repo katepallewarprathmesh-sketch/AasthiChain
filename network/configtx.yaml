@@ -1,0 +1,219 @@
+# Configtx for AasthiChain - property-channel
+# Defines 4 orgs and endorsement policies per spec §2
+
+Organizations:
+  - &OrdererOrg
+    Name: OrdererOrg
+    ID: OrdererMSP
+    MSPDir: ./crypto-config/ordererOrganizations/aasthichain.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+
+  - &OriginatorOrg
+    Name: OriginatorOrg
+    ID: OriginatorMSP
+    MSPDir: ./crypto-config/peerOrganizations/originator.aasthichain.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OriginatorMSP.admin', 'OriginatorMSP.peer', 'OriginatorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OriginatorMSP.admin', 'OriginatorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OriginatorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('OriginatorMSP.peer')"
+
+  - &RegistrarOrg
+    Name: RegistrarOrg
+    ID: RegistrarMSP
+    MSPDir: ./crypto-config/peerOrganizations/registrar.aasthichain.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('RegistrarMSP.admin', 'RegistrarMSP.peer', 'RegistrarMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('RegistrarMSP.admin', 'RegistrarMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('RegistrarMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('RegistrarMSP.peer')"
+
+  - &InvestorOrg
+    Name: InvestorOrg
+    ID: InvestorMSP
+    MSPDir: ./crypto-config/peerOrganizations/investor.aasthichain.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('InvestorMSP.admin', 'InvestorMSP.peer', 'InvestorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('InvestorMSP.admin', 'InvestorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('InvestorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('InvestorMSP.peer')"
+
+  - &RegulatorOrg
+    Name: RegulatorOrg
+    ID: RegulatorMSP
+    MSPDir: ./crypto-config/peerOrganizations/regulator.aasthichain.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('RegulatorMSP.admin', 'RegulatorMSP.peer', 'RegulatorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('RegulatorMSP.admin', 'RegulatorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('RegulatorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('RegulatorMSP.peer')"
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_5: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  EtcdRaft:
+    Consenters:
+      - Host: orderer1.aasthichain
+        Port: 7050
+        ClientTLSCert: ./crypto-config/ordererOrganizations/aasthichain.com/orderers/orderer1.aasthichain/tls/server.crt
+        ServerTLSCert: ./crypto-config/ordererOrganizations/aasthichain.com/orderers/orderer1.aasthichain/tls/server.crt
+      - Host: orderer2.aasthichain
+        Port: 7050
+        ClientTLSCert: ./crypto-config/ordererOrganizations/aasthichain.com/orderers/orderer2.aasthichain/tls/server.crt
+        ServerTLSCert: ./crypto-config/ordererOrganizations/aasthichain.com/orderers/orderer2.aasthichain/tls/server.crt
+      - Host: orderer3.aasthichain
+        Port: 7050
+        ClientTLSCert: ./crypto-config/ordererOrganizations/aasthichain.com/orderers/orderer3.aasthichain/tls/server.crt
+        ServerTLSCert: ./crypto-config/ordererOrganizations/aasthichain.com/orderers/orderer3.aasthichain/tls/server.crt
+  Addresses:
+    - orderer1.aasthichain:7050
+    - orderer2.aasthichain:7050
+    - orderer3.aasthichain:7050
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 10
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 512 KB
+  Organizations:
+    - *OrdererOrg
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  AasthiChainGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Consortiums:
+      AasthiChainConsortium:
+        Organizations:
+          - *OriginatorOrg
+          - *RegistrarOrg
+          - *InvestorOrg
+          - *RegulatorOrg
+
+  PropertyChannel:
+    Consortium: AasthiChainConsortium
+    <<: *ChannelDefaults
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *OriginatorOrg
+        - *RegistrarOrg
+        - *InvestorOrg
+        - *RegulatorOrg
+      Policies:
+        Readers:
+          Type: ImplicitMeta
+          Rule: "ANY Readers"
+        Writers:
+          Type: ImplicitMeta
+          Rule: "ANY Writers"
+        Admins:
+          Type: ImplicitMeta
+          Rule: "MAJORITY Admins"
+        LifecycleEndorsement:
+          Type: ImplicitMeta
+          Rule: "MAJORITY Endorsement"
+        Endorsement:
+          Type: ImplicitMeta
+          Rule: "MAJORITY Endorsement"
+          # Note: Specific endorsement policies for MintPropertyTokens (AND Originator, Registrar) and TransferTokens (Investor) are enforced in chaincode + channel chaincode definition
