@@ -530,11 +530,24 @@ async function settleConfirmedPayment(pay) {
   balances[bKey] = { docType: 'balance', assetId, ownerId: buyer, balance: ((bBal ? parseInt(bBal.balance) : 0)) + amt, updatedAt: now };
   const tid = `TXN-${safeUUID().slice(0, 8)}-S1`;
   transfers[tid] = { docType: 'transfer', transferId: tid, assetId, fromId: seller, toId: buyer, amount: amt, txTimestamp: now, status: 'COMPLETED', paymentId: pay.paymentId, settledServerSide: true };
-  drunixAppend('TOKEN_TRANSFERRED', [{ kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, atomic: 'DvP-leg-1' }]);
   pay.drunixTransferId = tid;
   pay.status = 'RELEASED';
   pay.releasedAt = now;
-  drunixAppend('ESCROW_RELEASED', [{ kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, tokens: amt, seller, buyer, atomic: 'DvP-leg-2' }]);
+  // ONE block carrying BOTH legs.
+  //
+  // This used to be two appends — TOKEN_TRANSFERRED then ESCROW_RELEASED,
+  // labelled 'DvP-leg-1' and 'DvP-leg-2'. Two blocks are two transactions: if
+  // the process died between them the securities leg was committed and the
+  // cash leg was not, and the ledger recorded a delivery that was never paid
+  // for. Calling that "atomic" was wrong.
+  //
+  // Both legs now share a single block, matching the SettleDvP chaincode
+  // function in drunix-gateway/cash.go, where they share a single read-write
+  // set and are validated by one MVCC check.
+  drunixAppend('DVP_SETTLED', [
+    { kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, leg: 'securities' },
+    { kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, amountPaise: Math.round(pay.amountINR * 100), seller, buyer, leg: 'cash' },
+  ], { atomic: true, contract: 'aasthi.dvp-v1', chaincodeFn: 'SettleDvP', simulated: true });
   globalThis._aasthi_balances = balances;
   globalThis._aasthi_transfers = transfers;
   globalThis._aasthi_npcipayments = npciPayments;
@@ -578,13 +591,17 @@ function drunixTxnsRoot(txns) {
 }
 function drunixCanonical(b) { return [b.height, b.timestamp, b.type, b.txnsRoot, b.prevHash].join('|'); }
 let drunixChain = (typeof globalThis !== 'undefined' && globalThis._aasthi_chain) || [];
-function drunixAppend(type, txns) {
+// meta carries optional block-level attributes (for example the atomicity
+// marker on a DvP block). It is folded into the block BEFORE hashing, so any
+// later edit to it breaks the chain like any other field would.
+function drunixAppend(type, txns, meta) {
   const prev = drunixChain[drunixChain.length - 1] || null;
   const b = {
     height: drunixChain.length,
     timestamp: new Date().toISOString(),
     type, txns,
     contract: 'aasthi.dvp-v1',
+    ...(meta || {}),
     txnsRoot: null, prevHash: prev ? prev.hash : DRUNIX_GENESIS_PREV, hash: null
   };
   b.txnsRoot = drunixTxnsRoot(b.txns);

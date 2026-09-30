@@ -244,6 +244,12 @@ func (p EndorsementPolicy) SatisfiedBy(proposal string, endorsements []Endorseme
 
 // policyFor returns the endorsement policy per chaincode function.
 func policyFor(fn string) EndorsementPolicy {
+	// Money-leg functions carry their own policies (see cash.go): the payment
+	// operator signs cash movements, and DvP additionally requires the
+	// platform, so neither organisation can move the other's asset alone.
+	if p, owned := cashPolicyFor(fn); owned {
+		return p
+	}
 	switch fn {
 	case "MintPropertyTokens":
 		return EndorsementPolicy{RequiredMSPs: []string{"OriginatorMSP", "RegistrarMSP"}}
@@ -263,6 +269,12 @@ func simulateChaincode(state *StateDB, fn string, args []string, rw *RWSet) erro
 			return 0, fmt.Errorf("invalid number %q", s)
 		}
 		return n, nil
+	}
+	// Cash and DvP functions live in cash.go. They share this RW set, which is
+	// what lets SettleDvP put the money leg and the securities leg into one
+	// transaction rather than two sequential ledger appends.
+	if handled, err := simulateCashChaincode(state, fn, args, rw); handled {
+		return err
 	}
 	switch fn {
 	case "MintPropertyTokens": // args: assetId, owner, total

@@ -39,6 +39,9 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
+	mux.HandleFunc("/drunix/cash", s.handleCash)
+	mux.HandleFunc("/drunix/escrow", s.handleEscrow)
+	mux.HandleFunc("/drunix/dvp", s.handleDvP)
 	return logCORS(mux)
 }
 
@@ -267,4 +270,125 @@ func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 		"transactionFlow": []string{"1-endorsement", "2-submit-txn", "3-ordering", "4-validation", "5-commit"},
 		"roles":           []string{"Client (signs envelope)", "LitePeer (endorsement, stateless)", "Orderer (RAFT, batches txns into blocks)", "ValidationService (VSCC, round-robin)", "CommittingPeer (MVCC + commit)"},
 	})
+}
+
+// ---------- Cash leg / DvP (see cash.go) ----------
+
+// handleCash reports a party's committed cash position.
+//
+//	GET /drunix/cash?party=buyer1
+func (s *Server) handleCash(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipeline not wired"})
+		return
+	}
+	party := r.URL.Query().Get("party")
+	if party == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "party query parameter required"})
+		return
+	}
+	paise := CashBalanceOf(s.Pipeline.CP.State, party)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"party":       party,
+		"amountPaise": paise,
+		// Rendered for humans only; the ledger value is the integer above.
+		"amountINR": float64(paise) / 100,
+		"ledger":    "drunix cash~<party>",
+		"simulated": true,
+		"note":      "simulated wholesale cash on the Drunix ledger — no bank account is debited",
+	})
+}
+
+// handleEscrow reports the escrow record for one payment.
+//
+//	GET /drunix/escrow?paymentId=PAY-1
+func (s *Server) handleEscrow(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipeline not wired"})
+		return
+	}
+	id := r.URL.Query().Get("paymentId")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "paymentId query parameter required"})
+		return
+	}
+	view := EscrowOf(s.Pipeline.CP.State, id)
+	code := http.StatusOK
+	if !view.Found {
+		code = http.StatusNotFound
+	}
+	writeJSON(w, code, view)
+}
+
+// handleDvP runs a money-leg action through the full Drunix pipeline.
+//
+//	POST /drunix/dvp  {"action":"credit|lock|settle|refund", ...}
+//
+// The settle action is the atomic one: cash and securities move in a single
+// chaincode transaction, one RW set, one block.
+func (s *Server) handleDvP(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipeline not wired"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST required"})
+		return
+	}
+	var body struct {
+		Action      string `json:"action"`
+		PaymentID   string `json:"paymentId"`
+		Party       string `json:"party"`
+		Payer       string `json:"payer"`
+		Payee       string `json:"payee"`
+		AmountPaise uint64 `json:"amountPaise"`
+		AssetID     string `json:"assetId"`
+		Tokens      uint64 `json:"tokens"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	var (
+		res CommitResult
+		err error
+	)
+	switch body.Action {
+	case "credit":
+		res, err = s.Pipeline.CreditCash(body.Party, body.AmountPaise)
+	case "lock":
+		res, err = s.Pipeline.LockEscrow(body.PaymentID, body.Payer, body.Payee, body.AmountPaise, body.AssetID, body.Tokens)
+	case "settle":
+		res, err = s.Pipeline.SettleDvP(body.PaymentID)
+	case "refund":
+		res, err = s.Pipeline.RefundCash(body.PaymentID)
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "action must be one of credit, lock, settle, refund",
+		})
+		return
+	}
+
+	code := http.StatusOK
+	if err != nil {
+		code = http.StatusUnprocessableEntity
+	}
+	payload := map[string]interface{}{
+		"action":    body.Action,
+		"result":    res,
+		"error":     errStr(err),
+		"simulated": true,
+	}
+	if body.Action == "settle" && err == nil {
+		// Spelled out because this is the property the whole cash leg exists
+		// to provide, and it should be checkable from the response alone.
+		payload["atomicity"] = map[string]interface{}{
+			"legs":        []string{"cash: escrow -> payee", "securities: payee -> payer"},
+			"txId":        res.TxID,
+			"blockHeight": res.BlockHeight,
+			"guarantee":   "both legs are in one RW set, one endorsement round, one MVCC validation and one block — either both apply or neither does",
+		}
+	}
+	writeJSON(w, code, payload)
 }
