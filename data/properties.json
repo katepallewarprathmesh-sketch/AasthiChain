@@ -1,14 +1,52 @@
 {
   "PROP-GREEN-VALLEY-PUNE-001": {
-    "assetId": "PROP-GREEN-VALLEY-PUNE-001",
-    "title": "Green Valley Villas - Pune",
-    "location": {
-      "state": "Maharashtra",
-      "city": "Pune",
-      "pincode": "411045"
+    "property": {
+      "assetId": "PROP-GREEN-VALLEY-PUNE-001",
+      "docType": "property",
+      "originatorId": "originator1",
+      "title": "Green Valley Villas - Pune",
+      "location": {
+        "state": "Maharashtra",
+        "city": "Pune",
+        "pincode": "411045"
+      },
+      "valuationINR": 7500000,
+      "totalTokens": 15000,
+      "documentHash": "a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1",
+      "registrarValidationStatus": "VALIDATED",
+      "status": "TOKENIZED",
+      "createdAt": "2026-09-29T17:38:52.556Z",
+      "updatedAt": "2026-09-30T17:38:52.556Z",
+      "version": 1
     },
-    "valuationINR": 7500000,
-    "totalTokens": 15000,
-    "status": "TOKENIZED"
+    "tokenPrice": 500,
+    "availableTokens": 12000,
+    "soldTokens": 3000,
+    "holders": [
+      {
+        "ownerId": "originator1",
+        "balance": 12000
+      },
+      {
+        "ownerId": "investor1",
+        "balance": 2000
+      },
+      {
+        "ownerId": "investor2",
+        "balance": 1000
+      }
+    ],
+    "subscription": {
+      "totalTokens": 15000,
+      "soldTokens": 3000,
+      "availableTokens": 12000,
+      "percentFunded": 20,
+      "investorCount": 2,
+      "fullySubscribed": false,
+      "phase": "primary",
+      "completedAt": null
+    },
+    "documentHashVerified": true,
+    "fabricMode": "mock"
   }
 }

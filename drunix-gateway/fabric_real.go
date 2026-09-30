@@ -77,7 +77,7 @@ func NewFabricGateway(mspID string) (*FabricGateway, error) {
 // TODO(phase-2): replace each body with the Gateway SDK equivalent —
 // client.Connect -> gw.GetNetwork(channel).GetContract(chaincode) ->
 // SubmitTransaction / EvaluateTransaction, then read commit status for the
-// txID and block number. See docs/CHAIN_INTEROP_PLAN.md, Phase 2.
+// txID and block number.
 
 func (f *FabricGateway) SubmitTransaction(chaincode, fn string, args []string, creatorMSP string) (*TxRecord, error) {
 	return nil, fmt.Errorf("SubmitTransaction(%s.%s): %w", chaincode, fn, ErrGatewayNotWired)

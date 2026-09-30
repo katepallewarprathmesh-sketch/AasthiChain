@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 
 // Sepolia escrow contract. `contracts/PaymentEscrow.sol` is written but NOT deployed:
 // with no address configured this stays the zero address, and the on-chain path is
-// unavailable. See docs/CHAIN_INTEROP_PLAN.md.
+// unavailable.
 const CONTRACT_ADDRESS = import.meta.env.VITE_ESCROW_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000'
 const SEPOLIA_CHAIN_ID = '0xaa36a7'
 
@@ -317,8 +317,7 @@ export default function TestnetPayment({ assetId, tokenAmount, tokenPrice, onPay
       <div style={{ marginTop: 10, fontSize: 9, color: '#9CA3AF', maxWidth: '82ch', lineHeight: 1.5, background: 'var(--paper)', border: '1px solid #E5E7EB', borderRadius: 6, padding: 8 }}>
         Scope: an illustration of cross-chain DvP, not a payment product. No real money, no token sale, no
         investment offer. The escrow leg is not executed; the Drunix leg is. Production would settle the cash
-        leg in central-bank money over UMI rather than on a public chain — see docs/UMI_ALIGNMENT_PLAN.md and
-        docs/CHAIN_INTEROP_PLAN.md.
+        leg in central-bank money over UMI rather than on a public chain.
       </div>
     </div>
   )

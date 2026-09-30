@@ -165,7 +165,7 @@ function verifySignedToken(token) {
 // Clerk session tokens are 3-part JWTs. We do not hold Clerk's JWKS here, so we
 // cannot verify their signature; a Clerk session therefore maps to the demo
 // identity chosen in the UI. This is a known gap, recorded in
-// docs/DATA_ACCESS_AND_LEDGER_AUDIT.md.
+// the repository's security notes.
 function decodeClerkToken(token, fabricIdentityHeader) {
   const parts = String(token).split('.');
   if (parts.length !== 3) return null;
@@ -775,7 +775,7 @@ app.get('/api/testnet/payments', authMiddleware, (req, res) => {
     count: Object.keys(testnetPayments).length, 
     faucet: 'https://sepoliafaucet.com/', 
     explorer: 'https://sepolia.etherscan.io/', 
-    contract: 'PaymentEscrow.sol — written but NOT deployed. The escrow leg is not executed; the Drunix leg is real. See docs/CHAIN_INTEROP_PLAN.md.' 
+    contract: 'PaymentEscrow.sol — written but NOT deployed. The escrow leg is not executed; the Drunix leg is real.' 
   });
 });
 

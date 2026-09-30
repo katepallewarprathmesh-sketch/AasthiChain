@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// This file is the executable half of docs/UMI_PATTERN_CONFORMANCE.md.
+// This file is the executable conformance checklist for the UMI settlement pattern.
 //
 // Any team building a tokenised-settlement rail can copy RunConformance into their own
 // repository, pass their implementation to it, and get a pass/fail answer against the

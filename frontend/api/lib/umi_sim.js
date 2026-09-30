@@ -363,7 +363,7 @@ export function createUMISim(state = {}) {
     const passed = checks.filter(c => c.status === 'PASS').length;
     return decorate({
       suite: 'UMI pattern conformance',
-      reference: 'docs/UMI_PATTERN_CONFORMANCE.md',
+      reference: 'payment-gateway/settlement/conformance_test.go',
       goEquivalent: 'payment-gateway/settlement/conformance_test.go',
       passed,
       total: checks.length,

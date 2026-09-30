@@ -1,1 +1,37 @@
-{}
+{
+  "originator1": {
+    "docType": "kyc",
+    "identityId": "originator1",
+    "kycStatus": "VERIFIED",
+    "verifiedAt": "2026-09-30T17:38:52.556Z",
+    "provider": "mock"
+  },
+  "registrar1": {
+    "docType": "kyc",
+    "identityId": "registrar1",
+    "kycStatus": "VERIFIED",
+    "verifiedAt": "2026-09-30T17:38:52.556Z",
+    "provider": "mock"
+  },
+  "investor1": {
+    "docType": "kyc",
+    "identityId": "investor1",
+    "kycStatus": "VERIFIED",
+    "verifiedAt": "2026-09-30T17:38:52.556Z",
+    "provider": "mock"
+  },
+  "investor2": {
+    "docType": "kyc",
+    "identityId": "investor2",
+    "kycStatus": "VERIFIED",
+    "verifiedAt": "2026-09-30T17:38:52.556Z",
+    "provider": "mock"
+  },
+  "regulator1": {
+    "docType": "kyc",
+    "identityId": "regulator1",
+    "kycStatus": "VERIFIED",
+    "verifiedAt": "2026-09-30T17:38:52.556Z",
+    "provider": "mock"
+  }
+}

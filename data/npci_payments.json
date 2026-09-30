@@ -1,1 +1,88 @@
-{}
+{
+  "NPCI-B8199E2B5F47": {
+    "paymentId": "NPCI-B8199E2B5F47",
+    "upiTxnId": "AAST20260930D75EA2C5",
+    "rrn": "418209665575",
+    "utr": "109479893406",
+    "utr12": "109479893406",
+    "utrImps": "IMPS4182096655758219",
+    "rrnPlaceholder": "418980081193",
+    "utrPlaceholder": "IMPS4182969375547801",
+    "assetId": "PROP-GREEN-VALLEY-PUNE-001",
+    "tokenAmount": 10,
+    "amountINR": 5000,
+    "amountINRPaise": 500000,
+    "payerVpa": "investor1@okhdfcbank",
+    "payeeVpa": "originator1@okicici",
+    "note": "Payment for 10 tokens of PROP-GREEN-VALLEY-PUNE-001",
+    "status": "RELEASED",
+    "createdAt": "2026-09-30T17:38:57.608Z",
+    "expiresAt": "2026-09-30T17:43:57.608Z",
+    "confirmedAt": "2026-09-30T17:38:57.612Z",
+    "releasedAt": "2026-09-30T17:38:57.615Z",
+    "drunixTransferId": "TXN-6dd81138-S1",
+    "idempotencyKey": "",
+    "isSimulation": true,
+    "payerId": "investor1",
+    "payeeId": "originator1",
+    "callbackReceived": true,
+    "provider": "mock",
+    "webhookReceivedAt": "2026-09-30T17:38:57.612Z",
+    "risk": {
+      "score": 0,
+      "band": "LOW",
+      "decision": "APPROVE",
+      "factors": [
+        {
+          "code": "CLEAN",
+          "note": "no risk signals — genuine retail purchase pattern",
+          "weight": 0
+        }
+      ],
+      "model": "aasthichain-rules-v1 (JS parity of drunix-gateway/fraud.go)"
+    }
+  },
+  "NPCI-E5226CAF87CD": {
+    "paymentId": "NPCI-E5226CAF87CD",
+    "upiTxnId": "AAST202609305D159239",
+    "rrn": "418405070603",
+    "utr": "498402474969",
+    "utr12": "498402474969",
+    "utrImps": "IMPS4184050706031638",
+    "rrnPlaceholder": "418210296618",
+    "utrPlaceholder": "IMPS4188697301329058",
+    "assetId": "PROP-GREEN-VALLEY-PUNE-001",
+    "tokenAmount": 25,
+    "amountINR": 12500,
+    "amountINRPaise": 1250000,
+    "payerVpa": "investor1@okhdfcbank",
+    "payeeVpa": "originator1@okicici",
+    "note": "Payment for 25 tokens of PROP-GREEN-VALLEY-PUNE-001",
+    "status": "RELEASED",
+    "createdAt": "2026-09-30T17:38:57.621Z",
+    "expiresAt": "2026-09-30T17:43:57.621Z",
+    "confirmedAt": "2026-09-30T17:38:57.623Z",
+    "releasedAt": "2026-09-30T17:38:57.625Z",
+    "drunixTransferId": "TXN-fceb1d99-S1",
+    "idempotencyKey": "",
+    "isSimulation": true,
+    "payerId": "investor1",
+    "payeeId": "originator1",
+    "callbackReceived": true,
+    "provider": "mock",
+    "webhookReceivedAt": "2026-09-30T17:38:57.623Z",
+    "risk": {
+      "score": 0,
+      "band": "LOW",
+      "decision": "APPROVE",
+      "factors": [
+        {
+          "code": "CLEAN",
+          "note": "no risk signals — genuine retail purchase pattern",
+          "weight": 0
+        }
+      ],
+      "model": "aasthichain-rules-v1 (JS parity of drunix-gateway/fraud.go)"
+    }
+  }
+}
