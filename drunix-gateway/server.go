@@ -190,7 +190,7 @@ func (s *Server) handleFraudScore(w http.ResponseWriter, r *http.Request) {
 	if body.Payment.CreatedAt.IsZero() {
 		body.Payment.CreatedAt = time.Now()
 	}
-	writeJSON(w, http.StatusOK, ScorePayment(body.Payment, h, s.Thresholds))
+	writeJSON(w, http.StatusOK, ScorePaymentAuto(body.Payment, h, s.Thresholds))
 }
 
 func (s *Server) handleFraudConfig(w http.ResponseWriter, r *http.Request) {

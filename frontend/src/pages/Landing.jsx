@@ -319,7 +319,7 @@ export default function Landing({ user }) {
               { ico: I.swap(), t: 'Atomic DvP settlement', d: 'Delivery-versus-payment on the Drunix ledger: SettleDvP moves tokens and escrow together, with the UTR anchored on-chain.' },
               { ico: I.badge(), t: 'Registrar-verified titles', d: 'No listing goes live without document hash anchoring and a Registrar review fraud is stopped before tokenization.' },
               { ico: I.shield(), t: 'Regulator guardrails', d: 'A full audit view with emergency freeze. Cap table, transfers and payment trails are inspectable end-to-end.' },
-              { ico: I.spark(), t: 'AI fraud shield', d: 'A gradient-boosted model trained on 143,000 payments scores every collect, and shows the exact contribution of each signal behind its decision.' },
+              { ico: I.spark(), t: 'AI fraud shield', d: 'A model trained on 140,000 synthetic payments scores every collect, and shows the exact contribution of each signal behind its decision.' },
             ].map((f, i) => (
               <div key={f.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 26 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

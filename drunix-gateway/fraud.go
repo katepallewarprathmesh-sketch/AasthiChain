@@ -78,6 +78,16 @@ type HistorySummary struct {
 	RecentINR     []float64 `json:"recentINR"` // amounts of last 10 txns, newest first
 	AccountAgeMin int       `json:"accountAgeMin"`
 	KYCVerified   bool      `json:"kycVerified"`
+
+	// Added for the trained model. All additive and all optional: a caller
+	// that does not populate them gets the zero value, which the feature
+	// extractor treats as "unknown", so existing callers keep working and the
+	// rules engine ignores them entirely.
+	DistinctPayees24h int     `json:"distinctPayees24h,omitempty"` // fan-out from this payer
+	PayeeFanIn24h     int     `json:"payeeFanIn24h,omitempty"`     // distinct payers into this beneficiary
+	PayeeSeenBefore   bool    `json:"payeeSeenBefore,omitempty"`   // beneficiary novelty
+	BalanceBeforeINR  float64 `json:"balanceBeforeINR,omitempty"`
+	TxnType           string  `json:"txnType,omitempty"` // COLLECT | TRANSFER | CASH_OUT
 }
 
 // RiskFactor is one contributing signal with its weight (explainability).
@@ -88,12 +98,26 @@ type RiskFactor struct {
 }
 
 // RiskResult is the screening outcome attached to the payment record.
+//
+// The first five fields are the original contract and are unchanged, so every
+// existing caller and stored record keeps working. Everything below them is
+// additive, emitted only by the trained model, and omitted when empty.
 type RiskResult struct {
 	Score    int          `json:"score"`
 	Band     string       `json:"band"`
 	Decision string       `json:"decision"`
 	Factors  []RiskFactor `json:"factors"`
 	Model    string       `json:"model"`
+
+	Probability       float64      `json:"probability,omitempty"`
+	ModelVersion      string       `json:"modelVersion,omitempty"`
+	ModelKind         string       `json:"modelKind,omitempty"`
+	Threshold         float64      `json:"threshold,omitempty"`
+	Baseline          float64      `json:"baseline,omitempty"` // intercept for LR
+	TopPositive       []RiskFactor `json:"topPositive,omitempty"`
+	TopNegative       []RiskFactor `json:"topNegative,omitempty"`
+	DataCaveat        string       `json:"dataCaveat,omitempty"`
+	ExplainerNotation string       `json:"explainer,omitempty"`
 }
 
 func clampScore(n int) int {

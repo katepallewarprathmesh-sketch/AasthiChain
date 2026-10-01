@@ -1,55 +1,178 @@
 {
-  "comparison": [
-    {
-      "model": "rules-v1 (existing, replaced)",
-      "roc_auc": 0.7902,
-      "pr_auc": 0.4073,
-      "brier": 0.05663,
-      "threshold": 0.85,
-      "precision": 0.929,
-      "recall": 0.274,
-      "false_positive_rate": 0.00069,
-      "confusion": {
-        "tn": 34672,
-        "fp": 24,
-        "fn": 832,
-        "tp": 314
+  "rows": 139958,
+  "payers": 40000,
+  "fraud_rate": 0.04435616399205476,
+  "split": {
+    "train": 84337,
+    "validation": 27882,
+    "test": 27739,
+    "by": "payer_id"
+  },
+  "min_precision": 0.9,
+  "threshold_selected_on": "validation",
+  "results": {
+    "validation": [
+      {
+        "model": "rules-v1 (replaced)",
+        "split": "validation",
+        "n": 27882,
+        "positives": 1323,
+        "threshold": 0.85,
+        "precision": 0.9225,
+        "recall": 0.2698,
+        "f1": 0.4175,
+        "roc_auc": 0.8441,
+        "pr_auc": 0.4975,
+        "brier": 0.05543,
+        "false_positive_rate": 0.00113,
+        "confusion": {
+          "tn": 26529,
+          "fp": 30,
+          "fn": 966,
+          "tp": 357
+        }
+      },
+      {
+        "model": "logistic-regression (SHIPPED)",
+        "split": "validation",
+        "n": 27882,
+        "positives": 1323,
+        "threshold": 0.847605,
+        "precision": 0.9001,
+        "recall": 0.8443,
+        "f1": 0.8713,
+        "roc_auc": 0.9707,
+        "pr_auc": 0.8833,
+        "brier": 0.0197,
+        "false_positive_rate": 0.00467,
+        "confusion": {
+          "tn": 26435,
+          "fp": 124,
+          "fn": 206,
+          "tp": 1117
+        }
+      },
+      {
+        "model": "gradient-boosting (comparison)",
+        "split": "validation",
+        "n": 27882,
+        "positives": 1323,
+        "threshold": 0.084646,
+        "precision": 0.9007,
+        "recall": 0.9531,
+        "f1": 0.9262,
+        "roc_auc": 0.9845,
+        "pr_auc": 0.9131,
+        "brier": 0.00571,
+        "false_positive_rate": 0.00523,
+        "confusion": {
+          "tn": 26420,
+          "fp": 139,
+          "fn": 62,
+          "tp": 1261
+        }
       }
+    ],
+    "test": [
+      {
+        "model": "rules-v1 (replaced)",
+        "split": "test",
+        "n": 27739,
+        "positives": 1153,
+        "threshold": 0.85,
+        "precision": 0.9053,
+        "recall": 0.2654,
+        "f1": 0.4105,
+        "roc_auc": 0.8563,
+        "pr_auc": 0.4954,
+        "brier": 0.0526,
+        "false_positive_rate": 0.0012,
+        "confusion": {
+          "tn": 26554,
+          "fp": 32,
+          "fn": 847,
+          "tp": 306
+        }
+      },
+      {
+        "model": "logistic-regression (SHIPPED)",
+        "split": "test",
+        "n": 27739,
+        "positives": 1153,
+        "threshold": 0.847605,
+        "precision": 0.8991,
+        "recall": 0.889,
+        "f1": 0.894,
+        "roc_auc": 0.9729,
+        "pr_auc": 0.896,
+        "brier": 0.01792,
+        "false_positive_rate": 0.00433,
+        "confusion": {
+          "tn": 26471,
+          "fp": 115,
+          "fn": 128,
+          "tp": 1025
+        }
+      },
+      {
+        "model": "gradient-boosting (comparison)",
+        "split": "test",
+        "n": 27739,
+        "positives": 1153,
+        "threshold": 0.084646,
+        "precision": 0.9057,
+        "recall": 0.9575,
+        "f1": 0.9309,
+        "roc_auc": 0.984,
+        "pr_auc": 0.9136,
+        "brier": 0.00451,
+        "false_positive_rate": 0.00433,
+        "confusion": {
+          "tn": 26471,
+          "fp": 115,
+          "fn": 49,
+          "tp": 1104
+        }
+      }
+    ]
+  },
+  "coefficients": {
+    "log_amount": -0.18176050715263695,
+    "amount_in_structuring_band": 4.3084235754178755,
+    "balance_ratio": 0.0702810211746629,
+    "recent_in_structuring_band": -0.7251339763428559,
+    "recent_amount_cv": -0.4412257314357448,
+    "structuring_x_tightness": 2.3319473566194397,
+    "txn_count_10m": 0.15255216849082853,
+    "txn_count_24h": -0.37879654489483666,
+    "log_total_24h": 0.013271930485194195,
+    "amount_vs_recent_mean": 0.014481852814227461,
+    "burstiness": 3.1667592460377363,
+    "velocity_x_escalation": 0.004439727511487414,
+    "beneficiary_is_new": 1.3952886725181324,
+    "distinct_payees_24h": 0.7453124329614281,
+    "payee_fan_in_24h": -0.025789669578450282,
+    "log_account_age_min": 0.3310492004815659,
+    "kyc_unverified": 2.2979036684941554,
+    "new_account_x_amount": 0.19575720546786865,
+    "is_night": 0.4409126536894164,
+    "is_weekend": 0.012711371452340336,
+    "is_transfer_type": 5.566110943173081,
+    "risky_vpa_fragment": 3.329757813682415
+  },
+  "intercept": -6.805930575073501,
+  "class_distribution": {
+    "train": {
+      "n": 84337,
+      "positives": 3732
     },
-    {
-      "model": "logistic-regression (rejected)",
-      "roc_auc": 0.9587,
-      "pr_auc": 0.7647,
-      "brier": 0.05278,
-      "threshold": 0.993775,
-      "precision": 0.9002,
-      "recall": 0.4799,
-      "false_positive_rate": 0.00176,
-      "confusion": {
-        "tn": 34635,
-        "fp": 61,
-        "fn": 596,
-        "tp": 550
-      }
+    "validation": {
+      "n": 27882,
+      "positives": 1323
     },
-    {
-      "model": "gradient-boosting (SHIPPED)",
-      "roc_auc": 0.9791,
-      "pr_auc": 0.8691,
-      "brier": 0.00649,
-      "threshold": 0.470179,
-      "precision": 0.9006,
-      "recall": 0.8621,
-      "false_positive_rate": 0.00314,
-      "confusion": {
-        "tn": 34587,
-        "fp": 109,
-        "fn": 158,
-        "tp": 988
-      }
+    "test": {
+      "n": 27739,
+      "positives": 1153
     }
-  ],
-  "rows": 143367,
-  "fraud_rate": 0.03188320882769396,
-  "min_precision": 0.9
+  }
 }

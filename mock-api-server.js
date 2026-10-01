@@ -1247,9 +1247,19 @@ function computeRiskScore(payment, history, opts) {
         accountAgeMin: h.accountAgeMin != null ? h.accountAgeMin : 100000,
         kycVerified: h.kycVerified !== false,
         hourOfDay: at.getHours(),
+        // 0 = Monday, matching ml/features.py. JS getDay() is 0 = Sunday.
+        dayOfWeek: (at.getDay() + 6) % 7,
+        beneficiaryIsNew: h.payeeSeenBefore ? 0 : 1,
+        payeeSeenBefore: !!h.payeeSeenBefore,
+        distinctPayees24h: h.distinctPayees24h || 0,
+        payeeFanIn24h: h.payeeFanIn24h || 0,
+        balanceBeforeINR: h.balanceBeforeINR || 0,
+        txnType: payment.txnType || 'COLLECT',
       });
       return { score: r.score, band: r.band, decision: r.decision, factors: r.factors,
-               model: r.model, modelKind: r.modelKind, probability: r.probability,
+               model: r.model, modelVersion: r.modelVersion, modelKind: r.modelKind,
+               probability: r.probability, threshold: r.threshold, baseline: r.baseline,
+               topPositive: r.topPositive, topNegative: r.topNegative,
                explainer: r.explainer, dataCaveat: r.dataCaveat, engine: 'model' };
     } catch (e) {
       // A missing or corrupt model must not silently become "no fraud
@@ -1294,7 +1304,7 @@ function computeRiskScoreRules(payment, history) {
   return { score, band: bandName, decision, factors, model: 'aasthichain-rules-v1 (JS parity of drunix-gateway/fraud.go)' };
 }
 
-function payerHistory(payerId, excludePaymentId) {
+function payerHistory(payerId, excludePaymentId, payeeVpa) {
   const now = Date.now();
   let c10 = 0, c24 = 0, total24 = 0; const recent = [];
   Object.values(npciPayments).forEach(p => {
@@ -1308,7 +1318,31 @@ function payerHistory(payerId, excludePaymentId) {
     if (age <= 24 * 3600 * 1000) { c24++; total24 += parseFloat(p.amountINR) || 0; recent.push(parseFloat(p.amountINR) || 0); }
   });
   const kyc = kycRecords[payerId] || kycRecords[String(payerId).toLowerCase()];
-  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24, recentINR: recent.slice(0, 10), kycVerified: !kyc || kyc.kycStatus === 'VERIFIED' };
+
+  // Counterparty features for the trained model. Computed from the same
+  // payments store the velocity features come from, so they cost one extra
+  // pass and no new state.
+  const payees24h = new Set();
+  let payeeSeenBefore = false;
+  const fanIn = new Set();
+  Object.values(npciPayments).forEach(p => {
+    if (p.paymentId === excludePaymentId) return;
+    const t = new Date(p.createdAt).getTime();
+    if (isNaN(t) || Date.now() - t > 24 * 3600 * 1000) return;
+    if ((p.payerId || '') === payerId && p.payeeVpa) {
+      payees24h.add(p.payeeVpa);
+      if (payeeVpa && p.payeeVpa === payeeVpa) payeeSeenBefore = true;
+    }
+    if (payeeVpa && p.payeeVpa === payeeVpa && p.payerId) fanIn.add(p.payerId);
+  });
+
+  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24,
+           recentINR: recent.slice(0, 10),
+           kycVerified: !kyc || kyc.kycStatus === 'VERIFIED',
+           distinctPayees24h: payees24h.size,
+           payeeSeenBefore,
+           payeeFanIn24h: fanIn.size,
+           balanceBeforeINR: (npciBalances && npciBalances[payerId]) || 0 };
 }
 
 
@@ -1399,7 +1433,7 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
     callbackReceived: false, provider: 'mock', webhookReceivedAt: null
   };
   // AI & Fraud Detection screen (parity with drunix-gateway/fraud.go, Golang)
-  pay.risk = computeRiskScore(pay, payerHistory(pay.payerId, pay.paymentId));
+  pay.risk = computeRiskScore(pay, payerHistory(pay.payerId, pay.paymentId, pay.payeeVpa));
   if (pay.risk.decision === 'BLOCK') {
     pay.status = 'FAILED_FRAUD_BLOCKED';
     pay.failureReason = 'Blocked by fraud engine: ' + pay.risk.factors.map(f => f.code).join(', ');
@@ -1871,7 +1905,7 @@ app.post('/api/npci/payments/:id/approve', authMiddleware, (req, res) => {
     return res.status(400).json(pay);
   }
   // AI & Fraud Detection re-screen at approval (before any money movement)
-  const riskAtApprove = computeRiskScore(pay, payerHistory(payerId, pay.paymentId));
+  const riskAtApprove = computeRiskScore(pay, payerHistory(payerId, pay.paymentId, pay.payeeVpa));
   pay.risk = riskAtApprove;
   if (riskAtApprove.decision === 'BLOCK') {
     pay.status = 'FAILED_FRAUD_BLOCKED';
