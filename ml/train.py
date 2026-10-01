@@ -308,6 +308,13 @@ def main():
         with open(f"{OUT_DIR}/{fn}") as a, open(f"{go_dir}/{fn}", "w") as b:
             b.write(a.read())
 
+    # The Vercel function needs a co-located copy: its file tracer only bundles
+    # what it can see statically, and the library resolves MODEL_PATH at
+    # runtime. Without this the deployed handler would silently score with the
+    # rules engine. CI asserts all three copies are byte-identical.
+    with open(f"{OUT_DIR}/fraud_model.json") as a, open("../frontend/api/fraud_model.json", "w") as b:
+        b.write(a.read())
+
     size = os.path.getsize(f"{OUT_DIR}/fraud_model.json") / 1024
     print(f"\nexported {OUT_DIR}/fraud_model.json  ({len(coef)} coefficients, {size:.0f} KB)")
     print(f"exported {OUT_DIR}/gbt_comparison.json ({len(trees)} trees)")

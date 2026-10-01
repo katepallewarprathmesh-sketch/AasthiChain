@@ -49,7 +49,7 @@ SEED = 20260930
 # fraud rate, which makes every metric meaningless: real payment fraud is low
 # single digits and a model tuned on a balanced set collapses at a 3% base rate.
 MIX = [
-    ("retail", 0.600),
+    ("retail", 0.598),
     ("retail_busy", 0.180),
     ("retail_highvalue", 0.100),
     ("retail_new_beneficiary", 0.096),
@@ -59,6 +59,7 @@ MIX = [
     ("mule_fan_in", 0.005),
     ("mule_fan_out", 0.003),
     ("beneficiary_anomaly", 0.002),
+    ("handle_mimic", 0.002),
 ]
 
 
@@ -142,6 +143,14 @@ def _episode(rng, kind):
                   fan_out_boost=rng.randint(10, 40))
                 for _ in range(rng.randint(5, 12))], 1
 
+    if kind == "handle_mimic":
+        # Impersonation: the payee handle copies the payer's local part on a
+        # different bank, so the victim believes they are paying themselves.
+        age = rng.randint(1000, 300000)
+        return [P(amount=rng.uniform(20000, 400000), age=age, new_payee=1,
+                  mimic=True, gap_min=rng.uniform(5, 120))
+                for _ in range(rng.randint(1, 4))], 1
+
     if kind == "beneficiary_anomaly":
         # Long-dormant ordinary account, then one large payment to a new payee.
         age = rng.randint(200000, 900000)
@@ -195,6 +204,13 @@ def generate(n_payers, seed=SEED):
                 payee = f"payee{pid}_{payee_seq}"
             else:
                 payee = f"payee{pid}_0"
+            # Payee VPA: normally unrelated to the payer, but an impersonation
+            # episode copies the payer's local part onto a different bank.
+            payer_local = payer_vpa.split("@")[0]
+            if p.get("mimic"):
+                payee_vpa = f"{payer_local}@okaxis" if not payer_vpa.endswith("@okaxis") else f"{payer_local}@okhdfcbank"
+            else:
+                payee_vpa = f"{payee}@okicici"
             is_new = 0 if payee in payees_seen else 1
             payees_seen.add(payee)
 
@@ -208,6 +224,7 @@ def generate(n_payers, seed=SEED):
                 hour_of_day=hour, day_of_week=dow, beneficiary_is_new=is_new,
                 distinct_payees_24h=fan_out, payee_fan_in_24h=fan_in,
                 balance_before_inr=p["bal"], txn_type=p["ttype"],
+                payee_vpa=payee_vpa,
             )
 
             # Asymmetric label noise. Labels in payments come from disputes:

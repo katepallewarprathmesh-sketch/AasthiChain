@@ -57,6 +57,7 @@ FEATURE_NAMES = [
     # --- categorical ------------------------------------------------------
     "is_transfer_type",
     "risky_vpa_fragment",
+    "handle_mimic",
 ]
 
 # Amounts parked just under the ₹50,000 reporting line.
@@ -81,6 +82,15 @@ def _cv(values):
     return math.sqrt(var) / mean
 
 
+def _handle_mimic(payer_vpa, payee_vpa):
+    """1.0 when the two handles share a local part but differ overall."""
+    if not payer_vpa or not payee_vpa or payer_vpa == payee_vpa:
+        return 0.0
+    a = payer_vpa.split("@")[0]
+    b = payee_vpa.split("@")[0]
+    return 1.0 if a and a == b else 0.0
+
+
 def _safe(v, default=0.0):
     """Missing or non-finite inputs collapse to a defined value.
 
@@ -100,7 +110,8 @@ def _safe(v, default=0.0):
 def extract(amount_inr, payer_vpa, recent_inr, txn_count_10m, txn_count_24h,
             total_inr_24h, account_age_min, kyc_verified, hour_of_day,
             day_of_week=2, beneficiary_is_new=0, distinct_payees_24h=0,
-            payee_fan_in_24h=0, balance_before_inr=0.0, txn_type="COLLECT"):
+            payee_fan_in_24h=0, balance_before_inr=0.0, txn_type="COLLECT",
+            payee_vpa=""):
     """Returns the feature vector in FEATURE_NAMES order.
 
     Pure arithmetic on primitives, deliberately trivial to port. Every argument
@@ -166,8 +177,16 @@ def extract(amount_inr, payer_vpa, recent_inr, txn_count_10m, txn_count_24h,
         # categorical
         1.0 if str(txn_type).upper() in ("TRANSFER", "CASH_OUT") else 0.0,
         1.0 if any(f in vpa for f in RISKY_VPA_FRAGMENTS) else 0.0,
+        # Lookalike handle: payer and payee share a local part on different
+        # banks (ravi@okhdfcbank paying ravi@okaxis). Carried over from the
+        # rules engine, which scored it 15/100 -- it was the one signal the
+        # first model revision dropped.
+        _handle_mimic(vpa, str(payee_vpa or "").lower()),
     ]
 
 
 assert len(extract(1000, "a@b", [], 0, 0, 0, 100, True, 12)) == len(FEATURE_NAMES), \
     "extract() arity must match FEATURE_NAMES"
+assert _handle_mimic("ravi@okhdfcbank", "ravi@okaxis") == 1.0
+assert _handle_mimic("ravi@okhdfcbank", "ravi@okhdfcbank") == 0.0
+assert _handle_mimic("ravi@okhdfcbank", "seller@okaxis") == 0.0

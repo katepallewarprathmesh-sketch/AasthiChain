@@ -20,8 +20,8 @@ No LLM is involved in any decision or any explanation.
 |---|---|
 | Generator | `ml/generate_dataset.py` |
 | Seed | `20260930` (fixed, committed) |
-| Rows | 139,958 payments from 40,000 payers |
-| Fraud rate | 4.44% (6,208 positive) |
+| Rows | 139,788 payments from 40,000 payers |
+| Fraud rate | 4.66% (6,519 positive) |
 | Committed? | No — regenerates deterministically from the seed |
 
 **External benchmark — PaySim.**
@@ -58,6 +58,7 @@ would make the model relearn the rules and every comparison circular.
 | `mule_fan_in` | Fresh unverified beneficiary receiving from 8–30 distinct payers |
 | `mule_fan_out` | One account spraying to 10–40 brand-new beneficiaries |
 | `beneficiary_anomaly` | Dormant ordinary account, then one large payment to a new payee |
+| `handle_mimic` | Payee handle copies the payer's local part on a different bank (impersonation) |
 
 **Deliberate class overlap.** Honest payers who burst (`retail_busy`), honest
 whales (`retail_highvalue`) and honest payments to brand-new counterparties
@@ -72,7 +73,7 @@ negatives.
 
 ---
 
-## 3. Feature list (22)
+## 3. Feature list (23)
 
 Every feature is computable from what the API holds when a collect request
 arrives. A feature that cannot be computed in the request path is useless, so
@@ -102,6 +103,7 @@ none are included.
 | 20 | `is_weekend` | day-of-week |
 | 21 | `is_transfer_type` | transaction type |
 | 22 | `risky_vpa_fragment` | counterparty identifier |
+| 23 | `handle_mimic` | counterparty identifier / impersonation |
 
 **Device / IP features are deliberately absent.** The brief lists them "if
 available in our existing schema". They are not: no payment record carries a
@@ -118,7 +120,7 @@ ids are never fed to the model, as that would invite memorisation.
 | | |
 |---|---|
 | Library | scikit-learn (`LogisticRegression`, lbfgs) |
-| Shipped model | `aasthichain-fraud-lr-v3`, schema v3 |
+| Shipped model | `aasthichain-fraud-lr-v3`, schema v3 (23 coefficients) |
 | Regularisation | L2, `C=1.0` |
 | Class imbalance | `class_weight="balanced"` |
 | Max iterations | 5000 |
@@ -143,9 +145,9 @@ every test row. Current deviation: **1.42e-14**.
 
 | Split | Rows | Fraud | Rate |
 |---|---|---|---|
-| Train | 84,337 | 3,732 | 4.43% |
-| Validation | 27,882 | 1,323 | 4.74% |
-| Test | 27,739 | 1,153 | 4.16% |
+| Train | 84,027 | 3,811 | 4.54% |
+| Validation | 27,816 | 1,402 | 5.04% |
+| Test | 27,945 | 1,306 | 4.67% |
 
 **Split is by `payer_id`, 60/20/20.** Rows within one payer's episode are
 strongly correlated. A random row split puts a payer's early payments in train
@@ -160,9 +162,9 @@ Threshold chosen here, on validation.
 
 | Model | Precision | Recall | F1 | ROC-AUC | PR-AUC |
 |---|---|---|---|---|---|
-| `rules-v1` (replaced) | 0.9225 | 0.2698 | 0.4175 | 0.8441 | 0.4975 |
-| **Logistic regression (shipped)** | **0.9001** | **0.8443** | **0.8713** | **0.9707** | **0.8833** |
-| Gradient boosting (comparison) | 0.9007 | 0.9531 | 0.9262 | 0.9845 | 0.9131 |
+| `rules-v1` (replaced) | 0.9209 | 0.2739 | 0.4222 | 0.8554 | 0.5363 |
+| **Logistic regression (shipped)** | **0.9005** | **0.8452** | **0.8720** | **0.9670** | **0.8828** |
+| Gradient boosting (comparison) | 0.9124 | 0.9508 | 0.9312 | 0.9838 | 0.9285 |
 
 ## 7. Held-out test metrics
 
@@ -170,16 +172,15 @@ Threshold carried over from validation, never re-tuned here.
 
 | Model | Precision | Recall | F1 | ROC-AUC | PR-AUC |
 |---|---|---|---|---|---|
-| `rules-v1` (replaced) | 0.9053 | 0.2654 | 0.4105 | 0.8563 | 0.4954 |
-| **Logistic regression (shipped)** | **0.8991** | **0.8890** | **0.8940** | **0.9729** | **0.8960** |
-| Gradient boosting (comparison) | 0.9057 | 0.9575 | 0.9309 | 0.9840 | 0.9136 |
+| `rules-v1` (replaced) | 0.9371 | 0.2282 | 0.3670 | 0.8438 | 0.4814 |
+| **Logistic regression (shipped)** | **0.8888** | **0.8629** | **0.8757** | **0.9656** | **0.8842** |
+| Gradient boosting (comparison) | 0.9131 | 0.9571 | 0.9346 | 0.9839 | 0.9293 |
 
-The rules caught **27%** of fraud. The shipped model catches **89%** at
-comparable precision, and PR-AUC — the metric that matters on imbalanced data —
-goes from 0.495 to 0.896.
+The rules caught **23%** of fraud. The shipped model catches **86%**, and
+PR-AUC — the metric that matters on imbalanced data — goes from 0.481 to 0.884.
 
-**Accuracy is not reported anywhere.** At a 4.4% base rate, approving
-everything scores 95.6%.
+**Accuracy is not reported anywhere.** At a 4.7% base rate, approving
+everything scores 95.3%.
 
 ---
 
@@ -189,8 +190,8 @@ everything scores 95.6%.
 |---|---|
 | Policy | highest recall subject to **precision ≥ 0.90** |
 | Chosen on | **validation split** |
-| Block threshold | `0.847605` |
-| Review threshold | `0.339042` (0.4 × block) |
+| Block threshold | `0.848545` |
+| Review threshold | `0.339418` (0.4 × block) |
 | Precision floor met | yes |
 
 A shield that blocks genuine payments destroys more value than it saves, so the
@@ -209,11 +210,11 @@ threshold-selection failure.
 
 |  | Predicted legit | Predicted fraud |
 |---|---|---|
-| **Actually legit** | 26,471 | 115 |
-| **Actually fraud** | 128 | 1,025 |
+| **Actually legit** | 26,498 | 141 |
+| **Actually fraud** | 179 | 1,127 |
 
-115 false positives out of 26,586 legitimate payments — a 0.43% false-positive
-rate. 128 frauds missed out of 1,153.
+141 false positives out of 26,639 legitimate payments — a 0.53% false-positive
+rate. 179 frauds missed out of 1,306.
 
 ---
 
@@ -221,8 +222,8 @@ rate. 128 frauds missed out of 1,153.
 
 | | Validation | Test |
 |---|---|---|
-| ROC-AUC | 0.9707 | 0.9729 |
-| PR-AUC | 0.8833 | 0.8960 |
+| ROC-AUC | 0.9670 | 0.9656 |
+| PR-AUC | 0.8828 | 0.8842 |
 | Brier | see `model/metrics.json` | |
 
 PR-AUC is the headline. ROC-AUC is optimistic on imbalanced data because the
@@ -232,38 +233,40 @@ true-negative pool is enormous.
 
 ## 11. Feature coefficients
 
-Intercept: **−6.8059**. Positive drives the score toward fraud.
+Intercept: **−7.5253**. Positive drives the score toward fraud.
 
 | Feature | Coefficient |
 |---|---|
-| `is_transfer_type` | +5.5661 |
-| `amount_in_structuring_band` | +4.3084 |
-| `risky_vpa_fragment` | +3.3298 |
-| `burstiness` | +3.1668 |
-| `structuring_x_tightness` | +2.3319 |
-| `kyc_unverified` | +2.2979 |
-| `beneficiary_is_new` | +1.3953 |
-| `distinct_payees_24h` | +0.7453 |
-| `is_night` | +0.4409 |
-| `log_account_age_min` | +0.3310 |
-| `new_account_x_amount` | +0.1958 |
-| `txn_count_10m` | +0.1526 |
-| `balance_ratio` | +0.0703 |
-| `amount_vs_recent_mean` | +0.0145 |
-| `log_total_24h` | +0.0133 |
-| `is_weekend` | +0.0127 |
-| `velocity_x_escalation` | +0.0044 |
-| `payee_fan_in_24h` | −0.0258 |
-| `log_amount` | −0.1818 |
-| `txn_count_24h` | −0.3788 |
-| `recent_amount_cv` | −0.4412 |
-| `recent_in_structuring_band` | −0.7251 |
+| `handle_mimic` | +7.7590 |
+| `is_transfer_type` | +5.7387 |
+| `amount_in_structuring_band` | +5.0170 |
+| `risky_vpa_fragment` | +3.2059 |
+| `burstiness` | +2.3647 |
+| `kyc_unverified` | +2.3494 |
+| `structuring_x_tightness` | +1.3148 |
+| `beneficiary_is_new` | +0.9615 |
+| `distinct_payees_24h` | +0.7950 |
+| `is_night` | +0.7491 |
+| `log_account_age_min` | +0.4026 |
+| `is_weekend` | +0.3007 |
+| `txn_count_10m` | +0.2019 |
+| `balance_ratio` | +0.1457 |
+| `new_account_x_amount` | +0.1224 |
+| `recent_in_structuring_band` | +0.0414 |
+| `log_total_24h` | +0.0221 |
+| `amount_vs_recent_mean` | +0.0043 |
+| `velocity_x_escalation` | -0.0002 |
+| `payee_fan_in_24h` | -0.0304 |
+| `log_amount` | -0.1831 |
+| `txn_count_24h` | -0.3937 |
+| `recent_amount_cv` | -0.5768 |
 
 Two coefficients are worth reading carefully rather than at face value.
 `log_amount` is **negative** because amount is already carried by
 `amount_in_structuring_band` and `balance_ratio`; conditional on those, a large
-amount is mildly reassuring in this dataset. `payee_fan_in_24h` is near zero
-because the generator's fan-in is concentrated in one typology. Neither is a
+amount is mildly reassuring in this dataset. `payee_fan_in_24h` and
+`velocity_x_escalation` are near zero because their signal is already absorbed
+by `distinct_payees_24h` and `burstiness` respectively. Neither is a
 claim about real fraud — they are properties of this synthetic distribution.
 
 ### Explainability
@@ -366,8 +369,8 @@ Further limitations:
 ### Why logistic regression ships
 
 The gradient-boosted tree scores better on held-out synthetic data: test PR-AUC
-0.914 vs 0.896, recall 0.958 vs 0.889. The linear model ships anyway because it
-buys two things that outweigh ~7 points of recall for a regulated payments
+0.929 vs 0.884, recall 0.957 vs 0.863. The linear model ships anyway because it
+buys two things that outweigh ~9 points of recall for a regulated payments
 decision:
 
 - **An exact additive explanation.** `contribution = value × coefficient`, and
@@ -396,8 +399,8 @@ per-feature contribution are committed, and both ports must match to `1e-9`:
 
 | Implementation | Worst logit | Worst probability | Worst contribution |
 |---|---|---|---|
-| Go | 3.55e-15 | 2.50e-16 | 0 |
-| JavaScript | 4.44e-15 | 6.11e-16 | 0 |
+| Go | 4.00e-15 | 6.11e-16 | 0 |
+| JavaScript | 4.00e-15 | 6.11e-16 | 0 |
 
 Tolerance `1e-9`; observed deviation is ~1e-15, i.e. double-precision rounding.
 
@@ -418,7 +421,7 @@ them gets zero values, which the extractor treats as "unknown".
 
 ```bash
 cd ml
-python3 generate_dataset.py      # 139,958 payments, seed 20260930
+python3 generate_dataset.py      # 139,788 payments, seed 20260930
 python3 train.py                 # trains, verifies the export, writes artifacts
 python3 test_pipeline.py         # determinism + artifact + explanation tests
 python3 paysim_benchmark.py      # external benchmark (~185 MB download, not committed)
@@ -436,11 +439,12 @@ exactly. Both are assertions, not warnings.
 | `ml/train.py` | Training, evaluation, export, self-verification |
 | `ml/paysim_benchmark.py` | External PaySim ingestion + evaluation |
 | `ml/test_pipeline.py` | Determinism, artifact and explanation tests |
-| `ml/model/fraud_model.json` | **Shipped artifact** (22 coefficients) |
+| `ml/model/fraud_model.json` | **Shipped artifact** (23 coefficients) |
 | `ml/model/gbt_comparison.json` | Tree model, comparison / optional serving |
 | `ml/model/golden_vectors.json` | 200 sklearn outputs pinning the ports |
 | `ml/model/metrics.json` | Full evaluation output |
 | `ml/model/paysim_benchmark.json` | PaySim results + provenance |
 | `drunix-gateway/model.go` | Go inference + explainability |
 | `lib/fraud-model.js` | JS inference + explainability |
+| `frontend/api/fraud_model.json` | Co-located copy so Vercel bundles the artifact |
 | `scripts/fraud-model-parity.mjs` | JS↔sklearn parity + robustness (CI) |

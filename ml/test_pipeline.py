@@ -102,6 +102,35 @@ v2 = extract(47000, "a@b", [], 0, 0, 0, 100000, True, 12, balance_before_inr=1.0
 check("balance_ratio is capped", v2[FEATURE_NAMES.index("balance_ratio")] <= 20.0,
       str(v2[FEATURE_NAMES.index("balance_ratio")]))
 
+# ---------------------------------------------------------- training determinism
+# The brief asks for deterministic TRAINING, not only deterministic data.
+# Training twice on identical input must give identical coefficients, or the
+# committed artifact cannot be reproduced from the committed code.
+try:
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.preprocessing import StandardScaler
+
+    rows = generate(400, seed=SEED)
+    X = np.array([r[:len(FEATURE_NAMES)] for r in rows], dtype=float)
+    y = np.array([r[len(FEATURE_NAMES)] for r in rows], dtype=int)
+    if y.sum() == 0 or y.sum() == len(y):
+        check("training determinism (skipped: single-class sample)", True)
+    else:
+        def fit():
+            sc = StandardScaler().fit(X)
+            m = LogisticRegression(max_iter=5000, class_weight="balanced",
+                                   solver="lbfgs", random_state=SEED)
+            m.fit(sc.transform(X), y)
+            return m.coef_[0].copy(), float(m.intercept_[0])
+        c1, i1 = fit()
+        c2, i2 = fit()
+        check("training twice gives identical coefficients",
+              bool(np.array_equal(c1, c2)) and i1 == i2,
+              f"max delta {float(np.max(np.abs(c1 - c2))):.3e}")
+except ImportError as e:
+    check(f"training determinism (sklearn unavailable: {e})", True)
+
 # ---------------------------------------------------------------- artifact
 here = os.path.dirname(os.path.abspath(__file__))
 mp = os.path.join(here, "model", "fraud_model.json")

@@ -216,6 +216,27 @@ const (
 // missing -- a ratio of 47000 for a 47k payment -- which is far outside
 // anything seen in training and made a missing balance the loudest term in
 // every explanation. The cap stops one odd input from swamping the score.
+// handleMimic flags a payee whose local part copies the payer's on a
+// different bank (ravi@okhdfcbank -> ravi@okaxis). Carried over from the rules
+// engine, which scored it 15/100; the first model revision dropped it.
+func handleMimic(payerVPA, payeeVPA string) float64 {
+	if payerVPA == "" || payeeVPA == "" || payerVPA == payeeVPA {
+		return 0
+	}
+	a := payerVPA
+	if i := strings.Index(a, "@"); i > 0 {
+		a = a[:i]
+	}
+	b := payeeVPA
+	if i := strings.Index(b, "@"); i > 0 {
+		b = b[:i]
+	}
+	if a != "" && a == b {
+		return 1
+	}
+	return 0
+}
+
 func balanceRatio(amount, bal float64) float64 {
 	if bal <= 0 {
 		return 0
@@ -345,6 +366,7 @@ func ExtractFeatures(in PaymentInput, h HistorySummary, hourOfDay, dayOfWeek int
 		isWeekend,                    // is_weekend
 		isTransfer,                   // is_transfer_type
 		riskyVPA,                     // risky_vpa_fragment
+		handleMimic(vpa, strings.ToLower(in.PayeeVPA)), // handle_mimic
 	}
 }
 
@@ -425,6 +447,11 @@ func featurePhrase(name string, value float64) string {
 			return "payer VPA contains a phishing-style fragment"
 		}
 		return "payer VPA looks ordinary"
+	case "handle_mimic":
+		if value > 0 {
+			return "payee handle copies the payer's on a different bank (impersonation pattern)"
+		}
+		return "payee handle is unrelated to the payer's"
 	}
 	return name
 }

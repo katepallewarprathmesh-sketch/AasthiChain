@@ -1240,6 +1240,7 @@ function computeRiskScore(payment, history, opts) {
       const r = fraudModel.scorePaymentML({
         amountINR: parseFloat(payment.amountINR) || 0,
         payerVpa: payment.payerVpa,
+        payeeVpa: payment.payeeVpa,
         recentINR: h.recentINR || [],
         txnCount10m: h.txnCount10m || 0,
         txnCount24h: h.txnCount24h || 0,

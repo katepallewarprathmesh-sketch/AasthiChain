@@ -7,6 +7,7 @@ import { realDB } from './lib/db_real.js';
 import { authStore } from './lib/authstore.js';
 import { getSharedUMISim } from './lib/umi_sim.js';
 import * as supervision from './lib/supervision.js';
+import { createRequire } from 'module';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -903,7 +904,60 @@ const FRAUD_T = { blockScore: 70, reviewScore: 40, highValue: 500000, elevated: 
   structFloor: 180000, structCeil: 200000, structCount: 3, velBlock: 8, velWarn: 5,
   total24h: 1000000, riskyFragments: ['fraud','scam','thief','steal','phish','xxx','darkweb'] };
 
-function computeRiskScore(payment, history) {
+// ---- trained fraud model -------------------------------------------------
+// The library resolves its artifact path at runtime, which Vercel's file
+// tracer cannot see, so the handler requires its own co-located copy and
+// injects it. Without this the deployed function would silently score with
+// the rules engine while the repo claimed a trained model.
+let fraudModel = null;
+try {
+  const req = createRequire(import.meta.url);
+  fraudModel = req('../../lib/fraud-model.js');
+  fraudModel.useModel(req('./fraud_model.json'));
+} catch (e) {
+  console.error('[fraud] trained model unavailable, using rules:', e.message);
+  fraudModel = null;
+}
+
+function computeRiskScore(payment, history, opts) {
+  const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
+  if (fraudModel && !(opts && opts.engine === 'rules')) {
+    try {
+      const at = (opts && opts.at) ? new Date(opts.at) : new Date();
+      const r = fraudModel.scorePaymentML({
+        amountINR: parseFloat(payment.amountINR) || 0,
+        payerVpa: payment.payerVpa,
+        payeeVpa: payment.payeeVpa,
+        recentINR: h.recentINR || [],
+        txnCount10m: h.txnCount10m || 0,
+        txnCount24h: h.txnCount24h || 0,
+        totalINR24h: h.totalINR24h || 0,
+        accountAgeMin: h.accountAgeMin != null ? h.accountAgeMin : 100000,
+        kycVerified: h.kycVerified !== false,
+        hourOfDay: at.getHours(),
+        dayOfWeek: (at.getDay() + 6) % 7,   // 0 = Monday, matching features.py
+        payeeSeenBefore: !!h.payeeSeenBefore,
+        distinctPayees24h: h.distinctPayees24h || 0,
+        payeeFanIn24h: h.payeeFanIn24h || 0,
+        balanceBeforeINR: h.balanceBeforeINR || 0,
+        txnType: payment.txnType || 'COLLECT',
+      });
+      return { score: r.score, band: r.band, decision: r.decision, factors: r.factors,
+               model: r.model, modelVersion: r.modelVersion, modelKind: r.modelKind,
+               probability: r.probability, threshold: r.threshold, baseline: r.baseline,
+               topPositive: r.topPositive, topNegative: r.topNegative,
+               explainer: r.explainer, dataCaveat: r.dataCaveat, engine: 'model' };
+    } catch (e) {
+      // A corrupt model must not become "no fraud screening". Fall back and say so.
+      console.error('[fraud] model scoring failed, falling back to rules:', e.message);
+      const viaRules = computeRiskScoreRules(payment, h);
+      return { ...viaRules, engine: 'rules-fallback', fallbackReason: e.message };
+    }
+  }
+  return computeRiskScoreRules(payment, h);
+}
+
+function computeRiskScoreRules(payment, history) {
   const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
   const factors = [];
   let score = 0;

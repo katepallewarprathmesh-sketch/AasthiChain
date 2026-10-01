@@ -135,6 +135,7 @@ jobs:
         run: |
           diff -q ml/model/fraud_model.json drunix-gateway/fraudmodel/fraud_model.json
           diff -q ml/model/golden_vectors.json drunix-gateway/fraudmodel/golden_vectors.json
+          diff -q ml/model/fraud_model.json frontend/api/fraud_model.json
 
   access-control:
     name: Access control
