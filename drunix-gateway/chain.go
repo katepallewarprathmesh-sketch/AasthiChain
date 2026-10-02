@@ -17,6 +17,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
+	"sync"
 	"time"
 )
 
@@ -74,7 +75,14 @@ func canonical(b *DrunixBlock) string {
 }
 
 // DrunixChain is the append-only block store (MockLedger world-state companion).
+//
+// Append/Verify are safe for concurrent use: a real committing peer serialises
+// block cutting, and so do we — concurrent settlement requests (e.g. the UMI
+// rail under load) must never interleave prevHash reads with slice appends.
+// The mutex is unexported, so the zero value and &DrunixChain{} still work and
+// no existing caller or JSON payload changes.
 type DrunixChain struct {
+	mu     sync.Mutex
 	Blocks []*DrunixBlock
 }
 
@@ -93,6 +101,8 @@ func NewChain() *DrunixChain {
 
 // Append commits a new block and returns it.
 func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *DrunixBlock {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	prevHash := GenesisPrevHash
 	if n := len(c.Blocks); n > 0 {
 		prevHash = c.Blocks[n-1].Hash
@@ -122,6 +132,8 @@ type ChainVerification struct {
 
 // Verify replays the full chain from genesis: linkage + hash integrity.
 func (c *DrunixChain) Verify() ChainVerification {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for i, b := range c.Blocks {
 		expectPrev := GenesisPrevHash
 		if i > 0 {

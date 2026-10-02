@@ -40,6 +40,12 @@ func main() {
 	transient := drunix.NewTransientStore()
 	chain := drunix.NewChain()
 	srv.Pipeline = drunix.NewPipeline(state, transient, chain)
+	// UMI rail — RBI Unified Market Interface pattern (atomic DvP in wholesale
+	// CBDC) mounted on the same service. Disable with UMI_ENABLED=false.
+	if os.Getenv("UMI_ENABLED") != "false" {
+		srv.UMI = drunix.NewUMIRail(drunix.NewMemorySecurities(), chain)
+		log.Printf("UMI rail mounted at /umi/* — SEBI Demat 2.0 pattern: Drunix securities leg + e₹-W wholesale CBDC cash leg, atomic DvP (simulation)")
+	}
 	log.Printf("Drunix pipeline wired: LitePeer + Orderer(3, RAFT sim) + ValidationService + CommittingPeer on hash-chained ledger")
 	addr := ":" + envOr("DRUNIX_PORT", "21100")
 	log.Printf("AasthiChain Drunix Gateway (Golang) listening on %s — channel %s, chaincode %s",
