@@ -304,10 +304,18 @@ function Loading() {
   return <div style={{ padding: '24px 0', color: '#9CA3AF', fontSize: 13 }}>Loading…</div>
 }
 
+// Used in five places on this page. Routing it through describeError means a
+// raw code can never reach the screen from any of them, and a dead session
+// gets the same guidance here as anywhere else.
 function ErrorNote({ children }) {
+  const isErr = children && typeof children === 'object' && ('status' in children || children instanceof Error)
+  const { title, detail } = isErr
+    ? describeError(children, { what: 'this report' })
+    : { title: null, detail: String(children || '') }
   return (
-    <div style={{ marginTop: 14, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, fontSize: 13, color: '#B91C1C' }}>
-      {children}
+    <div role="status" style={{ marginTop: 14, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, fontSize: 13, color: '#B91C1C' }}>
+      {title && <div style={{ fontWeight: 650, marginBottom: 4 }}>{title}</div>}
+      <div style={{ opacity: 0.9 }}>{detail}</div>
     </div>
   )
 }

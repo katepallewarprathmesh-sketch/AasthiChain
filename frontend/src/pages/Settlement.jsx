@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import api from '../lib/api.js'
+import ErrorState from '../components/ErrorState'
 
 const INK = '#1A1F2B'
 const MUTED = '#6B7280'
@@ -149,10 +150,9 @@ export default function Settlement() {
       </p>
 
       {error && (
-        <Card style={{ marginTop: 20, borderColor: '#FECACA', background: '#FEF2F2' }}>
-          <strong style={{ color: '#991B1B' }}>Could not reach the settlement API</strong>
-          <div style={{ fontSize: 13, color: MUTED, marginTop: 6 }}>{error}</div>
-        </Card>
+        <div style={{ marginTop: 20 }}>
+          <ErrorState error={error} what="settlement activity" />
+        </div>
       )}
 
       {caps && (

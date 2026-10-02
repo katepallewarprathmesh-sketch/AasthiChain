@@ -1,3 +1,5 @@
+import { ApiError, announceSessionExpired } from './apiError'
+
 // SOLID: Single Responsibility API abstraction
 // Dependency Inversion Pages depend on this abstraction, not concrete fetch
 // Open/Closed Open for extension via new methods, closed for modification
@@ -27,22 +29,46 @@ class ApiClient {
 
   async request(path, options = {}) {
     const headers = { ...this.getAuthHeaders(), ...(options.headers || {}) }
-    const res = await fetch(path, { ...options, headers })
-    
-    let data
+
+    let res
+    try {
+      res = await fetch(path, { ...options, headers })
+    } catch {
+      // fetch rejects before any response exists: offline, DNS, CORS.
+      const e = new ApiError({ status: 0, code: 'ERR_NETWORK', path })
+      e.offline = true
+      throw e
+    }
+
+    let data = null
     try {
       data = await res.json()
     } catch {
-      throw new Error(`Request failed ${res.status} ${path}`)
+      // A non-JSON body (an HTML error page, an empty 502) is still a failure
+      // the user has to be told about in plain language.
+      if (!res.ok) throw new ApiError({ status: res.status, code: 'ERR_BAD_RESPONSE', path })
+      return {}
     }
-    
+
     if (!res.ok) {
-      const error = new Error(data.error || data.message || `HTTP ${res.status}`)
+      const error = new ApiError({
+        status: res.status,
+        code: data.error,
+        serverMessage: data.message,
+        path,
+      })
       error.data = data
-      error.status = res.status
+
+      // A 401 means the session is dead for every subsequent call, not just
+      // this one. Announce it once so the app clears state and routes to
+      // sign-in, rather than each page separately rendering a failure the
+      // user has no way to act on.
+      if (res.status === 401) {
+        announceSessionExpired(data.error === 'ERR_INVALID_TOKEN' ? 'expired' : 'required')
+      }
       throw error
     }
-    
+
     return data
   }
 

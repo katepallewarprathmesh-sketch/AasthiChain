@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useProperties } from '../hooks/useProperties.js'
 import SimplePropertyCard from '../components/SimplePropertyCard.jsx'
+import ErrorState from '../components/ErrorState'
 
 export default function Marketplace({ user }) {
   const [filter, setFilter] = useState('')
@@ -116,26 +117,7 @@ export default function Marketplace({ user }) {
           <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
         </div>
       ) : error ? (
-        <div style={{
-          background: '#FEF2F2',
-          border: '1px solid #FECACA',
-          borderRadius: 12,
-          padding: 20,
-          textAlign: 'center'
-        }}>
-          <p style={{ fontSize: 14, color: '#991B1B' }}>Failed to load: {error}</p>
-          <button onClick={refresh} style={{
-            marginTop: 12,
-            padding: '8px 16px',
-            background: '#1E3A5F',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer'
-          }}>
-            Try Again
-          </button>
-        </div>
+        <ErrorState error={error} what="the marketplace" onRetry={refresh} />
       ) : filtered.length === 0 ? (
         <div style={{
           background: 'white',

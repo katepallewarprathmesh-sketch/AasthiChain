@@ -1,11 +1,33 @@
 import React, { useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { SignIn, useUser, useAuth, Show, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
 const isClerkConfigured = (() => {
   const k = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
   return k && k.startsWith('pk_') && !k.includes('placeholder') && !k.includes('your-key-here') && k.length > 20
 })()
+
+/**
+ * Explains why the user was sent here. Arriving at a sign-in screen with no
+ * explanation after a session quietly died is its own kind of broken.
+ */
+function SessionNotice() {
+  const location = useLocation()
+  const reason = location.state && location.state.reason
+  if (!reason) return null
+  const text = reason === 'expired'
+    ? 'Your session expired, so you were signed out. Sessions last one hour — choose a role below to continue.'
+    : 'Please sign in to continue. Choose a role below.'
+  return (
+    <div role="status" style={{
+      background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10,
+      padding: '12px 16px', marginBottom: 18, fontSize: 13.5,
+      color: '#1E3A5F', lineHeight: 1.5,
+    }}>
+      {text}
+    </div>
+  )
+}
 
 const ROLES = [
   { id: 'originator1', role: 'Originator', label: 'Property Owner', mspId: 'OriginatorMSP', desc: 'List & tokenize', color:'#1E3A5F' },
@@ -53,6 +75,7 @@ function DemoPresets({ onLogin, title }) {
 
   return (
     <div style={{marginTop:24}}>
+      <SessionNotice />
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
         <h3 style={{fontSize:13, fontWeight:700}}>{title || 'Quick Demo Access Instant, no verification'}</h3>
         <span style={{fontSize:9, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:20, fontWeight:600}}>LIVE + LOCAL</span>

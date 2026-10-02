@@ -62,7 +62,7 @@ export function useProperties(filterStatus = '') {
       
       setProperties(merged)
     } catch (e) {
-      setError(e.message)
+      setError(e)   // keep the object: status and code decide what the user is told
       // Fallback to cache + demo
       try {
         const cached = loadLocalCache()
@@ -140,7 +140,7 @@ export function useProperty(assetId) {
         }
       } catch {}
       
-      setError(e.message)
+      setError(e)   // keep the object: status and code decide what the user is told
       // Fallback demo
       if (!property) {
         setProperty({

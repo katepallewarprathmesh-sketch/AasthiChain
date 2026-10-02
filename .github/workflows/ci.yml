@@ -137,6 +137,17 @@ jobs:
           diff -q ml/model/golden_vectors.json drunix-gateway/fraudmodel/golden_vectors.json
           diff -q ml/model/fraud_model.json frontend/api/fraud_model.json
 
+  error-ux:
+    name: Error UX
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: No raw error code may reach a user, and every failure names an action
+        run: node scripts/error-ux-check.mjs
+
   vercel-handler:
     name: Vercel handler auth
     runs-on: ubuntu-latest

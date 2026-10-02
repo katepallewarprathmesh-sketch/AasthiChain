@@ -3,6 +3,7 @@ import { money } from '../lib/format.js'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
+import ErrorState from '../components/ErrorState'
 
 // SOLID: Single Responsibility Only wallet display + transfer for layman
 
@@ -113,7 +114,7 @@ export default function Wallet({ user }) {
       const total = merged.reduce((s, b) => s + (b.valueINR || 0), 0)
       setWallet({ ...data, balances: merged, totalPortfolioValue: total })
     } catch (e) {
-      setError(e.message)
+      setError(e)   // keep the object so status decides the message
       setWallet({ balances: [], totalPortfolioValue: 0 })
     } finally {
       setLoading(false)
@@ -259,9 +260,7 @@ export default function Wallet({ user }) {
       </div>
 
       {error && (
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 10, fontSize: 12, color: '#991B1B', marginTop: 12 }}>
-          {error}
-        </div>
+        <ErrorState error={error} what="your wallet" onRetry={typeof refresh==='function'?refresh:undefined} />
       )}
 
       <div style={{ marginTop: 24 }}>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { SESSION_EXPIRED_EVENT, clearSession, tokenLooksUsable } from './lib/apiError'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
 class ErrorBoundary extends React.Component {
@@ -280,8 +281,43 @@ function AppContent({ user, setUser }) {
 
   const [internalUser, setInternalUser] = useState(user)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => { setInternalUser(user) }, [user])
+
+  // A stored token this build cannot use is a dead session. Detect it at
+  // startup and clear it, rather than sending it on every request to be
+  // rejected and surfacing a failure the user cannot act on. This is what
+  // makes sessions issued before token signing recover by themselves.
+  useEffect(() => {
+    let token = null
+    try { token = localStorage.getItem('aasthi_token') } catch { return }
+    if (token && !tokenLooksUsable(token)) {
+      clearSession()
+      setInternalUser(null)
+      setUser(null)
+      if (location.pathname !== '/login' && location.pathname !== '/') {
+        navigate('/login', { replace: true, state: { reason: 'expired' } })
+      }
+    }
+  }, [])
+
+  // One listener for the whole app: any 401 clears the session and routes to
+  // sign-in once, instead of every page rendering its own dead end.
+  useEffect(() => {
+    const onExpired = (e) => {
+      setInternalUser(null)
+      setUser(null)
+      if (location.pathname !== '/login') {
+        navigate('/login', {
+          replace: true,
+          state: { reason: (e && e.detail && e.detail.reason) || 'required' },
+        })
+      }
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
+  }, [location.pathname, navigate, setUser])
 
   useEffect(() => { prefetchLikelyRoutes() }, [])
 

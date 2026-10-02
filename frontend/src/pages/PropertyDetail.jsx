@@ -4,6 +4,7 @@ import { useProperty } from '../hooks/useProperties.js'
 import SimpleBuyFlow from '../components/SimpleBuyFlow.jsx'
 import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
+import ErrorState from '../components/ErrorState'
 
 export default function PropertyDetail({ user }) {
   const { id } = useParams()
@@ -94,19 +95,8 @@ export default function PropertyDetail({ user }) {
     return (
       <div style={{ padding: 20, maxWidth: 600, margin: '0 auto' }}>
         <Link to="/marketplace" style={{ fontSize: 13, color: '#1E3A5F', textDecoration: 'none' }}>← Back to Properties</Link>
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 20, marginTop: 16, textAlign: 'center' }}>
-          <p style={{ fontSize: 14, color: '#991B1B' }}>{error}</p>
-          <button onClick={refresh} style={{
-            marginTop: 12,
-            padding: '8px 16px',
-            background: '#1E3A5F',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer'
-          }}>
-            Try Again
-          </button>
+        <div style={{ marginTop: 16 }}>
+          <ErrorState error={error} what="this property" onRetry={refresh} />
         </div>
       </div>
     )
