@@ -30,7 +30,13 @@ func TestPropertyData_Verify_Encumbrance(t *testing.T) {
 		verification, _ := provider.Verify("PROP-001", 7500000, "originator1", "Maharashtra", "Pune", "411045", SourceBhoomi)
 		if verification.EncumbranceCheck.HasEncumbrance {
 			foundEncumbrance = true
-			assert.NotEmpty(t, verification.EncumbranceCheck.Encumbrances)
+			// HasEncumbrance is raised by EITHER a registered charge OR a pending
+			// litigation, and those live in two separate slices. Asserting only on
+			// Encumbrances failed whenever the litigation branch fired on its own.
+			enc := verification.EncumbranceCheck.Encumbrances
+			lit := verification.EncumbranceCheck.Litigation
+			assert.Greater(t, len(enc)+len(lit), 0,
+				"HasEncumbrance must be backed by a charge or a litigation")
 			assert.False(t, verification.Verified, "Should not be verified if has encumbrance")
 			break
 		}

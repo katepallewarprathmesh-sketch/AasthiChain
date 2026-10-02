@@ -46,26 +46,26 @@ func GenerateUTRRealistic() UTRBundle {
 
 // Webhook payload from Setu/ICICI/Decentro
 type WebhookPayload struct {
-	PaymentID     string  `json:"paymentId"`
-	ReferenceID   string  `json:"referenceId"` // Setu uses referenceId
-	MerchantTxnID string  `json:"merchantTxnId"`
-	TransactionID string  `json:"transactionId"`
-	Status        string  `json:"status"`        // SUCCESS, FAILED, etc
-	TxnStatus     string  `json:"txnStatus"`     // Setu
-	PaymentStatus string  `json:"paymentStatus"` // ICICI
-	RRN           string  `json:"rrn"`
-	BankRRN       string  `json:"bankRRN"`
-	UTR           string  `json:"utr"`
-	BankUTR       string  `json:"bankUTR"`
-	UpiUTR        string  `json:"upiUTR"`
-	UTR12         string  `json:"utr12"`
-	Amount        float64 `json:"amount"`
-	AmountPaise   int64   `json:"amountPaise"`
-	TxnAmount     float64 `json:"txnAmount"`
-	Provider      string  `json:"provider"` // setu, icici, decentro
-	Signature     string  `json:"signature"`
-	Timestamp     string  `json:"timestamp"`
-	FailureReason string  `json:"failureReason"`
+	PaymentID     string                 `json:"paymentId"`
+	ReferenceID   string                 `json:"referenceId"` // Setu uses referenceId
+	MerchantTxnID string                 `json:"merchantTxnId"`
+	TransactionID string                 `json:"transactionId"`
+	Status        string                 `json:"status"`        // SUCCESS, FAILED, etc
+	TxnStatus     string                 `json:"txnStatus"`     // Setu
+	PaymentStatus string                 `json:"paymentStatus"` // ICICI
+	RRN           string                 `json:"rrn"`
+	BankRRN       string                 `json:"bankRRN"`
+	UTR           string                 `json:"utr"`
+	BankUTR       string                 `json:"bankUTR"`
+	UpiUTR        string                 `json:"upiUTR"`
+	UTR12         string                 `json:"utr12"`
+	Amount        float64                `json:"amount"`
+	AmountPaise   int64                  `json:"amountPaise"`
+	TxnAmount     float64                `json:"txnAmount"`
+	Provider      string                 `json:"provider"` // setu, icici, decentro
+	Signature     string                 `json:"signature"`
+	Timestamp     string                 `json:"timestamp"`
+	FailureReason string                 `json:"failureReason"`
 	Raw           map[string]interface{} `json:"-"`
 }
 
@@ -144,34 +144,34 @@ func VerifyWebhookSignature(rawBody []byte, signature, secret, provider string) 
 
 // Webhook audit event for Regulator
 type WebhookEvent struct {
-	WebhookID     string    `json:"webhookId"`
-	PaymentID     string    `json:"paymentId"`
-	Status        string    `json:"status"`
-	RRN           string    `json:"rrn"`
-	UTR           string    `json:"utr"`
-	Provider      string    `json:"provider"`
-	Amount        float64   `json:"amount"`
-	ExpectedAmount float64  `json:"expectedAmount,omitempty"`
-	Timestamp     time.Time `json:"timestamp"`
-	Result        string    `json:"result"` // SUCCESS, AMOUNT_MISMATCH, INVALID_SIGNATURE, etc
-	FailureReason string    `json:"failureReason,omitempty"`
-	Raw           interface{} `json:"raw,omitempty"`
-	Test          bool      `json:"test,omitempty"`
-	Simulated     bool      `json:"simulated,omitempty"`
+	WebhookID      string      `json:"webhookId"`
+	PaymentID      string      `json:"paymentId"`
+	Status         string      `json:"status"`
+	RRN            string      `json:"rrn"`
+	UTR            string      `json:"utr"`
+	Provider       string      `json:"provider"`
+	Amount         float64     `json:"amount"`
+	ExpectedAmount float64     `json:"expectedAmount,omitempty"`
+	Timestamp      time.Time   `json:"timestamp"`
+	Result         string      `json:"result"` // SUCCESS, AMOUNT_MISMATCH, INVALID_SIGNATURE, etc
+	FailureReason  string      `json:"failureReason,omitempty"`
+	Raw            interface{} `json:"raw,omitempty"`
+	Test           bool        `json:"test,omitempty"`
+	Simulated      bool        `json:"simulated,omitempty"`
 }
 
 // Reconciliation dashboard for Regulator/Admin
 type ReconciliationReport struct {
 	Summary struct {
-		TotalPayments   int     `json:"totalPayments"`
-		SuccessCount    int     `json:"successCount"`
-		PendingCount    int     `json:"pendingCount"`
-		FailedCount     int     `json:"failedCount"`
-		TotalVolumeINR  float64 `json:"totalVolumeINR"`
-		SuccessRate     string  `json:"successRate"`
-		UTRCoverage     string  `json:"utrCoverage"`
-		WebhookCount    int     `json:"webhookCount"`
-		UTRIndexCount   int     `json:"utrIndexCount"`
+		TotalPayments  int     `json:"totalPayments"`
+		SuccessCount   int     `json:"successCount"`
+		PendingCount   int     `json:"pendingCount"`
+		FailedCount    int     `json:"failedCount"`
+		TotalVolumeINR float64 `json:"totalVolumeINR"`
+		SuccessRate    string  `json:"successRate"`
+		UTRCoverage    string  `json:"utrCoverage"`
+		WebhookCount   int     `json:"webhookCount"`
+		UTRIndexCount  int     `json:"utrIndexCount"`
 	} `json:"summary"`
 	Issues struct {
 		PendingWithoutUTR []PaymentSummary `json:"pendingWithoutUTR"`
@@ -184,14 +184,14 @@ type ReconciliationReport struct {
 }
 
 type PaymentSummary struct {
-	PaymentID     string    `json:"paymentId"`
-	AssetID       string    `json:"assetId"`
-	AmountINR     float64   `json:"amountINR"`
-	CreatedAt     time.Time `json:"createdAt"`
-	AgeMinutes    int       `json:"ageMin,omitempty"`
-	FailureReason string    `json:"failureReason,omitempty"`
-	ExpectedAmount float64  `json:"expected,omitempty"`
-	Provider      string    `json:"provider,omitempty"`
+	PaymentID      string    `json:"paymentId"`
+	AssetID        string    `json:"assetId"`
+	AmountINR      float64   `json:"amountINR"`
+	CreatedAt      time.Time `json:"createdAt"`
+	AgeMinutes     int       `json:"ageMin,omitempty"`
+	FailureReason  string    `json:"failureReason,omitempty"`
+	ExpectedAmount float64   `json:"expected,omitempty"`
+	Provider       string    `json:"provider,omitempty"`
 }
 
 type UTRSample struct {
@@ -340,11 +340,11 @@ func (g *GatewayWithWebhook) ProcessWebhook(payload WebhookPayload, rawBody []by
 
 	// Allow only forward transitions
 	allowed := map[Status][]Status{
-		StatusPending:   {StatusConfirmed, "FAILED_PROVIDER", StatusDeclined, StatusExpired, "FAILED_AMOUNT_MISMATCH"},
-		StatusConfirmed: {StatusReleased, StatusRefunded},
+		StatusPending:     {StatusConfirmed, "FAILED_PROVIDER", StatusDeclined, StatusExpired, "FAILED_AMOUNT_MISMATCH"},
+		StatusConfirmed:   {StatusReleased, StatusRefunded},
 		"FAILED_PROVIDER": {StatusRefunded},
-		StatusDeclined:  {StatusRefunded},
-		StatusExpired:   {StatusRefunded},
+		StatusDeclined:    {StatusRefunded},
+		StatusExpired:     {StatusRefunded},
 	}
 	if p.Status != newStatus {
 		if allowedList, ok := allowed[p.Status]; ok {
@@ -355,16 +355,16 @@ func (g *GatewayWithWebhook) ProcessWebhook(payload WebhookPayload, rawBody []by
 			if !allowedMap[newStatus] {
 				// Invalid transition — log but return 200 to avoid retry storm
 				g.addWebhookAudit(WebhookEvent{
-					WebhookID: webhookID,
-					PaymentID: paymentID,
-					Status:    string(newStatus),
-					RRN:       p.RRN,
-					UTR:       p.UTR,
-					Provider:  payload.Provider,
-					Timestamp: time.Now(),
-					Result:    "INVALID_TRANSITION",
+					WebhookID:     webhookID,
+					PaymentID:     paymentID,
+					Status:        string(newStatus),
+					RRN:           p.RRN,
+					UTR:           p.UTR,
+					Provider:      payload.Provider,
+					Timestamp:     time.Now(),
+					Result:        "INVALID_TRANSITION",
 					FailureReason: fmt.Sprintf("Invalid transition %s -> %s ignored", p.Status, newStatus),
-					Raw:       payload,
+					Raw:           payload,
 				})
 				cp := *p
 				return &cp, nil
@@ -470,10 +470,10 @@ func (g *GatewayWithWebhook) GetReconciliationReport() ReconciliationReport {
 		// Issues
 		if p.Status == StatusConfirmed && p.UTR == "" {
 			report.Issues.PendingWithoutUTR = append(report.Issues.PendingWithoutUTR, PaymentSummary{
-				PaymentID: p.PaymentID,
-				AssetID:   p.AssetID,
-				AmountINR: p.AmountINR,
-				CreatedAt: p.CreatedAt,
+				PaymentID:  p.PaymentID,
+				AssetID:    p.AssetID,
+				AmountINR:  p.AmountINR,
+				CreatedAt:  p.CreatedAt,
 				AgeMinutes: int(now.Sub(p.CreatedAt).Minutes()),
 			})
 		}

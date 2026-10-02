@@ -3,6 +3,8 @@ const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const fraudModel = require('./lib/fraud-model.js');
 
 const app = express();
 app.use(cors({ origin: '*', allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key'] }));
@@ -107,79 +109,70 @@ for (let i = 0; i < 25; i++) {
 }
 
 // JWT mock - just base64
+// ===================== AUTH: SIGNED TOKENS =====================
+// Tokens used to be unsigned base64 JSON, so anyone could mint an identity:
+//     echo -n '{"identityId":"registrar1","role":"Registrar"}' | base64
+// ...and every downstream role check was decorative. Worse, authMiddleware had a
+// catch-all `catch { req.user = roleMap[header] ; next() }` that ADMITTED the
+// request when the token failed to parse, taking the identity from the
+// attacker-supplied x-fabric-identity header.
+//
+// Tokens are now HMAC-signed and verified. An unsigned or tampered token is a
+// 401, and there is no fallback that lets a bad token through.
+//
+// Threat model, stated honestly: /api/auth/login is open by design — this is a
+// demo with no passwords, so anyone can obtain a valid token for any demo
+// identity. Signing fixes tampering and the fallback hole; it does not turn the
+// demo into an authenticated system. What it does make real is AUTHORISATION:
+// a valid investor2 token can no longer read investor1's data.
+const TOKEN_SECRET = process.env.AASTHI_TOKEN_SECRET || 'aasthi-demo-secret-change-me';
+if (!process.env.AASTHI_TOKEN_SECRET) {
+  console.warn('[auth] AASTHI_TOKEN_SECRET is not set — using the built-in demo secret. Set it for any shared deployment.');
+}
+
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(s) {
+  return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+}
+function signPayload(payloadB64) {
+  return b64url(crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest());
+}
+
+// Issues a signed token: <base64url(payload)>.<base64url(hmac)>
 function mockJWT(identityId, mspId, role) {
-  return Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
+  const payloadB64 = b64url(JSON.stringify({ identityId, mspId, role, exp: Date.now() + 3600000 }));
+  return payloadB64 + '.' + signPayload(payloadB64);
 }
 
-function decodeClerkOrMockToken(token) {
-  // Try mock base64 JSON first
+// Verifies a signed mock token. Returns the payload, or null.
+function verifySignedToken(token) {
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;                   // 3 parts => Clerk JWT, handled elsewhere
+  const [payloadB64, sig] = parts;
+  const expected = signPayload(payloadB64);
+  // Constant-time compare; lengths must match or timingSafeEqual throws.
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
-    if (payload.identityId) return payload;
-  } catch {}
-  // Try JWT (Clerk) — decode without verification for mock server
-  try {
-    const parts = token.split('.');
-    if (parts.length === 3) {
-      const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = payloadB64 + '='.repeat((4 - payloadB64.length % 4) % 4);
-      const payload = JSON.parse(Buffer.from(padded, 'base64').toString());
-      // Clerk JWT has sub, sid, etc.
-      const identityId = payload.fabricIdentity || payload.identityId || (payload.sub ? 'investor1' : null);
-      // If Clerk token, map to demo identity from header or default
-      // Check for custom claims or use fallback
-      if (payload.sub) {
-        // Clerk user — use demo identity from localStorage mapping or default investor1
-        // For mock, we accept any Clerk token and map to investor1 unless x-fabric-identity header present
-        return {
-          identityId: payload.fabricIdentity || 'investor1',
-          mspId: payload.mspId || 'InvestorMSP',
-          role: payload.role || 'Investor',
-          clerkId: payload.sub,
-          clerk: true
-        };
-      }
-      if (payload.identityId) return payload;
-    }
-  } catch (e) {
-    // console.warn('Token decode failed', e.message)
-  }
-  return null;
+    const payload = JSON.parse(b64urlDecode(payloadB64));
+    if (!payload || !payload.identityId) return null;
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
 }
 
-function authMiddleware(req, res, next) {
-  const auth = req.headers.authorization;
-  const fabricIdentityHeader = req.headers['x-fabric-identity'] || req.headers['x-fabric-role'];
-  if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+// Clerk session tokens are 3-part JWTs. We do not hold Clerk's JWKS here, so we
+// cannot verify their signature; a Clerk session therefore maps to the demo
+// identity chosen in the UI. This is a known gap, recorded in
+// the repository's security notes.
+function decodeClerkToken(token, fabricIdentityHeader) {
+  const parts = String(token).split('.');
+  if (parts.length !== 3) return null;
   try {
-    const token = auth.split(' ')[1];
-    let payload = decodeClerkOrMockToken(token);
-    
-    // If token is Clerk JWT and we have fabric identity header, use it
-    if (payload && payload.clerk && fabricIdentityHeader) {
-      const roleMap = {
-        originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
-        registrar1: { identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar' },
-        investor1: { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' },
-        investor2: { identityId: 'investor2', mspId: 'InvestorMSP', role: 'Investor' },
-        regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
-      };
-      const mapped = roleMap[fabricIdentityHeader.toLowerCase()] || roleMap['investor1'];
-      payload = { ...payload, ...mapped };
-    }
-
-    if (payload && payload.identityId) {
-      req.user = payload;
-      return next();
-    }
-
-    // Fallback: try direct base64
-    const fallback = JSON.parse(Buffer.from(token, 'base64').toString());
-    req.user = fallback;
-    next();
-  } catch {
-    // Allow mock token format from frontend fallback + Clerk placeholder tokens
-    const headerIdentity = fabricIdentityHeader || 'investor1';
+    const payload = JSON.parse(b64urlDecode(parts[1]));
+    if (!payload || !payload.sub) return null;
     const roleMap = {
       originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
       registrar1: { identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar' },
@@ -187,9 +180,54 @@ function authMiddleware(req, res, next) {
       investor2: { identityId: 'investor2', mspId: 'InvestorMSP', role: 'Investor' },
       regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
     };
-    req.user = roleMap[headerIdentity.toLowerCase()] || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
-    next();
+    const mapped = roleMap[String(fabricIdentityHeader || 'investor1').toLowerCase()] || roleMap.investor1;
+    return { ...mapped, clerkId: payload.sub, via: 'clerk' };
+  } catch { return null; }
+}
+
+function decodeClerkOrMockToken(token, fabricIdentityHeader) {
+  return verifySignedToken(token) || decodeClerkToken(token, fabricIdentityHeader);
+}
+
+function authMiddleware(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+  const token = auth.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+  const payload = decodeClerkOrMockToken(token, req.headers['x-fabric-identity'] || req.headers['x-fabric-role']);
+  if (!payload || !payload.identityId) {
+    // No fallback. A token we cannot verify is not a login.
+    return res.status(401).json({ error: 'ERR_INVALID_TOKEN', message: 'Token is missing, malformed, expired or not signed by this server.' });
   }
+  req.user = payload;
+  next();
+}
+
+// ===================== AUTHORISATION HELPERS =====================
+// authMiddleware answers "are you logged in?". These answer "is this yours?".
+const PRIVILEGED_READERS = ['Regulator'];
+
+// Guards a route whose target identity is in the path. The caller must BE that
+// identity, or hold a role allowed to look across users.
+function requireSelfOrRole(paramNames, roles = PRIVILEGED_READERS) {
+  const names = Array.isArray(paramNames) ? paramNames : [paramNames];
+  return (req, res, next) => {
+    const target = names.map(n => req.params[n]).find(Boolean);
+    if (!target) return next();
+    if (req.user && req.user.identityId === target) return next();
+    if (req.user && roles.includes(req.user.role)) return next();
+    return res.status(403).json({
+      error: 'ERR_FORBIDDEN',
+      message: `This belongs to ${target}. You are signed in as ${req.user ? req.user.identityId : 'nobody'}.`
+    });
+  };
+}
+
+// True when the caller is a party to this payment, or may supervise it.
+function canSeePayment(user, pay) {
+  if (!user || !pay) return false;
+  if (PRIVILEGED_READERS.includes(user.role)) return true;
+  return pay.payerId === user.identityId || pay.payeeId === user.identityId;
 }
 
 app.get('/health', (req, res) => {
@@ -197,7 +235,7 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'aasthichain-api-gateway', version: '2.6-drunix-fraud-golang', fabricMode: 'mock', drunixGateway: { mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go' : 'embedded', language: 'golang', source: 'drunix-gateway/ (Go)' }, fraudEngine: { model: 'aasthichain-rules-v1', theme: 'AI & Fraud Detection', parityOf: 'drunix-gateway/fraud.go' }, payuBridge: (() => { const pu = payuConfig(); return { enabled: pu.active, mode: pu.test ? 'test' : 'live', baseUrl: pu.base, callbackPath: '/api/npci/payu/callback' }; })() });
+  res.json({ status: 'ok', service: 'aasthichain-api-gateway', version: '2.6-drunix-fraud-golang', fabricMode: 'mock', drunixGateway: { mode: process.env.DRUNIX_GATEWAY_URL ? 'remote-go' : 'embedded', language: 'golang', source: 'drunix-gateway/ (Go)' }, fraudEngine: (() => { try { const i = fraudModel.modelInfo(); return { engine: 'trained-model', model: i.name, kind: i.kind, nTrees: i.nTrees, features: i.features.length, trainedOn: i.trainedOn }; } catch (e) { return { engine: 'unavailable', error: e.message }; } })(), payuBridge: (() => { const pu = payuConfig(); return { enabled: pu.active, mode: pu.test ? 'test' : 'live', baseUrl: pu.base, callbackPath: '/api/npci/payu/callback' }; })() });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -425,13 +463,30 @@ app.post('/api/properties/:id/mint', authMiddleware, (req, res) => {
   res.json(resp);
 });
 
-app.post('/api/properties/:id/freeze', authMiddleware, (req, res) => {
+app.post('/api/properties/:id/freeze', authMiddleware, async (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  // A freeze with no recorded reason or actor is not reviewable after the fact,
+  // so this legacy route now writes to the same supervisory log as
+  // POST /api/regulator/freeze. Neither path can bypass the record.
+  let record = null;
+  try {
+    const sup = await import('./frontend/api/lib/supervision.js');
+    record = sup.recordAction({
+      assetId: req.params.id,
+      action: 'FREEZE',
+      reason: req.body.reason,
+      actor: req.user.identityId,
+      actorRole: req.user.role,
+    });
+  } catch (e) {
+    return res.status(e.http || 400).json({ error: e.code || 'ERR_SUPERVISION', message: e.message });
+  }
+  prop.previousStatus = prop.status;
   prop.status = 'FROZEN';
   prop.updatedAt = new Date();
   properties[req.params.id] = prop;
-  res.json({ assetId: req.params.id, status: 'FROZEN', reason: req.body.reason, fabricMode: 'mock' });
+  res.json({ assetId: req.params.id, status: 'FROZEN', reason: record.reason, actionId: record.actionId, actor: record.actor, fabricMode: 'mock' });
 });
 
 app.post('/api/transfers', authMiddleware, (req, res) => {
@@ -544,7 +599,7 @@ app.post('/api/transfers', authMiddleware, (req, res) => {
 });
 
 // FIX: wallet route BEFORE balance/:assetId/:ownerId — otherwise "wallet" is captured as assetId
-app.get('/api/balances/wallet/:ownerId', authMiddleware, (req, res) => {
+app.get('/api/balances/wallet/:ownerId', authMiddleware, requireSelfOrRole('ownerId'), (req, res) => {
   const ownerId = req.params.ownerId;
   const bals = Object.values(balances).filter(b => b.ownerId === ownerId && (b.balance || 0) > 0);
   let total = 0;
@@ -563,7 +618,7 @@ app.get('/api/balances/wallet/:ownerId', authMiddleware, (req, res) => {
   res.json({ ownerId, balances: enriched, totalPortfolioValue: total, fabricMode: 'mock', indexUsed: 'idx_balance_owner' });
 });
 
-app.get('/api/balances/:assetId/:ownerId', authMiddleware, (req, res) => {
+app.get('/api/balances/:assetId/:ownerId', authMiddleware, requireSelfOrRole('ownerId'), (req, res) => {
   // Safety: wallet handled above; never treat it as an asset
   if (req.params.assetId === 'wallet') {
     return res.json({ ownerId: req.params.ownerId, balances: [], totalPortfolioValue: 0 });
@@ -600,9 +655,15 @@ app.put('/api/kyc/:identityId', authMiddleware, (req, res) => {
   res.json({ identityId: id, kycStatus: req.body.status, fabricMode: 'mock' });
 });
 
+// A counterparty needs to know THAT you are verified, never your documents.
+// Self and regulators get the full record; everyone else gets the boolean.
 app.get('/api/kyc/:identityId', authMiddleware, (req, res) => {
-  const rec = kycRecords[req.params.identityId] || { docType: 'kyc', identityId: req.params.identityId, kycStatus: 'UNVERIFIED', provider: 'mock' };
-  res.json(rec);
+  const id = req.params.identityId;
+  const rec = kycRecords[id] || { docType: 'kyc', identityId: id, kycStatus: 'UNVERIFIED', provider: 'mock' };
+  const isSelf = req.user.identityId === id;
+  const privileged = PRIVILEGED_READERS.includes(req.user.role);
+  if (isSelf || privileged) return res.json(rec);
+  res.json({ docType: 'kyc', identityId: id, kycStatus: rec.kycStatus, scope: 'counterparty-view' });
 });
 
 app.post('/api/payments/confirm', authMiddleware, (req, res) => {
@@ -638,34 +699,43 @@ app.post('/api/transfers/failure-demo', authMiddleware, (req, res) => {
 let testnetPayments = {};
 
 app.post('/api/testnet/payments/initiate', authMiddleware, (req, res) => {
-  const { assetId, tokenAmount, estimatedEth, txHash, paymentId, from, to, isSimulated } = req.body;
-  const pid = paymentId || (isSimulated ? 'SIM-' + crypto.randomUUID().slice(0,8).toUpperCase() : '0x' + crypto.randomUUID().replace(/-/g,'') + crypto.randomUUID().replace(/-/g,'').slice(0,16));
-  // FIX: No fabricated hash in simulated mode — per user fix #1, simulated state has no fake 0x... hash or fake Etherscan link, greyed out non-clickable
-  const finalTxHash = isSimulated ? '' : (txHash || '0x' + crypto.randomBytes(32).toString('hex'));
+  const { assetId, tokenAmount, estimatedEth, txHash, paymentId, from, to } = req.body;
+  // INVARIANT: a transaction hash exists only if a chain gave us one.
+  // This endpoint used to fabricate `0x` + randomBytes(32) whenever isSimulated was
+  // falsy, label the record isSimulated:false, and build an Etherscan link from it.
+  // That published a proof of something that never happened. Never fabricate.
+  const realHash = (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) ? txHash : '';
+  // No hash means nothing was broadcast, so the record is simulated. The client
+  // cannot override this by asserting isSimulated:false.
+  const simulated = !realHash;
+  const pid = paymentId || 'SIM-' + crypto.randomUUID().slice(0, 8).toUpperCase();
   testnetPayments[pid] = {
     paymentId: pid,
     assetId,
     tokenAmount,
     estimatedEth,
-    txHash: finalTxHash,
+    txHash: realHash,
     from,
     to,
     status: 'PENDING',
     createdAt: new Date(),
     drunixTransferId: null,
-    isSimulated: !!isSimulated,
-    // Real flow: Etherscan-verifiable link, Simulated: no link, greyed out non-clickable visibly different
-    sepoliaExplorer: isSimulated ? '' : `https://sepolia.etherscan.io/tx/${finalTxHash}`,
-    escrowContract: '0x0000000000000000000000000000000000000000',
+    isSimulated: simulated,
+    // Only ever built from a hash a chain returned.
+    sepoliaExplorer: realHash ? `https://sepolia.etherscan.io/tx/${realHash}` : '',
+    escrowContract: process.env.ESCROW_CONTRACT || '0x0000000000000000000000000000000000000000',
+    escrowDeployed: !!(process.env.ESCROW_CONTRACT && !/^0x0+$/.test(process.env.ESCROW_CONTRACT)),
     amountINR: tokenAmount * 500
   };
-  res.json({ 
-    paymentId: pid, 
-    status: 'PENDING', 
-    txHash: finalTxHash, 
-    isSimulated: !!isSimulated,
-    sepoliaExplorer: testnetPayments[pid].sepoliaExplorer, 
-    message: isSimulated ? 'Simulated — faucet unavailable, no real transaction — Drunix leg only, greyed out non-clickable' : 'Testnet escrow locked — real on-chain testnet transaction demonstrating atomic DvP settlement pattern, Sepolia test ETH has no monetary value' 
+  res.json({
+    paymentId: pid,
+    status: 'PENDING',
+    txHash: realHash,
+    isSimulated: simulated,
+    sepoliaExplorer: testnetPayments[pid].sepoliaExplorer,
+    message: simulated
+      ? 'Escrow leg not executed: no Sepolia transaction was broadcast and no hash exists. The Drunix token transfer is real.'
+      : 'Escrow locked on Sepolia testnet. Test ETH carries no monetary value.'
   });
 });
 
@@ -682,7 +752,7 @@ app.post('/api/testnet/payments/:id/confirm', authMiddleware, (req, res) => {
     testnetPayments[pid].drunixTransferId = req.body.drunixTransferId;
     testnetPayments[pid].confirmedAt = new Date();
   }
-  res.json({ paymentId: pid, status: 'CONFIRMED', drunixTransferId: req.body.drunixTransferId, message: 'Drunix transfer confirmed — linked to testnet escrow via confirmDrunixTransfer() — real Drunix ledger' });
+  res.json({ paymentId: pid, status: 'CONFIRMED', drunixTransferId: req.body.drunixTransferId, message: 'Drunix transfer confirmed and linked to the escrow reference. The Drunix ledger write is real.' });
 });
 
 app.post('/api/testnet/payments/:id/release', authMiddleware, (req, res) => {
@@ -696,7 +766,7 @@ app.post('/api/testnet/payments/:id/release', authMiddleware, (req, res) => {
     paymentId: pid, 
     status: 'RELEASED', 
     isSimulated: !!isSim,
-    message: isSim ? 'Simulated release — faucet unavailable, no real transaction — DvP pattern demo only' : 'Escrow released to originator — atomic DvP settlement pattern complete — real on-chain testnet transactions demonstrating DvP, Sepolia test ETH has no monetary value' 
+    message: isSim ? 'Reference marked released. No Sepolia transaction and no value moved.' : 'Escrow released on Sepolia testnet. Test ETH carries no monetary value.' 
   });
 });
 
@@ -706,7 +776,7 @@ app.get('/api/testnet/payments', authMiddleware, (req, res) => {
     count: Object.keys(testnetPayments).length, 
     faucet: 'https://sepoliafaucet.com/', 
     explorer: 'https://sepolia.etherscan.io/', 
-    contract: 'PaymentEscrow.sol — Sepolia Testnet — demonstrates atomic DvP settlement pattern, Sepolia test ETH has no monetary value, real on-chain testnet transactions when faucet available, simulated greyed out non-clickable when faucet unavailable' 
+    contract: 'PaymentEscrow.sol — written but NOT deployed. The escrow leg is not executed; the Drunix leg is real.' 
   });
 });
 
@@ -718,8 +788,8 @@ app.get('/api/testnet/config', (req, res) => {
     explorer: 'https://sepolia.etherscan.io',
     contractAddress: process.env.ESCROW_CONTRACT || '0x0000000000000000000000000000000000000000',
     faucet: 'https://sepoliafaucet.com/',
-    conversion: 'Oracle: ₹20k = 1 SepoliaETH for demo (min 0.001 enforced), prod uses Chainlink',
-    message: 'Real on-chain testnet transactions demonstrating atomic delivery-vs-payment settlement pattern, Sepolia test ETH has no monetary value, not real monetary value — real Sepolia flow Etherscan-verifiable when faucet available, simulated greyed out non-clickable when faucet unavailable'
+    conversion: 'Indicative only at a fixed ₹20,000 = 1 ETH. No oracle is consulted and nothing is payable.',
+    message: 'Cross-chain DvP illustration. The escrow contract is not deployed, so no Sepolia transaction is broadcast and no transaction hash is ever generated. The Drunix token transfer is real.'
   });
 });
 
@@ -729,6 +799,12 @@ app.use((req, res, next) => {
     return next();
   }
   if (req.method !== 'GET') return next();
+  // Vercel-only endpoints (analytics/insights) and favicon must not fall through to
+  // index.html — the browser would try to execute HTML as JavaScript and throw
+  // "Unexpected token '<'" in the console on every local page load.
+  if (req.path.startsWith('/_vercel/') || req.path === '/favicon.ico') {
+    return res.status(204).end();
+  }
   const distPath = path.join(__dirname, 'frontend', 'dist');
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
@@ -822,11 +898,24 @@ async function settleConfirmedPayment(pay) {
   balances[bKey] = { docType: 'balance', assetId, ownerId: buyer, balance: ((bBal ? parseInt(bBal.balance) : 0)) + amt, updatedAt: now };
   const tid = `TXN-${(typeof safeUUID === 'function' ? safeUUID() : crypto.randomUUID()).slice(0, 8)}-S1`;
   transfers[tid] = { docType: 'transfer', transferId: tid, assetId, fromId: seller, toId: buyer, amount: amt, txTimestamp: now, status: 'COMPLETED', paymentId: pay.paymentId, settledServerSide: true };
-  drunixAppend('TOKEN_TRANSFERRED', [{ kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, atomic: 'DvP-leg-1' }]);
   pay.drunixTransferId = tid;
   pay.status = 'RELEASED';
   pay.releasedAt = now;
-  drunixAppend('ESCROW_RELEASED', [{ kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, tokens: amt, seller, buyer, atomic: 'DvP-leg-2' }]);
+  // ONE block carrying BOTH legs.
+  //
+  // This used to be two appends — TOKEN_TRANSFERRED then ESCROW_RELEASED,
+  // labelled 'DvP-leg-1' and 'DvP-leg-2'. Two blocks are two transactions: if
+  // the process died between them the securities leg was committed and the
+  // cash leg was not, and the ledger recorded a delivery that was never paid
+  // for. Calling that "atomic" was wrong.
+  //
+  // Both legs now share a single block, matching the SettleDvP chaincode
+  // function in drunix-gateway/cash.go, where they share a single read-write
+  // set and are validated by one MVCC check.
+  drunixAppend('DVP_SETTLED', [
+    { kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, leg: 'securities' },
+    { kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, amountPaise: Math.round(pay.amountINR * 100), seller, buyer, leg: 'cash' },
+  ], { atomic: true, contract: 'aasthi.dvp-v1', chaincodeFn: 'SettleDvP', simulated: true });
   if (typeof globalThis !== 'undefined') {
     globalThis._aasthi_balances = balances;
     globalThis._aasthi_transfers = transfers;
@@ -872,23 +961,65 @@ function drunixTxnsRoot(txns) {
 }
 function drunixCanonical(b) { return [b.height, b.timestamp, b.type, b.txnsRoot, b.prevHash].join('|'); }
 let drunixChain = (typeof globalThis !== 'undefined' && globalThis._aasthi_chain) || [];
-function drunixAppend(type, txns) {
+// meta carries optional block-level attributes (for example the atomicity
+// marker on a DvP block). It is folded into the block BEFORE hashing, so any
+// later edit to it breaks the chain like any other field would.
+function drunixAppend(type, txns, meta) {
   const prev = drunixChain[drunixChain.length - 1] || null;
   const b = {
     height: drunixChain.length,
     timestamp: new Date().toISOString(),
     type, txns,
     contract: 'aasthi.dvp-v1',
+    ...(meta || {}),
     txnsRoot: null, prevHash: prev ? prev.hash : DRUNIX_GENESIS_PREV, hash: null
   };
   b.txnsRoot = drunixTxnsRoot(b.txns);
   b.hash = drunixHash(drunixCanonical(b));
   drunixChain.push(b);
   if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+  try { if (typeof saveAllPersisted === 'function') saveAllPersisted(); } catch {}
   return b;
 }
-if (drunixChain.length === 0) {
-  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
+// ---------------- Ledger persistence ----------------
+// The chain used to live only in memory. mock-api-server.js called
+// saveAllPersisted() behind a `typeof ... === 'function'` guard, but that
+// function is defined only in frontend/api/index.js — so the call silently did
+// nothing and every restart began again at GENESIS. That is why the ledger view
+// always showed a single block. The function is defined here now.
+const CHAIN_FILE = path.join(os.tmpdir(), 'aasthi_chain.json');
+
+function saveAllPersisted() {
+  try {
+    fs.writeFileSync(CHAIN_FILE, JSON.stringify(drunixChain), 'utf8');
+  } catch (e) {
+    console.error('[chain] save failed:', e.message);
+  }
+}
+
+// Only accept a stored chain that still verifies. This deliberately delegates to
+// drunixVerify() — the same function /api/chain/verify uses — rather than
+// re-implementing the checks. A first cut of this loader hand-rolled them and
+// omitted the merkle-root comparison, so an edit to a transaction's contents
+// inside a committed block was silently accepted on restart. Two
+// implementations of an integrity check will always drift; there is now one.
+function loadPersistedChain() {
+  let previous = drunixChain;
+  try {
+    if (!fs.existsSync(CHAIN_FILE)) return false;
+    const parsed = JSON.parse(fs.readFileSync(CHAIN_FILE, 'utf8'));
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    drunixChain = parsed;
+    const v = drunixVerify();
+    if (!v.valid) throw new Error(`${v.reason} (block ${v.brokenAt})`);
+    if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+    console.log(`[chain] restored ${parsed.length} block(s) from ${CHAIN_FILE}`);
+    return true;
+  } catch (e) {
+    drunixChain = previous;
+    console.error('[chain] stored chain REJECTED, starting fresh:', e.message);
+    return false;
+  }
 }
 function drunixVerify() {
   for (let i = 0; i < drunixChain.length; i++) {
@@ -898,7 +1029,25 @@ function drunixVerify() {
     if (drunixTxnsRoot(b.txns) !== b.txnsRoot) return { valid: false, brokenAt: b.height, reason: 'merkle root mismatch — block ' + b.height + ' transactions were altered after commit' };
     if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
   }
-  return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+  // An empty ledger is internally consistent but is not evidence of anything.
+  // Reporting a bare valid:true on a genesis-only chain reads as "we verified
+  // the activity" when there is no activity to verify.
+  const genesisOnly = drunixChain.length <= 1;
+  return {
+    valid: true, chainId: DRUNIX_CHAIN_ID,
+    height: Math.max(0, drunixChain.length - 1),
+    blocks: drunixChain.length,
+    genesisOnly,
+    verified: genesisOnly ? 'genesis block only — no committed transactions to verify'
+                          : `${drunixChain.length - 1} block(s) of committed transactions`,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+// Restore the ledger, then create genesis only if there was nothing valid to restore.
+loadPersistedChain();
+if (drunixChain.length === 0) {
+  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
 // Judge/demo only (clearly labeled SIMULATION in UI): alter a committed txn so
 // verify() can detect it — proof of tamper-evidence, the core of decentralized trust.
@@ -1089,7 +1238,54 @@ const FRAUD_T = { blockScore: 70, reviewScore: 40, highValue: 500000, elevated: 
   structFloor: 180000, structCeil: 200000, structCount: 3, velBlock: 8, velWarn: 5,
   total24h: 1000000, riskyFragments: ['fraud','scam','thief','steal','phish','xxx','darkweb'] };
 
-function computeRiskScore(payment, history) {
+// Screens a payment with the TRAINED model (ml/model/fraud_model.json), not
+// with hand-tuned thresholds. The rules version below is kept and still
+// exposed at /api/fraud/config so the two can be compared
+// on the same payment — the model beat it 0.869 PR-AUC to 0.407 on held-out
+// synthetic data, and that comparison should stay reproducible rather than
+// being a claim in a README.
+function computeRiskScore(payment, history, opts) {
+  const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
+  if (!(opts && opts.engine === 'rules')) {
+    try {
+      const at = (opts && opts.at) ? new Date(opts.at) : new Date();
+      const r = fraudModel.scorePaymentML({
+        amountINR: parseFloat(payment.amountINR) || 0,
+        payerVpa: payment.payerVpa,
+        payeeVpa: payment.payeeVpa,
+        recentINR: h.recentINR || [],
+        txnCount10m: h.txnCount10m || 0,
+        txnCount24h: h.txnCount24h || 0,
+        totalINR24h: h.totalINR24h || 0,
+        accountAgeMin: h.accountAgeMin != null ? h.accountAgeMin : 100000,
+        kycVerified: h.kycVerified !== false,
+        hourOfDay: at.getHours(),
+        // 0 = Monday, matching ml/features.py. JS getDay() is 0 = Sunday.
+        dayOfWeek: (at.getDay() + 6) % 7,
+        beneficiaryIsNew: h.payeeSeenBefore ? 0 : 1,
+        payeeSeenBefore: !!h.payeeSeenBefore,
+        distinctPayees24h: h.distinctPayees24h || 0,
+        payeeFanIn24h: h.payeeFanIn24h || 0,
+        balanceBeforeINR: h.balanceBeforeINR || 0,
+        txnType: payment.txnType || 'COLLECT',
+      });
+      return { score: r.score, band: r.band, decision: r.decision, factors: r.factors,
+               model: r.model, modelVersion: r.modelVersion, modelKind: r.modelKind,
+               probability: r.probability, threshold: r.threshold, baseline: r.baseline,
+               topPositive: r.topPositive, topNegative: r.topNegative,
+               explainer: r.explainer, dataCaveat: r.dataCaveat, engine: 'model' };
+    } catch (e) {
+      // A missing or corrupt model must not silently become "no fraud
+      // screening". Fall back to the rules and say so in the response.
+      console.error('[fraud] model scoring failed, falling back to rules:', e.message);
+      const viaRules = computeRiskScoreRules(payment, h);
+      return { ...viaRules, engine: 'rules-fallback', fallbackReason: e.message };
+    }
+  }
+  return computeRiskScoreRules(payment, h);
+}
+
+function computeRiskScoreRules(payment, history) {
   const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
   const factors = [];
   let score = 0;
@@ -1121,7 +1317,7 @@ function computeRiskScore(payment, history) {
   return { score, band: bandName, decision, factors, model: 'aasthichain-rules-v1 (JS parity of drunix-gateway/fraud.go)' };
 }
 
-function payerHistory(payerId, excludePaymentId) {
+function payerHistory(payerId, excludePaymentId, payeeVpa) {
   const now = Date.now();
   let c10 = 0, c24 = 0, total24 = 0; const recent = [];
   Object.values(npciPayments).forEach(p => {
@@ -1135,7 +1331,31 @@ function payerHistory(payerId, excludePaymentId) {
     if (age <= 24 * 3600 * 1000) { c24++; total24 += parseFloat(p.amountINR) || 0; recent.push(parseFloat(p.amountINR) || 0); }
   });
   const kyc = kycRecords[payerId] || kycRecords[String(payerId).toLowerCase()];
-  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24, recentINR: recent.slice(0, 10), kycVerified: !kyc || kyc.kycStatus === 'VERIFIED' };
+
+  // Counterparty features for the trained model. Computed from the same
+  // payments store the velocity features come from, so they cost one extra
+  // pass and no new state.
+  const payees24h = new Set();
+  let payeeSeenBefore = false;
+  const fanIn = new Set();
+  Object.values(npciPayments).forEach(p => {
+    if (p.paymentId === excludePaymentId) return;
+    const t = new Date(p.createdAt).getTime();
+    if (isNaN(t) || Date.now() - t > 24 * 3600 * 1000) return;
+    if ((p.payerId || '') === payerId && p.payeeVpa) {
+      payees24h.add(p.payeeVpa);
+      if (payeeVpa && p.payeeVpa === payeeVpa) payeeSeenBefore = true;
+    }
+    if (payeeVpa && p.payeeVpa === payeeVpa && p.payerId) fanIn.add(p.payerId);
+  });
+
+  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24,
+           recentINR: recent.slice(0, 10),
+           kycVerified: !kyc || kyc.kycStatus === 'VERIFIED',
+           distinctPayees24h: payees24h.size,
+           payeeSeenBefore,
+           payeeFanIn24h: fanIn.size,
+           balanceBeforeINR: (npciBalances && npciBalances[payerId]) || 0 };
 }
 
 
@@ -1199,7 +1419,7 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
       payerVpa: payerVpa.toLowerCase(), payeeVpa: payeeVpa.toLowerCase(), note: note || '',
       status: 'FAILED_KYC_NOT_VERIFIED', failureReason: `payee ${payeeKycId} KYC not verified`,
       createdAt: new Date(), expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-      isSimulation: true, payerId: payerId || 'investor1', payeeId: payeeKycId
+      isSimulation: true, payerId: req.user.identityId, payeeId: payeeKycId
     };
     npciPayments[paymentId] = pay;
     if (idemKey) npciIdem[idemKey] = pay;
@@ -1220,11 +1440,13 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
     status: 'PENDING', createdAt: now, expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
     confirmedAt: null, releasedAt: null, drunixTransferId: null,
     idempotencyKey: idemKey, isSimulation: true,
-    payerId: payerId || 'investor1', payeeId: payeeId || 'originator1',
+    // payerId is the authenticated caller. Taking it from the body let a client
+    // assign its payments to someone else, defeating any ownership check.
+    payerId: req.user.identityId, payeeId: payeeId || 'originator1',
     callbackReceived: false, provider: 'mock', webhookReceivedAt: null
   };
   // AI & Fraud Detection screen (parity with drunix-gateway/fraud.go, Golang)
-  pay.risk = computeRiskScore(pay, payerHistory(pay.payerId, pay.paymentId));
+  pay.risk = computeRiskScore(pay, payerHistory(pay.payerId, pay.paymentId, pay.payeeVpa));
   if (pay.risk.decision === 'BLOCK') {
     pay.status = 'FAILED_FRAUD_BLOCKED';
     pay.failureReason = 'Blocked by fraud engine: ' + pay.risk.factors.map(f => f.code).join(', ');
@@ -1371,6 +1593,18 @@ app.post('/api/npci/payments/:id/settle', authMiddleware, async (req, res) => {
   try {
     const pay = npciPayments[req.params.id];
     const result = await settleConfirmedPayment(pay);
+    // A replay is not a success. Eight concurrent callers previously all got
+    // HTTP 200 while exactly one settlement happened, so seven were told they
+    // had settled a payment they did not. 409 with the original settlement
+    // attached is both honest and still safely idempotent for the caller.
+    if (result.ok && result.already) {
+      return res.status(409).json({
+        ...result,
+        error: 'ERR_ALREADY_SETTLED',
+        message: 'This payment was already settled; the original settlement is attached.',
+        drunixTransferId: pay.drunixTransferId,
+      });
+    }
     return res.status(result.ok ? 200 : (result.code || 400)).json(result);
   } catch (e) {
     return res.status(500).json({ error: 'ERR_SETTLE_FAILED', message: e.message });
@@ -1417,8 +1651,208 @@ app.get('/api/drunix/ledger', authMiddleware, (req, res) => {
 });
 
 app.get('/api/fraud/config', authMiddleware, (req, res) => {
-  res.json({ model: 'aasthichain-rules-v1 (ML-pluggable)', thresholds: FRAUD_T, sourceOfTruth: 'drunix-gateway/fraud.go (Golang)', theme: 'AI & Fraud Detection' });
+  let info = null;
+  try { info = fraudModel.modelInfo(); } catch (e) { info = { error: e.message }; }
+  res.json({
+    engine: 'trained-model',
+    model: info,
+    scoredIn: ['lib/fraud-model.js (JS)', 'drunix-gateway/model.go (Go)'],
+    trainedBy: 'ml/train.py (scikit-learn GradientBoostingClassifier)',
+    parity: 'scripts/fraud-model-parity.mjs + Go TestGoldenVectors pin all three to 1e-9',
+    legacyRules: { model: 'aasthichain-rules-v1', thresholds: FRAUD_T,
+                   note: 'retained for comparison; no longer the decision engine' },
+    theme: 'AI & Fraud Detection'
+  });
 });
+
+// ---------------------------------------------------------------------------
+// UMI-pattern settlement simulation — same module the Vercel API uses, so both
+// servers cannot drift. Models the SEBI Demat 2.0 / RBI Unified Market Interface
+// shape: cash leg reserved, then both legs commit atomically or neither does.
+//
+// NOT connected to RBI, SEBI, NPCI, NSDL or CDSL. Every response is stamped
+// simulated:true, centralBankMoney:false, regulatoryStatus:SIMULATED_NOT_CONNECTED.
+// ---------------------------------------------------------------------------
+let _umiSimPromise = null;
+function umiSim() {
+  if (!_umiSimPromise) {
+    _umiSimPromise = import('./frontend/api/lib/umi_sim.js').then(m => m.getSharedUMISim());
+  }
+  return _umiSimPromise;
+}
+
+// Wraps a UMI handler so thrown rail errors become honest HTTP responses.
+function umiRoute(handler) {
+  return async (req, res) => {
+    try {
+      const umi = await umiSim();
+      await handler(umi, req, res);
+    } catch (e) {
+      res.status(e.http || 400).json({
+        error: e.code || 'ERR_UMI',
+        message: e.message,
+        settlementRail: 'UMI_SIM',
+        simulated: true,
+      });
+    }
+  };
+}
+
+app.get('/api/umi/capabilities', umiRoute(async (umi, req, res) => res.json(umi.capabilities())));
+app.get('/api/umi/conformance', umiRoute(async (umi, req, res) => res.json(umi.conformance())));
+app.get('/api/umi/wallets', umiRoute(async (umi, req, res) => res.json({ wallets: umi.listWallets(), settlementRail: 'UMI_SIM', simulated: true })));
+app.post('/api/umi/wallet', umiRoute(async (umi, req, res) => {
+  const b = req.body || {};
+  res.status(201).json(umi.openWallet({
+    participantId: b.participantId,
+    participantClass: b.participantClass,
+    bank: b.participatingBank,
+    openingPaise: b.openingPaise,
+  }));
+}));
+app.get('/api/umi/wallet/:participantId', umiRoute(async (umi, req, res) => res.json(umi.getWallet(req.params.participantId))));
+app.post('/api/umi/dvp/reserve', umiRoute(async (umi, req, res) => res.status(201).json(umi.reserve(req.body || {}))));
+app.post('/api/umi/dvp/settle', umiRoute(async (umi, req, res) => res.json(umi.atomicSettle(req.body || {}))));
+app.post('/api/umi/dvp/unwind', umiRoute(async (umi, req, res) => res.json(umi.unwind(req.body || {}))));
+app.get('/api/umi/dvp/:dvpId', umiRoute(async (umi, req, res) => res.json(umi.getDvP(req.params.dvpId))));
+app.post('/api/umi/corporate-action', umiRoute(async (umi, req, res) => res.status(201).json(umi.distributeCorporateAction(req.body || {}))));
+app.get('/api/umi/corporate-actions', umiRoute(async (umi, req, res) => res.json({ actions: umi.listCorporateActions(req.query.assetId), simulated: true })));
+
+// ---------------------------------------------------------------------------
+// Supervisory reporting — the evidence a securities regulator consumes.
+//
+// A regulator does not expose an API you can connect to; supervision runs the
+// other way, with the supervised entity producing evidence in a defined shape.
+// Nothing below is filed with or acknowledged by SEBI, RBI, NPCI, NSDL or CDSL.
+// Every response carries simulated:true and regulatoryStatus per the module.
+// ---------------------------------------------------------------------------
+let _supervisionPromise = null;
+function supervision() {
+  if (!_supervisionPromise) {
+    _supervisionPromise = import('./frontend/api/lib/supervision.js');
+  }
+  return _supervisionPromise;
+}
+
+// Reports are drawn from live server state, never from a separate copy.
+function supervisionState() {
+  return { properties, balances, transfers, payments: npciPayments, kyc: kycRecords, chain: drunixChain };
+}
+
+// Supervisory reports expose every holder's position across the whole book.
+// Only the regulator role may read them.
+function regulatorOnly(handler) {
+  return async (req, res) => {
+    if (req.user.role !== 'Regulator') {
+      return res.status(403).json({
+        error: 'ERR_NOT_A_REGULATOR',
+        message: 'Supervisory reports are restricted to the Regulator role. Sign in as regulator1.',
+        yourRole: req.user.role,
+      });
+    }
+    try {
+      const sup = await supervision();
+      await handler(sup, req, res);
+    } catch (e) {
+      res.status(e.http || 400).json({
+        error: e.code || 'ERR_SUPERVISION',
+        message: e.message,
+        simulated: true,
+        regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+      });
+    }
+  };
+}
+
+// Public: describes the surface, discloses what is not modelled. No data.
+app.get('/api/regulator/capabilities', async (req, res) => {
+  try {
+    const sup = await supervision();
+    res.json(sup.capabilities());
+  } catch (e) {
+    res.status(500).json({ error: 'ERR_SUPERVISION', message: e.message });
+  }
+});
+
+app.get('/api/regulator/cap-table', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.capTable(supervisionState(), { assetId: req.query.assetId, asOf: req.query.asOf }));
+}));
+
+app.get('/api/regulator/audit-export', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const report = sup.auditExport(supervisionState(), {
+    assetId: req.query.assetId,
+    from: req.query.from,
+    to: req.query.to,
+  });
+  if ((req.query.format || 'json').toLowerCase() === 'csv') {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="aasthichain-audit-${Date.now()}.csv"`);
+    return res.send(sup.auditExportCSV(report));
+  }
+  res.json(report);
+}));
+
+// Re-derives the hash chain from the document alone — edit one row and this fails.
+app.post('/api/regulator/audit-verify', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.verifyAuditExport(req.body || {}));
+}));
+
+app.get('/api/regulator/alerts', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.suspiciousActivity(supervisionState(), { assetId: req.query.assetId }));
+}));
+
+app.post('/api/regulator/alerts/disposition', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const b = req.body || {};
+  res.json(sup.setDisposition(b.alertId, b.disposition, b.note, req.user.identityId));
+}));
+
+app.get('/api/regulator/scheme-report', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json(sup.schemeReport(supervisionState(), { assetId: req.query.assetId }));
+}));
+
+app.get('/api/regulator/actions', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  res.json({
+    reportType: 'SUPERVISORY_ACTION_LOG',
+    actions: sup.listActions(req.query.assetId),
+    simulated: true,
+    regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+  });
+}));
+
+// Freeze and unfreeze both demand a written reason and record the named actor.
+app.post('/api/regulator/freeze', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const b = req.body || {};
+  const prop = properties[b.assetId];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  const record = sup.recordAction({
+    assetId: b.assetId, action: 'FREEZE', reason: b.reason,
+    actor: req.user.identityId, actorRole: req.user.role,
+  });
+  prop.previousStatus = prop.status;
+  prop.status = 'FROZEN';
+  prop.updatedAt = new Date();
+  properties[b.assetId] = prop;
+  drunixAppend('ASSET_FROZEN', [{ kind: 'supervisory', assetId: b.assetId, actionId: record.actionId, actor: record.actor }]);
+  res.json({ ...record, assetStatus: 'FROZEN', simulated: true, regulatoryStatus: 'SIMULATED_NOT_CONNECTED' });
+}));
+
+app.post('/api/regulator/unfreeze', authMiddleware, regulatorOnly(async (sup, req, res) => {
+  const b = req.body || {};
+  const prop = properties[b.assetId];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  if (prop.status !== 'FROZEN') {
+    return res.status(409).json({ error: 'ERR_NOT_FROZEN', message: `${b.assetId} is ${prop.status}, not FROZEN` });
+  }
+  const record = sup.recordAction({
+    assetId: b.assetId, action: 'UNFREEZE', reason: b.reason,
+    actor: req.user.identityId, actorRole: req.user.role,
+  });
+  prop.status = prop.previousStatus || 'TOKENIZED';
+  prop.updatedAt = new Date();
+  properties[b.assetId] = prop;
+  drunixAppend('ASSET_UNFROZEN', [{ kind: 'supervisory', assetId: b.assetId, actionId: record.actionId, actor: record.actor }]);
+  res.json({ ...record, assetStatus: prop.status, simulated: true, regulatoryStatus: 'SIMULATED_NOT_CONNECTED' });
+}));
 
 app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
   res.json({
@@ -1437,15 +1871,23 @@ app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
 });
 
 app.get('/api/npci/payments', authMiddleware, (req, res) => {
-  const list = Object.values(npciPayments)
+  // Used to return every payment in the system to any logged-in user.
+  // Now scoped to the legs the caller is a party to; regulators see all.
+  const visible = Object.values(npciPayments).filter(p => canSeePayment(req.user, p));
+  const list = visible
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, parseInt(req.query.limit) || 20);
-  res.json({ payments: list, count: list.length });
+  res.json({ payments: list, count: list.length, scope: PRIVILEGED_READERS.includes(req.user.role) ? 'all' : 'own' });
 });
 
 app.get('/api/npci/payments/:id', authMiddleware, (req, res) => {
   const pay = npciPayments[req.params.id];
   if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId: req.params.id });
+  // Any logged-in user could previously read any payment, including the
+  // counterparty VPAs, amount and UTR.
+  if (!canSeePayment(req.user, pay)) {
+    return res.status(403).json({ error: 'ERR_FORBIDDEN', message: 'You are not a party to this payment.' });
+  }
   if (pay.status === 'PENDING' && new Date() > new Date(pay.expiresAt)) {
     pay.status = 'EXPIRED';
     pay.failureReason = 'collect request expired after 5 min';
@@ -1488,7 +1930,7 @@ app.post('/api/npci/payments/:id/approve', authMiddleware, (req, res) => {
     return res.status(400).json(pay);
   }
   // AI & Fraud Detection re-screen at approval (before any money movement)
-  const riskAtApprove = computeRiskScore(pay, payerHistory(payerId, pay.paymentId));
+  const riskAtApprove = computeRiskScore(pay, payerHistory(payerId, pay.paymentId, pay.payeeVpa));
   pay.risk = riskAtApprove;
   if (riskAtApprove.decision === 'BLOCK') {
     pay.status = 'FAILED_FRAUD_BLOCKED';
@@ -1755,7 +2197,7 @@ app.post('/api/chain/restore', (req, res) => {
 
 
 // ---- Programmable ownership API: continuous NAV, yield servicing, governance, credit, swaps ----
-app.get('/api/portfolio/:identityId/nav', authMiddleware, (req, res) => {
+app.get('/api/portfolio/:identityId/nav', authMiddleware, requireSelfOrRole('identityId'), (req, res) => {
   res.json(drunixNav(req.params.identityId));
 });
 

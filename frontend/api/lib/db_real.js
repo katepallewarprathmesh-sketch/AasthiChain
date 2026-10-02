@@ -5,7 +5,6 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { githubDB } from './github_db.js';
 
 const TMP_DIR = os.tmpdir()
 
@@ -172,37 +171,24 @@ export class RealDB {
       return this.mode
     }
 
-    // Try GitHub as real DB — persistent via GitHub repo data/*.json, shared across Vercel lambdas
-    // This fixes property vanishes on refresh + originator not visible at investor
-    try {
-      const githubMode = await githubDB.init()
-      if (githubMode) {
-        this.mode = 'github'
-        this.initialized = true
-        console.log('[DB] Mode: github — persistent via GitHub repo data/*.json, shared across lambdas — real DB')
-        return this.mode
-      }
-    } catch (e) {
-      console.error('[DB] GitHub DB init failed', e.message)
-    }
-
     // Fallback to file-backed — per lambda, not shared
     this.mode = 'file-backed'
     this.initialized = true
-    console.log('[DB] Mode: file-backed — /tmp + globalThis fallback — per lambda, not shared, use github/postgres for production')
+    console.log('[DB] Mode: file-backed — /tmp + globalThis fallback — per instance, NOT shared. Set DATABASE_URL (Neon) for real persistence.')
     return this.mode
   }
 
   getMode() {
     // After init() has run, report the ACTUAL mode — not the env guess.
     // Fixes silent write-loss: if Postgres connection fails and we fall back to
-    // github/file, env-based 'postgres' would route writes to a dead pool.
+    // file-backed, env-based 'postgres' would route writes to a dead pool.
     if (this.initialized && this.mode) return this.mode
     if (process.env.DATABASE_URL || process.env.POSTGRES_URL) return 'postgres'
     if (process.env.KV_URL || process.env.KV_REST_API_URL) return 'vercel-kv'
-    if (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT) return 'github'
-    // Always try github as real DB for shared persistence across lambdas — read via raw.githubusercontent.com works without token
-    return 'github'
+    // No shared store configured. Report file-backed honestly rather than
+    // naming a mode that cannot persist: state is then per-instance, and on
+    // serverless that means it is effectively not shared at all.
+    return 'file-backed'
   }
 
   // Properties
@@ -210,40 +196,6 @@ export class RealDB {
     const mode = this.getMode()
     
     // Try GitHub as real DB first — shared across lambdas
-    if (mode === 'github') {
-      try {
-        const githubProps = await githubDB.getProperties()
-        if (githubProps && Object.keys(githubProps).length > 0) {
-          console.log(`[DB] Loaded ${Object.keys(githubProps).length} properties from GitHub real DB`)
-          // Merge with file for deterministic property
-          const fileProps = loadFromFile(PERSIST_FILES.properties, {})
-          const merged = { ...githubProps, ...fileProps }
-          // Ensure deterministic property
-          const fixedId = 'PROP-GREEN-VALLEY-PUNE-001'
-          if (!merged[fixedId]) {
-            const now = new Date()
-            merged[fixedId] = {
-              assetId: fixedId,
-              docType: 'property',
-              originatorId: 'originator1',
-              title: 'Green Valley Villas - Pune',
-              location: { state: 'Maharashtra', city: 'Pune', pincode: '411045' },
-              valuationINR: 7500000,
-              totalTokens: 15000,
-              documentHash: 'a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
-              registrarValidationStatus: 'VALIDATED',
-              status: 'TOKENIZED',
-              createdAt: new Date(Date.now() - 24*3600*1000),
-              updatedAt: now,
-              version: 1
-            }
-          }
-          return merged
-        }
-      } catch (e) {
-        console.error('[DB] getProperties github failed', e.message)
-      }
-    }
     
     if (mode === 'postgres') {
       try {
@@ -377,14 +329,6 @@ export class RealDB {
     const mode = this.getMode()
     
     // Save to GitHub as real DB — shared across lambdas
-    if (mode === 'github') {
-      try {
-        await githubDB.saveProperty(assetId, property)
-        console.log(`[DB] Saved property ${assetId} to GitHub real DB`)
-      } catch (e) {
-        console.error('[DB] saveProperty github failed', e.message)
-      }
-    }
     
     if (mode === 'postgres') {
       try {
@@ -434,18 +378,6 @@ export class RealDB {
   async getBalances() {
     const mode = this.getMode()
     
-    if (mode === 'github') {
-      try {
-        const githubBals = await githubDB.getBalances()
-        if (githubBals) {
-          const fileBals = loadFromFile(PERSIST_FILES.balances, {})
-          const globalBals = globalThis._aasthi_balances || {}
-          return { ...githubBals, ...fileBals, ...globalBals }
-        }
-      } catch (e) {
-        console.error('[DB] getBalances github failed', e.message)
-      }
-    }
     
     if (mode === 'postgres') {
       try {
@@ -482,11 +414,6 @@ export class RealDB {
   async saveBalance(key, balance) {
     const mode = this.getMode()
     
-    if (mode === 'github') {
-      try {
-        await githubDB.saveBalance(key, balance)
-      } catch (e) {}
-    }
     
     if (mode === 'postgres') {
       try {
@@ -527,18 +454,6 @@ export class RealDB {
   async getTransfers() {
     const mode = this.getMode()
     
-    if (mode === 'github') {
-      try {
-        const githubTrans = await githubDB.getTransfers()
-        if (githubTrans) {
-          const fileTrans = loadFromFile(PERSIST_FILES.transfers, {})
-          const globalTrans = globalThis._aasthi_transfers || {}
-          return { ...githubTrans, ...fileTrans, ...globalTrans }
-        }
-      } catch (e) {
-        console.error('[DB] getTransfers github failed', e.message)
-      }
-    }
     
     if (mode === 'postgres') {
       try {
@@ -572,11 +487,6 @@ export class RealDB {
   async saveTransfer(transferId, transfer) {
     const mode = this.getMode()
     
-    if (mode === 'github') {
-      try {
-        await githubDB.saveTransfer(transferId, transfer)
-      } catch (e) {}
-    }
     
     if (mode === 'postgres') {
       try {
@@ -618,12 +528,6 @@ export class RealDB {
   async getNpciState() {
     const mode = this.getMode()
 
-    if (mode === 'github') {
-      try {
-        const s = await githubDB.getNpciState()
-        if (s && s.payments && Object.keys(s.payments).length > 0) return s
-      } catch (e) {}
-    }
 
     if (mode === 'postgres') {
       try {
@@ -670,9 +574,6 @@ export class RealDB {
       savedAt: new Date().toISOString()
     }
 
-    if (mode === 'github') {
-      try { await githubDB.saveNpciState(bundle) } catch (e) {}
-    }
 
     if (mode === 'postgres') {
       try {

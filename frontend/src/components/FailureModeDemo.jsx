@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 export default function FailureModeDemo({ user }) {
   const [result, setResult] = useState(null)
@@ -9,7 +10,7 @@ export default function FailureModeDemo({ user }) {
     setResult(null)
     try {
       const token = localStorage.getItem('aasthi_token')
-      const res = await fetch('/api/transfers/failure-demo', {
+      const res = await authedFetch('/api/transfers/failure-demo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ scenario })

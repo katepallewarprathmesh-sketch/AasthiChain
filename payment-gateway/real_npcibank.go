@@ -129,22 +129,22 @@ func (r *RealNPCIProvider) initiateSetu(req CollectRequest) (*Payment, error) {
 	// Map to our Payment struct — same fields as simulation
 	now := time.Now()
 	p := &Payment{
-		PaymentID:        setuResp.PaymentLinkID,
-		UpiTxnID:         setuResp.UpiTxnID,
-		RRN:              setuResp.RRN,
-		UTR:              GenerateUTR(setuResp.RRN), // UTR = IMPS+RRN+4-digit, same as simulation
-		AssetID:          req.AssetID,
-		TokenAmount:      req.TokenAmount,
-		AmountINRPaise:   setuReq.Amount,
-		AmountINR:        req.AmountINR,
-		PayerVPA:         req.PayerVPA,
-		PayeeVPA:         req.PayeeVPA,
-		Note:             req.Note,
-		Status:           StatusPending,
-		CreatedAt:        now,
-		ExpiresAt:        now.Add(5 * time.Minute),
-		IdempotencyKey:   req.IdempotencyKey,
-		IsSimulation:     false, // real!
+		PaymentID:      setuResp.PaymentLinkID,
+		UpiTxnID:       setuResp.UpiTxnID,
+		RRN:            setuResp.RRN,
+		UTR:            GenerateUTR(setuResp.RRN), // UTR = IMPS+RRN+4-digit, same as simulation
+		AssetID:        req.AssetID,
+		TokenAmount:    req.TokenAmount,
+		AmountINRPaise: setuReq.Amount,
+		AmountINR:      req.AmountINR,
+		PayerVPA:       req.PayerVPA,
+		PayeeVPA:       req.PayeeVPA,
+		Note:           req.Note,
+		Status:         StatusPending,
+		CreatedAt:      now,
+		ExpiresAt:      now.Add(5 * time.Minute),
+		IdempotencyKey: req.IdempotencyKey,
+		IsSimulation:   false, // real!
 	}
 	return p, nil
 }

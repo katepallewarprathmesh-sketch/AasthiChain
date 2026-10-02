@@ -12,6 +12,7 @@ import (
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -79,16 +80,22 @@ func NewLiveFabricClient() (*LiveFabricClient, error) {
 		return nil, err
 	}
 
-	// gRPC connection
-	var tlsCert *x509.Certificate
+	// gRPC connection — use the peer's TLS CA when it is available and pin the
+	// gateway peer name as the TLS server-name override, because a Fabric peer
+	// presents its internal hostname rather than the dialled endpoint. Falls
+	// back to an insecure connection for local/dev networks without TLS.
+	dialCreds := insecure.NewCredentials()
 	if tlsCertPath != "" {
-		if tlsPEM, err := os.ReadFile(tlsCertPath); err == nil {
-			tlsCert, _ = identity.CertificateFromPEM(tlsPEM)
-			_ = tlsCert
+		if tlsPEM, readErr := os.ReadFile(tlsCertPath); readErr == nil {
+			if tlsCert, certErr := identity.CertificateFromPEM(tlsPEM); certErr == nil {
+				pool := x509.NewCertPool()
+				pool.AddCert(tlsCert)
+				dialCreds = credentials.NewClientTLSFromCert(pool, gatewayPeer)
+			}
 		}
 	}
 
-	conn, err := grpc.Dial(peerEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(peerEndpoint, grpc.WithTransportCredentials(dialCreds))
 	if err != nil {
 		return nil, err
 	}

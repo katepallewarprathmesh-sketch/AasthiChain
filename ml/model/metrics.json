@@ -1,0 +1,179 @@
+{
+  "rows": 139788,
+  "payers": 40000,
+  "fraud_rate": 0.04663490428362949,
+  "split": {
+    "train": 84027,
+    "validation": 27816,
+    "test": 27945,
+    "by": "payer_id"
+  },
+  "min_precision": 0.9,
+  "threshold_selected_on": "validation",
+  "results": {
+    "validation": [
+      {
+        "model": "rules-v1 (replaced)",
+        "split": "validation",
+        "n": 27816,
+        "positives": 1402,
+        "threshold": 0.85,
+        "precision": 0.9209,
+        "recall": 0.2739,
+        "f1": 0.4222,
+        "roc_auc": 0.8554,
+        "pr_auc": 0.5363,
+        "brier": 0.05426,
+        "false_positive_rate": 0.00125,
+        "confusion": {
+          "tn": 26381,
+          "fp": 33,
+          "fn": 1018,
+          "tp": 384
+        }
+      },
+      {
+        "model": "logistic-regression (SHIPPED)",
+        "split": "validation",
+        "n": 27816,
+        "positives": 1402,
+        "threshold": 0.848545,
+        "precision": 0.9005,
+        "recall": 0.8452,
+        "f1": 0.872,
+        "roc_auc": 0.967,
+        "pr_auc": 0.8828,
+        "brier": 0.02066,
+        "false_positive_rate": 0.00496,
+        "confusion": {
+          "tn": 26283,
+          "fp": 131,
+          "fn": 217,
+          "tp": 1185
+        }
+      },
+      {
+        "model": "gradient-boosting (comparison)",
+        "split": "validation",
+        "n": 27816,
+        "positives": 1402,
+        "threshold": 0.061502,
+        "precision": 0.9124,
+        "recall": 0.9508,
+        "f1": 0.9312,
+        "roc_auc": 0.9838,
+        "pr_auc": 0.9285,
+        "brier": 0.00548,
+        "false_positive_rate": 0.00485,
+        "confusion": {
+          "tn": 26286,
+          "fp": 128,
+          "fn": 69,
+          "tp": 1333
+        }
+      }
+    ],
+    "test": [
+      {
+        "model": "rules-v1 (replaced)",
+        "split": "test",
+        "n": 27945,
+        "positives": 1306,
+        "threshold": 0.85,
+        "precision": 0.9371,
+        "recall": 0.2282,
+        "f1": 0.367,
+        "roc_auc": 0.8438,
+        "pr_auc": 0.4814,
+        "brier": 0.0566,
+        "false_positive_rate": 0.00075,
+        "confusion": {
+          "tn": 26619,
+          "fp": 20,
+          "fn": 1008,
+          "tp": 298
+        }
+      },
+      {
+        "model": "logistic-regression (SHIPPED)",
+        "split": "test",
+        "n": 27945,
+        "positives": 1306,
+        "threshold": 0.848545,
+        "precision": 0.8888,
+        "recall": 0.8629,
+        "f1": 0.8757,
+        "roc_auc": 0.9656,
+        "pr_auc": 0.8842,
+        "brier": 0.02102,
+        "false_positive_rate": 0.00529,
+        "confusion": {
+          "tn": 26498,
+          "fp": 141,
+          "fn": 179,
+          "tp": 1127
+        }
+      },
+      {
+        "model": "gradient-boosting (comparison)",
+        "split": "test",
+        "n": 27945,
+        "positives": 1306,
+        "threshold": 0.061502,
+        "precision": 0.9131,
+        "recall": 0.9571,
+        "f1": 0.9346,
+        "roc_auc": 0.9839,
+        "pr_auc": 0.9293,
+        "brier": 0.0048,
+        "false_positive_rate": 0.00447,
+        "confusion": {
+          "tn": 26520,
+          "fp": 119,
+          "fn": 56,
+          "tp": 1250
+        }
+      }
+    ]
+  },
+  "coefficients": {
+    "log_amount": -0.18307185686923713,
+    "amount_in_structuring_band": 5.016984699980266,
+    "balance_ratio": 0.1456764727520207,
+    "recent_in_structuring_band": 0.04137781589009866,
+    "recent_amount_cv": -0.5767660467597103,
+    "structuring_x_tightness": 1.314789599903232,
+    "txn_count_10m": 0.2019133250004944,
+    "txn_count_24h": -0.39368361486885445,
+    "log_total_24h": 0.02208926077001437,
+    "amount_vs_recent_mean": 0.00430884525006274,
+    "burstiness": 2.3646628359821236,
+    "velocity_x_escalation": -0.00020815861839387694,
+    "beneficiary_is_new": 0.9615355846723761,
+    "distinct_payees_24h": 0.7949628713439553,
+    "payee_fan_in_24h": -0.030369283916375056,
+    "log_account_age_min": 0.4026300679607439,
+    "kyc_unverified": 2.3493587015954276,
+    "new_account_x_amount": 0.12235239768397228,
+    "is_night": 0.7491384324921821,
+    "is_weekend": 0.3007355943651079,
+    "is_transfer_type": 5.738705559029727,
+    "risky_vpa_fragment": 3.2059487827906525,
+    "handle_mimic": 7.758959938299493
+  },
+  "intercept": -7.525337538609803,
+  "class_distribution": {
+    "train": {
+      "n": 84027,
+      "positives": 3811
+    },
+    "validation": {
+      "n": 27816,
+      "positives": 1402
+    },
+    "test": {
+      "n": 27945,
+      "positives": 1306
+    }
+  }
+}

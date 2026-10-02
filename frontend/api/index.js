@@ -5,6 +5,9 @@ import path from 'path';
 import os from 'os';
 import { realDB } from './lib/db_real.js';
 import { authStore } from './lib/authstore.js';
+import { getSharedUMISim } from './lib/umi_sim.js';
+import * as supervision from './lib/supervision.js';
+import { createRequire } from 'module';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -18,6 +21,7 @@ const PERSIST_FILES = {
   npci: path.join(TMP_DIR, 'aasthi_npci.json'),
   utrIndex: path.join(TMP_DIR, 'aasthi_utr_index.json'),
   webhooks: path.join(TMP_DIR, 'aasthi_webhooks.json'),
+  chain: path.join(TMP_DIR, 'aasthi_chain.json'),
 };
 
 function loadFromFile(filePath, fallback) {
@@ -112,6 +116,7 @@ function saveAllPersisted() {
     saveToFile(PERSIST_FILES.npci, { payments: npciPayments, idem: npciIdem, balances: npciBalances, utrIndex });
     saveToFile(PERSIST_FILES.utrIndex, utrIndex);
     saveToFile(PERSIST_FILES.webhooks, npciWebhooks);
+    saveToFile(PERSIST_FILES.chain, drunixChain);   // the ledger was the one thing never saved
     
     // Also save to real DB if available — fire and forget for performance
     try {
@@ -528,11 +533,24 @@ async function settleConfirmedPayment(pay) {
   balances[bKey] = { docType: 'balance', assetId, ownerId: buyer, balance: ((bBal ? parseInt(bBal.balance) : 0)) + amt, updatedAt: now };
   const tid = `TXN-${safeUUID().slice(0, 8)}-S1`;
   transfers[tid] = { docType: 'transfer', transferId: tid, assetId, fromId: seller, toId: buyer, amount: amt, txTimestamp: now, status: 'COMPLETED', paymentId: pay.paymentId, settledServerSide: true };
-  drunixAppend('TOKEN_TRANSFERRED', [{ kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, atomic: 'DvP-leg-1' }]);
   pay.drunixTransferId = tid;
   pay.status = 'RELEASED';
   pay.releasedAt = now;
-  drunixAppend('ESCROW_RELEASED', [{ kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, tokens: amt, seller, buyer, atomic: 'DvP-leg-2' }]);
+  // ONE block carrying BOTH legs.
+  //
+  // This used to be two appends — TOKEN_TRANSFERRED then ESCROW_RELEASED,
+  // labelled 'DvP-leg-1' and 'DvP-leg-2'. Two blocks are two transactions: if
+  // the process died between them the securities leg was committed and the
+  // cash leg was not, and the ledger recorded a delivery that was never paid
+  // for. Calling that "atomic" was wrong.
+  //
+  // Both legs now share a single block, matching the SettleDvP chaincode
+  // function in drunix-gateway/cash.go, where they share a single read-write
+  // set and are validated by one MVCC check.
+  drunixAppend('DVP_SETTLED', [
+    { kind: 'transfer', transferId: tid, assetId, from: seller, to: buyer, tokens: amt, paymentId: pay.paymentId, leg: 'securities' },
+    { kind: 'escrow-release', paymentId: pay.paymentId, transferId: tid, assetId, amountINR: pay.amountINR, amountPaise: Math.round(pay.amountINR * 100), seller, buyer, leg: 'cash' },
+  ], { atomic: true, contract: 'aasthi.dvp-v1', chaincodeFn: 'SettleDvP', simulated: true });
   globalThis._aasthi_balances = balances;
   globalThis._aasthi_transfers = transfers;
   globalThis._aasthi_npcipayments = npciPayments;
@@ -576,13 +594,17 @@ function drunixTxnsRoot(txns) {
 }
 function drunixCanonical(b) { return [b.height, b.timestamp, b.type, b.txnsRoot, b.prevHash].join('|'); }
 let drunixChain = (typeof globalThis !== 'undefined' && globalThis._aasthi_chain) || [];
-function drunixAppend(type, txns) {
+// meta carries optional block-level attributes (for example the atomicity
+// marker on a DvP block). It is folded into the block BEFORE hashing, so any
+// later edit to it breaks the chain like any other field would.
+function drunixAppend(type, txns, meta) {
   const prev = drunixChain[drunixChain.length - 1] || null;
   const b = {
     height: drunixChain.length,
     timestamp: new Date().toISOString(),
     type, txns,
     contract: 'aasthi.dvp-v1',
+    ...(meta || {}),
     txnsRoot: null, prevHash: prev ? prev.hash : DRUNIX_GENESIS_PREV, hash: null
   };
   b.txnsRoot = drunixTxnsRoot(b.txns);
@@ -590,9 +612,6 @@ function drunixAppend(type, txns) {
   drunixChain.push(b);
   if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
   return b;
-}
-if (drunixChain.length === 0) {
-  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
 function drunixVerify() {
   for (let i = 0; i < drunixChain.length; i++) {
@@ -602,7 +621,42 @@ function drunixVerify() {
     if (drunixTxnsRoot(b.txns) !== b.txnsRoot) return { valid: false, brokenAt: b.height, reason: 'merkle root mismatch — block ' + b.height + ' transactions were altered after commit' };
     if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
   }
-  return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+  // An empty ledger is internally consistent but is not evidence of anything.
+  const genesisOnly = drunixChain.length <= 1;
+  return {
+    valid: true, chainId: DRUNIX_CHAIN_ID,
+    height: Math.max(0, drunixChain.length - 1),
+    blocks: drunixChain.length,
+    genesisOnly,
+    verified: genesisOnly ? 'genesis block only — no committed transactions to verify'
+                          : `${drunixChain.length - 1} block(s) of committed transactions`,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+// Restore the ledger before creating genesis. The chain was previously the only
+// collection never persisted, so every cold start reset the explorer to a single
+// GENESIS block. Restoration is gated on drunixVerify() — the same check
+// /api/chain/verify runs — so a chain that no longer hashes is refused.
+function loadPersistedChain() {
+  const previous = drunixChain;
+  try {
+    const stored = loadFromFile(PERSIST_FILES.chain, null);
+    if (!Array.isArray(stored) || stored.length === 0) return false;
+    drunixChain = stored;
+    const v = drunixVerify();
+    if (!v.valid) throw new Error(v.reason);
+    if (typeof globalThis !== 'undefined') globalThis._aasthi_chain = drunixChain;
+    return true;
+  } catch (e) {
+    drunixChain = previous;
+    console.error('[chain] stored chain REJECTED, starting fresh:', e.message);
+    return false;
+  }
+}
+loadPersistedChain();
+if (drunixChain.length === 0) {
+  drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
 // Judge/demo only (clearly labeled SIMULATION in UI): alter a committed txn so
 // verify() can detect it — proof of tamper-evidence, the core of decentralized trust.
@@ -860,7 +914,60 @@ const FRAUD_T = { blockScore: 70, reviewScore: 40, highValue: 500000, elevated: 
   structFloor: 180000, structCeil: 200000, structCount: 3, velBlock: 8, velWarn: 5,
   total24h: 1000000, riskyFragments: ['fraud','scam','thief','steal','phish','xxx','darkweb'] };
 
-function computeRiskScore(payment, history) {
+// ---- trained fraud model -------------------------------------------------
+// The library resolves its artifact path at runtime, which Vercel's file
+// tracer cannot see, so the handler requires its own co-located copy and
+// injects it. Without this the deployed function would silently score with
+// the rules engine while the repo claimed a trained model.
+let fraudModel = null;
+try {
+  const req = createRequire(import.meta.url);
+  fraudModel = req('../../lib/fraud-model.js');
+  fraudModel.useModel(req('./fraud_model.json'));
+} catch (e) {
+  console.error('[fraud] trained model unavailable, using rules:', e.message);
+  fraudModel = null;
+}
+
+function computeRiskScore(payment, history, opts) {
+  const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
+  if (fraudModel && !(opts && opts.engine === 'rules')) {
+    try {
+      const at = (opts && opts.at) ? new Date(opts.at) : new Date();
+      const r = fraudModel.scorePaymentML({
+        amountINR: parseFloat(payment.amountINR) || 0,
+        payerVpa: payment.payerVpa,
+        payeeVpa: payment.payeeVpa,
+        recentINR: h.recentINR || [],
+        txnCount10m: h.txnCount10m || 0,
+        txnCount24h: h.txnCount24h || 0,
+        totalINR24h: h.totalINR24h || 0,
+        accountAgeMin: h.accountAgeMin != null ? h.accountAgeMin : 100000,
+        kycVerified: h.kycVerified !== false,
+        hourOfDay: at.getHours(),
+        dayOfWeek: (at.getDay() + 6) % 7,   // 0 = Monday, matching features.py
+        payeeSeenBefore: !!h.payeeSeenBefore,
+        distinctPayees24h: h.distinctPayees24h || 0,
+        payeeFanIn24h: h.payeeFanIn24h || 0,
+        balanceBeforeINR: h.balanceBeforeINR || 0,
+        txnType: payment.txnType || 'COLLECT',
+      });
+      return { score: r.score, band: r.band, decision: r.decision, factors: r.factors,
+               model: r.model, modelVersion: r.modelVersion, modelKind: r.modelKind,
+               probability: r.probability, threshold: r.threshold, baseline: r.baseline,
+               topPositive: r.topPositive, topNegative: r.topNegative,
+               explainer: r.explainer, dataCaveat: r.dataCaveat, engine: 'model' };
+    } catch (e) {
+      // A corrupt model must not become "no fraud screening". Fall back and say so.
+      console.error('[fraud] model scoring failed, falling back to rules:', e.message);
+      const viaRules = computeRiskScoreRules(payment, h);
+      return { ...viaRules, engine: 'rules-fallback', fallbackReason: e.message };
+    }
+  }
+  return computeRiskScoreRules(payment, h);
+}
+
+function computeRiskScoreRules(payment, history) {
   const h = history || { txnCount10m: 0, txnCount24h: 0, totalINR24h: 0, recentINR: [], kycVerified: true };
   const factors = [];
   let score = 0;
@@ -915,12 +1022,38 @@ function isValidVPA(vpa) {
   } catch { return false; }
 }
 
+// ---- Signed tokens (mirrors mock-api-server.js) ----
+// Tokens were unsigned base64, so any identity could be self-minted.
+const TOKEN_SECRET = process.env.AASTHI_TOKEN_SECRET || 'aasthi-demo-secret-change-me';
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(s) {
+  return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+}
+function signPayload(payloadB64) {
+  return b64url(crypto.createHmac('sha256', TOKEN_SECRET).update(payloadB64).digest());
+}
 function mockJWT(identityId, mspId, role) {
   try {
-    return Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
+    const payloadB64 = b64url(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 }));
+    return payloadB64 + '.' + signPayload(payloadB64);
   } catch {
     return `mock-${identityId}-${Date.now()}`;
   }
+}
+function verifySignedToken(token) {
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  const [payloadB64, sig] = parts;
+  try {
+    const a = Buffer.from(sig), b = Buffer.from(signPayload(payloadB64));
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    const payload = JSON.parse(b64urlDecode(payloadB64));
+    if (!payload || !payload.identityId) return null;
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch { return null; }
 }
 
 function decodeToken(token) {
@@ -955,14 +1088,23 @@ function getUser(req) {
       regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
     };
 
-    if (!auth) {
-      const mapped = roleMap[(fabricHeader || '').toLowerCase()];
-      return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
-    }
+    // No Authorization header is NOT a login. This used to return the
+    // investor1 identity (or whatever x-fabric-identity asked for), so every
+    // signed-token control only protected requests that bothered to send a
+    // token -- omitting it entirely authenticated you as someone.
+    if (!auth) return null;
 
     try {
       const token = auth.split(' ')[1] || '';
+      // A signed token is authoritative.
+      const signed = verifySignedToken(token);
+      if (signed) return signed;
       const payload = decodeToken(token);
+      if (payload && !payload.clerk) {
+        // Unsigned mock token: previously trusted outright. Now refused, so it
+        // cannot be used to self-assign an identity.
+        return null;
+      }
       if (payload) {
         if (payload.clerk) {
           const mapped = roleMap[(fabricHeader || '').toLowerCase()];
@@ -976,12 +1118,38 @@ function getUser(req) {
       }
     } catch {}
 
-    const mapped = roleMap[(fabricHeader || '').toLowerCase()];
-    return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
+    // A token we cannot verify is not a login either.
+    return null;
   } catch {
-    return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
+    return null;
   }
 }
+
+// Paths that are legitimately reachable without a token: liveness, the demo
+// login itself, and the public read-only ledger/settlement surfaces. Anything
+// not listed here requires a verified identity.
+// /api/npci/utr/<reference> is a payment-verification receipt, equivalent to a
+// bank's UTR lookup page: you are meant to be able to open the link and
+// confirm a payment settled. mock-api-server.js has always served it with
+// optionalAuth for exactly that reason, and it renders an HTML receipt when
+// opened in a browser. The blanket auth gate added here refused it before the
+// handler could run, which broke a link that is supposed to work for anyone
+// holding the reference.
+const PUBLIC_PATH_PREFIXES = ['/api/chain', '/api/umi/', '/api/npci/utr/'];
+const PUBLIC_PATHS_EXACT = new Set([
+  '/health', '/api/health', '/api/auth/login', '/api/umi',
+]);
+function isPublicPath(path) {
+  if (PUBLIC_PATHS_EXACT.has(path)) return true;
+  return PUBLIC_PATH_PREFIXES.some(p => path === p || path.startsWith(p));
+}
+
+// Identity used for public paths so their handlers do not dereference null.
+// Deliberately not a real demo identity: it can read public surfaces and
+// nothing else.
+const ANONYMOUS = Object.freeze({
+  identityId: 'anonymous', mspId: 'PublicMSP', role: 'Public', anonymous: true,
+});
 
 export default async function handler(req, res) {
   try {
@@ -1002,7 +1170,16 @@ export default async function handler(req, res) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const path = url.pathname;
     const method = req.method;
-    const user = getUser(req);
+    let user = getUser(req);
+    if (!user) {
+      if (!isPublicPath(path)) {
+        return res.status(401).json({
+          error: 'ERR_UNAUTHORIZED',
+          message: 'Token is missing, malformed, expired or not signed by this server.',
+        });
+      }
+      user = ANONYMOUS;
+    }
 
     if (path === '/health' || path === '/api/health') {
       let dbMode = 'unknown';
@@ -1034,7 +1211,7 @@ export default async function handler(req, res) {
           secondary: 'Sepolia PaymentEscrow.sol (experimental, cross-chain pattern)',
           npciMode: process.env.NPCI_MODE || 'mock',
           realProviders: ['Setu (Pine Labs) — NPCI-certified switch, direct NPCI access', 'ICICI Bank UPI Collect API', 'Decentro UPI Stack', 'Razorpay/Cashfree aggregator'],
-          note: 'NPCI has no public production API — API Setu sandbox-only. Real access via PSP Bank partnership. See /api/npci/real-config and docs/NPCI_REAL_API_INTEGRATION.md'
+          note: 'NPCI has no public production API — API Setu sandbox-only. Real access via PSP Bank partnership. See /api/npci/real-config.'
         }
       });
     }
@@ -1072,6 +1249,160 @@ export default async function handler(req, res) {
 
     if (path === '/api/fraud/config' && method === 'GET') {
       return res.json({ model: 'aasthichain-rules-v1 (ML-pluggable)', thresholds: FRAUD_T, sourceOfTruth: 'drunix-gateway/fraud.go (Golang)', theme: 'AI & Fraud Detection' });
+    }
+
+    // ------------------------------------------------------------------
+    // UMI-pattern settlement simulation (SEBI Demat 2.0 / RBI UMI shape).
+    // Every response carries settlementRail, simulated:true, centralBankMoney:false
+    // and regulatoryStatus:SIMULATED_NOT_CONNECTED — enforced inside the module.
+    // Nothing here is connected to RBI, SEBI, NPCI, NSDL or CDSL.
+    // ------------------------------------------------------------------
+    if (path.startsWith('/api/umi/')) {
+      const umi = getSharedUMISim();
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      try {
+        if (path === '/api/umi/capabilities' && method === 'GET') {
+          return res.json(umi.capabilities());
+        }
+        if (path === '/api/umi/conformance' && method === 'GET') {
+          return res.json(umi.conformance());
+        }
+        if (path === '/api/umi/wallets' && method === 'GET') {
+          return res.json({ wallets: umi.listWallets(), settlementRail: 'UMI_SIM', simulated: true });
+        }
+        if (path === '/api/umi/wallet' && method === 'POST') {
+          return res.status(201).json(umi.openWallet({
+            participantId: body.participantId,
+            participantClass: body.participantClass,
+            bank: body.participatingBank,
+            openingPaise: body.openingPaise,
+          }));
+        }
+        if (path.startsWith('/api/umi/wallet/') && method === 'GET') {
+          return res.json(umi.getWallet(decodeURIComponent(path.split('/')[4] || '')));
+        }
+        if (path === '/api/umi/dvp/reserve' && method === 'POST') {
+          return res.status(201).json(umi.reserve(body));
+        }
+        if (path === '/api/umi/dvp/settle' && method === 'POST') {
+          return res.json(umi.atomicSettle(body));
+        }
+        if (path === '/api/umi/dvp/unwind' && method === 'POST') {
+          return res.json(umi.unwind(body));
+        }
+        if (path.startsWith('/api/umi/dvp/') && method === 'GET') {
+          return res.json(umi.getDvP(decodeURIComponent(path.split('/')[4] || '')));
+        }
+        if (path === '/api/umi/corporate-action' && method === 'POST') {
+          return res.status(201).json(umi.distributeCorporateAction(body));
+        }
+        if (path === '/api/umi/corporate-actions' && method === 'GET') {
+          return res.json({ actions: umi.listCorporateActions(url.searchParams.get('assetId') || undefined), simulated: true });
+        }
+        return res.status(404).json({ error: 'ERR_UNKNOWN_UMI_ROUTE', path, simulated: true });
+      } catch (e) {
+        return res.status(e.http || 400).json({
+          error: e.code || 'ERR_UMI',
+          message: e.message,
+          settlementRail: 'UMI_SIM',
+          simulated: true,
+        });
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Supervisory reporting — the evidence a securities regulator consumes.
+    // A regulator exposes no socket to dial; supervision runs the other way,
+    // with the supervised entity producing evidence in a defined shape.
+    // Nothing here is filed with or acknowledged by SEBI, RBI, NPCI, NSDL or
+    // CDSL; simulated:true and regulatoryStatus are enforced in the module.
+    // ------------------------------------------------------------------
+    if (path.startsWith('/api/regulator/')) {
+      // Public: describes the surface and discloses gaps. Carries no data.
+      if (path === '/api/regulator/capabilities' && method === 'GET') {
+        return res.json(supervision.capabilities());
+      }
+
+      // Everything else exposes the whole book, so it is regulator-only.
+      if (user.role !== 'Regulator') {
+        return res.status(403).json({
+          error: 'ERR_NOT_A_REGULATOR',
+          message: 'Supervisory reports are restricted to the Regulator role. Sign in as regulator1.',
+          yourRole: user.role,
+        });
+      }
+
+      const state = { properties, balances, transfers, payments: npciPayments, kyc: kycRecords, chain: drunixChain };
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const q = Object.fromEntries(url.searchParams.entries());
+
+      try {
+        if (path === '/api/regulator/cap-table' && method === 'GET') {
+          return res.json(supervision.capTable(state, { assetId: q.assetId, asOf: q.asOf }));
+        }
+        if (path === '/api/regulator/audit-export' && method === 'GET') {
+          const report = supervision.auditExport(state, { assetId: q.assetId, from: q.from, to: q.to });
+          if ((q.format || 'json').toLowerCase() === 'csv') {
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="aasthichain-audit-${Date.now()}.csv"`);
+            return res.send(supervision.auditExportCSV(report));
+          }
+          return res.json(report);
+        }
+        if (path === '/api/regulator/audit-verify' && method === 'POST') {
+          return res.json(supervision.verifyAuditExport(body));
+        }
+        if (path === '/api/regulator/alerts' && method === 'GET') {
+          return res.json(supervision.suspiciousActivity(state, { assetId: q.assetId }));
+        }
+        if (path === '/api/regulator/alerts/disposition' && method === 'POST') {
+          return res.json(supervision.setDisposition(body.alertId, body.disposition, body.note, user.identityId));
+        }
+        if (path === '/api/regulator/scheme-report' && method === 'GET') {
+          return res.json(supervision.schemeReport(state, { assetId: q.assetId }));
+        }
+        if (path === '/api/regulator/actions' && method === 'GET') {
+          return res.json({
+            reportType: 'SUPERVISORY_ACTION_LOG',
+            actions: supervision.listActions(q.assetId),
+            simulated: true,
+            regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+          });
+        }
+        if ((path === '/api/regulator/freeze' || path === '/api/regulator/unfreeze') && method === 'POST') {
+          const freezing = path.endsWith('/freeze');
+          const prop = properties[body.assetId];
+          if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+          if (!freezing && prop.status !== 'FROZEN') {
+            return res.status(409).json({ error: 'ERR_NOT_FROZEN', message: `${body.assetId} is ${prop.status}, not FROZEN` });
+          }
+          const record = supervision.recordAction({
+            assetId: body.assetId,
+            action: freezing ? 'FREEZE' : 'UNFREEZE',
+            reason: body.reason,
+            actor: user.identityId,
+            actorRole: user.role,
+          });
+          if (freezing) {
+            prop.previousStatus = prop.status;
+            prop.status = 'FROZEN';
+          } else {
+            prop.status = prop.previousStatus || 'TOKENIZED';
+          }
+          prop.updatedAt = new Date();
+          properties[body.assetId] = prop;
+          globalThis._aasthi_properties = properties;
+          return res.json({ ...record, assetStatus: prop.status, simulated: true, regulatoryStatus: 'SIMULATED_NOT_CONNECTED' });
+        }
+        return res.status(404).json({ error: 'ERR_UNKNOWN_REGULATOR_ROUTE', path, simulated: true });
+      } catch (e) {
+        return res.status(e.http || 400).json({
+          error: e.code || 'ERR_SUPERVISION',
+          message: e.message,
+          simulated: true,
+          regulatoryStatus: 'SIMULATED_NOT_CONNECTED',
+        });
+      }
     }
 
     if (path === '/api/openfinance/capabilities' && method === 'GET') {
@@ -1118,7 +1449,7 @@ export default async function handler(req, res) {
         ourSimulation: {
           honest: 'Same state machine PENDING→CONFIRMED→RELEASED/REFUNDED, same IDs NPCI-xxx RRN 12-digit 418... UTR IMPS+RRN, same edge cases, inspired by upi-mock-engine + PPRO Sandbox Not Available',
           badge: 'SIMULATION — No live NPCI — Track A6 honest labeling > overclaim',
-          mapping: '1:1 with real bank API — see docs/NPCI_REAL_API_INTEGRATION.md table'
+          mapping: '1:1 field mapping with the real bank API'
         },
         productionToggle: {
           mock: 'NPCI_MODE=mock (default, hackathon, no creds, honest simulation)',
@@ -1601,6 +1932,12 @@ export default async function handler(req, res) {
     }
 
     if (path === '/api/npci/payments' && method === 'GET') {
+      // Scope to the caller's own legs; regulators see everything.
+      if (!user) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+      if (user.role !== 'Regulator') {
+        const own = Object.values(npciPayments).filter(p => p.payerId === user.identityId || p.payeeId === user.identityId);
+        return res.json({ payments: own.slice(0, 20), count: own.length, scope: 'own' });
+      }
       try {
         const list = Object.values(npciPayments).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
         return res.json({ payments: list, count: list.length, isSimulation: true });
@@ -2309,6 +2646,9 @@ export default async function handler(req, res) {
 
     // ---- Programmable ownership API: continuous NAV, yield servicing, governance, credit, swaps ----
     const navMatch = path.match(/^\/api\/portfolio\/([^/]+)\/nav$/);
+    if (navMatch && !(user && (user.identityId === navMatch[1] || user.role === 'Regulator'))) {
+      return res.status(403).json({ error: 'ERR_FORBIDDEN', message: `Portfolio belongs to ${navMatch[1]}.` });
+    }
     if (navMatch && method === 'GET') {
       return res.json(drunixNav(decodeURIComponent(navMatch[1])));
     }
@@ -2676,11 +3016,24 @@ export default async function handler(req, res) {
         const id = decodeURIComponent(freezeMatch[1]);
         const prop = properties[id];
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+        // Same supervisory log as POST /api/regulator/freeze — a freeze with no
+        // recorded reason or actor is not reviewable after the fact, and neither
+        // route is allowed to bypass the record.
+        let record;
+        try {
+          record = supervision.recordAction({
+            assetId: id, action: 'FREEZE', reason: (req.body || {}).reason,
+            actor: user.identityId, actorRole: user.role,
+          });
+        } catch (err) {
+          return res.status(err.http || 400).json({ error: err.code || 'ERR_SUPERVISION', message: err.message });
+        }
+        prop.previousStatus = prop.status;
         prop.status = 'FROZEN';
         prop.updatedAt = new Date();
         properties[id] = prop;
         globalThis._aasthi_properties = properties;
-        return res.json({ assetId: id, status: 'FROZEN', reason: req.body.reason });
+        return res.json({ assetId: id, status: 'FROZEN', reason: record.reason, actionId: record.actionId, actor: record.actor });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
@@ -3012,16 +3365,22 @@ export default async function handler(req, res) {
     // Testnet (secondary)
     if (path === '/api/testnet/payments/initiate' && method === 'POST') {
       try {
-        const { assetId, tokenAmount, estimatedEth, txHash, paymentId, from, to, isSimulated } = req.body || {};
-        const pid = paymentId || (isSimulated ? 'SIM-' + safeUUID().slice(0,8).toUpperCase() : '0x' + safeUUID().replace(/-/g,'').slice(0,16));
-        const finalTxHash = isSimulated ? '' : (txHash || '0x' + (crypto.randomBytes ? crypto.randomBytes(32).toString('hex') : safeUUID().replace(/-/g,'')));
+        const { assetId, tokenAmount, estimatedEth, txHash, paymentId, from, to } = req.body || {};
+        // INVARIANT: a transaction hash exists only if a chain gave us one.
+        // This used to fabricate a random hash whenever isSimulated was falsy and
+        // then build an Etherscan link from it, publishing proof of a transaction
+        // that never happened. Never fabricate.
+        const realHash = (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) ? txHash : '';
+        // No hash means nothing was broadcast. The client cannot override this.
+        const simulated = !realHash;
+        const pid = paymentId || 'SIM-' + safeUUID().slice(0,8).toUpperCase();
         testnetPayments[pid] = {
-          paymentId: pid, assetId, tokenAmount, estimatedEth, txHash: finalTxHash, from, to,
-          status: 'PENDING', createdAt: new Date(), drunixTransferId: null, isSimulated: !!isSimulated,
-          sepoliaExplorer: isSimulated ? '' : `https://sepolia.etherscan.io/tx/${finalTxHash}`,
+          paymentId: pid, assetId, tokenAmount, estimatedEth, txHash: realHash, from, to,
+          status: 'PENDING', createdAt: new Date(), drunixTransferId: null, isSimulated: simulated,
+          sepoliaExplorer: realHash ? `https://sepolia.etherscan.io/tx/${realHash}` : '',
         };
         globalThis._aasthi_testnet = testnetPayments;
-        return res.json({ paymentId: pid, status: 'PENDING', txHash: finalTxHash, isSimulated: !!isSimulated, sepoliaExplorer: testnetPayments[pid].sepoliaExplorer });
+        return res.json({ paymentId: pid, status: 'PENDING', txHash: realHash, isSimulated: simulated, sepoliaExplorer: testnetPayments[pid].sepoliaExplorer });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
@@ -3079,7 +3438,9 @@ export default async function handler(req, res) {
         chainName: 'Sepolia Testnet',
         explorer: 'https://sepolia.etherscan.io',
         faucet: 'https://sepoliafaucet.com/',
-        isSecondary: true
+        isSecondary: true,
+        escrowDeployed: false,
+        message: 'PaymentEscrow.sol is written but not deployed. No Sepolia transaction is broadcast and no transaction hash is ever generated. The Drunix token transfer is real.'
       });
     }
 
@@ -3192,8 +3553,12 @@ export default async function handler(req, res) {
 
     if (path === '/api/kyc/digilocker/pull-document' && method === 'POST') {
       try {
-        const { identityId, docType } = req.body || {};
-        if (!identityId || !docType) return res.status(400).json({ error: 'identityId and docType required' });
+        const { docType } = req.body || {};
+        // identityId used to come from the request body, so any caller could pull
+        // another person's Aadhaar/PAN. It is the authenticated subject now.
+        if (!user || !user.identityId) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+        const identityId = user.identityId;
+        if (!docType) return res.status(400).json({ error: 'docType required' });
         
         const kyc = kycRecords[identityId];
         if (!kyc || kyc.kycStatus !== 'VERIFIED') {
@@ -3345,15 +3710,6 @@ export default async function handler(req, res) {
               implementation: 'frontend/api/lib/db_real.js + @vercel/kv',
               persistent: 'Yes — shared via Upstash Redis'
             },
-            github: {
-              enabled: realMode === 'github',
-              requiredEnv: 'GITHUB_TOKEN (optional, for write) — reading via raw.githubusercontent.com works without token',
-              files: ['data/properties.json', 'data/balances.json', 'data/transfers.json', 'data/kyc.json', 'data/npci_payments.json', 'data/utr_index.json', 'data/webhooks.json'],
-              implementation: 'frontend/api/lib/github_db.js + GitHub Contents API + raw.githubusercontent.com',
-              persistent: 'Yes — shared via GitHub repo, survives cold start, visible to all via raw URL',
-              howItFixes: 'Property created by originator → saved to GitHub data/properties.json → raw URL shared across lambdas → investor sees in Marketplace',
-              currentData: `https://raw.githubusercontent.com/katepallewarprathmesh-sketch/AasthiChain/main/data/properties.json`
-            },
             fileBacked: {
               enabled: realMode === 'file-backed',
               location: '/tmp/aasthi_*.json + globalThis',
@@ -3413,13 +3769,10 @@ export default async function handler(req, res) {
         const realMode = realDB.getMode()
         await realDB.init()
         
-        // Try to get real counts from realDB if postgres/github
+        // Try to get real counts from realDB when a shared store is configured
         let realCounts = null
         try {
-          if (realMode === 'github') {
-            const all = await githubDB.getAll()
-            realCounts = all.count
-          } else if (realMode === 'postgres') {
+          if (realMode === 'postgres') {
             const props = await realDB.getProperties()
             const bals = await realDB.getBalances()
             const trans = await realDB.getTransfers()
@@ -3459,12 +3812,8 @@ export default async function handler(req, res) {
               balances: !!globalThis._aasthi_balances,
               utrIndex: !!globalThis._aasthi_utr_index
             },
-            github: {
-              rawUrl: `https://raw.githubusercontent.com/katepallewarprathmesh-sketch/AasthiChain/main/data/properties.json`,
-              note: 'GitHub raw is persistent shared across lambdas'
-            }
           },
-          message: realMode === 'postgres' ? 'Using Postgres — persistent, shared, never vanishes' : realMode === 'github' ? 'Using GitHub as real DB — persistent via repo, shared across lambdas' : 'Using file-backed + localStorage — per lambda, use postgres/github for true persistence'
+          message: realMode === 'postgres' ? 'Using Postgres (Neon) — persistent and shared across instances' : 'Using file-backed storage — per instance and NOT shared; set DATABASE_URL to a Neon connection string for real persistence'
         });
       } catch (e) {
         return res.status(500).json({ error: e.message });

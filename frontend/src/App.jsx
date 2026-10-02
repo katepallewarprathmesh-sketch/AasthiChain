@@ -1,5 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { SESSION_EXPIRED_EVENT, clearSession, tokenLooksUsable, ensureSession } from './lib/apiError'
+import { startBuildWatcher } from './lib/buildCheck'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
 class ErrorBoundary extends React.Component {
@@ -18,21 +20,28 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div style={{padding:24, maxWidth:600, margin:'40px auto'}}>
-          <div className="card" style={{borderColor:'#FECACA', background:'#FEF2F2'}}>
-            <h3 style={{color:'#991B1B'}}>Something went wrong but your payment is safe</h3>
-            <p style={{fontSize:13, color:'#6B7280', marginTop:8, lineHeight:1.5}}>
-              The screen error was caught to prevent blank screen. Your payment and tokens move together atomically if one fails, both refunded no risk. Please refresh or try again.
+          <div className="card" style={{borderColor:'#FDE68A', background:'#FFFBEB'}}>
+            <h3 style={{color:'#92400E'}}>This page could not be displayed</h3>
+            <p style={{fontSize:13.5, color:'#6B7280', marginTop:8, lineHeight:1.6}}>
+              Something went wrong while drawing this screen. Nothing you were doing
+              was lost or changed — payments and tokens only ever move together, so a
+              display problem cannot leave a transaction half-finished.
+              Reloading usually fixes it.
             </p>
-            <pre style={{marginTop:12, background:'white', padding:10, borderRadius:6, fontSize:11, overflow:'auto', maxHeight:200, border:'1px solid #FECACA'}}>
-              {String(this.state.error?.message || this.state.error || 'Unknown error')}
-              {this.state.info?.componentStack ? '\n' + this.state.info.componentStack.slice(0,500) : ''}
-            </pre>
+            {/* A stack trace is for us, not for the person using the site.
+                It is shown in development only; in production it is reported
+                to the console instead of onto the page. */}
+            {import.meta.env.DEV && (
+              <pre style={{marginTop:12, background:'white', padding:10, borderRadius:6, fontSize:11, overflow:'auto', maxHeight:200, border:'1px solid #FDE68A'}}>
+                {String(this.state.error?.message || this.state.error || 'Unknown error')}
+                {this.state.info?.componentStack ? '\n' + this.state.info.componentStack.slice(0,500) : ''}
+              </pre>
+            )}
             <div style={{marginTop:12, display:'flex', gap:8, flexWrap:'wrap'}}>
               <button className="btn btn-primary" style={{fontSize:12}} onClick={()=>window.location.reload()}>Refresh Page</button>
               <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>this.setState({hasError:false, error:null, info:null})}>Try Again</button>
               <a href="/marketplace" className="btn btn-secondary" style={{fontSize:12, textDecoration:'none'}}>Back to Marketplace</a>
             </div>
-            <div style={{fontSize:10, color:'#9CA3AF', marginTop:8}}>Error caught by boundary prevents blank screen check console for details</div>
           </div>
         </div>
       )
@@ -47,14 +56,40 @@ import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, Cle
 // download small and the site interactive almost immediately.
 import Landing from './pages/Landing.jsx'
 
-const Login = lazy(() => import('./pages/Login.jsx'))
-const Marketplace = lazy(() => import('./pages/Marketplace.jsx'))
-const Wallet = lazy(() => import('./pages/Wallet.jsx'))
-const Admin = lazy(() => import('./pages/Admin.jsx'))
-const Regulator = lazy(() => import('./pages/Regulator.jsx'))
-const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
-const Support = lazy(() => import('./pages/Support.jsx'))
-const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
+/**
+ * A deploy renames every chunk. A tab that was already open then asks for a
+ * filename that no longer exists, the dynamic import rejects, and the user
+ * gets an error screen for no reason of their own — which is how a stale tab
+ * ends up showing a failure on a live page.
+ *
+ * On the first such failure we reload once, which fetches the new index.html
+ * and the new chunk names. The sessionStorage guard means a genuinely broken
+ * chunk cannot cause a reload loop: the second failure is allowed through to
+ * the error boundary.
+ */
+function lazyRoute(factory, name) {
+  return lazy(() => factory().catch((err) => {
+    const key = `aasthi_chunk_reload_${name}`
+    let alreadyTried = false
+    try { alreadyTried = sessionStorage.getItem(key) === '1' } catch {}
+    if (!alreadyTried) {
+      try { sessionStorage.setItem(key, '1') } catch {}
+      window.location.reload()
+      return new Promise(() => {})   // hold until the reload takes over
+    }
+    throw err
+  }))
+}
+
+const Login = lazyRoute(() => import('./pages/Login.jsx'), 'Login')
+const Marketplace = lazyRoute(() => import('./pages/Marketplace.jsx'), 'Marketplace')
+const Wallet = lazyRoute(() => import('./pages/Wallet.jsx'), 'Wallet')
+const Admin = lazyRoute(() => import('./pages/Admin.jsx'), 'Admin')
+const Regulator = lazyRoute(() => import('./pages/Regulator.jsx'), 'Regulator')
+const PropertyDetail = lazyRoute(() => import('./pages/PropertyDetail.jsx'), 'PropertyDetail')
+const Support = lazyRoute(() => import('./pages/Support.jsx'), 'Support')
+const LedgerExplorer = lazyRoute(() => import('./pages/LedgerExplorer.jsx'), 'LedgerExplorer')
+const SettlementPage = lazyRoute(() => import('./pages/Settlement.jsx'), 'Settlement')
 
 function RouteFallback() {
   return (
@@ -220,6 +255,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
                   { path: '/marketplace', label: 'Marketplace' },
                   { path: '/wallet', label: 'Wallet' },
                   { path: '/ledger', label: 'Ledger' },
+                  { path: '/settlement', label: 'Settlement' },
                   ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
                   ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
                 ]
@@ -278,10 +314,76 @@ function AppContent({ user, setUser }) {
 
   const [internalUser, setInternalUser] = useState(user)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => { setInternalUser(user) }, [user])
 
+  // A stored token this build cannot use is a dead session. Detect it at
+  // startup and clear it, rather than sending it on every request to be
+  // rejected and surfacing a failure the user cannot act on. This is what
+  // makes sessions issued before token signing recover by themselves.
+  useEffect(() => {
+    let token = null, storedUser = null
+    try {
+      token = localStorage.getItem('aasthi_token')
+      const raw = localStorage.getItem('aasthi_user')
+      storedUser = raw ? JSON.parse(raw) : null
+    } catch { return }
+    if (!token || tokenLooksUsable(token)) return
+
+    // The token predates token signing, so the server will refuse it. If we
+    // already know which identity this person was using, just get them a
+    // valid one -- the demo worked without any token at all before, and
+    // bouncing someone to a sign-in screen for an internal format change is
+    // not something they should have to care about.
+    if (storedUser && storedUser.identityId) {
+      ensureSession().then((fresh) => {
+        if (fresh) {
+          const updated = { ...storedUser, token: fresh }
+          setInternalUser(updated)
+          setUser(updated)
+          return
+        }
+        clearSession(); setInternalUser(null); setUser(null)
+        if (location.pathname !== '/login' && location.pathname !== '/') {
+          navigate('/login', { replace: true, state: { reason: 'expired' } })
+        }
+      })
+      return
+    }
+
+    clearSession()
+    setInternalUser(null)
+    setUser(null)
+    if (location.pathname !== '/login' && location.pathname !== '/') {
+      navigate('/login', { replace: true, state: { reason: 'expired' } })
+    }
+  }, [])
+
+  // One listener for the whole app: any 401 clears the session and routes to
+  // sign-in once, instead of every page rendering its own dead end.
+  useEffect(() => {
+    const onExpired = (e) => {
+      setInternalUser(null)
+      setUser(null)
+      if (location.pathname !== '/login') {
+        navigate('/login', {
+          replace: true,
+          state: { reason: (e && e.detail && e.detail.reason) || 'required' },
+        })
+      }
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
+  }, [location.pathname, navigate, setUser])
+
   useEffect(() => { prefetchLikelyRoutes() }, [])
+
+  // A tab left open across a deploy keeps running the old bundle, because
+  // Vercel serves previous hashed assets forever and nothing ever 404s. That
+  // tab shows bugs that are already fixed, and its retry buttons re-run the
+  // same old code. Watch for a newer build and reload once when one appears.
+  useEffect(() => startBuildWatcher(), [])
 
   useEffect(() => {
     if (!isClerkConfigured) return
@@ -342,24 +444,53 @@ function AppContent({ user, setUser }) {
     }
   }
 
-  const handleRoleSwitch = (roleData) => {
-    const updated = {
-      ...(internalUser || {}),
-      identityId: roleData.id,
-      role: roleData.role,
-      mspId: roleData.mspId
+  // Switching role must mint a token for the NEW identity.
+  //
+  // This used to rewrite identityId in localStorage and keep the old token.
+  // The server authenticates from the signed token, so the UI would say
+  // "Registrar" while every request was still carried out as investor1 --
+  // silently acting as the wrong identity, and producing permission errors
+  // that looked like bugs. Tokens are signed now, so the identity in the
+  // token is the identity the server uses, and the only correct way to
+  // change identity is to obtain a new token.
+  const [roleSwitchError, setRoleSwitchError] = useState(null)
+
+  const handleRoleSwitch = async (roleData) => {
+    setRoleSwitchError(null)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identityId: roleData.id, role: roleData.role }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const { token } = await res.json()
+      if (!token) throw new Error('no token returned')
+
+      const updated = {
+        ...(internalUser || {}),
+        identityId: roleData.id,
+        role: roleData.role,
+        mspId: roleData.mspId,
+        token,
+      }
+      localStorage.setItem('aasthi_token', token)
+      localStorage.setItem('aasthi_user', JSON.stringify(updated))
+      localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
+      setInternalUser(updated)
+      setUser(updated)
+    } catch {
+      // Leave the previous identity intact rather than half-switching into a
+      // state where the UI and the token disagree.
+      setRoleSwitchError(`Could not switch to ${roleData.label || roleData.role}. Your current role is unchanged — please try again.`)
     }
-    localStorage.setItem('aasthi_user', JSON.stringify(updated))
-    localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
-    setInternalUser(updated)
-    setUser(updated)
   }
 
   const effectiveUser = internalUser || user
 
   // Public pages must never wait on the auth SDK — they render immediately and
   // Clerk finishes initialising in the background. Only auth-gated routes pause.
-  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support']
+  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/settlement', '/support']
   const isPublicPath = PUBLIC_PATHS.includes(location.pathname)
 
   if (isClerkConfigured && !isLoaded && !isPublicPath) {
@@ -376,6 +507,14 @@ function AppContent({ user, setUser }) {
   return (
     <ErrorBoundary>
       <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
+      {roleSwitchError && (
+        <div role="status" className="container" style={{
+          marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A',
+          borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#92400E',
+        }}>
+          {roleSwitchError}
+        </div>
+      )}
       <main className="container" style={{paddingTop:0, paddingBottom:0}}>
         <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -384,6 +523,7 @@ function AppContent({ user, setUser }) {
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
+          <Route path="/settlement" element={<SettlementPage />} />
           <Route path="/support" element={<Support />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />

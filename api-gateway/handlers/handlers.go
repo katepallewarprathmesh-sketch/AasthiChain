@@ -364,14 +364,14 @@ func (h *Handler) GetTransferHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"transfers": paginated.Transfers,
-		"count":     len(paginated.Transfers),
-		"total":     paginated.Total,
-		"bookmark":  paginated.Bookmark,
-		"hasMore":   paginated.HasMore,
-		"pageSize":  pageSize,
+		"transfers":  paginated.Transfers,
+		"count":      len(paginated.Transfers),
+		"total":      paginated.Total,
+		"bookmark":   paginated.Bookmark,
+		"hasMore":    paginated.HasMore,
+		"pageSize":   pageSize,
 		"fabricMode": h.fabric.Mode(),
-		"indexUsed": "idx_transfer_asset_time",
+		"indexUsed":  "idx_transfer_asset_time",
 	})
 }
 
@@ -461,10 +461,10 @@ func (h *Handler) FailureModeDemo(c *gin.Context) {
 		req.ToID = "investor2"
 		_, err := h.fabric.TransferTokens(req.AssetID, req.FromID, req.ToID, req.Amount)
 		c.JSON(http.StatusOK, gin.H{
-			"scenario": "insufficient_balance",
-			"expected": "ERR_INSUFFICIENT_BALANCE",
-			"result":   err.Error(),
-			"passed":   strings.Contains(err.Error(), "ERR_INSUFFICIENT_BALANCE"),
+			"scenario":    "insufficient_balance",
+			"expected":    "ERR_INSUFFICIENT_BALANCE",
+			"result":      err.Error(),
+			"passed":      strings.Contains(err.Error(), "ERR_INSUFFICIENT_BALANCE"),
 			"explanation": "No partial transfer — atomic rejection per §6.2",
 		})
 		return
@@ -473,10 +473,10 @@ func (h *Handler) FailureModeDemo(c *gin.Context) {
 		req.Amount = 10
 		_, err := h.fabric.TransferTokens(req.AssetID, req.FromID, req.ToID, req.Amount)
 		c.JSON(http.StatusOK, gin.H{
-			"scenario": "self_transfer",
-			"expected": "ERR_INVALID_TRANSFER",
-			"result":   err.Error(),
-			"passed":   strings.Contains(err.Error(), "ERR_INVALID_TRANSFER"),
+			"scenario":    "self_transfer",
+			"expected":    "ERR_INVALID_TRANSFER",
+			"result":      err.Error(),
+			"passed":      strings.Contains(err.Error(), "ERR_INVALID_TRANSFER"),
 			"explanation": "Self-transfer blocked per §6.2",
 		})
 		return
@@ -485,10 +485,10 @@ func (h *Handler) FailureModeDemo(c *gin.Context) {
 		req.Amount = 10
 		_, err := h.fabric.TransferTokens(req.AssetID, req.FromID, req.ToID, req.Amount)
 		c.JSON(http.StatusOK, gin.H{
-			"scenario": "kyc_unverified",
-			"expected": "ERR_KYC_NOT_VERIFIED",
-			"result":   err.Error(),
-			"passed":   strings.Contains(err.Error(), "ERR_KYC_NOT_VERIFIED"),
+			"scenario":    "kyc_unverified",
+			"expected":    "ERR_KYC_NOT_VERIFIED",
+			"result":      err.Error(),
+			"passed":      strings.Contains(err.Error(), "ERR_KYC_NOT_VERIFIED"),
 			"explanation": "Transfer to unverified KYC wallet rejected per §6.2",
 		})
 		return
@@ -497,10 +497,10 @@ func (h *Handler) FailureModeDemo(c *gin.Context) {
 		req.Amount = 0
 		_, err := h.fabric.TransferTokens(req.AssetID, req.FromID, req.ToID, req.Amount)
 		c.JSON(http.StatusOK, gin.H{
-			"scenario": "zero_amount",
-			"expected": "ERR_INVALID_AMOUNT",
-			"result":   err.Error(),
-			"passed":   strings.Contains(err.Error(), "ERR_INVALID_AMOUNT"),
+			"scenario":    "zero_amount",
+			"expected":    "ERR_INVALID_AMOUNT",
+			"result":      err.Error(),
+			"passed":      strings.Contains(err.Error(), "ERR_INVALID_AMOUNT"),
 			"explanation": "Zero/negative amount rejected per §6.2",
 		})
 		return

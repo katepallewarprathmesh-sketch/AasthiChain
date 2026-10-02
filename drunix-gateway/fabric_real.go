@@ -3,63 +3,97 @@
 package drunix
 
 // Real Drunix/Fabric network adapter — compiled ONLY with `go build -tags real`.
-// Default builds (hackathon dev/demo per FAQ 19) use MockLedger and need no
-// network. When building with the tag, fetch the Fabric Gateway SDK:
+//
+// Drunix is NPCI's fork of Hyperledger Fabric and is documented as backwards
+// compatible with HLF v2.5.x, so this adapter targets the standard Fabric
+// Gateway SDK:
 //
 //	go get github.com/hyperledger/fabric-gateway
 //
 // Connection details come from env: DRUNIX_API_HOST, DRUNIX_API_PORT,
 // DRUNIX_MSP_ID, DRUNIX_CERT_FILE, DRUNIX_KEY_FILE, DRUNIX_TLS_CERT.
-// The adapter maps this package's DrunixClient straight onto the Gateway SDK's
-// Submit/Evaluate semantics — the app code does not change (DIP).
+//
+// ---------------------------------------------------------------------------
+// WHY THIS RETURNS ERRORS INSTEAD OF DATA
+//
+// This adapter previously held a *MockLedger as a "safety net" and forwarded
+// every call to it, so building with -tags real produced a client that looked
+// like it was talking to a Drunix network and was in fact returning simulated
+// results. A settlement component that silently degrades to fabricated data is
+// worse than one that is missing: the caller cannot tell the difference, and
+// neither can an auditor reading the logs.
+//
+// So the fallback is gone. Until the Gateway SDK is actually wired, every
+// method fails loudly with ErrGatewayNotWired. Callers that want simulation
+// must ask for it explicitly by constructing a MockLedger.
+// ---------------------------------------------------------------------------
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"time"
+	"os"
 )
 
-type FabricGateway struct {
-	// connection handles from the Fabric Gateway SDK (populated in Connect).
-	mspID    string
-	mode     string
-	fallback *MockLedger // safety net if network unreachable in demo
+// ErrGatewayNotWired is returned by every FabricGateway method until the
+// Fabric Gateway SDK is connected. It is deliberately not recoverable by
+// falling back to simulation.
+var ErrGatewayNotWired = errors.New(
+	"drunix: real gateway is not wired yet — refusing to return simulated data from the real adapter; " +
+		"use NewMockLedger() explicitly if simulation is what you want")
+
+// requiredEnv lists the settings a real connection cannot work without.
+var requiredEnv = []string{
+	"DRUNIX_API_HOST",
+	"DRUNIX_MSP_ID",
+	"DRUNIX_CERT_FILE",
+	"DRUNIX_KEY_FILE",
 }
 
-// NewFabricGateway connects to a real Drunix peer via the Fabric Gateway SDK.
-// NOTE: wired when compiled with -tags real; kept minimal for the hackathon
-// skeleton so the same DrunixClient interface is exercised end-to-end.
-func NewFabricGateway(mspID string) (*FabricGateway, error) {
-	return &FabricGateway{mspID: mspID, mode: "real", fallback: NewMockLedger()}, nil
+type FabricGateway struct {
+	mspID string
+	host  string
+	// No fallback field. That is the point.
 }
+
+// NewFabricGateway validates that the environment describes a real endpoint.
+// It refuses to construct a client that cannot possibly reach a network,
+// rather than returning one that quietly simulates.
+func NewFabricGateway(mspID string) (*FabricGateway, error) {
+	var missing []string
+	for _, k := range requiredEnv {
+		if os.Getenv(k) == "" {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("drunix: cannot build a real gateway, missing env %v: %w", missing, ErrGatewayNotWired)
+	}
+	if mspID == "" {
+		mspID = os.Getenv("DRUNIX_MSP_ID")
+	}
+	return &FabricGateway{mspID: mspID, host: os.Getenv("DRUNIX_API_HOST")}, nil
+}
+
+// TODO(phase-2): replace each body with the Gateway SDK equivalent —
+// client.Connect -> gw.GetNetwork(channel).GetContract(chaincode) ->
+// SubmitTransaction / EvaluateTransaction, then read commit status for the
+// txID and block number.
 
 func (f *FabricGateway) SubmitTransaction(chaincode, fn string, args []string, creatorMSP string) (*TxRecord, error) {
-	// Real path: contract.SubmitTransaction(contractAPI, fn, args...) then read
-	// commit status for txID + block number. Until peer credentials are
-	// provisioned, degrade gracefully to the deterministic simulator so the
-	// demo never dead-ends (honest labelling via Mode).
-	rec, err := f.fallback.SubmitTransaction(chaincode, fn, args, creatorMSP)
-	if err == nil {
-		rec.Timestamp = time.Now()
-	}
-	return rec, err
+	return nil, fmt.Errorf("SubmitTransaction(%s.%s): %w", chaincode, fn, ErrGatewayNotWired)
 }
 
 func (f *FabricGateway) EvaluateTransaction(chaincode, fn string, args []string, creatorMSP string) (*TxRecord, error) {
-	return f.fallback.EvaluateTransaction(chaincode, fn, args, creatorMSP)
+	return nil, fmt.Errorf("EvaluateTransaction(%s.%s): %w", chaincode, fn, ErrGatewayNotWired)
 }
 
 func (f *FabricGateway) GetTransaction(txID string) (*TxRecord, error) {
-	return f.fallback.GetTransaction(txID)
+	return nil, fmt.Errorf("GetTransaction(%s): %w", txID, ErrGatewayNotWired)
 }
 
 func (f *FabricGateway) LedgerStatus() (*LedgerStatus, error) {
-	st, err := f.fallback.LedgerStatus()
-	if err == nil && st != nil {
-		st.Mode = "real(mock-fallback:" + f.mode + ")"
-	}
-	return st, err
+	return nil, fmt.Errorf("LedgerStatus: %w", ErrGatewayNotWired)
 }
 
-var _ = context.Background
-var _ = fmt.Sprintf
+// Compile-time proof the adapter still satisfies the interface the app depends on.
+var _ DrunixClient = (*FabricGateway)(nil)

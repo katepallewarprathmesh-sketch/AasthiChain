@@ -319,7 +319,7 @@ export default function Landing({ user }) {
               { ico: I.swap(), t: 'Atomic DvP settlement', d: 'Delivery-versus-payment on the Drunix ledger: SettleDvP moves tokens and escrow together, with the UTR anchored on-chain.' },
               { ico: I.badge(), t: 'Registrar-verified titles', d: 'No listing goes live without document hash anchoring and a Registrar review fraud is stopped before tokenization.' },
               { ico: I.shield(), t: 'Regulator guardrails', d: 'A full audit view with emergency freeze. Cap table, transfers and payment trails are inspectable end-to-end.' },
-              { ico: I.spark(), t: 'AI fraud shield', d: 'An explainable risk engine screens every collect velocity, structuring, high-value patterns and re-screens at approval.' },
+              { ico: I.spark(), t: 'AI fraud shield', d: 'A model trained on 140,000 synthetic payments scores every collect, and shows the exact contribution of each signal behind its decision.' },
             ].map((f, i) => (
               <div key={f.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 26 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -520,6 +520,17 @@ export default function Landing({ user }) {
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                 <span className="acx-chip" style={{ borderColor: 'var(--warn)', color: 'var(--warn)', fontSize: 10 }}>SIMULATION</span>
                 <span style={{ fontSize: 11, color: 'var(--faint)' }}>NPCI UPI rail is a testnet simulation no live NPCI sandbox credentials available for hackathons. Honest labeling per Track A6.</span>
+              </div>
+
+              {/* Regulatory honesty: the ₹500 figure demonstrates divisibility, it is not a
+                  lawful retail minimum. Real fractional real estate in India is an SM REIT. */}
+              <div style={{ fontSize: 11, color: 'var(--faint)', lineHeight: 1.7, marginBottom: 16, maxWidth: 760 }}>
+                The ₹500 entry point demonstrates how far a property can be divided on-ledger. Under the SEBI
+                SM REIT framework the current retail minimum for a real fractional real-estate investment is
+                ₹10 lakh. AasthiChain also simulates the SEBI Demat 2.0 / RBI Unified Market Interface
+                settlement pattern it is not connected to RBI, SEBI, NPCI, NSDL or CDSL. See{' '}
+                <Link to="/settlement" style={{ color: 'var(--accent-2)' }}>Settlement</Link> for the full
+                claim-by-claim breakdown.
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>

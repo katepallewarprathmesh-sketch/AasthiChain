@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 export default function UTRReconciliation() {
   const [data, setData] = useState(null)
@@ -22,7 +23,7 @@ export default function UTRReconciliation() {
   const fetchReconcile = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/npci/reconcile', { headers: getHeaders() })
+      const res = await authedFetch('/api/npci/reconcile', { headers: getHeaders() })
       const json = await res.json()
       setData(json)
     } catch (e) {
@@ -34,7 +35,7 @@ export default function UTRReconciliation() {
 
   const fetchWebhooks = async () => {
     try {
-      const res = await fetch('/api/npci/webhooks?limit=20', { headers: getHeaders() })
+      const res = await authedFetch('/api/npci/webhooks?limit=20', { headers: getHeaders() })
       const json = await res.json()
       setWebhooks(json.webhooks || [])
     } catch {}
@@ -44,7 +45,7 @@ export default function UTRReconciliation() {
     if (!utrQuery.trim()) return
     setUtrResult({ loading: true })
     try {
-      const res = await fetch(`/api/npci/utr/${encodeURIComponent(utrQuery.trim())}`, { headers: getHeaders() })
+      const res = await authedFetch(`/api/npci/utr/${encodeURIComponent(utrQuery.trim())}`, { headers: getHeaders() })
       const json = await res.json()
       setUtrResult(json)
     } catch (e) {

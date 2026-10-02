@@ -1,3 +1,5 @@
+import { ApiError, announceSessionExpired, ensureSession } from './apiError'
+
 // SOLID: Single Responsibility API abstraction
 // Dependency Inversion Pages depend on this abstraction, not concrete fetch
 // Open/Closed Open for extension via new methods, closed for modification
@@ -25,24 +27,55 @@ class ApiClient {
     }
   }
 
-  async request(path, options = {}) {
+  async request(path, options = {}, _retried = false) {
     const headers = { ...this.getAuthHeaders(), ...(options.headers || {}) }
-    const res = await fetch(path, { ...options, headers })
-    
-    let data
+
+    let res
+    try {
+      res = await fetch(path, { ...options, headers })
+    } catch {
+      // fetch rejects before any response exists: offline, DNS, CORS.
+      const e = new ApiError({ status: 0, code: 'ERR_NETWORK', path })
+      e.offline = true
+      throw e
+    }
+
+    let data = null
     try {
       data = await res.json()
     } catch {
-      throw new Error(`Request failed ${res.status} ${path}`)
+      // A non-JSON body (an HTML error page, an empty 502) is still a failure
+      // the user has to be told about in plain language.
+      if (!res.ok) throw new ApiError({ status: res.status, code: 'ERR_BAD_RESPONSE', path })
+      return {}
     }
-    
+
     if (!res.ok) {
-      const error = new Error(data.error || data.message || `HTTP ${res.status}`)
+      const error = new ApiError({
+        status: res.status,
+        code: data.error,
+        serverMessage: data.message,
+        path,
+      })
       error.data = data
-      error.status = res.status
+
+      // A 401 usually means the stored token predates token signing, or has
+      // simply expired. The demo used to work without any token at all, so
+      // rather than interrupting the user -- possibly mid-payment -- quietly
+      // obtain a fresh signed token for the identity they are already using
+      // and replay the request once.
+      if (res.status === 401 && !_retried && path !== '/api/auth/login') {
+        const token = await ensureSession()
+        if (token) return this.request(path, options, true)
+        // Only when a session genuinely cannot be established does the user
+        // need to be involved.
+        announceSessionExpired(data.error === 'ERR_INVALID_TOKEN' ? 'expired' : 'required')
+      } else if (res.status === 401) {
+        announceSessionExpired(data.error === 'ERR_INVALID_TOKEN' ? 'expired' : 'required')
+      }
       throw error
     }
-    
+
     return data
   }
 

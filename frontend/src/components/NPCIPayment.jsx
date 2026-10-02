@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymentComplete, recipient, user }) {
   const [payerVpa, setPayerVpa] = useState('demo.investor@aasthichain')
@@ -69,7 +70,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
     setError('')
     setStatus('initiating')
     try {
-      const res = await fetch('/api/npci/collect', {
+      const res = await authedFetch('/api/npci/collect', {
         method: 'POST',
         headers: { ...getHeaders(), 'X-Idempotency-Key': `collect-${assetId}-${tokenAmount}-${Date.now()}` },
         body: JSON.stringify({
@@ -113,7 +114,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
     setStatus('confirming')
     setError('')
     try {
-      const res = await fetch(`/api/npci/payments/${encodeURIComponent(payment.paymentId)}/approve`, {
+      const res = await authedFetch(`/api/npci/payments/${encodeURIComponent(payment.paymentId)}/approve`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ payerId: user?.identityId || 'investor1' })
@@ -143,7 +144,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           const toId = user?.identityId || 'investor1'
           let drunixRes
           try {
-            drunixRes = await fetch('/api/transfers', {
+            drunixRes = await authedFetch('/api/transfers', {
               method: 'POST',
               headers: getHeaders(),
               body: JSON.stringify({ assetId, fromId: primaryFromId, toId, amount: parseInt(tokenAmount) || 1 })
@@ -163,12 +164,12 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             if (import.meta.env.DEV) console.log(`Transfer failed with ${primaryFromId}, retrying with originator1 and property originator lookup for ${assetId}`)
             // Try to get property originator
             try {
-              const propRes = await fetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: getHeaders() })
+              const propRes = await authedFetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: getHeaders() })
               if (propRes.ok) {
                 const propData = await propRes.json()
                 const realOriginator = propData.property?.originatorId || propData.originatorId || 'originator1'
                 if (realOriginator !== primaryFromId) {
-                  drunixRes = await fetch('/api/transfers', {
+                  drunixRes = await authedFetch('/api/transfers', {
                     method: 'POST',
                     headers: getHeaders(),
                     body: JSON.stringify({ assetId, fromId: realOriginator, toId, amount: parseInt(tokenAmount) || 1 })
@@ -179,7 +180,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             } catch {}
             // If still fails, try originator1 as last resort
             if (!drunixRes.ok) {
-              drunixRes = await fetch('/api/transfers', {
+              drunixRes = await authedFetch('/api/transfers', {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify({ assetId, fromId: 'originator1', toId, amount: parseInt(tokenAmount) || 1 })
@@ -188,7 +189,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
             }
           }
           if (!drunixRes.ok) {
-            await fetch(`/api/npci/payments/${payment.paymentId}/refund`, {
+            await authedFetch(`/api/npci/payments/${payment.paymentId}/refund`, {
               method: 'POST',
               headers: getHeaders(),
               body: JSON.stringify({ reason: `Transfer failed: ${drunixData.error} ${drunixData.message || ''}` })
@@ -199,7 +200,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
           }
           setDrunixTx(drunixData.transferId)
 
-          const releaseRes = await fetch(`/api/npci/payments/${payment.paymentId}/release`, {
+          const releaseRes = await authedFetch(`/api/npci/payments/${payment.paymentId}/release`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify({ drunixTransferId: drunixData.transferId })
@@ -230,7 +231,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
   const declinePayment = async () => {
     if (!payment) return
     try {
-      const res = await fetch(`/api/npci/payments/${payment.paymentId}/decline`, {
+      const res = await authedFetch(`/api/npci/payments/${payment.paymentId}/decline`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ reason: 'user declined' })
@@ -245,7 +246,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
   const timeoutPayment = async () => {
     if (!payment) return
     try {
-      const res = await fetch(`/api/npci/payments/${payment.paymentId}/timeout`, {
+      const res = await authedFetch(`/api/npci/payments/${payment.paymentId}/timeout`, {
         method: 'POST',
         headers: getHeaders()
       })
