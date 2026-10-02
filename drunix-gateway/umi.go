@@ -29,10 +29,12 @@ package drunix
 // Nothing in this file modifies existing behaviour; it is additive.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -113,6 +115,16 @@ func (m *MemorySecurities) Credit(assetID, holder string, tokens int64) {
 		m.book[assetID] = make(map[string]int64)
 	}
 	m.book[assetID][holder] += tokens
+}
+
+// Set replaces a holder's position (used when restoring from the store).
+func (m *MemorySecurities) Set(assetID, holder string, tokens int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.book[assetID] == nil {
+		m.book[assetID] = make(map[string]int64)
+	}
+	m.book[assetID][holder] = tokens
 }
 
 // Position implements SecuritiesLedger.
@@ -275,7 +287,8 @@ type UMIRail struct {
 
 	securities   SecuritiesLedger
 	chain        *DrunixChain
-	fundedPaise  int64 // lifetime sandbox funding in
+	store        UMIStore // durable mirror (nil = in-memory only, original behaviour)
+	fundedPaise  int64    // lifetime sandbox funding in
 	settledCount int64
 	failedCount  int64
 }
@@ -297,6 +310,131 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 
 // Securities exposes the asset-leg ledger (used by the HTTP layer for seeding).
 func (r *UMIRail) Securities() SecuritiesLedger { return r.securities }
+
+// WithStore attaches a durable mirror and replays whatever it holds. Persistence
+// is best-effort by design: a database problem degrades to in-memory operation
+// and is reported through /umi/config, never by failing a settlement.
+func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
+	if store == nil {
+		return r
+	}
+	r.store = store
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	snap, err := store.LoadSnapshot(ctx)
+	if err != nil || snap == nil {
+		return r
+	}
+	r.mu.Lock()
+	for _, w := range snap.Wallets {
+		cp := w
+		cp.ReservedPaise = 0
+		cp.refresh()
+		r.wallets[w.Participant] = &cp
+	}
+	for _, p := range snap.ISINs {
+		cp := p
+		r.isins[p.AssetID] = &cp
+	}
+	for _, si := range snap.Instructions {
+		cp := si
+		r.instructions[si.InstructionID] = &cp
+		r.order = append(r.order, si.InstructionID)
+	}
+	r.fundedPaise = snap.FundedPaise
+	r.settledCount = snap.Settled
+	r.failedCount = snap.Failed
+	r.mu.Unlock()
+
+	if mem, ok := r.securities.(*MemorySecurities); ok {
+		for _, p := range snap.Positions {
+			mem.Set(p.AssetID, p.Holder, p.Tokens)
+		}
+	}
+	log.Printf("UMI rail restored from %s: %d wallets, %d positions, %d ISINs, %d instructions",
+		store.Mode(), len(snap.Wallets), len(snap.Positions), len(snap.ISINs), len(snap.Instructions))
+	return r
+}
+
+// persistence helpers — all no-ops when no store is attached.
+
+func (r *UMIRail) pWallet(w CBDCWallet) {
+	if r.store != nil {
+		_ = r.store.SaveWallet(w)
+	}
+}
+
+func (r *UMIRail) pPosition(assetID string, holders ...string) {
+	if r.store == nil {
+		return
+	}
+	for _, h := range holders {
+		_ = r.store.SavePosition(assetID, h, r.securities.Position(assetID, h))
+	}
+}
+
+func (r *UMIRail) pInstruction(si SettlementInstruction) {
+	if r.store != nil {
+		_ = r.store.SaveInstruction(si)
+	}
+}
+
+func (r *UMIRail) pISIN(p PilotISIN) {
+	if r.store != nil {
+		_ = r.store.SaveISIN(p)
+	}
+}
+
+func (r *UMIRail) pMeta() {
+	if r.store == nil {
+		return
+	}
+	r.mu.Lock()
+	funded, settled, failed := r.fundedPaise, r.settledCount, r.failedCount
+	r.mu.Unlock()
+	_ = r.store.SaveMeta(funded, settled, failed)
+}
+
+// SeedPosition credits demo securities and mirrors them to the store.
+func (r *UMIRail) SeedPosition(assetID, holder string, tokens int64) (int64, error) {
+	mem, ok := r.securities.(*MemorySecurities)
+	if !ok {
+		return 0, fmt.Errorf("ERR_UMI_LEDGER_NOT_SEEDABLE")
+	}
+	if assetID == "" || holder == "" || tokens <= 0 {
+		return 0, ErrUMIInvalidAmount
+	}
+	mem.Credit(assetID, holder, tokens)
+	r.pPosition(assetID, holder)
+	return mem.Position(assetID, holder), nil
+}
+
+// IsEmpty reports whether the rail has no state yet (used to decide whether
+// boot seeding is appropriate — never re-seed a restored ledger).
+func (r *UMIRail) IsEmpty() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.wallets) == 0 && len(r.order) == 0 && r.fundedPaise == 0
+}
+
+// PersistenceStatus describes the durable mirror for /umi/config.
+func (r *UMIRail) PersistenceStatus() map[string]interface{} {
+	if r.store == nil {
+		return map[string]interface{}{
+			"mode": "in-memory",
+			"note": "State resets on restart. Set DATABASE_URL (Neon) to persist wallets, positions, pilot ISINs and instructions.",
+		}
+	}
+	st := map[string]interface{}{
+		"mode":   r.store.Mode(),
+		"tables": []string{"umi_wallet", "umi_position", "umi_isin", "umi_instruction", "umi_meta"},
+		"note":   "Write-through mirror; settlement invariants are enforced in memory under one mutex, the database is the durable copy.",
+	}
+	if e := r.store.LastError(); e != "" {
+		st["lastError"] = e
+	}
+	return st
+}
 
 func (r *UMIRail) nextID(prefix string) string {
 	r.seq++
@@ -358,6 +496,8 @@ func (r *UMIRail) FundWallet(participant string, amountINR float64) (*CBDCWallet
 	snapshot := *w
 	r.mu.Unlock()
 
+	r.pWallet(snapshot)
+	r.pMeta()
 	blk := r.append(BlockUMIWalletFunded, map[string]interface{}{
 		"kind":            "umi-funding",
 		"walletId":        snapshot.WalletID,
@@ -424,6 +564,7 @@ func (r *UMIRail) AssignISIN(assetID, issuer, depository string) (*PilotISIN, *D
 	cp := *rec
 	r.mu.Unlock()
 
+	r.pISIN(cp)
 	blk := r.append(BlockUMIISINAssigned, map[string]interface{}{
 		"kind":       "umi-isin",
 		"assetId":    assetID,
@@ -491,6 +632,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	si.msg("sese.023", fmt.Sprintf("Instruction received: %d tokens of %s, %s → %s, cash ₹%.2f settled in e₹-W",
 		req.Tokens, req.AssetID, req.Seller, req.Buyer, si.CashINR))
 
+	// an ISIN minted inline below is mirrored to the store after the lock drops
+	var autoAssigned *PilotISIN
+
 	fail := func(err error, detail string) (*SettlementInstruction, error) {
 		si.Status = UMIStatusFailed
 		si.FailureReason = err.Error()
@@ -504,6 +648,11 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 		}
 		r.mu.Unlock()
 		if !req.DryRun {
+			if autoAssigned != nil {
+				r.pISIN(*autoAssigned)
+			}
+			r.pInstruction(*si)
+			r.pMeta()
 			if blk := r.append(BlockUMIDvPFailed, map[string]interface{}{
 				"kind":          "umi-dvp",
 				"instructionId": si.InstructionID,
@@ -543,6 +692,7 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 			PilotFlag: true, Depository: "AasthiChain Depository (Drunix channel, 5 MSPs)", AssignedAt: now,
 		}
 		r.isins[req.AssetID] = isin
+		autoAssigned = isin
 	}
 	si.ISIN = isin.ISIN
 
@@ -578,6 +728,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 		si.Status = UMIStatusMatched
 		si.msg("sese.024", "Dry run: instruction is settleable. No state changed.")
 		r.mu.Unlock()
+		if autoAssigned != nil {
+			r.pISIN(*autoAssigned)
+		}
 		return si, nil
 	}
 
@@ -607,6 +760,14 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	buyerSnapshot, sellerSnapshot := *buyerWallet, *sellerWallet
 	r.mu.Unlock()
 
+	if autoAssigned != nil {
+		r.pISIN(*autoAssigned)
+	}
+	r.pWallet(buyerSnapshot)
+	r.pWallet(sellerSnapshot)
+	r.pPosition(si.AssetID, si.Seller, si.Buyer)
+	r.pInstruction(*si)
+	r.pMeta()
 	if blk := r.append(BlockUMIDvPSettled, map[string]interface{}{
 		"kind":          "umi-dvp",
 		"instructionId": si.InstructionID,
@@ -719,7 +880,17 @@ func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*Servicing
 	// servicing is an internal transfer between wallets: conservation unaffected
 	res.DistributedINR = paiseToINR(distributed)
 	res.RemainderINR = paiseToINR(gross - distributed)
+	touched := make([]CBDCWallet, 0, len(res.Payouts)+1)
+	touched = append(touched, *payerWallet)
+	for _, p := range res.Payouts {
+		if w, ok := r.wallets[p.Holder]; ok {
+			touched = append(touched, *w)
+		}
+	}
 	r.mu.Unlock()
+	for _, w := range touched {
+		r.pWallet(w)
+	}
 
 	if blk := r.append(BlockUMIServicingPaid, map[string]interface{}{
 		"kind":            "umi-servicing",
@@ -844,8 +1015,9 @@ func (r *UMIRail) Config() map[string]interface{} {
 			ErrUMINoWallet.Error(), ErrUMIInsufficientCBDC.Error(), ErrUMIInsufficientSecurities.Error(),
 			ErrUMINotPilotEligible.Error(), ErrUMISelfSettlement.Error(), ErrUMIInvalidAmount.Error(),
 		},
-		"counts":    map[string]int{"wallets": wallets, "pilotIsins": isins, "instructions": instr},
-		"endpoints": umiEndpointList,
+		"counts":      map[string]int{"wallets": wallets, "pilotIsins": isins, "instructions": instr},
+		"persistence": r.PersistenceStatus(),
+		"endpoints":   umiEndpointList,
 		"notUMI": []string{
 			"Not a public blockchain, token standard or SDK — UMI is a settlement interface to central bank money.",
 			"Retail e₹ is out of scope: UMI settles WHOLESALE CBDC between institutions.",

@@ -38,6 +38,11 @@ rendering, then its first `/api/umi/config` call returning 503.)
    | `UMI_ENABLED` | `true` |
    | `UMI_SEED_DEMO` | `true` |
    | `DRUNIX_MODE` | `mock` |
+   | `DATABASE_URL` | your Neon connection string (`postgresql://…?sslmode=require`) |
+
+   `DATABASE_URL` is what stops the demo resetting every time the free instance sleeps — the rail
+   persists wallets, positions, pilot ISINs and instructions into `umi_*` tables in your existing
+   Neon database. Leave it out and the rail still works, just in-memory.
 
    Do **not** set `PORT` — Render injects it and the binary reads it.
 
@@ -110,7 +115,8 @@ You should get JSON with `"mode":"simulation"` and two seeded wallets
 |---|---|---|
 | Still "not configured for this deployment" | Variable missing **on that environment**, or no redeploy | Confirm it's ticked for Preview *and* Production, then redeploy without cache |
 | "UMI rail not reachable at …" | Variable is set but the Go service is down/asleep | Open `<render-url>/health` directly; check Render logs |
-| Works, then empty after a while | Free instance slept; state is in-memory | Expected. Reload to re-seed, or move to a paid instance / add a persistent StateDB |
+| Works, then empty after a while | Free instance slept and `DATABASE_URL` is not set | Add `DATABASE_URL` on Render (see above) — state then survives sleeps |
+| `/umi/config` shows `persistence.lastError` | DB reachable at boot but failing writes | Check Neon quota / connection limits; settlement keeps working meanwhile |
 | 404 on `/umi/config` | `UMI_ENABLED=false` on Render | Set it to `true`, redeploy the service |
 | Page loads but wallets list is empty | `UMI_SEED_DEMO=false` | Set to `true`, or fund a wallet from the UI |
 
