@@ -19,21 +19,28 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div style={{padding:24, maxWidth:600, margin:'40px auto'}}>
-          <div className="card" style={{borderColor:'#FECACA', background:'#FEF2F2'}}>
-            <h3 style={{color:'#991B1B'}}>Something went wrong but your payment is safe</h3>
-            <p style={{fontSize:13, color:'#6B7280', marginTop:8, lineHeight:1.5}}>
-              The screen error was caught to prevent blank screen. Your payment and tokens move together atomically if one fails, both refunded no risk. Please refresh or try again.
+          <div className="card" style={{borderColor:'#FDE68A', background:'#FFFBEB'}}>
+            <h3 style={{color:'#92400E'}}>This page could not be displayed</h3>
+            <p style={{fontSize:13.5, color:'#6B7280', marginTop:8, lineHeight:1.6}}>
+              Something went wrong while drawing this screen. Nothing you were doing
+              was lost or changed — payments and tokens only ever move together, so a
+              display problem cannot leave a transaction half-finished.
+              Reloading usually fixes it.
             </p>
-            <pre style={{marginTop:12, background:'white', padding:10, borderRadius:6, fontSize:11, overflow:'auto', maxHeight:200, border:'1px solid #FECACA'}}>
-              {String(this.state.error?.message || this.state.error || 'Unknown error')}
-              {this.state.info?.componentStack ? '\n' + this.state.info.componentStack.slice(0,500) : ''}
-            </pre>
+            {/* A stack trace is for us, not for the person using the site.
+                It is shown in development only; in production it is reported
+                to the console instead of onto the page. */}
+            {import.meta.env.DEV && (
+              <pre style={{marginTop:12, background:'white', padding:10, borderRadius:6, fontSize:11, overflow:'auto', maxHeight:200, border:'1px solid #FDE68A'}}>
+                {String(this.state.error?.message || this.state.error || 'Unknown error')}
+                {this.state.info?.componentStack ? '\n' + this.state.info.componentStack.slice(0,500) : ''}
+              </pre>
+            )}
             <div style={{marginTop:12, display:'flex', gap:8, flexWrap:'wrap'}}>
               <button className="btn btn-primary" style={{fontSize:12}} onClick={()=>window.location.reload()}>Refresh Page</button>
               <button className="btn btn-secondary" style={{fontSize:12}} onClick={()=>this.setState({hasError:false, error:null, info:null})}>Try Again</button>
               <a href="/marketplace" className="btn btn-secondary" style={{fontSize:12, textDecoration:'none'}}>Back to Marketplace</a>
             </div>
-            <div style={{fontSize:10, color:'#9CA3AF', marginTop:8}}>Error caught by boundary prevents blank screen check console for details</div>
           </div>
         </div>
       )
@@ -48,15 +55,40 @@ import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, Cle
 // download small and the site interactive almost immediately.
 import Landing from './pages/Landing.jsx'
 
-const Login = lazy(() => import('./pages/Login.jsx'))
-const Marketplace = lazy(() => import('./pages/Marketplace.jsx'))
-const Wallet = lazy(() => import('./pages/Wallet.jsx'))
-const Admin = lazy(() => import('./pages/Admin.jsx'))
-const Regulator = lazy(() => import('./pages/Regulator.jsx'))
-const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
-const Support = lazy(() => import('./pages/Support.jsx'))
-const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
-const SettlementPage = lazy(() => import('./pages/Settlement.jsx'))
+/**
+ * A deploy renames every chunk. A tab that was already open then asks for a
+ * filename that no longer exists, the dynamic import rejects, and the user
+ * gets an error screen for no reason of their own — which is how a stale tab
+ * ends up showing a failure on a live page.
+ *
+ * On the first such failure we reload once, which fetches the new index.html
+ * and the new chunk names. The sessionStorage guard means a genuinely broken
+ * chunk cannot cause a reload loop: the second failure is allowed through to
+ * the error boundary.
+ */
+function lazyRoute(factory, name) {
+  return lazy(() => factory().catch((err) => {
+    const key = `aasthi_chunk_reload_${name}`
+    let alreadyTried = false
+    try { alreadyTried = sessionStorage.getItem(key) === '1' } catch {}
+    if (!alreadyTried) {
+      try { sessionStorage.setItem(key, '1') } catch {}
+      window.location.reload()
+      return new Promise(() => {})   // hold until the reload takes over
+    }
+    throw err
+  }))
+}
+
+const Login = lazyRoute(() => import('./pages/Login.jsx'), 'Login')
+const Marketplace = lazyRoute(() => import('./pages/Marketplace.jsx'), 'Marketplace')
+const Wallet = lazyRoute(() => import('./pages/Wallet.jsx'), 'Wallet')
+const Admin = lazyRoute(() => import('./pages/Admin.jsx'), 'Admin')
+const Regulator = lazyRoute(() => import('./pages/Regulator.jsx'), 'Regulator')
+const PropertyDetail = lazyRoute(() => import('./pages/PropertyDetail.jsx'), 'PropertyDetail')
+const Support = lazyRoute(() => import('./pages/Support.jsx'), 'Support')
+const LedgerExplorer = lazyRoute(() => import('./pages/LedgerExplorer.jsx'), 'LedgerExplorer')
+const SettlementPage = lazyRoute(() => import('./pages/Settlement.jsx'), 'Settlement')
 
 function RouteFallback() {
   return (

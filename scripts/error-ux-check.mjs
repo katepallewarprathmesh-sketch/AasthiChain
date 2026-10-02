@@ -89,6 +89,45 @@ for (const f of fs.readdirSync(pagesDir).filter(f => f.endsWith('.jsx'))) {
 }
 check('no page renders a bare error value', offenders.length === 0, offenders.join('; '));
 
+// ---------------------------------------------------------------- boundary
+console.log('  -- the error boundary must not leak internals to users --');
+{
+  const app = fs.readFileSync('frontend/src/App.jsx', 'utf8');
+  // A component stack is for us. It may appear only behind a DEV guard.
+  const stackUses = [...app.matchAll(/componentStack/g)];
+  const devGuarded = /import\.meta\.env\.DEV && \([\s\S]{0,400}?componentStack/.test(app);
+  check('component stack is shown only in development',
+    stackUses.length === 0 || devGuarded);
+  check('no "check console" instruction is shown to users',
+    !/check console/i.test(app));
+
+  // Every lazy route must survive a deploy renaming its chunk.
+  const bareLazy = [...app.matchAll(/=\s*lazy\(\(\)\s*=>/g)].length;
+  check('every lazy route is deploy-safe (uses lazyRoute)', bareLazy === 0,
+    `${bareLazy} bare lazy() import(s) left`);
+  check('lazyRoute guards against a reload loop',
+    /sessionStorage/.test(app) && /alreadyTried/.test(app));
+}
+
+// ---------------------------------------------------------------- built output
+console.log('  -- the shipped bundle carries no raw error text --');
+{
+  const dir = 'frontend/dist/assets';
+  if (fs.existsSync(dir)) {
+    const ours = fs.readdirSync(dir).filter(f => /^index-.*\.js$/.test(f));
+    let bad = [];
+    for (const f of ours) {
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      for (const m of ['Failed to load', 'check console for details']) {
+        if (src.includes(m)) bad.push(`${f}: ${m}`);
+      }
+    }
+    check('built app bundle has no raw error strings', bad.length === 0, bad.join('; '));
+  } else {
+    console.log('  SKIP  built bundle not present (run npm run build)');
+  }
+}
+
 console.log(`\n${passed} passed, ${failures.length} failed\n`);
 if (failures.length) { failures.forEach(f => console.error('  FAIL ' + f)); process.exit(1); }
 console.log('Error UX OK');
