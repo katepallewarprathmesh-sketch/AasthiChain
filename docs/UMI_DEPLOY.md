@@ -112,6 +112,11 @@ Behaviour guarantees:
 - **Single writer.** One gateway instance owns the rail. Running several replicas against one
   database needs row locks or an SQL-side settlement engine; don't scale past 1 instance as-is.
 
+**Running tests against a persisted rail:** the regression suite deliberately creates throwaway
+participants and failed settlements. With persistence on, those rows stay in the database forever
+and clutter the demo. Run load/regression traffic with `UMI_PERSIST=false`, or point the rail at a
+scratch database with `UMI_DATABASE_URL`, and keep the Neon instance for the real demo.
+
 Verified end to end against Neon: boot → settle → servicing → kill → restart → wallets
 (₹56,000 / ₹44,000 post-servicing), pilot ISIN, instruction trace and `conserved: true` all came back.
 
