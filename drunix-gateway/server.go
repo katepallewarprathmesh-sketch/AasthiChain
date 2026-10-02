@@ -32,6 +32,7 @@ func NewServer(l DrunixClient) *Server {
 // Router composes middleware + routes (Open/Closed: add routes, no rewrites).
 func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/drunix/ledger/status", s.handleLedgerStatus)
 	mux.HandleFunc("/drunix/tx/", s.handleTx)
@@ -67,6 +68,44 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// handleIndex answers the service root with a machine- and human-readable
+// directory. Without it "/" returned Go's bare "404 page not found", which
+// makes a correctly-running deployment look broken.
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{
+			"error": "ERR_NOT_FOUND", "path": r.URL.Path,
+			"hint": "see / for the endpoint directory",
+		})
+		return
+	}
+	body := map[string]interface{}{
+		"service":  "aasthichain-drunix-gateway",
+		"language": "golang",
+		"platform": "NPCI Drunix (Hyperledger Fabric fork)",
+		"status":   "ok",
+		"endpoints": map[string]interface{}{
+			"health":  []string{"GET /health", "GET /drunix/ledger/status"},
+			"drunix":  []string{"POST /drunix/submit", "POST /drunix/evaluate", "GET /drunix/tx/{txId}", "GET /drunix/recent", "POST /drunix/pipeline", "GET /drunix/pipeline/stats"},
+			"fraud":   []string{"POST /fraud/score", "GET /fraud/config"},
+			"umiRail": umiIndexEndpoints(s.UMI),
+		},
+		"note": "This is an API service, not a website. The AasthiChain UI lives on Vercel and proxies /api/umi/* here when UMI_GATEWAY_URL points at this host.",
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+func umiIndexEndpoints(rail *UMIRail) interface{} {
+	if rail == nil {
+		return "disabled (UMI_ENABLED=false)"
+	}
+	return map[string]interface{}{
+		"rail":      "RBI Unified Market Interface (UMI) — SEBI Demat 2.0 pattern, simulation",
+		"routes":    umiEndpointList,
+		"vercelEnv": "UMI_GATEWAY_URL=<this service's base URL>",
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
