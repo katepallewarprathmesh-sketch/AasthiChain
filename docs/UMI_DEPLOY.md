@@ -1,5 +1,7 @@
 # Deploying the UMI rail (fixing "Rail offline" on the hosted site)
 
+> **Looking for exact clicks for Render + Vercel?** See **[UMI_VERCEL_SETUP.md](./UMI_VERCEL_SETUP.md)**.
+
 ## Why you see "Rail offline"
 
 All UMI settlement logic is **Go** (`drunix-gateway/umi.go`). Vercel runs only the Node
