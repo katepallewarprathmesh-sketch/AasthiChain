@@ -1,0 +1,855 @@
+package drunix
+
+// UMI rail — RBI Unified Market Interface settlement pattern, in Go.
+//
+// Context (SEBI + RBI, Global Fintech Fest, 10 Sep 2026): "Demat 2.0" issues a
+// corporate bond as a NATIVE TOKEN on a permissioned DLT owned by the
+// depositories, and settles the CASH leg in RBI WHOLESALE CBDC (e₹-W) through
+// the RBI's Unified Market Interface (UMI). The result is atomic DvP — the
+// asset and the money move as one linked transaction — plus programmable asset
+// servicing (coupon/redemption straight into holders' CBDC wallets).
+//
+// AasthiChain already owns both ends of that sandwich: Drunix property-fraction
+// tokens (securities leg) and UPI/PayU (retail money leg). This file adds the
+// middle: a central-bank-money settlement interface.
+//
+// SCOPE / HONESTY: this is a PATTERN SIMULATION. There is no public UMI API;
+// participation runs through the SEBI Regulatory Sandbox. Every response from
+// this rail is stamped mode=simulation. We never claim RBI connectivity.
+//
+// Design notes:
+//   - cash is int64 PAISE, never float: central-bank money must conserve exactly
+//   - the securities leg is reached through the SecuritiesLedger interface (DIP),
+//     so the same engine drives the demo positions today and live chaincode later
+//   - settlement is lock-both-legs-then-commit under one mutex: there is no
+//     observable state where one leg moved and the other did not
+//   - every outcome (including failures) commits a block to the existing
+//     hash-chained Drunix ledger, so /api/chain/verify proves the rail too
+//
+// Nothing in this file modifies existing behaviour; it is additive.
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+// ---------- constants ----------
+
+const (
+	// UMIMode marks every payload as a pattern simulation, never a live RBI link.
+	UMIMode = "simulation"
+	// UMIDisclaimer is returned with every UMI response.
+	UMIDisclaimer = "Pattern simulation of RBI's Unified Market Interface (UMI) / SEBI Demat 2.0 atomic DvP in wholesale CBDC. No RBI or depository connectivity; sandbox-shaped demo only."
+	// UMIContract is the settlement contract name written into blocks.
+	UMIContract = "aasthi.umi-dvp-v1"
+	// UMISettlementBank is the notional e₹-W issuing/settlement counterparty.
+	UMISettlementBank = "RBI e₹-W (wholesale) — sandbox settlement account"
+
+	// Settlement instruction states.
+	UMIStatusReceived = "RECEIVED"
+	UMIStatusMatched  = "MATCHED"
+	UMIStatusLocked   = "LOCKED"
+	UMIStatusSettled  = "SETTLED"
+	UMIStatusFailed   = "FAILED"
+
+	// Block types appended to the Drunix chain (all new).
+	BlockUMIWalletFunded  = "UMI_WALLET_FUNDED"
+	BlockUMIISINAssigned  = "UMI_ISIN_ASSIGNED"
+	BlockUMIDvPSettled    = "UMI_DVP_SETTLED"
+	BlockUMIDvPFailed     = "UMI_DVP_FAILED"
+	BlockUMIServicingPaid = "UMI_SERVICING_PAID"
+)
+
+// Machine-readable failure reasons surfaced to the UI.
+var (
+	ErrUMINoWallet               = errors.New("ERR_UMI_NO_WALLET")
+	ErrUMIInsufficientCBDC       = errors.New("ERR_UMI_INSUFFICIENT_CBDC")
+	ErrUMIInsufficientSecurities = errors.New("ERR_UMI_INSUFFICIENT_SECURITIES")
+	ErrUMINotPilotEligible       = errors.New("ERR_UMI_NOT_PILOT_ELIGIBLE")
+	ErrUMISelfSettlement         = errors.New("ERR_UMI_SELF_SETTLEMENT")
+	ErrUMIInvalidAmount          = errors.New("ERR_UMI_INVALID_AMOUNT")
+	ErrUMIInstructionNotFound    = errors.New("ERR_UMI_INSTRUCTION_NOT_FOUND")
+	ErrUMINoHolders              = errors.New("ERR_UMI_NO_HOLDERS")
+)
+
+// ---------- securities leg (DIP boundary) ----------
+
+// SecuritiesLedger is the asset side of DvP. The demo wires the in-memory
+// position book below; production wires the Drunix chaincode token ledger
+// (chaincode/token.go) without touching the settlement engine.
+type SecuritiesLedger interface {
+	// Position returns the holder's token count for an asset.
+	Position(assetID, holder string) int64
+	// Move transfers tokens. It must be atomic and return an error without
+	// mutating anything if the seller is short.
+	Move(assetID, from, to string, tokens int64) error
+	// Holders returns every non-zero position for an asset.
+	Holders(assetID string) map[string]int64
+}
+
+// MemorySecurities is a deterministic in-process position book implementing
+// SecuritiesLedger — used by the gateway demo and the tests.
+type MemorySecurities struct {
+	mu   sync.Mutex
+	book map[string]map[string]int64 // assetID -> holder -> tokens
+}
+
+// NewMemorySecurities creates an empty position book.
+func NewMemorySecurities() *MemorySecurities {
+	return &MemorySecurities{book: make(map[string]map[string]int64)}
+}
+
+// Credit adds tokens to a holder (seeding / mint parity for the demo).
+func (m *MemorySecurities) Credit(assetID, holder string, tokens int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.book[assetID] == nil {
+		m.book[assetID] = make(map[string]int64)
+	}
+	m.book[assetID][holder] += tokens
+}
+
+// Position implements SecuritiesLedger.
+func (m *MemorySecurities) Position(assetID, holder string) int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.book[assetID][holder]
+}
+
+// Holders implements SecuritiesLedger.
+func (m *MemorySecurities) Holders(assetID string) map[string]int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make(map[string]int64)
+	for h, v := range m.book[assetID] {
+		if v > 0 {
+			out[h] = v
+		}
+	}
+	return out
+}
+
+// Move implements SecuritiesLedger (all-or-nothing).
+func (m *MemorySecurities) Move(assetID, from, to string, tokens int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if tokens <= 0 {
+		return ErrUMIInvalidAmount
+	}
+	if m.book[assetID] == nil || m.book[assetID][from] < tokens {
+		return ErrUMIInsufficientSecurities
+	}
+	m.book[assetID][from] -= tokens
+	m.book[assetID][to] += tokens
+	return nil
+}
+
+// ---------- cash leg: wholesale CBDC wallets ----------
+
+// CBDCWallet is a participant's wholesale e₹ wallet. Balances are PAISE.
+type CBDCWallet struct {
+	WalletID      string    `json:"walletId"`
+	Participant   string    `json:"participant"`
+	Bank          string    `json:"bank"`
+	BalancePaise  int64     `json:"balancePaise"`
+	ReservedPaise int64     `json:"reservedPaise"` // earmarked by in-flight instructions
+	BalanceINR    float64   `json:"balanceINR"`
+	AvailableINR  float64   `json:"availableINR"`
+	OpenedAt      time.Time `json:"openedAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+func (w *CBDCWallet) available() int64 { return w.BalancePaise - w.ReservedPaise }
+
+func (w *CBDCWallet) refresh() {
+	w.BalanceINR = paiseToINR(w.BalancePaise)
+	w.AvailableINR = paiseToINR(w.available())
+	w.UpdatedAt = time.Now().UTC()
+}
+
+func paiseToINR(p int64) float64 { return float64(p) / 100.0 }
+
+// INRToPaise converts rupees to paise with half-up rounding (no float drift).
+func INRToPaise(inr float64) int64 {
+	if inr >= 0 {
+		return int64(inr*100 + 0.5)
+	}
+	return -int64(-inr*100 + 0.5)
+}
+
+// ---------- pilot ISIN register ----------
+
+// PilotISIN is the Demat 2.0-style identifier flagged as part of the pilot.
+// Same instrument, one identifier — the pilot flag does not split the asset.
+type PilotISIN struct {
+	AssetID    string    `json:"assetId"`
+	ISIN       string    `json:"isin"`
+	Issuer     string    `json:"issuer"`
+	PilotFlag  bool      `json:"pilotFlag"`
+	Depository string    `json:"depository"`
+	AssignedAt time.Time `json:"assignedAt"`
+}
+
+func pilotISINFor(assetID string) string {
+	sum := sha256.Sum256([]byte("aasthi-pilot-isin|" + assetID))
+	return "AASTHI" + strings.ToUpper(hex.EncodeToString(sum[:])[:6])
+}
+
+// ---------- ISO 20022 message trace ----------
+
+// UMIMessage is one leg of the regulator-grade audit trail. The families match
+// what a real securities-settlement + central-bank-money rail emits.
+type UMIMessage struct {
+	Seq       int       `json:"seq"`
+	Family    string    `json:"family"` // sese.023 | sese.024 | pacs.009 | sese.025 | camt.054 | camt.019
+	Name      string    `json:"name"`
+	Detail    string    `json:"detail"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+var umiMessageNames = map[string]string{
+	"sese.023": "SecuritiesSettlementTransactionInstruction",
+	"sese.024": "SecuritiesSettlementTransactionStatusAdvice",
+	"pacs.009": "FinancialInstitutionCreditTransfer (e₹-W cash leg)",
+	"sese.025": "SecuritiesSettlementTransactionConfirmation",
+	"camt.054": "BankToCustomerDebitCreditNotification",
+	"camt.019": "ReturnBusinessDayInformation / reject advice",
+}
+
+// ---------- settlement instruction ----------
+
+// SettlementInstruction is one atomic DvP across the two legs.
+type SettlementInstruction struct {
+	InstructionID    string       `json:"instructionId"`
+	AssetID          string       `json:"assetId"`
+	ISIN             string       `json:"isin"`
+	Seller           string       `json:"seller"`
+	Buyer            string       `json:"buyer"`
+	Tokens           int64        `json:"tokens"`
+	PricePerTokenINR float64      `json:"pricePerTokenINR"`
+	CashPaise        int64        `json:"cashPaise"`
+	CashINR          float64      `json:"cashINR"`
+	Status           string       `json:"status"`
+	FailureReason    string       `json:"failureReason,omitempty"`
+	FailureDetail    string       `json:"failureDetail,omitempty"`
+	Atomic           string       `json:"atomic"`
+	SecuritiesLeg    string       `json:"securitiesLeg"`
+	CashLeg          string       `json:"cashLeg"`
+	BlockHeight      int64        `json:"blockHeight"`
+	BlockHash        string       `json:"blockHash,omitempty"`
+	Messages         []UMIMessage `json:"messages"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	SettledAt        *time.Time   `json:"settledAt,omitempty"`
+	DryRun           bool         `json:"dryRun"`
+	Mode             string       `json:"mode"`
+	Disclaimer       string       `json:"disclaimer"`
+}
+
+func (si *SettlementInstruction) msg(family, detail string) {
+	si.Messages = append(si.Messages, UMIMessage{
+		Seq:       len(si.Messages) + 1,
+		Family:    family,
+		Name:      umiMessageNames[family],
+		Detail:    detail,
+		Timestamp: time.Now().UTC(),
+	})
+}
+
+// ---------- the rail ----------
+
+// UMIRail is the settlement interface between the Drunix securities ledger and
+// wholesale central-bank money. Safe for concurrent use.
+type UMIRail struct {
+	mu           sync.Mutex
+	wallets      map[string]*CBDCWallet            // participant -> wallet
+	isins        map[string]*PilotISIN             // assetID -> pilot ISIN
+	instructions map[string]*SettlementInstruction // id -> instruction
+	order        []string                          // instruction ids, oldest first
+	seq          uint64
+
+	securities   SecuritiesLedger
+	chain        *DrunixChain
+	fundedPaise  int64 // lifetime sandbox funding in
+	settledCount int64
+	failedCount  int64
+}
+
+// NewUMIRail wires the rail to a securities ledger and the Drunix chain (DIP).
+// chain may be nil (settlement still works; no blocks are appended).
+func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
+	if sec == nil {
+		sec = NewMemorySecurities()
+	}
+	return &UMIRail{
+		wallets:      make(map[string]*CBDCWallet),
+		isins:        make(map[string]*PilotISIN),
+		instructions: make(map[string]*SettlementInstruction),
+		securities:   sec,
+		chain:        chain,
+	}
+}
+
+// Securities exposes the asset-leg ledger (used by the HTTP layer for seeding).
+func (r *UMIRail) Securities() SecuritiesLedger { return r.securities }
+
+func (r *UMIRail) nextID(prefix string) string {
+	r.seq++
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d", prefix, r.seq, time.Now().UnixNano())))
+	return prefix + "-" + strings.ToUpper(hex.EncodeToString(sum[:])[:10])
+}
+
+func (r *UMIRail) append(blockType string, txn map[string]interface{}) *DrunixBlock {
+	if r.chain == nil {
+		return nil
+	}
+	txn["contract"] = UMIContract
+	txn["rail"] = "RBI-UMI (simulated)"
+	return r.chain.Append(blockType, []map[string]interface{}{txn})
+}
+
+// --- wallets ---
+
+// walletLocked returns (creating if needed) a participant's e₹-W wallet.
+// Caller must hold r.mu.
+func (r *UMIRail) walletLocked(participant string) *CBDCWallet {
+	if w, ok := r.wallets[participant]; ok {
+		return w
+	}
+	w := &CBDCWallet{
+		WalletID:    "UMI-W-" + strings.ToUpper(participant),
+		Participant: participant,
+		Bank:        UMISettlementBank,
+		OpenedAt:    time.Now().UTC(),
+	}
+	w.refresh()
+	r.wallets[participant] = w
+	return w
+}
+
+// OpenWallet creates (idempotently) a wholesale CBDC wallet for a participant.
+func (r *UMIRail) OpenWallet(participant string) (*CBDCWallet, error) {
+	if strings.TrimSpace(participant) == "" {
+		return nil, ErrUMINoWallet
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	w := r.walletLocked(participant)
+	cp := *w
+	return &cp, nil
+}
+
+// FundWallet performs a sandbox top-up from the settlement bank.
+func (r *UMIRail) FundWallet(participant string, amountINR float64) (*CBDCWallet, *DrunixBlock, error) {
+	paise := INRToPaise(amountINR)
+	if paise <= 0 {
+		return nil, nil, ErrUMIInvalidAmount
+	}
+	r.mu.Lock()
+	w := r.walletLocked(participant)
+	w.BalancePaise += paise
+	r.fundedPaise += paise
+	w.refresh()
+	snapshot := *w
+	r.mu.Unlock()
+
+	blk := r.append(BlockUMIWalletFunded, map[string]interface{}{
+		"kind":            "umi-funding",
+		"walletId":        snapshot.WalletID,
+		"participant":     participant,
+		"amountINR":       paiseToINR(paise),
+		"balanceINR":      snapshot.BalanceINR,
+		"source":          UMISettlementBank,
+		"settlementAsset": "e₹-W (wholesale CBDC, simulated)",
+	})
+	return &snapshot, blk, nil
+}
+
+// Wallets returns every wallet, sorted by participant.
+func (r *UMIRail) Wallets() []CBDCWallet {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]CBDCWallet, 0, len(r.wallets))
+	for _, w := range r.wallets {
+		w.refresh()
+		out = append(out, *w)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Participant < out[j].Participant })
+	return out
+}
+
+// Wallet returns one participant's wallet.
+func (r *UMIRail) Wallet(participant string) (*CBDCWallet, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	w, ok := r.wallets[participant]
+	if !ok {
+		return nil, false
+	}
+	w.refresh()
+	cp := *w
+	return &cp, true
+}
+
+// --- pilot ISIN ---
+
+// AssignISIN registers a property as pilot-eligible under a Demat 2.0-style ISIN.
+func (r *UMIRail) AssignISIN(assetID, issuer, depository string) (*PilotISIN, *DrunixBlock, error) {
+	if strings.TrimSpace(assetID) == "" {
+		return nil, nil, ErrUMINotPilotEligible
+	}
+	if depository == "" {
+		depository = "AasthiChain Depository (Drunix channel, 5 MSPs)"
+	}
+	r.mu.Lock()
+	if existing, ok := r.isins[assetID]; ok {
+		cp := *existing
+		r.mu.Unlock()
+		return &cp, nil, nil
+	}
+	rec := &PilotISIN{
+		AssetID:    assetID,
+		ISIN:       pilotISINFor(assetID),
+		Issuer:     issuer,
+		PilotFlag:  true,
+		Depository: depository,
+		AssignedAt: time.Now().UTC(),
+	}
+	r.isins[assetID] = rec
+	cp := *rec
+	r.mu.Unlock()
+
+	blk := r.append(BlockUMIISINAssigned, map[string]interface{}{
+		"kind":       "umi-isin",
+		"assetId":    assetID,
+		"isin":       rec.ISIN,
+		"issuer":     issuer,
+		"pilotFlag":  true,
+		"depository": rec.Depository,
+		"note":       "One identifier, flagged as pilot — the instrument is not split in two (Demat 2.0 pattern)",
+	})
+	return &cp, blk, nil
+}
+
+// ISINs returns the pilot register.
+func (r *UMIRail) ISINs() []PilotISIN {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]PilotISIN, 0, len(r.isins))
+	for _, v := range r.isins {
+		out = append(out, *v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].AssetID < out[j].AssetID })
+	return out
+}
+
+// --- settlement ---
+
+// DvPRequest is one settlement instruction submitted to the rail.
+type DvPRequest struct {
+	AssetID          string  `json:"assetId"`
+	Seller           string  `json:"seller"`
+	Buyer            string  `json:"buyer"`
+	Tokens           int64   `json:"tokens"`
+	PricePerTokenINR float64 `json:"pricePerTokenINR"`
+	DryRun           bool    `json:"dryRun"`
+	// AutoAssignISIN registers the asset in the pilot register if absent
+	// (default true via the HTTP layer, so the demo never dead-ends).
+	AutoAssignISIN bool `json:"autoAssignIsin"`
+}
+
+// SettleDvP runs the full UMI flow: validate → match → lock BOTH legs → commit
+// atomically. On any failure nothing moves and the instruction ends FAILED.
+func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
+	now := time.Now().UTC()
+	cashPaise := INRToPaise(float64(req.Tokens) * req.PricePerTokenINR)
+
+	r.mu.Lock()
+	si := &SettlementInstruction{
+		InstructionID:    r.nextID("UMI"),
+		AssetID:          req.AssetID,
+		Seller:           req.Seller,
+		Buyer:            req.Buyer,
+		Tokens:           req.Tokens,
+		PricePerTokenINR: req.PricePerTokenINR,
+		CashPaise:        cashPaise,
+		CashINR:          paiseToINR(cashPaise),
+		Status:           UMIStatusReceived,
+		Atomic:           "all-or-nothing (DvP, both legs or neither)",
+		SecuritiesLeg:    "Drunix permissioned ledger — property fraction tokens",
+		CashLeg:          "RBI wholesale CBDC e₹-W via UMI (simulated)",
+		CreatedAt:        now,
+		DryRun:           req.DryRun,
+		Mode:             UMIMode,
+		Disclaimer:       UMIDisclaimer,
+	}
+	si.msg("sese.023", fmt.Sprintf("Instruction received: %d tokens of %s, %s → %s, cash ₹%.2f settled in e₹-W",
+		req.Tokens, req.AssetID, req.Seller, req.Buyer, si.CashINR))
+
+	fail := func(err error, detail string) (*SettlementInstruction, error) {
+		si.Status = UMIStatusFailed
+		si.FailureReason = err.Error()
+		si.FailureDetail = detail
+		si.msg("sese.024", "Settlement status advice: UNSETTLED — "+err.Error())
+		si.msg("camt.019", "Reject advice: "+detail+". Neither leg moved.")
+		if !req.DryRun {
+			r.failedCount++
+			r.instructions[si.InstructionID] = si
+			r.order = append(r.order, si.InstructionID)
+		}
+		r.mu.Unlock()
+		if !req.DryRun {
+			if blk := r.append(BlockUMIDvPFailed, map[string]interface{}{
+				"kind":          "umi-dvp",
+				"instructionId": si.InstructionID,
+				"assetId":       si.AssetID,
+				"seller":        si.Seller,
+				"buyer":         si.Buyer,
+				"tokens":        si.Tokens,
+				"cashINR":       si.CashINR,
+				"status":        UMIStatusFailed,
+				"failureReason": si.FailureReason,
+				"atomic":        "no partial settlement — both legs rolled back",
+			}); blk != nil {
+				si.BlockHeight, si.BlockHash = blk.Height, blk.Hash
+			}
+		}
+		return si, err
+	}
+
+	// --- validation ---
+	if req.Tokens <= 0 || req.PricePerTokenINR <= 0 || cashPaise <= 0 {
+		return fail(ErrUMIInvalidAmount, "tokens and pricePerTokenINR must both be positive")
+	}
+	if req.Seller == "" || req.Buyer == "" {
+		return fail(ErrUMINoWallet, "seller and buyer identities are required")
+	}
+	if req.Seller == req.Buyer {
+		return fail(ErrUMISelfSettlement, "a participant cannot settle against itself")
+	}
+
+	isin, ok := r.isins[req.AssetID]
+	if !ok {
+		if !req.AutoAssignISIN {
+			return fail(ErrUMINotPilotEligible, "asset "+req.AssetID+" is not in the pilot ISIN register — POST /umi/isin first")
+		}
+		isin = &PilotISIN{
+			AssetID: req.AssetID, ISIN: pilotISINFor(req.AssetID), Issuer: req.Seller,
+			PilotFlag: true, Depository: "AasthiChain Depository (Drunix channel, 5 MSPs)", AssignedAt: now,
+		}
+		r.isins[req.AssetID] = isin
+	}
+	si.ISIN = isin.ISIN
+
+	// --- leg checks (pre-lock) ---
+	sellerPos := r.securities.Position(req.AssetID, req.Seller)
+	if sellerPos < req.Tokens {
+		return fail(ErrUMIInsufficientSecurities,
+			fmt.Sprintf("%s holds %d tokens of %s, needs %d", req.Seller, sellerPos, req.AssetID, req.Tokens))
+	}
+	buyerWallet, hasBuyer := r.wallets[req.Buyer]
+	if !hasBuyer {
+		return fail(ErrUMINoWallet, "buyer "+req.Buyer+" has no wholesale CBDC wallet — fund one via POST /umi/wallets/{id}/fund")
+	}
+	if buyerWallet.available() < cashPaise {
+		return fail(ErrUMIInsufficientCBDC,
+			fmt.Sprintf("buyer e₹-W available ₹%.2f, instruction needs ₹%.2f", paiseToINR(buyerWallet.available()), si.CashINR))
+	}
+	sellerWallet := r.walletLocked(req.Seller)
+
+	si.Status = UMIStatusMatched
+	si.msg("sese.024", "Settlement status advice: MATCHED — both legs validated against the shared ledger")
+
+	// --- lock both legs ---
+	buyerWallet.ReservedPaise += cashPaise
+	si.Status = UMIStatusLocked
+	si.msg("sese.024", fmt.Sprintf("Settlement status advice: LOCKED — %d tokens earmarked at the depository, ₹%.2f reserved in e₹-W",
+		req.Tokens, si.CashINR))
+
+	if req.DryRun {
+		// release the earmark; report what would have happened
+		buyerWallet.ReservedPaise -= cashPaise
+		buyerWallet.refresh()
+		si.Status = UMIStatusMatched
+		si.msg("sese.024", "Dry run: instruction is settleable. No state changed.")
+		r.mu.Unlock()
+		return si, nil
+	}
+
+	// --- atomic commit ---
+	if err := r.securities.Move(req.AssetID, req.Seller, req.Buyer, req.Tokens); err != nil {
+		buyerWallet.ReservedPaise -= cashPaise // release cash lock, nothing moved
+		buyerWallet.refresh()
+		return fail(ErrUMIInsufficientSecurities, "securities leg rejected at commit: "+err.Error())
+	}
+	buyerWallet.ReservedPaise -= cashPaise
+	buyerWallet.BalancePaise -= cashPaise
+	sellerWallet.BalancePaise += cashPaise
+	buyerWallet.refresh()
+	sellerWallet.refresh()
+
+	settledAt := time.Now().UTC()
+	si.Status = UMIStatusSettled
+	si.SettledAt = &settledAt
+	si.msg("pacs.009", fmt.Sprintf("Cash leg executed in central bank money: ₹%.2f debited %s, credited %s (e₹-W)",
+		si.CashINR, buyerWallet.WalletID, sellerWallet.WalletID))
+	si.msg("sese.025", "Settlement confirmation: DvP complete — securities and cash moved in the same transaction")
+	si.msg("camt.054", fmt.Sprintf("Credit/debit notification issued to %s and %s", req.Buyer, req.Seller))
+
+	r.instructions[si.InstructionID] = si
+	r.order = append(r.order, si.InstructionID)
+	r.settledCount++
+	buyerSnapshot, sellerSnapshot := *buyerWallet, *sellerWallet
+	r.mu.Unlock()
+
+	if blk := r.append(BlockUMIDvPSettled, map[string]interface{}{
+		"kind":          "umi-dvp",
+		"instructionId": si.InstructionID,
+		"assetId":       si.AssetID,
+		"isin":          si.ISIN,
+		"securitiesLeg": map[string]interface{}{"from": si.Seller, "to": si.Buyer, "tokens": si.Tokens},
+		"cashLeg":       map[string]interface{}{"from": buyerSnapshot.WalletID, "to": sellerSnapshot.WalletID, "amountINR": si.CashINR, "asset": "e₹-W wholesale CBDC (simulated)"},
+		"status":        UMIStatusSettled,
+		"atomic":        "both legs in one block — no settlement-risk window",
+		"interface":     "RBI Unified Market Interface (pattern simulation)",
+	}); blk != nil {
+		si.BlockHeight, si.BlockHash = blk.Height, blk.Hash
+	}
+	return si, nil
+}
+
+// --- asset servicing ---
+
+// ServicingPayout is one holder's share of a servicing run.
+type ServicingPayout struct {
+	Holder     string  `json:"holder"`
+	WalletID   string  `json:"walletId"`
+	Tokens     int64   `json:"tokens"`
+	AmountINR  float64 `json:"amountINR"`
+	BalanceINR float64 `json:"balanceINR"`
+}
+
+// ServicingResult is the outcome of a coupon / rent distribution.
+type ServicingResult struct {
+	ServicingID    string            `json:"servicingId"`
+	AssetID        string            `json:"assetId"`
+	ISIN           string            `json:"isin"`
+	Payer          string            `json:"payer"`
+	GrossINR       float64           `json:"grossINR"`
+	DistributedINR float64           `json:"distributedINR"`
+	RemainderINR   float64           `json:"remainderINR"`
+	Payouts        []ServicingPayout `json:"payouts"`
+	BlockHeight    int64             `json:"blockHeight"`
+	BlockHash      string            `json:"blockHash,omitempty"`
+	SettledAt      time.Time         `json:"settledAt"`
+	Contract       string            `json:"contract"`
+	Mode           string            `json:"mode"`
+	Disclaimer     string            `json:"disclaimer"`
+}
+
+// Servicing distributes rent/coupon pro-rata straight into holders' CBDC
+// wallets — the Demat 2.0 "payment reaches the holder's wallet on the due date,
+// no registrar file-shuffling" behaviour. Excluded holders: the payer itself.
+// Rounding remainder (sub-paise dust) is reported, never silently created.
+func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*ServicingResult, error) {
+	gross := INRToPaise(grossINR)
+	if gross <= 0 {
+		return nil, ErrUMIInvalidAmount
+	}
+	holders := r.securities.Holders(assetID)
+	delete(holders, payer)
+	if len(holders) == 0 {
+		return nil, ErrUMINoHolders
+	}
+	var totalTokens int64
+	names := make([]string, 0, len(holders))
+	for h, t := range holders {
+		totalTokens += t
+		names = append(names, h)
+	}
+	sort.Strings(names)
+	if totalTokens <= 0 {
+		return nil, ErrUMINoHolders
+	}
+
+	r.mu.Lock()
+	payerWallet := r.walletLocked(payer)
+	if payerWallet.available() < gross {
+		avail := paiseToINR(payerWallet.available())
+		r.mu.Unlock()
+		return nil, fmt.Errorf("%w: payer e₹-W available ₹%.2f, servicing needs ₹%.2f", ErrUMIInsufficientCBDC, avail, paiseToINR(gross))
+	}
+
+	res := &ServicingResult{
+		ServicingID: r.nextID("UMISRV"),
+		AssetID:     assetID,
+		Payer:       payer,
+		GrossINR:    paiseToINR(gross),
+		SettledAt:   time.Now().UTC(),
+		Contract:    "aasthi.servicing-umi-v1",
+		Mode:        UMIMode,
+		Disclaimer:  UMIDisclaimer,
+	}
+	if isin, ok := r.isins[assetID]; ok {
+		res.ISIN = isin.ISIN
+	}
+
+	var distributed int64
+	for _, h := range names {
+		share := gross * holders[h] / totalTokens // integer paise, floor
+		if share <= 0 {
+			continue
+		}
+		w := r.walletLocked(h)
+		w.BalancePaise += share
+		w.refresh()
+		distributed += share
+		res.Payouts = append(res.Payouts, ServicingPayout{
+			Holder: h, WalletID: w.WalletID, Tokens: holders[h],
+			AmountINR: paiseToINR(share), BalanceINR: w.BalanceINR,
+		})
+	}
+	payerWallet.BalancePaise -= distributed
+	payerWallet.refresh()
+	// servicing is an internal transfer between wallets: conservation unaffected
+	res.DistributedINR = paiseToINR(distributed)
+	res.RemainderINR = paiseToINR(gross - distributed)
+	r.mu.Unlock()
+
+	if blk := r.append(BlockUMIServicingPaid, map[string]interface{}{
+		"kind":            "umi-servicing",
+		"servicingId":     res.ServicingID,
+		"assetId":         assetID,
+		"isin":            res.ISIN,
+		"payer":           payer,
+		"grossINR":        res.GrossINR,
+		"distributedINR":  res.DistributedINR,
+		"holders":         len(res.Payouts),
+		"settlementAsset": "e₹-W wholesale CBDC (simulated)",
+		"note":            "Smart-contract servicing: funds land in holders' CBDC wallets on the due date, no registrar file exchange",
+	}); blk != nil {
+		res.BlockHeight, res.BlockHash = blk.Height, blk.Hash
+	}
+	return res, nil
+}
+
+// --- queries ---
+
+// Instructions returns instructions newest-first (optionally capped).
+func (r *UMIRail) Instructions(limit int) []SettlementInstruction {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]SettlementInstruction, 0, len(r.order))
+	for i := len(r.order) - 1; i >= 0; i-- {
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		if si, ok := r.instructions[r.order[i]]; ok {
+			out = append(out, *si)
+		}
+	}
+	return out
+}
+
+// Instruction returns a single instruction with its full ISO 20022 trace.
+func (r *UMIRail) Instruction(id string) (*SettlementInstruction, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	si, ok := r.instructions[id]
+	if !ok {
+		return nil, ErrUMIInstructionNotFound
+	}
+	cp := *si
+	return &cp, nil
+}
+
+// Reconciliation is the money-conservation + leg-integrity report.
+type Reconciliation struct {
+	AsOf             time.Time         `json:"asOf"`
+	Wallets          int               `json:"wallets"`
+	TotalBalanceINR  float64           `json:"totalBalanceINR"`
+	TotalReservedINR float64           `json:"totalReservedINR"`
+	TotalFundedINR   float64           `json:"totalFundedINR"`
+	Conserved        bool              `json:"conserved"`
+	ConservationNote string            `json:"conservationNote"`
+	SettledCount     int64             `json:"settledInstructions"`
+	FailedCount      int64             `json:"failedInstructions"`
+	PilotISINs       int               `json:"pilotIsins"`
+	Chain            ChainVerification `json:"chain"`
+	Mode             string            `json:"mode"`
+	Disclaimer       string            `json:"disclaimer"`
+}
+
+// Reconcile asserts that no paisa was created or destroyed by the rail:
+// Σ wallet balances must equal lifetime sandbox funding (DvP and servicing are
+// internal transfers and must net to zero).
+func (r *UMIRail) Reconcile() Reconciliation {
+	r.mu.Lock()
+	var total, reserved int64
+	for _, w := range r.wallets {
+		total += w.BalancePaise
+		reserved += w.ReservedPaise
+	}
+	rec := Reconciliation{
+		AsOf:             time.Now().UTC(),
+		Wallets:          len(r.wallets),
+		TotalBalanceINR:  paiseToINR(total),
+		TotalReservedINR: paiseToINR(reserved),
+		TotalFundedINR:   paiseToINR(r.fundedPaise),
+		Conserved:        total == r.fundedPaise,
+		SettledCount:     r.settledCount,
+		FailedCount:      r.failedCount,
+		PilotISINs:       len(r.isins),
+		Mode:             UMIMode,
+		Disclaimer:       UMIDisclaimer,
+	}
+	r.mu.Unlock()
+
+	if rec.Conserved {
+		rec.ConservationNote = "Σ wallet balances == lifetime funding: every settled DvP and servicing run moved money, none created it."
+	} else {
+		rec.ConservationNote = "MISMATCH — settlement engine created or destroyed central bank money. This must never happen."
+	}
+	if r.chain != nil {
+		rec.Chain = r.chain.Verify()
+	}
+	return rec
+}
+
+// Config describes the rail for the UI and for judges.
+func (r *UMIRail) Config() map[string]interface{} {
+	r.mu.Lock()
+	wallets, isins, instr := len(r.wallets), len(r.isins), len(r.order)
+	r.mu.Unlock()
+	return map[string]interface{}{
+		"rail":            "RBI Unified Market Interface (UMI)",
+		"pattern":         "SEBI Demat 2.0 — tokenised asset on a permissioned depository ledger, cash leg in RBI wholesale CBDC, atomic DvP",
+		"launchContext":   "Announced by RBI Governor Sanjay Malhotra and SEBI Chairman Tuhin Kanta Pandey at Global Fintech Fest, 10 Sep 2026; first phase ₹1,025 crore of tokenised corporate bonds (REC, L&T, IIFL).",
+		"mode":            UMIMode,
+		"disclaimer":      UMIDisclaimer,
+		"language":        "golang",
+		"service":         "aasthichain-drunix-gateway (umi.go)",
+		"contract":        UMIContract,
+		"settlementAsset": "e₹-W wholesale CBDC (simulated, integer paise)",
+		"securitiesLeg":   "Drunix permissioned ledger — property fraction tokens",
+		"blockTypes":      []string{BlockUMIWalletFunded, BlockUMIISINAssigned, BlockUMIDvPSettled, BlockUMIDvPFailed, BlockUMIServicingPaid},
+		"messageFamilies": umiMessageNames,
+		"states":          []string{UMIStatusReceived, UMIStatusMatched, UMIStatusLocked, UMIStatusSettled, UMIStatusFailed},
+		"failureReasons": []string{
+			ErrUMINoWallet.Error(), ErrUMIInsufficientCBDC.Error(), ErrUMIInsufficientSecurities.Error(),
+			ErrUMINotPilotEligible.Error(), ErrUMISelfSettlement.Error(), ErrUMIInvalidAmount.Error(),
+		},
+		"counts":    map[string]int{"wallets": wallets, "pilotIsins": isins, "instructions": instr},
+		"endpoints": umiEndpointList,
+		"notUMI": []string{
+			"Not a public blockchain, token standard or SDK — UMI is a settlement interface to central bank money.",
+			"Retail e₹ is out of scope: UMI settles WHOLESALE CBDC between institutions.",
+			"UPI remains AasthiChain's retail money leg; UMI is the institutional rail beside it.",
+		},
+	}
+}
