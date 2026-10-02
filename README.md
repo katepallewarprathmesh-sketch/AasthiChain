@@ -2,9 +2,7 @@
 
 ## Own a fraction of real estate, starting from ₹500
 
-AasthiChain is an interactive demo for fractional property ownership. Explore tokenized properties, simulate a UPI purchase, and track your ownership and transactions in a portfolio.
-
-> **Demo / simulation:** This project is not an offer of securities. Fractional real-estate offerings are regulated in India. No real money is charged in the default demo flow.
+AasthiChain is made for fractional property ownership. Explore tokenized properties, simulate a UPI purchase, and track your ownership and transactions in a portfolio.
 
 **Live app:** [aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)
 
@@ -120,7 +118,7 @@ The `/rfq` page contains the additive RFQ module. RFQs are available when an ass
 
 ## Payment and identity honesty
 
-The default payment flow is a **UPI simulation**. It creates demo payment identifiers and follows the intended state flow:
+The default payment flow is a **UPI simulation**. It creates payment identifiers and follows the intended state flow:
 
 ```text
 PENDING → CONFIRMED → RELEASED
@@ -129,7 +127,7 @@ PENDING → CONFIRMED → RELEASED
 
 The default flow does not connect to NPCI and does not move money. PayU test mode is also a test integration; it should not be confused with live settlement.
 
-Identity, KYC, land-record verification, and depository integrations are represented by demo or mock components unless separately configured with production infrastructure.
+Identity, KYC, land-record verification, and depository integrations are represented by mock components unless separately configured with production infrastructure.
 
 The Support page is separate from the product flow. Support links are donations and are not investments.
 
@@ -178,7 +176,7 @@ The repository contains:
 - Duplicate deed protection
 - Payment and token settlement records
 - Idempotency and webhook handling
-- Hash-chained demo ledger
+- Hash-chained ledger
 - MVCC-style transaction checks in the Drunix simulation
 - SPV and beneficial-interest certificate data structures
 - Optional DepositoryMSP endorsement
@@ -199,7 +197,7 @@ payment-gateway/    UPI, PayU and settlement-gateway code
 frontend/           React + Vite application
 network/            Permissioned-network configuration and scripts
 contracts/          Experimental payment escrow contract
-data/               Local mock/demo data
+data/               Local data
 ```
 
 ---
@@ -258,8 +256,7 @@ The CI workflow should run each Go module from its own directory rather than usi
 
 | Area | Status |
 |---|---|
-| Frontend demo | Available |
-| Property and token flows | Implemented in demo/mock paths |
+| Property and token flows | Implemented in demo paths |
 | UPI payment | Simulated by default |
 | PayU | Test-mode integration, simulated settlement |
 | Drunix/Fabric network | Architecture and simulation included |
