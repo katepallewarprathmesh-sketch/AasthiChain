@@ -13,7 +13,13 @@ const TYPE_STYLES = {
   GENESIS: { label: 'Genesis', color: '#64748B', bg: '#F1F5F9', border: '#E2E8F0' },
   TOKEN_MINTED: { label: 'Token Minted', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
   TOKEN_TRANSFERRED: { label: 'Token Transferred', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
-  ESCROW_RELEASED: { label: 'Escrow Released', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' }
+  ESCROW_RELEASED: { label: 'Escrow Released', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  // UMI rail (RBI Unified Market Interface / SEBI Demat 2.0 pattern) — additive
+  UMI_WALLET_FUNDED: { label: 'UMI · e₹-W Funded', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
+  UMI_ISIN_ASSIGNED: { label: 'UMI · Pilot ISIN', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
+  UMI_DVP_SETTLED: { label: 'UMI · Atomic DvP Settled', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_DVP_FAILED: { label: 'UMI · DvP Failed (no partial)', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_SERVICING_PAID: { label: 'UMI · Servicing Paid', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' }
 }
 
 function shortHash(h) { return h ? `${h.slice(0, 10)}…${h.slice(-8)}` : '' }
@@ -23,6 +29,10 @@ function txnSummary(t) {
   if (t.kind === 'mint') return `${Number(t.totalTokens || 0).toLocaleString('en-IN')} tokens minted → ${t.to} (${t.msp || ''})`
   if (t.kind === 'transfer') return `${Number(t.tokens || 0).toLocaleString('en-IN')} tokens · ${t.from} → ${t.to}${t.atomic ? ` · ${t.atomic}` : ''}`
   if (t.kind === 'escrow-release') return `₹${Number(t.amountINR || 0).toLocaleString('en-IN')} released to seller · ${Number(t.tokens || 0).toLocaleString('en-IN')} tokens · ${t.seller} ⇄ ${t.buyer}`
+  if (t.kind === 'umi-dvp') return `${Number(t.tokens || (t.securitiesLeg && t.securitiesLeg.tokens) || 0).toLocaleString('en-IN')} tokens ⇄ ₹${Number(t.cashINR || (t.cashLeg && t.cashLeg.amountINR) || 0).toLocaleString('en-IN')} in e₹-W · ${t.status}${t.failureReason ? ' · ' + t.failureReason : ''}`
+  if (t.kind === 'umi-funding') return `₹${Number(t.amountINR || 0).toLocaleString('en-IN')} funded into ${t.walletId} (wholesale CBDC)`
+  if (t.kind === 'umi-isin') return `pilot ISIN ${t.isin} assigned to ${t.assetId}`
+  if (t.kind === 'umi-servicing') return `₹${Number(t.distributedINR || 0).toLocaleString('en-IN')} servicing paid into ${t.holders} CBDC wallet(s)`
   if (t.config) return `channel ${t.channel} · ${(t.orgs || []).length} orgs · ${(t.consensus || '').toLowerCase()}`
   return Object.entries(t).slice(0, 3).map(([k, v]) => `${k}=${v}`).join(' · ')
 }

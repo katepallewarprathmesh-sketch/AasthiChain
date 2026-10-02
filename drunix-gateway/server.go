@@ -19,6 +19,9 @@ type Server struct {
 	// HistoryLookup returns the payer's recent-activity summary (wired by main
 	// from the payments store; nil means zero-history).
 	HistoryLookup func(payerID string) HistorySummary
+	// UMI is the RBI Unified Market Interface settlement rail (optional, additive;
+	// nil means the /umi/* routes are simply not mounted — see umi.go).
+	UMI *UMIRail
 }
 
 // NewServer wires dependencies (DIP).
@@ -39,6 +42,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
+	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
 	return logCORS(mux)
 }
 
