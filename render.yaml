@@ -1,0 +1,31 @@
+# Render blueprint — hosts the Go Drunix gateway + UMI settlement rail so the
+# deployed frontend (Vercel) has a live /api/umi/* backend.
+#
+# Deploy: Render dashboard → New → Blueprint → point at this repo.
+# Then set UMI_GATEWAY_URL on Vercel to the service URL Render gives you
+# (e.g. https://aasthichain-umi-gateway.onrender.com) and redeploy the frontend.
+#
+# Free tier note: the instance sleeps after inactivity and state is in-memory,
+# so the first request after a sleep is slow and resets the demo ledger. That is
+# acceptable for a sandbox-labelled simulation rail; use a paid instance or add a
+# persistent StateDB if you need continuity.
+
+services:
+  - type: web
+    name: aasthichain-umi-gateway
+    runtime: docker
+    repo: https://github.com/katepallewarprathmesh-sketch/AasthiChain
+    branch: main
+    dockerfilePath: ./drunix-gateway/Dockerfile
+    dockerContext: ./drunix-gateway
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: UMI_ENABLED
+        value: "true"
+      - key: UMI_SEED_DEMO
+        value: "true"
+      - key: DRUNIX_MODE
+        value: mock
