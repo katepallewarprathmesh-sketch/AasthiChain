@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 export default function NPCIFailureModeDemo() {
   const [result, setResult] = useState(null)
@@ -9,7 +10,7 @@ export default function NPCIFailureModeDemo() {
     setResult(null)
     try {
       const token = localStorage.getItem('aasthi_token') || ''
-      const res = await fetch('/api/npci/failure-demo', {
+      const res = await authedFetch('/api/npci/failure-demo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ scenario })

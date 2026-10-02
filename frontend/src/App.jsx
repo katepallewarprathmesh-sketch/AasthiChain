@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { SESSION_EXPIRED_EVENT, clearSession, tokenLooksUsable } from './lib/apiError'
+import { SESSION_EXPIRED_EVENT, clearSession, tokenLooksUsable, ensureSession } from './lib/apiError'
 import { startBuildWatcher } from './lib/buildCheck'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
@@ -323,15 +323,40 @@ function AppContent({ user, setUser }) {
   // rejected and surfacing a failure the user cannot act on. This is what
   // makes sessions issued before token signing recover by themselves.
   useEffect(() => {
-    let token = null
-    try { token = localStorage.getItem('aasthi_token') } catch { return }
-    if (token && !tokenLooksUsable(token)) {
-      clearSession()
-      setInternalUser(null)
-      setUser(null)
-      if (location.pathname !== '/login' && location.pathname !== '/') {
-        navigate('/login', { replace: true, state: { reason: 'expired' } })
-      }
+    let token = null, storedUser = null
+    try {
+      token = localStorage.getItem('aasthi_token')
+      const raw = localStorage.getItem('aasthi_user')
+      storedUser = raw ? JSON.parse(raw) : null
+    } catch { return }
+    if (!token || tokenLooksUsable(token)) return
+
+    // The token predates token signing, so the server will refuse it. If we
+    // already know which identity this person was using, just get them a
+    // valid one -- the demo worked without any token at all before, and
+    // bouncing someone to a sign-in screen for an internal format change is
+    // not something they should have to care about.
+    if (storedUser && storedUser.identityId) {
+      ensureSession().then((fresh) => {
+        if (fresh) {
+          const updated = { ...storedUser, token: fresh }
+          setInternalUser(updated)
+          setUser(updated)
+          return
+        }
+        clearSession(); setInternalUser(null); setUser(null)
+        if (location.pathname !== '/login' && location.pathname !== '/') {
+          navigate('/login', { replace: true, state: { reason: 'expired' } })
+        }
+      })
+      return
+    }
+
+    clearSession()
+    setInternalUser(null)
+    setUser(null)
+    if (location.pathname !== '/login' && location.pathname !== '/') {
+      navigate('/login', { replace: true, state: { reason: 'expired' } })
     }
   }, [])
 

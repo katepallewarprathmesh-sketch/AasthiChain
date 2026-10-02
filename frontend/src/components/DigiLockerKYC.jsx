@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 export default function DigiLockerKYC({ user }) {
   const [kycStatus, setKycStatus] = useState(null)
@@ -21,7 +22,7 @@ export default function DigiLockerKYC({ user }) {
   const fetchKYC = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/kyc/${encodeURIComponent(user?.identityId || 'investor1')}`, { headers: getHeaders() })
+      const res = await authedFetch(`/api/kyc/${encodeURIComponent(user?.identityId || 'investor1')}`, { headers: getHeaders() })
       const data = await res.json()
       setKycStatus(data)
     } catch (e) {
@@ -34,7 +35,7 @@ export default function DigiLockerKYC({ user }) {
   const initDigiLocker = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/kyc/digilocker/init', {
+      const res = await authedFetch('/api/kyc/digilocker/init', {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ identityId: user?.identityId || 'investor1' })
@@ -56,7 +57,7 @@ export default function DigiLockerKYC({ user }) {
   const simulateCallback = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/kyc/digilocker/callback', {
+      const res = await authedFetch('/api/kyc/digilocker/callback', {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
@@ -78,7 +79,7 @@ export default function DigiLockerKYC({ user }) {
   const pullDocument = async (docType) => {
     setLoading(true)
     try {
-      const res = await fetch('/api/kyc/digilocker/pull-document', {
+      const res = await authedFetch('/api/kyc/digilocker/pull-document', {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({

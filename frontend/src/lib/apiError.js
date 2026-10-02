@@ -168,6 +168,54 @@ export function clearSession() {
   } catch { /* storage may be unavailable; nothing else to do */ }
 }
 
+/**
+ * Silently obtains a valid signed token for the identity the user is already
+ * using, without interrupting them.
+ *
+ * Before tokens were signed, no token simply meant "you are investor1", so the
+ * demo always worked. Hardening made that a 401 -- correct for the server, but
+ * it broke the demo for anyone holding a token issued earlier, and a payment
+ * part-way through would fail with a raw error.
+ *
+ * /api/auth/login is public, so the client can always mint a proper token.
+ * Doing that automatically restores the old frictionless behaviour while the
+ * server keeps refusing unsigned and forged tokens.
+ *
+ * Returns the new token, or null if a session genuinely cannot be established.
+ */
+export async function ensureSession() {
+  let identityId = 'investor1';
+  let role = 'Investor';
+  try {
+    const raw = localStorage.getItem('aasthi_user');
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u && u.identityId) identityId = u.identityId;
+      if (u && u.role) role = u.role;
+    }
+  } catch { /* fall back to the demo investor */ }
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identityId, role }),
+    });
+    if (!res.ok) return null;
+    const { token } = await res.json();
+    if (!token) return null;
+    localStorage.setItem('aasthi_token', token);
+    try {
+      const raw = localStorage.getItem('aasthi_user');
+      const u = raw ? JSON.parse(raw) : {};
+      localStorage.setItem('aasthi_user', JSON.stringify({ ...u, identityId, role, token }));
+    } catch { /* token alone is enough to continue */ }
+    return token;
+  } catch {
+    return null;
+  }
+}
+
 /** Tells the app a session died, so it can redirect once rather than per-call. */
 export function announceSessionExpired(reason) {
   clearSession();

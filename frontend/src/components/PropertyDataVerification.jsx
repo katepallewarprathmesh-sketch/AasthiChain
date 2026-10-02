@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 export default function PropertyDataVerification({ assetId }) {
   const [data, setData] = useState(null)
@@ -21,7 +22,7 @@ export default function PropertyDataVerification({ assetId }) {
     if (!assetId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: getHeaders() })
+      const res = await authedFetch(`/api/properties/${encodeURIComponent(assetId)}`, { headers: getHeaders() })
       const json = await res.json()
       setData(json.property || json)
     } catch (e) {
@@ -35,7 +36,7 @@ export default function PropertyDataVerification({ assetId }) {
     if (!assetId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/properties/${encodeURIComponent(assetId)}/verify`, {
+      const res = await authedFetch(`/api/properties/${encodeURIComponent(assetId)}/verify`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ source: 'bhoomi' })

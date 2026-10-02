@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 
 // Sepolia escrow contract. `contracts/PaymentEscrow.sol` is written but NOT deployed:
 // with no address configured this stays the zero address, and the on-chain path is
@@ -129,7 +130,7 @@ export default function TestnetPayment({ assetId, tokenAmount, tokenPrice, onPay
       const token = localStorage.getItem('aasthi_token') || ''
       const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
-      await fetch('/api/testnet/payments/initiate', {
+      await authedFetch('/api/testnet/payments/initiate', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export default function TestnetPayment({ assetId, tokenAmount, tokenPrice, onPay
         })
       })
 
-      const drunixRes = await fetch('/api/transfers', {
+      const drunixRes = await authedFetch('/api/transfers', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ assetId, toId: recipient || 'investor2', amount: parseInt(tokenAmount) || 1 })
@@ -160,11 +161,11 @@ export default function TestnetPayment({ assetId, tokenAmount, tokenPrice, onPay
       setDrunixTx(drunixData.transferId)
       setStatus('confirmed')
 
-      await fetch(`/api/testnet/payments/${simulatedId}/confirm`, {
+      await authedFetch(`/api/testnet/payments/${simulatedId}/confirm`, {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ drunixTransferId: drunixData.transferId })
       })
-      await fetch(`/api/testnet/payments/${simulatedId}/release`, { method: 'POST', headers: authHeaders })
+      await authedFetch(`/api/testnet/payments/${simulatedId}/release`, { method: 'POST', headers: authHeaders })
 
       setStatus('released')
       if (handleComplete) {
