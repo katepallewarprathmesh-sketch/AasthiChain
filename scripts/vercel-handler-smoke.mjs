@@ -134,6 +134,28 @@ check('login returned a signed token', typeof token === 'string' && token.includ
     `HTTP ${r.statusCode}`);
 }
 
+// ---------------------------------------------------------------- identity
+console.log('  -- the token decides identity, never a client header --');
+{
+  // Switching role by rewriting x-fabric-identity used to work, because the
+  // server trusted the header. It no longer does, which is why the UI must
+  // mint a new token when the role changes instead of relabelling itself.
+  const inv = await call('/api/npci/payments', {
+    token, headers: { 'x-fabric-identity': 'regulator1' },
+  });
+  check('investor token + regulator header is still the investor',
+    inv.statusCode === 200 && inv.body && inv.body.scope === 'own',
+    `scope=${inv.body && inv.body.scope}`);
+
+  const regLogin = await call('/api/auth/login', {
+    method: 'POST', body: { identityId: 'regulator1', role: 'Regulator' },
+  });
+  const reg = await call('/api/npci/payments', { token: regLogin.body.token });
+  check('a real regulator token is not scope-limited',
+    reg.statusCode === 200 && (!reg.body.scope || reg.body.scope === 'all'),
+    `scope=${reg.body && reg.body.scope}`);
+}
+
 // ---------------------------------------------------------------- fraud model
 console.log('  -- the handler serves the trained model, not the rules --');
 {

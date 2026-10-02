@@ -380,17 +380,46 @@ function AppContent({ user, setUser }) {
     }
   }
 
-  const handleRoleSwitch = (roleData) => {
-    const updated = {
-      ...(internalUser || {}),
-      identityId: roleData.id,
-      role: roleData.role,
-      mspId: roleData.mspId
+  // Switching role must mint a token for the NEW identity.
+  //
+  // This used to rewrite identityId in localStorage and keep the old token.
+  // The server authenticates from the signed token, so the UI would say
+  // "Registrar" while every request was still carried out as investor1 --
+  // silently acting as the wrong identity, and producing permission errors
+  // that looked like bugs. Tokens are signed now, so the identity in the
+  // token is the identity the server uses, and the only correct way to
+  // change identity is to obtain a new token.
+  const [roleSwitchError, setRoleSwitchError] = useState(null)
+
+  const handleRoleSwitch = async (roleData) => {
+    setRoleSwitchError(null)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identityId: roleData.id, role: roleData.role }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const { token } = await res.json()
+      if (!token) throw new Error('no token returned')
+
+      const updated = {
+        ...(internalUser || {}),
+        identityId: roleData.id,
+        role: roleData.role,
+        mspId: roleData.mspId,
+        token,
+      }
+      localStorage.setItem('aasthi_token', token)
+      localStorage.setItem('aasthi_user', JSON.stringify(updated))
+      localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
+      setInternalUser(updated)
+      setUser(updated)
+    } catch {
+      // Leave the previous identity intact rather than half-switching into a
+      // state where the UI and the token disagree.
+      setRoleSwitchError(`Could not switch to ${roleData.label || roleData.role}. Your current role is unchanged — please try again.`)
     }
-    localStorage.setItem('aasthi_user', JSON.stringify(updated))
-    localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
-    setInternalUser(updated)
-    setUser(updated)
   }
 
   const effectiveUser = internalUser || user
@@ -414,6 +443,14 @@ function AppContent({ user, setUser }) {
   return (
     <ErrorBoundary>
       <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
+      {roleSwitchError && (
+        <div role="status" className="container" style={{
+          marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A',
+          borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#92400E',
+        }}>
+          {roleSwitchError}
+        </div>
+      )}
       <main className="container" style={{paddingTop:0, paddingBottom:0}}>
         <Suspense fallback={<RouteFallback />}>
         <Routes>
