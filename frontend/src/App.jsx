@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { SESSION_EXPIRED_EVENT, clearSession, tokenLooksUsable } from './lib/apiError'
+import { startBuildWatcher } from './lib/buildCheck'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
 class ErrorBoundary extends React.Component {
@@ -352,6 +353,12 @@ function AppContent({ user, setUser }) {
   }, [location.pathname, navigate, setUser])
 
   useEffect(() => { prefetchLikelyRoutes() }, [])
+
+  // A tab left open across a deploy keeps running the old bundle, because
+  // Vercel serves previous hashed assets forever and nothing ever 404s. That
+  // tab shows bugs that are already fixed, and its retry buttons re-run the
+  // same old code. Watch for a newer build and reload once when one appears.
+  useEffect(() => startBuildWatcher(), [])
 
   useEffect(() => {
     if (!isClerkConfigured) return

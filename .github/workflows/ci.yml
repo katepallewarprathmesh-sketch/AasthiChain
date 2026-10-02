@@ -147,6 +147,8 @@ jobs:
           node-version: '20'
       - name: No raw error code may reach a user, and every failure names an action
         run: node scripts/error-ux-check.mjs
+      - name: A tab left open across a deploy must reload itself
+        run: node scripts/build-staleness-check.mjs
 
   vercel-handler:
     name: Vercel handler auth
