@@ -1029,7 +1029,19 @@ function drunixVerify() {
     if (drunixTxnsRoot(b.txns) !== b.txnsRoot) return { valid: false, brokenAt: b.height, reason: 'merkle root mismatch — block ' + b.height + ' transactions were altered after commit' };
     if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
   }
-  return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+  // An empty ledger is internally consistent but is not evidence of anything.
+  // Reporting a bare valid:true on a genesis-only chain reads as "we verified
+  // the activity" when there is no activity to verify.
+  const genesisOnly = drunixChain.length <= 1;
+  return {
+    valid: true, chainId: DRUNIX_CHAIN_ID,
+    height: Math.max(0, drunixChain.length - 1),
+    blocks: drunixChain.length,
+    genesisOnly,
+    verified: genesisOnly ? 'genesis block only — no committed transactions to verify'
+                          : `${drunixChain.length - 1} block(s) of committed transactions`,
+    checkedAt: new Date().toISOString(),
+  };
 }
 
 // Restore the ledger, then create genesis only if there was nothing valid to restore.
@@ -1581,6 +1593,18 @@ app.post('/api/npci/payments/:id/settle', authMiddleware, async (req, res) => {
   try {
     const pay = npciPayments[req.params.id];
     const result = await settleConfirmedPayment(pay);
+    // A replay is not a success. Eight concurrent callers previously all got
+    // HTTP 200 while exactly one settlement happened, so seven were told they
+    // had settled a payment they did not. 409 with the original settlement
+    // attached is both honest and still safely idempotent for the caller.
+    if (result.ok && result.already) {
+      return res.status(409).json({
+        ...result,
+        error: 'ERR_ALREADY_SETTLED',
+        message: 'This payment was already settled; the original settlement is attached.',
+        drunixTransferId: pay.drunixTransferId,
+      });
+    }
     return res.status(result.ok ? 200 : (result.code || 400)).json(result);
   } catch (e) {
     return res.status(500).json({ error: 'ERR_SETTLE_FAILED', message: e.message });

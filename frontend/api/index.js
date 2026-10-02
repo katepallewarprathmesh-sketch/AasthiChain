@@ -621,7 +621,17 @@ function drunixVerify() {
     if (drunixTxnsRoot(b.txns) !== b.txnsRoot) return { valid: false, brokenAt: b.height, reason: 'merkle root mismatch — block ' + b.height + ' transactions were altered after commit' };
     if (b.hash !== drunixHash(drunixCanonical(b))) return { valid: false, brokenAt: b.height, reason: 'block ' + b.height + ' contents do not match its committed hash — data was altered after commit' };
   }
-  return { valid: true, chainId: DRUNIX_CHAIN_ID, height: Math.max(0, drunixChain.length - 1), blocks: drunixChain.length, checkedAt: new Date().toISOString() };
+  // An empty ledger is internally consistent but is not evidence of anything.
+  const genesisOnly = drunixChain.length <= 1;
+  return {
+    valid: true, chainId: DRUNIX_CHAIN_ID,
+    height: Math.max(0, drunixChain.length - 1),
+    blocks: drunixChain.length,
+    genesisOnly,
+    verified: genesisOnly ? 'genesis block only — no committed transactions to verify'
+                          : `${drunixChain.length - 1} block(s) of committed transactions`,
+    checkedAt: new Date().toISOString(),
+  };
 }
 
 // Restore the ledger before creating genesis. The chain was previously the only
@@ -1078,10 +1088,11 @@ function getUser(req) {
       regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
     };
 
-    if (!auth) {
-      const mapped = roleMap[(fabricHeader || '').toLowerCase()];
-      return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
-    }
+    // No Authorization header is NOT a login. This used to return the
+    // investor1 identity (or whatever x-fabric-identity asked for), so every
+    // signed-token control only protected requests that bothered to send a
+    // token -- omitting it entirely authenticated you as someone.
+    if (!auth) return null;
 
     try {
       const token = auth.split(' ')[1] || '';
@@ -1107,12 +1118,31 @@ function getUser(req) {
       }
     } catch {}
 
-    const mapped = roleMap[(fabricHeader || '').toLowerCase()];
-    return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
+    // A token we cannot verify is not a login either.
+    return null;
   } catch {
-    return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
+    return null;
   }
 }
+
+// Paths that are legitimately reachable without a token: liveness, the demo
+// login itself, and the public read-only ledger/settlement surfaces. Anything
+// not listed here requires a verified identity.
+const PUBLIC_PATH_PREFIXES = ['/api/chain', '/api/umi/'];
+const PUBLIC_PATHS_EXACT = new Set([
+  '/health', '/api/health', '/api/auth/login', '/api/umi',
+]);
+function isPublicPath(path) {
+  if (PUBLIC_PATHS_EXACT.has(path)) return true;
+  return PUBLIC_PATH_PREFIXES.some(p => path === p || path.startsWith(p));
+}
+
+// Identity used for public paths so their handlers do not dereference null.
+// Deliberately not a real demo identity: it can read public surfaces and
+// nothing else.
+const ANONYMOUS = Object.freeze({
+  identityId: 'anonymous', mspId: 'PublicMSP', role: 'Public', anonymous: true,
+});
 
 export default async function handler(req, res) {
   try {
@@ -1133,7 +1163,16 @@ export default async function handler(req, res) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const path = url.pathname;
     const method = req.method;
-    const user = getUser(req);
+    let user = getUser(req);
+    if (!user) {
+      if (!isPublicPath(path)) {
+        return res.status(401).json({
+          error: 'ERR_UNAUTHORIZED',
+          message: 'Token is missing, malformed, expired or not signed by this server.',
+        });
+      }
+      user = ANONYMOUS;
+    }
 
     if (path === '/health' || path === '/api/health') {
       let dbMode = 'unknown';
