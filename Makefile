@@ -1,4 +1,4 @@
-.PHONY: network chaincode api frontend test clean
+.PHONY: network chaincode api frontend test clean umi umi-test
 
 network:
 	cd network && docker-compose up -d
@@ -16,7 +16,14 @@ api:
 frontend:
 	cd frontend && npm install && npm run dev
 
-test: chaincode-test
+# UMI rail (RBI Unified Market Interface / SEBI Demat 2.0 pattern) — Go, :21100
+umi:
+	cd drunix-gateway && go run ./cmd/gateway
+
+umi-test:
+	cd drunix-gateway && go vet ./... && go test -race -count=1 ./...
+
+test: chaincode-test umi-test
 	@echo "All tests passed"
 
 clean:

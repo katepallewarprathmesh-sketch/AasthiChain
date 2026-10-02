@@ -3471,6 +3471,39 @@ export default async function handler(req, res) {
       }
     }
 
+    // ===== UMI RAIL PROXY (additive, zero logic) =====
+    // All UMI settlement logic lives in Go (drunix-gateway/umi.go). Vercel has no
+    // Go process, so this forwards to wherever the rail is hosted (UMI_GATEWAY_URL).
+    // Unset => 503 on /api/umi/* only; every other route is unaffected.
+    if (path === '/api/umi' || path.startsWith('/api/umi/')) {
+      const base = process.env.UMI_GATEWAY_URL || '';
+      if (!base) {
+        return res.status(503).json({
+          error: 'ERR_UMI_RAIL_UNAVAILABLE',
+          message: 'UMI settlement rail (Go) is not configured for this deployment. Set UMI_GATEWAY_URL to a hosted drunix-gateway, or run it locally: cd drunix-gateway && go run ./cmd/gateway',
+          rail: 'RBI Unified Market Interface (simulation)', language: 'golang',
+          docs: 'docs/UMI_INTEGRATION.md'
+        });
+      }
+      const suffix = path.replace(/^\/api\/umi/, '') || '/config';
+      try {
+        const upstream = await fetch(base.replace(/\/$/, '') + '/umi' + (suffix.startsWith('/') ? suffix : '/' + suffix) + (url.search || ''), {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(req.body || {})
+        });
+        const text = await upstream.text();
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(upstream.status).send(text);
+      } catch (e) {
+        return res.status(503).json({
+          error: 'ERR_UMI_RAIL_UNAVAILABLE',
+          message: `UMI rail not reachable at ${base}`, detail: String((e && e.message) || e)
+        });
+      }
+    }
+    // ===== END UMI RAIL PROXY =====
+
     return res.status(404).json({ error: 'Not found', path });
 
   } catch (outerError) {

@@ -43,6 +43,36 @@ AasthiChain's Drunix layer (`drunix-gateway/peer.go`, all Go) follows NPCI's tra
 - Endpoints (open verification layer, never advertised in the UI): `POST /drunix/pipeline` (returns the per-txn phase trace `1-endorsed → 2-signed → 3-ordered → 4-validated → 5-committed`), `GET /drunix/pipeline/stats` (orderer batch/leader state, VS pool, StateDB, chain verification)
 - Run: `cd drunix-gateway && go test ./...` then `go run ./cmd/gateway` (:21100)
 
+### UMI Settlement Rail — RBI Unified Market Interface (v1.9, additive)
+
+On 10 Sep 2026 SEBI + RBI launched **Demat 2.0**: a bond issued as a *native token* on the depositories'
+permissioned DLT, with the **cash leg settled in RBI wholesale CBDC (e₹-W) through the Unified Market
+Interface (UMI)** — atomic DvP plus smart-contract asset servicing (₹1,025 cr issued by REC, L&T, IIFL).
+AasthiChain already had both ends (Drunix fraction tokens + UPI money leg); v1.9 adds the middle.
+
+- **Written in Go**, beside Drunix itself — `drunix-gateway/umi.go`, `umi_server.go`, `umi_test.go`.
+  Node holds **zero** UMI state: `mock-api-server.js` only reverse-proxies `/api/umi/*` → Go `:21100`.
+- **Atomic DvP**: validate → match → **lock both legs** → single-mutex commit. Failure rolls back both;
+  there is no observable state where one leg moved. Reasons: `ERR_UMI_INSUFFICIENT_CBDC`,
+  `ERR_UMI_INSUFFICIENT_SECURITIES`, `ERR_UMI_NOT_PILOT_ELIGIBLE`, `ERR_UMI_NO_WALLET`, `ERR_UMI_SELF_SETTLEMENT`.
+- **Wholesale CBDC wallets** in integer **paise** — `/umi/reconciliation` proves Σ balances == lifetime
+  funding (`"conserved": true`), so the rail can never create or destroy central bank money.
+- **Pilot ISIN register** (`AASTHI******`) — one identifier flagged as pilot, instrument not split in two.
+- **Programmable servicing**: `POST /umi/servicing` pays rent/coupon pro-rata straight into holders'
+  CBDC wallets on the due date — no registrar file exchange.
+- **ISO 20022 trace** per instruction: `sese.023 → sese.024 → pacs.009 → sese.025 → camt.054`
+  (failures end at `sese.024 + camt.019`).
+- New Drunix block types only — `UMI_WALLET_FUNDED`, `UMI_ISIN_ASSIGNED`, `UMI_DVP_SETTLED`,
+  `UMI_DVP_FAILED`, `UMI_SERVICING_PAID` — so Ledger Explorer and `/api/chain/verify` keep working and now
+  also verify settlement.
+- UI: new page **`/umi`** (nav: *UMI*). Everything else untouched; rail offline ⇒ `/api/umi/*` 503s and the
+  rest of the app is unaffected.
+- Labelled `"mode": "simulation"` everywhere — there is no public UMI API; real access is the SEBI
+  Regulatory Sandbox. Full design: **`docs/UMI_INTEGRATION.md`**.
+
+Run: `cd drunix-gateway && go test ./... && go run ./cmd/gateway` (rail at `:21100/umi/*`), then
+`node mock-api-server.js` (proxy at `/api/umi/*`, override with `UMI_GATEWAY_URL`).
+
 ### Programmable Ownership (beyond tokenization)
 
 Tokens behave like real ownership, not just receipts — every action commits to the Drunix chain:

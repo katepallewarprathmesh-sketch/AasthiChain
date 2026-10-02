@@ -1875,6 +1875,38 @@ app.post('/api/swap', authMiddleware, (req, res) => {
   res.json({ ok: true, swapId, blockHeight: blk.height, gave: { assetId: giveAssetId, tokens: gt }, received: { assetId: getAssetId, tokens: rt }, counterparty, message: 'Both legs settled together. Either both moved, or neither.' });
 });
 
+// ============ UMI RAIL PROXY (additive) ============
+// RBI Unified Market Interface pattern — SEBI Demat 2.0: tokenised asset on the
+// depositories' permissioned ledger + cash leg in wholesale CBDC (e₹-W) = atomic DvP.
+// ALL UMI logic lives in Go (drunix-gateway/umi.go). Node holds zero UMI state and
+// only reverse-proxies; if the Go rail is down, /api/umi/* returns 503 and every
+// other AasthiChain route is unaffected.
+const UMI_GATEWAY_URL = process.env.UMI_GATEWAY_URL || 'http://127.0.0.1:21100';
+app.all('/api/umi', umiProxy);
+app.all('/api/umi/*splat', umiProxy);
+async function umiProxy(req, res) {
+  const suffix = req.originalUrl.replace(/^\/api\/umi/, '') || '/config';
+  const target = UMI_GATEWAY_URL + '/umi' + (suffix.startsWith('/') ? suffix : '/' + suffix);
+  try {
+    const init = { method: req.method, headers: { 'Content-Type': 'application/json' } };
+    if (!['GET', 'HEAD'].includes(req.method)) init.body = JSON.stringify(req.body || {});
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    init.signal = ctrl.signal;
+    const upstream = await fetch(target, init);
+    clearTimeout(timer);
+    const text = await upstream.text();
+    res.status(upstream.status).type('application/json').send(text);
+  } catch (e) {
+    res.status(503).json({
+      error: 'ERR_UMI_RAIL_UNAVAILABLE',
+      message: `UMI settlement rail (Go) not reachable at ${UMI_GATEWAY_URL}. Start it with: cd drunix-gateway && go run ./cmd/gateway`,
+      rail: 'RBI Unified Market Interface (simulation)', language: 'golang', detail: String(e && e.message || e)
+    });
+  }
+}
+// ============ END UMI RAIL PROXY ============
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`AasthiChain Mock API Gateway + Frontend (Node.js live demo) listening on :${PORT} | FabricMode: mock | Tracks A1-A7 + Fintech UI per spec`);
   console.log(`Seed property: ${propId} | Balances: ${Object.keys(balances).length} | Transfers: ${Object.keys(transfers).length} (25 for pagination demo)`);
