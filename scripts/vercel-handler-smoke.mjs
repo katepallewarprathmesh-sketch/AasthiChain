@@ -38,9 +38,13 @@ function mockRes() {
 }
 
 async function call(path, { method = 'GET', token, headers = {}, body } = {}) {
+  // Vercel populates req.query; the handler reads it (e.g. ?format=json on the
+  // UTR receipt), so the harness must provide it or it misreports behaviour.
+  const qs = path.includes('?') ? new URLSearchParams(path.split('?')[1]) : new URLSearchParams();
   const req = {
     url: path,
     method,
+    query: Object.fromEntries(qs),
     headers: {
       host: 'test.local',
       'content-type': 'application/json',
@@ -132,6 +136,44 @@ check('login returned a signed token', typeof token === 'string' && token.includ
   const r = await call('/api/portfolio/investor1/nav', { token: other.body.token });
   check('another user cannot read investor1 portfolio', r.statusCode === 403,
     `HTTP ${r.statusCode}`);
+}
+
+// ---------------------------------------------------------------- UTR receipt
+console.log('  -- the UTR receipt is openable without signing in --');
+{
+  // Create a settled payment so there is a real UTR to look up.
+  const c = await call('/api/npci/collect', {
+    method: 'POST', token,
+    body: { amountINR: 1000, tokenAmount: 2, assetId: 'PROP-GREEN-VALLEY-PUNE-001',
+            payerVpa: 'ravi@okhdfcbank', payeeVpa: 'seller@okicici' },
+  });
+  const pid = c.body && c.body.paymentId;
+  await call(`/api/npci/payments/${pid}/approve`, { method: 'POST', token, body: {} });
+  await call(`/api/npci/payments/${pid}/settle`, { method: 'POST', token, body: {} });
+  const paid = await call(`/api/npci/payments/${pid}`, { token });
+  const rec = (paid.body && (paid.body.payment || paid.body)) || {};
+  const utr = rec.utr12 || rec.utr || rec.rrn;
+  check('a settled payment has a UTR', !!utr, JSON.stringify(rec).slice(0, 80));
+
+  if (utr) {
+    // No token at all — this is someone opening the link in a browser.
+    const anon = await call(`/api/npci/utr/${utr}`);
+    check('UTR lookup without a token is not 401', anon.statusCode !== 401,
+      `HTTP ${anon.statusCode}`);
+    check('UTR lookup returns the payment', anon.statusCode === 200,
+      `HTTP ${anon.statusCode}`);
+
+    // And the browser case: Accept: text/html must render the receipt page.
+    const html = await call(`/api/npci/utr/${utr}`, { headers: { accept: 'text/html' } });
+    const body = typeof html.body === 'string' ? html.body : '';
+    check('a browser gets the HTML verification receipt',
+      /PAYMENT VERIFICATION/.test(body), `got ${typeof html.body}`);
+  }
+
+  // An unknown reference must 404, not 401 — "not found" is the honest answer.
+  const missing = await call('/api/npci/utr/NPCI-DOES-NOT-EXIST');
+  check('unknown UTR is 404, not 401', missing.statusCode === 404,
+    `HTTP ${missing.statusCode}`);
 }
 
 // ---------------------------------------------------------------- identity

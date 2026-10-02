@@ -1128,7 +1128,14 @@ function getUser(req) {
 // Paths that are legitimately reachable without a token: liveness, the demo
 // login itself, and the public read-only ledger/settlement surfaces. Anything
 // not listed here requires a verified identity.
-const PUBLIC_PATH_PREFIXES = ['/api/chain', '/api/umi/'];
+// /api/npci/utr/<reference> is a payment-verification receipt, equivalent to a
+// bank's UTR lookup page: you are meant to be able to open the link and
+// confirm a payment settled. mock-api-server.js has always served it with
+// optionalAuth for exactly that reason, and it renders an HTML receipt when
+// opened in a browser. The blanket auth gate added here refused it before the
+// handler could run, which broke a link that is supposed to work for anyone
+// holding the reference.
+const PUBLIC_PATH_PREFIXES = ['/api/chain', '/api/umi/', '/api/npci/utr/'];
 const PUBLIC_PATHS_EXACT = new Set([
   '/health', '/api/health', '/api/auth/login', '/api/umi',
 ]);
