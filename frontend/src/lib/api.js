@@ -101,6 +101,12 @@ class ApiClient {
   // ---- Drunix block ledger (public open-layer endpoints) ----
   async getChain(limit = 50) { return this.request(`/api/chain?limit=${limit}`) }
   async verifyChain() { return this.request('/api/chain/verify') }
+  // UMI settlement chain (Go rail, durable + append-only). Separate from the
+  // Node demo chain above: this is the one UMI commits every settlement to.
+  async getUmiChain(limit = 60) { return this.request(`/api/drunix/chain?limit=${limit}`) }
+  async umiWallets() { return this.request('/api/umi/wallets') }
+  async umiInstructions() { return this.request('/api/umi/instructions') }
+  async umiIncome(participant) { return this.request(`/api/umi/income/${encodeURIComponent(participant)}`) }
   async chainHead() { return this.request('/api/chain/head') }
   async tamperChain(height) {
     return this.request('/api/chain/tamper', { method: 'POST', body: JSON.stringify({ height }) })
