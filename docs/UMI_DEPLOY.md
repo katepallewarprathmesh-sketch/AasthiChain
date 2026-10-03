@@ -207,5 +207,76 @@ Vercel bakes env vars in at build time, so after adding it you must redeploy
 
 The browser keeps the key in `sessionStorage` and sends it as a header, so it
 never lands in a URL, a server log, or the browser history. Aggregation lives
-in `lib/insights.js`, shared by `mock-api-server.js` (Express) and
+in `frontend/api/lib/insights.mjs`, shared by `mock-api-server.js` (Express) and
 `frontend/api/index.js` (Vercel), so the two deployments cannot drift.
+
+## Web traffic analytics (first-party)
+
+Pageview and referrer measurement with no third party involved. The browser
+posts a small beacon to our own `/api/track`; that is the whole data path.
+
+| Item | Value |
+|---|---|
+| Collector | `POST /api/track` — public by necessity, returns **204**, never returns data |
+| Report | Included as `traffic` in `GET /api/admin/insights` (admin key required) |
+| Client | `frontend/src/lib/track.js`, fired on route change from `App.jsx` |
+| Storage | Postgres (`DATABASE_URL`/`POSTGRES_URL`) when set, else a temp JSON file |
+| Tables | `site_traffic (day, path, referrer, hits)`, `site_visitors (day, visitor)` |
+
+### Privacy properties
+
+These are design guarantees, not settings:
+
+- **No IP addresses are stored** — not hashed, not truncated, never written.
+- **No cookies.** The visitor id is a random value in `sessionStorage`; it dies
+  with the tab and cannot follow anyone to another site.
+- **Daily-rotating hash.** The id is hashed with a server salt plus the date, so
+  the same person is not linkable across two days. The raw value never reaches
+  the database.
+- **No event log.** Hits are aggregated into counters on write, so there is no
+  per-visit history to leak or subpoena.
+- **Do Not Track and Global Privacy Control are honoured** in the client.
+- Bots are filtered by user-agent; asset and `/api/*` paths are never counted.
+
+### Required for durable counts
+
+Set `DATABASE_URL` (the same Neon instance the rail uses) on the deployment.
+Without it, counts live in a temp file and reset on every serverless cold start
+— the dashboard states which mode is active rather than hiding it.
+
+Optionally set `TRAFFIC_SALT` to a random value; it defaults to
+`ADMIN_DASHBOARD_KEY`. Changing it resets visitor-uniqueness going forward.
+
+## Marketplace catalogue
+
+`frontend/api/lib/catalogue.json` is the single source for seeded listings and
+is read by BOTH `mock-api-server.js` and `frontend/api/index.js`, so the local
+and Vercel deployments always show the same set.
+
+Nine properties across six cities and five asset classes (Residential,
+Commercial, Retail, Industrial, Land), with yields from 0% (land) to 11.3%
+(cold chain) and entry prices from ₹100 to ₹5,000 per token.
+
+The original `PROP-GREEN-VALLEY-PUNE-001` is entry #1: its id, token count and
+the three seeded balances are unchanged, so existing links and tests keep
+working. Holdings are seeded only for listings that do not already exist, so a
+restart never overwrites real positions.
+
+### Derived, never stored
+
+`tokensAvailable`, `tokensSold`, `fundedPct`, `holderCount`,
+`annualRentPerTokenINR` and `minInvestmentINR` are computed from live balances
+on every request. A listing therefore cannot drift out of agreement with the
+ledger about how much is actually left.
+
+### Query parameters on `GET /api/properties`
+
+`status`, `city`, `type`, `minYield`, `maxPrice`, and
+`sort` = `yield` | `priceAsc` | `priceDesc` | `funded` | `valuation`.
+The response also carries `facets.cities` and `facets.types` for building
+filter menus without a second request.
+
+**Vercel note:** `frontend/vercel.json` sets
+`functions."api/index.js".includeFiles = "api/lib/**"`. The catalogue is read at
+runtime with `fs`, which the bundler does not trace on its own — without this
+the function would deploy without the JSON and fall back to one property.
