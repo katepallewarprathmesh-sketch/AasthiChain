@@ -4,6 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { realDB } from './lib/db_real.js';
+// Shared with the Express server. Kept as .cjs so one copy serves both the
+// ESM serverless handler and the CommonJS local server, and so it lives
+// INSIDE the Vercel project root (frontend/) and actually gets bundled.
+import insightsLib from './lib/insights.cjs';
 import { authStore } from './lib/authstore.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
@@ -3503,12 +3507,12 @@ export default async function handler(req, res) {
       }
     }
     // ===== PRIVATE OPERATOR INSIGHTS =====
-    // Same contract as the local server; shared aggregation in lib/insights.js.
+    // Same contract as the local server; shared aggregation in lib/insights.cjs.
     if (path === '/api/admin/insights/status') {
       return res.status(200).json({ enabled: !!(process.env.ADMIN_DASHBOARD_KEY || '').trim() });
     }
     if (path === '/api/admin/insights') {
-      const { authorise: insightsAuth, buildInsights } = require('../../lib/insights.js');
+      const { authorise: insightsAuth, buildInsights } = insightsLib;
       const denied = insightsAuth({ headers: req.headers, query: Object.fromEntries(url.searchParams) });
       if (denied) return res.status(denied.status).json(denied.body);
 
