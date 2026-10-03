@@ -110,7 +110,14 @@ export default function LedgerExplorer() {
     } finally { setBusy(false) }
   }
 
-  const stats = [
+  const stats = isUMI ? [
+    ['Chain', chain?.chainId || 'aasthichain'],
+    ['Height', chain ? `#${chain.height}` : ''],
+    ['Blocks', chain?.blocks ?? ''],
+    ['Hash algo', 'SHA-512'],
+    ['Storage', umi?.durability?.durable ? 'Postgres · append-only' : 'in-memory'],
+    ['Settlement', 'Atomic DvP · e₹-W'],
+  ] : [
     ['Chain', chain?.chainId || 'aasthi-drunix'],
     ['Height', chain ? `#${chain.height}` : ''],
     ['Blocks', chain?.blocks ?? ''],
@@ -118,6 +125,18 @@ export default function LedgerExplorer() {
     ['Contract', chain?.contract || 'aasthi.dvp-v1'],
     ['Orgs (MSP)', chain?.orgs ? chain.orgs.map(o => o.msp.replace('MSP', '')).join(' · ') : ''],
   ]
+
+  const tabBtn = (id, label, sub) => (
+    <button key={id} onClick={() => setSource(id)} style={{
+      padding: '9px 14px', borderRadius: 9, cursor: 'pointer', textAlign: 'left',
+      border: `1px solid ${source === id ? '#1E3A5F' : '#E5E7EB'}`,
+      background: source === id ? '#1E3A5F' : 'white',
+      color: source === id ? 'white' : '#374151'
+    }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 10.5, opacity: 0.8, marginTop: 1 }}>{sub}</div>
+    </button>
+  )
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px 60px' }}>
