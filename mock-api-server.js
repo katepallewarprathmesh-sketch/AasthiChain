@@ -1905,6 +1905,32 @@ async function umiProxy(req, res) {
     });
   }
 }
+// Drunix ledger proxy — the UMI settlement chain lives in Go and is the durable,
+// append-only one (Postgres-backed when DATABASE_URL is set). Node keeps its own
+// in-memory property chain at /api/chain for the local demo; this exposes the Go
+// chain to the Ledger Explorer so UMI blocks are actually visible. Pure proxy.
+app.all('/api/drunix/*splat', drunixProxy);
+async function drunixProxy(req, res) {
+  const suffix = req.originalUrl.replace(/^\/api\/drunix/, '') || '/chain';
+  const target = UMI_GATEWAY_URL + '/drunix' + (suffix.startsWith('/') ? suffix : '/' + suffix);
+  try {
+    const init = { method: req.method, headers: { 'Content-Type': 'application/json' } };
+    if (!['GET', 'HEAD'].includes(req.method)) init.body = JSON.stringify(req.body || {});
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    init.signal = ctrl.signal;
+    const upstream = await fetch(target, init);
+    clearTimeout(timer);
+    const text = await upstream.text();
+    res.status(upstream.status).type('application/json').send(text);
+  } catch (e) {
+    res.status(503).json({
+      error: 'ERR_DRUNIX_GATEWAY_UNAVAILABLE',
+      message: `Drunix gateway (Go) not reachable at ${UMI_GATEWAY_URL}.`,
+      detail: String(e && e.message || e)
+    });
+  }
+}
 // ============ END UMI RAIL PROXY ============
 
 app.listen(PORT, '0.0.0.0', () => {

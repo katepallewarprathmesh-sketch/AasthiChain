@@ -3502,6 +3502,35 @@ export default async function handler(req, res) {
         });
       }
     }
+    // Drunix ledger proxy — the Ledger Explorer reads the durable settlement
+    // chain through this. Same contract as /api/umi/*: pure forwarding, zero
+    // logic here, 503 (not 404) when the rail is not configured.
+    if (path === '/api/drunix' || path.startsWith('/api/drunix/')) {
+      const base = process.env.UMI_GATEWAY_URL || '';
+      if (!base) {
+        return res.status(503).json({
+          error: 'ERR_DRUNIX_GATEWAY_UNAVAILABLE',
+          message: 'Drunix gateway (Go) is not configured for this deployment. Set UMI_GATEWAY_URL to a hosted drunix-gateway.',
+          docs: 'docs/UMI_DEPLOY.md'
+        });
+      }
+      const suffix = path.replace(/^\/api\/drunix/, '') || '/chain';
+      try {
+        const upstream = await fetch(base.replace(/\/$/, '') + '/drunix' + (suffix.startsWith('/') ? suffix : '/' + suffix) + (url.search || ''), {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(req.body || {})
+        });
+        const text = await upstream.text();
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(upstream.status).send(text);
+      } catch (e) {
+        return res.status(503).json({
+          error: 'ERR_DRUNIX_GATEWAY_UNAVAILABLE',
+          message: `Drunix gateway not reachable at ${base}`, detail: String((e && e.message) || e)
+        });
+      }
+    }
     // ===== END UMI RAIL PROXY =====
 
     return res.status(404).json({ error: 'Not found', path });

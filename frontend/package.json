@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke": "vite build --config vite.smoke.config.js --logLevel error && node node_modules/.smoke/smoke-render.js"
   },
   "dependencies": {
     "@clerk/react": "^6.16.1",
