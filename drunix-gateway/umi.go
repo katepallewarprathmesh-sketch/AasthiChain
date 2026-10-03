@@ -297,7 +297,26 @@ type UMIRail struct {
 	fundedPaise  int64    // lifetime sandbox funding in
 	settledCount int64
 	failedCount  int64
-	rev          int64 // monotonic persistence revision (see nextRev)
+	rev          int64             // monotonic persistence revision (see nextRev)
+	servicing    []ServicingRecord // per-holder income history, oldest first
+}
+
+// ServicingRecord is one holder's share of one servicing run — the row an
+// investor needs to answer "what rent/coupon have I actually been paid?".
+// Kept per holder (the block only recorded a holder count, which no investor
+// view can use) and mirrored to the store so it survives restarts.
+type ServicingRecord struct {
+	ServicingID string    `json:"servicingId"`
+	AssetID     string    `json:"assetId"`
+	ISIN        string    `json:"isin,omitempty"`
+	Payer       string    `json:"payer"`
+	Holder      string    `json:"holder"`
+	Tokens      int64     `json:"tokens"`
+	AmountPaise int64     `json:"amountPaise"`
+	AmountINR   float64   `json:"amountINR"`
+	BlockHeight int64     `json:"blockHeight"`
+	SettledAt   time.Time `json:"settledAt"`
+	Rev         int64     `json:"-"`
 }
 
 // NewUMIRail wires the rail to a securities ledger and the Drunix chain (DIP).
@@ -351,6 +370,7 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	// Resume above the highest persisted revision. Without this the rev guard
 	// would reject every write made after a restart — persistence would look
 	// healthy and silently stop recording.
+	r.servicing = append(r.servicing, snap.Servicing...)
 	r.rev = snap.MaxRev
 	r.fundedPaise = snap.FundedPaise
 	r.settledCount = snap.Settled
@@ -416,6 +436,15 @@ func (r *UMIRail) snapPositions(assetID string, holders ...string) []PositionRow
 func (r *UMIRail) pInstruction(si SettlementInstruction) {
 	if r.store != nil {
 		_ = r.store.SaveInstruction(si)
+	}
+}
+
+func (r *UMIRail) pServicing(rows []ServicingRecord) {
+	if r.store == nil {
+		return
+	}
+	for _, rec := range rows {
+		_ = r.store.SaveServicing(rec)
 	}
 }
 
@@ -836,6 +865,48 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	return si, nil
 }
 
+// servicingPayoutsForBlock renders payouts for the ledger block, so the chain
+// itself records who was paid what — not merely how many holders there were.
+func servicingPayoutsForBlock(ps []ServicingPayout) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, map[string]interface{}{
+			"holder": p.Holder, "tokens": p.Tokens, "amountINR": p.AmountINR, "walletId": p.WalletID,
+		})
+	}
+	return out
+}
+
+// Income returns one participant's servicing (rent / coupon) history, newest
+// first, with the lifetime total. Empty slice, not nil, when there is none.
+func (r *UMIRail) Income(participant string) (float64, []ServicingRecord) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rows := make([]ServicingRecord, 0, 8)
+	var totalPaise int64
+	for i := len(r.servicing) - 1; i >= 0; i-- {
+		if r.servicing[i].Holder == participant {
+			rows = append(rows, r.servicing[i])
+			totalPaise += r.servicing[i].AmountPaise
+		}
+	}
+	return paiseToINR(totalPaise), rows
+}
+
+// ServicingHistory returns every servicing payout, newest first.
+func (r *UMIRail) ServicingHistory(limit int) []ServicingRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if limit <= 0 || limit > len(r.servicing) {
+		limit = len(r.servicing)
+	}
+	out := make([]ServicingRecord, 0, limit)
+	for i := len(r.servicing) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, r.servicing[i])
+	}
+	return out
+}
+
 // --- asset servicing ---
 
 // ServicingPayout is one holder's share of a servicing run.
@@ -939,6 +1010,16 @@ func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*Servicing
 			touched = append(touched, r.snapWallet(w))
 		}
 	}
+	records := make([]ServicingRecord, 0, len(res.Payouts))
+	for _, p := range res.Payouts {
+		rec := ServicingRecord{
+			ServicingID: res.ServicingID, AssetID: assetID, ISIN: res.ISIN, Payer: payer,
+			Holder: p.Holder, Tokens: p.Tokens, AmountPaise: INRToPaise(p.AmountINR),
+			AmountINR: p.AmountINR, SettledAt: res.SettledAt, Rev: r.nextRev(),
+		}
+		records = append(records, rec)
+	}
+	r.servicing = append(r.servicing, records...)
 	r.mu.Unlock()
 	for _, w := range touched {
 		r.pWallet(w)
@@ -953,11 +1034,26 @@ func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*Servicing
 		"grossINR":        res.GrossINR,
 		"distributedINR":  res.DistributedINR,
 		"holders":         len(res.Payouts),
+		"payouts":         servicingPayoutsForBlock(res.Payouts),
 		"settlementAsset": "e₹-W wholesale CBDC (simulated)",
 		"note":            "Smart-contract servicing: funds land in holders' CBDC wallets on the due date, no registrar file exchange",
 	}); blk != nil {
+		for i := range records {
+			records[i].BlockHeight = blk.Height
+		}
+		r.mu.Lock()
+		n := len(r.servicing)
+		for i := range records {
+			if idx := n - len(records) + i; idx >= 0 && idx < n {
+				r.servicing[idx].BlockHeight = blk.Height
+			}
+		}
+		r.mu.Unlock()
 		res.BlockHeight, res.BlockHash = blk.Height, blk.Hash
 	}
+	// persisted only once the block anchor is known, so a restart can still
+	// point each payout at the block that proves it
+	r.pServicing(records)
 	return res, nil
 }
 

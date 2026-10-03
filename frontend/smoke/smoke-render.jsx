@@ -18,6 +18,7 @@ import Login from '../src/pages/Login.jsx'
 import Marketplace from '../src/pages/Marketplace.jsx'
 import Wallet from '../src/pages/Wallet.jsx'
 import LedgerExplorer from '../src/pages/LedgerExplorer.jsx'
+import InvestorDashboard from '../src/pages/InvestorDashboard.jsx'
 import UMISettlement from '../src/pages/UMISettlement.jsx'
 import Support from '../src/pages/Support.jsx'
 import Admin from '../src/pages/Admin.jsx'
@@ -31,6 +32,7 @@ const ROUTES = [
   ['/login', <Login onLogin={() => {}} />],
   ['/marketplace', <Marketplace user={user} />],
   ['/wallet', <Wallet user={user} />],
+  ['/dashboard', <InvestorDashboard user={user} />],
   ['/ledger', <LedgerExplorer />],
   ['/umi', <UMISettlement />],
   ['/support', <Support />],

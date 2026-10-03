@@ -45,6 +45,7 @@ type UMIStore interface {
 	SaveWallet(w CBDCWallet) error
 	SavePosition(assetID, holder string, tokens, rev int64) error
 	SaveISIN(p PilotISIN) error
+	SaveServicing(rec ServicingRecord) error
 	SaveInstruction(si SettlementInstruction) error
 	SaveMeta(fundedPaise, settled, failed int64) error
 	Mode() string
@@ -63,6 +64,7 @@ type UMISnapshot struct {
 	Positions    []PositionRow
 	ISINs        []PilotISIN
 	Instructions []SettlementInstruction
+	Servicing    []ServicingRecord
 	FundedPaise  int64
 	Settled      int64
 	Failed       int64
@@ -174,6 +176,20 @@ CREATE TABLE IF NOT EXISTS umi_instruction (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS umi_instruction_created_idx ON umi_instruction (created_at DESC);
+CREATE TABLE IF NOT EXISTS umi_servicing (
+  servicing_id TEXT   NOT NULL,
+  holder       TEXT   NOT NULL,
+  asset_id     TEXT   NOT NULL,
+  isin         TEXT,
+  payer        TEXT   NOT NULL,
+  tokens       BIGINT NOT NULL DEFAULT 0,
+  amount_paise BIGINT NOT NULL DEFAULT 0,
+  block_height BIGINT NOT NULL DEFAULT 0,
+  settled_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  rev          BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (servicing_id, holder)
+);
+CREATE INDEX IF NOT EXISTS umi_servicing_holder_idx ON umi_servicing (holder, settled_at DESC);
 CREATE TABLE IF NOT EXISTS umi_meta (
   key        TEXT PRIMARY KEY,
   value      BIGINT NOT NULL DEFAULT 0,
@@ -268,6 +284,27 @@ func (s *PostgresUMIStore) LoadSnapshot(ctx context.Context) (*UMISnapshot, erro
 	}
 	rows.Close()
 
+	rows, err = s.db.QueryContext(ctx,
+		`SELECT servicing_id, holder, asset_id, COALESCE(isin,''), payer, tokens, amount_paise, block_height, settled_at, rev
+		   FROM umi_servicing ORDER BY settled_at ASC LIMIT 2000`)
+	if err != nil {
+		return nil, s.note(err)
+	}
+	for rows.Next() {
+		var rec ServicingRecord
+		if err := rows.Scan(&rec.ServicingID, &rec.Holder, &rec.AssetID, &rec.ISIN, &rec.Payer,
+			&rec.Tokens, &rec.AmountPaise, &rec.BlockHeight, &rec.SettledAt, &rec.Rev); err != nil {
+			rows.Close()
+			return nil, s.note(err)
+		}
+		rec.AmountINR = paiseToINR(rec.AmountPaise)
+		if rec.Rev > snap.MaxRev {
+			snap.MaxRev = rec.Rev
+		}
+		snap.Servicing = append(snap.Servicing, rec)
+	}
+	rows.Close()
+
 	rows, err = s.db.QueryContext(ctx, `SELECT key, value FROM umi_meta`)
 	if err != nil {
 		return nil, s.note(err)
@@ -346,6 +383,18 @@ func (s *PostgresUMIStore) SaveInstruction(si SettlementInstruction) error {
 	                 status = EXCLUDED.status, payload = EXCLUDED.payload, rev = EXCLUDED.rev
 	               WHERE umi_instruction.rev <= EXCLUDED.rev`,
 		si.InstructionID, si.AssetID, si.Seller, si.Buyer, si.Tokens, si.CashPaise, si.Status, raw, si.CreatedAt, si.Rev)
+}
+
+// SaveServicing records one holder's payout from one servicing run.
+func (s *PostgresUMIStore) SaveServicing(rec ServicingRecord) error {
+	return s.exec(`INSERT INTO umi_servicing
+	                 (servicing_id, holder, asset_id, isin, payer, tokens, amount_paise, block_height, settled_at, rev)
+	               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	               ON CONFLICT (servicing_id, holder) DO UPDATE SET
+	                 block_height = EXCLUDED.block_height, rev = EXCLUDED.rev
+	               WHERE umi_servicing.rev <= EXCLUDED.rev`,
+		rec.ServicingID, rec.Holder, rec.AssetID, rec.ISIN, rec.Payer,
+		rec.Tokens, rec.AmountPaise, rec.BlockHeight, rec.SettledAt, rec.Rev)
 }
 
 // SaveMeta persists the rail's lifetime counters (conservation baseline).
