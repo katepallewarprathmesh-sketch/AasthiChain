@@ -1875,6 +1875,46 @@ app.post('/api/swap', authMiddleware, (req, res) => {
   res.json({ ok: true, swapId, blockHeight: blk.height, gave: { assetId: giveAssetId, tokens: gt }, received: { assetId: getAssetId, tokens: rt }, counterparty, message: 'Both legs settled together. Either both moved, or neither.' });
 });
 
+// ============ PRIVATE OPERATOR INSIGHTS (additive) ============
+// Locked to the operator by ADMIN_DASHBOARD_KEY. Disabled (503) when unset —
+// it fails closed, never open. Aggregation lives in lib/insights.js so this
+// server and the Vercel handler cannot drift apart.
+const { authorise: insightsAuth, buildInsights, configuredKey } = require('./lib/insights.js');
+
+app.get('/api/admin/insights', async (req, res) => {
+  const denied = insightsAuth(req);
+  if (denied) return res.status(denied.status).json(denied.body);
+
+  let rail = null;
+  try {
+    const base = UMI_GATEWAY_URL.replace(/\/$/, '');
+    const get = async (p) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      try {
+        const r = await fetch(base + p, { signal: ctrl.signal });
+        return r.ok ? await r.json() : null;
+      } finally { clearTimeout(timer); }
+    };
+    const [config, reconciliation, instructions, wallets, chain] = await Promise.all([
+      get('/umi/config'), get('/umi/reconciliation'), get('/umi/instructions'),
+      get('/umi/wallets'), get('/drunix/chain?limit=500')
+    ]);
+    if (reconciliation) {
+      rail = { config, reconciliation, instructions: (instructions && instructions.instructions) || [],
+               wallets: (wallets && wallets.wallets) || [], chain };
+    }
+  } catch { /* rail optional — the report says so */ }
+
+  res.json(buildInsights({ properties, balances, transfers, kycRecords, chain: drunixChain }, rail));
+});
+
+// Lets the UI tell "wrong password" apart from "feature not configured".
+app.get('/api/admin/insights/status', (req, res) => {
+  res.json({ enabled: !!configuredKey() });
+});
+// ============ END PRIVATE OPERATOR INSIGHTS ============
+
 // ============ UMI RAIL PROXY (additive) ============
 // RBI Unified Market Interface pattern — SEBI Demat 2.0: tokenised asset on the
 // depositories' permissioned ledger + cash leg in wholesale CBDC (e₹-W) = atomic DvP.
