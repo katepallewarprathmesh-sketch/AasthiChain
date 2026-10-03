@@ -17,6 +17,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
 )
@@ -84,6 +85,15 @@ func canonical(b *DrunixBlock) string {
 type DrunixChain struct {
 	mu     sync.Mutex
 	Blocks []*DrunixBlock
+
+	// store, when set, makes the chain durable: every committed block is
+	// written to append-only storage and replayed at boot, so a restart can
+	// never erase history. nil => in-memory, exactly as before.
+	store BlockStore
+	// sealed is set when a restored chain failed verification. A tampered
+	// history is never extended; the node serves it read-only and says so.
+	sealed     bool
+	persistErr string
 }
 
 // NewChain seeds the genesis block (channel config, org MSPs).
@@ -100,9 +110,16 @@ func NewChain() *DrunixChain {
 }
 
 // Append commits a new block and returns it.
+//
+// The block is written to durable storage inside the same critical section as
+// the in-memory append, so heights can never be assigned twice or committed out
+// of order. A sealed (tamper-detected) chain refuses all appends.
 func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *DrunixBlock {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.sealed {
+		return nil
+	}
 	prevHash := GenesisPrevHash
 	if n := len(c.Blocks); n > 0 {
 		prevHash = c.Blocks[n-1].Hash
@@ -118,7 +135,40 @@ func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *D
 	b.TxnsRoot = TxnsRoot(b.Txns)
 	b.Hash = chainHash(b.Timestamp + "|" + b.Type + "|" + b.TxnsRoot + "|" + b.PrevHash)
 	c.Blocks = append(c.Blocks, b)
+	if c.store != nil {
+		if err := c.store.AppendBlock(b); err != nil {
+			// The block is already committed in memory and returned to the
+			// caller; durability is best-effort and must never fail a
+			// settlement. Loud log + surfaced in /drunix/ledger/status.
+			log.Printf("Drunix chain: block %d committed in memory but NOT persisted: %v", b.Height, err)
+			c.persistErr = err.Error()
+		}
+	}
 	return b
+}
+
+// Snapshot returns a race-safe copy of the block slice for read-only use.
+func (c *DrunixChain) Snapshot() []*DrunixBlock {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]*DrunixBlock, len(c.Blocks))
+	copy(out, c.Blocks)
+	return out
+}
+
+// Durability reports how the chain is stored, for /drunix/ledger/status.
+func (c *DrunixChain) Durability() map[string]interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	mode := "in-memory (resets on restart)"
+	if c.store != nil {
+		mode = c.store.BlockStoreMode() + " (append-only, survives restarts)"
+	}
+	st := map[string]interface{}{"mode": mode, "durable": c.store != nil, "sealed": c.sealed}
+	if c.persistErr != "" {
+		st["lastError"] = c.persistErr
+	}
+	return st
 }
 
 // ChainVerification is the replay result any node or agent can compute.

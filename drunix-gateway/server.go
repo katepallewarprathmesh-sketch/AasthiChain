@@ -32,6 +32,7 @@ func NewServer(l DrunixClient) *Server {
 // Router composes middleware + routes (Open/Closed: add routes, no rewrites).
 func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/drunix/ledger/status", s.handleLedgerStatus)
 	mux.HandleFunc("/drunix/tx/", s.handleTx)
@@ -42,6 +43,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
+	mux.HandleFunc("/drunix/chain", s.handleChain)
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
 	return logCORS(mux)
 }
@@ -67,6 +69,44 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// handleIndex answers the service root with a machine- and human-readable
+// directory. Without it "/" returned Go's bare "404 page not found", which
+// makes a correctly-running deployment look broken.
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{
+			"error": "ERR_NOT_FOUND", "path": r.URL.Path,
+			"hint": "see / for the endpoint directory",
+		})
+		return
+	}
+	body := map[string]interface{}{
+		"service":  "aasthichain-drunix-gateway",
+		"language": "golang",
+		"platform": "NPCI Drunix (Hyperledger Fabric fork)",
+		"status":   "ok",
+		"endpoints": map[string]interface{}{
+			"health":  []string{"GET /health", "GET /drunix/ledger/status"},
+			"drunix":  []string{"POST /drunix/submit", "POST /drunix/evaluate", "GET /drunix/tx/{txId}", "GET /drunix/recent", "POST /drunix/pipeline", "GET /drunix/pipeline/stats"},
+			"fraud":   []string{"POST /fraud/score", "GET /fraud/config"},
+			"umiRail": umiIndexEndpoints(s.UMI),
+		},
+		"note": "This is an API service, not a website. The AasthiChain UI lives on Vercel and proxies /api/umi/* here when UMI_GATEWAY_URL points at this host.",
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+func umiIndexEndpoints(rail *UMIRail) interface{} {
+	if rail == nil {
+		return "disabled (UMI_ENABLED=false)"
+	}
+	return map[string]interface{}{
+		"rail":      "RBI Unified Market Interface (UMI) — SEBI Demat 2.0 pattern, simulation",
+		"routes":    umiEndpointList,
+		"vercelEnv": "UMI_GATEWAY_URL=<this service's base URL>",
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +289,55 @@ func errStr(err error) string {
 	return ""
 }
 
+// handleChain serves the block chain itself: every block, the replay
+// verification anyone can recompute, and whether history is durable.
+// ?from=&limit= page through a long chain, newest-last.
+func (s *Server) handleChain(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil || s.Pipeline.CP == nil || s.Pipeline.CP.Ledger == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ledger not wired"})
+		return
+	}
+	c := s.Pipeline.CP.Ledger
+	v := c.Verify()
+	blocks := c.Snapshot()
+
+	from := atoiDefault(r.URL.Query().Get("from"), 0)
+	limit := atoiDefault(r.URL.Query().Get("limit"), 50)
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	if from < 0 || from > len(blocks) {
+		from = 0
+	}
+	end := from + limit
+	if end > len(blocks) {
+		end = len(blocks)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"chainId":      DrunixChainID,
+		"height":       v.Height,
+		"totalBlocks":  len(blocks),
+		"verification": v,
+		"durability":   c.Durability(),
+		"from":         from,
+		"returned":     end - from,
+		"blocks":       blocks[from:end],
+		"note":         "Append-only. Blocks are never updated or deleted; verification replays SHA-512 linkage and merkle roots from genesis.",
+	})
+}
+
+func atoiDefault(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
 // handlePipelineStats reports live pipeline state (judge dashboard).
 func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 	if s.Pipeline == nil {
@@ -260,7 +349,8 @@ func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"stateDB":        map[string]interface{}{"keys": p.CP.State.Size(), "engine": "in-memory (YugabyteDB in production)"},
 		"transientStore": map[string]interface{}{"entries": p.CP.Transient.Size(), "engine": "KeyDB (in-memory, never persisted)"},
-		"ledger":         map[string]interface{}{"blocks": len(p.CP.Ledger.Blocks), "height": v.Height, "valid": v.Valid, "chainId": DrunixChainID},
+		"ledger": map[string]interface{}{"blocks": len(p.CP.Ledger.Blocks), "height": v.Height, "valid": v.Valid,
+			"chainId": DrunixChainID, "durability": p.CP.Ledger.Durability()},
 		"orderer": map[string]interface{}{
 			"nodes": p.Order.Nodes, "sequence": p.Order.Seq, "leader": p.Order.Leader(),
 			"consensus": "RAFT (simulated)", "batchMax": p.Order.BatchMax,

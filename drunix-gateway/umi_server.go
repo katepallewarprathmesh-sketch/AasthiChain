@@ -278,18 +278,21 @@ func (s *Server) handleUMISeed(w http.ResponseWriter, r *http.Request) {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
 		return
 	}
-	mem, ok := s.UMI.Securities().(*MemorySecurities)
-	if !ok {
-		umiErr(w, http.StatusConflict, "ERR_UMI_LEDGER_NOT_SEEDABLE", "securities leg is backed by a real ledger")
-		return
-	}
 	if body.AssetID == "" || body.Holder == "" || body.Tokens <= 0 {
 		umiErr(w, http.StatusBadRequest, ErrUMIInvalidAmount.Error(), "assetId, holder and positive tokens required")
 		return
 	}
-	mem.Credit(body.AssetID, body.Holder, body.Tokens)
+	pos, err := s.UMI.SeedPosition(body.AssetID, body.Holder, body.Tokens)
+	if err != nil {
+		if err.Error() == "ERR_UMI_LEDGER_NOT_SEEDABLE" {
+			umiErr(w, http.StatusConflict, "ERR_UMI_LEDGER_NOT_SEEDABLE", "securities leg is backed by a real ledger")
+			return
+		}
+		umiErr(w, http.StatusBadRequest, err.Error(), "assetId, holder and positive tokens required")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true, "assetId": body.AssetID, "holder": body.Holder,
-		"position": mem.Position(body.AssetID, body.Holder), "mode": UMIMode,
+		"position": pos, "mode": UMIMode,
 	})
 }

@@ -38,20 +38,46 @@ func main() {
 	// Embedded Drunix pipeline: LP → Orderer(RAFT) → VS(VSCC) → CP(MVCC+commit)
 	state := drunix.NewStateDB()
 	transient := drunix.NewTransientStore()
-	chain := drunix.NewChain()
+	// The block chain is durable when DATABASE_URL is set: blocks are appended
+	// to umi_block (append-only — no UPDATE, no DELETE) and replayed at boot,
+	// re-verified before the node will extend them. Without a database the
+	// chain is in-memory, exactly as before.
+	blockStore := drunix.OpenUMIStoreFromEnv()
+	var chain *drunix.DrunixChain
+	var chainV drunix.ChainVerification
+	if blockStore != nil {
+		chain, chainV = drunix.NewChainWithStore(blockStore)
+	} else {
+		chain, chainV = drunix.NewChain(), drunix.ChainVerification{Valid: true}
+	}
+	if !chainV.Valid {
+		log.Printf("WARNING: stored chain failed verification at block %d (%s) — serving read-only", chainV.BrokenAt, chainV.Reason)
+	}
 	srv.Pipeline = drunix.NewPipeline(state, transient, chain)
+	if blockStore != nil {
+		defer blockStore.Close()
+	}
 	// UMI rail — RBI Unified Market Interface pattern (atomic DvP in wholesale
 	// CBDC) mounted on the same service. Disable with UMI_ENABLED=false.
 	if os.Getenv("UMI_ENABLED") != "false" {
 		sec := drunix.NewMemorySecurities()
 		srv.UMI = drunix.NewUMIRail(sec, chain)
+		// Durable mirror: DATABASE_URL (the project's Neon Postgres) makes rail
+		// state survive restarts and free-instance sleeps. Absent/unreachable =>
+		// in-memory, exactly as before. UMI_PERSIST=false forces in-memory.
+		if blockStore != nil {
+			srv.UMI = srv.UMI.WithStore(blockStore)
+		}
 		log.Printf("UMI rail mounted at /umi/* — SEBI Demat 2.0 pattern: Drunix securities leg + e₹-W wholesale CBDC cash leg, atomic DvP (simulation)")
 		// Hosted deployments start empty, which makes the demo page look broken.
 		// Seed the same positions/wallets the local demo uses (UMI_SEED_DEMO=false to skip).
-		if os.Getenv("UMI_SEED_DEMO") != "false" {
-			sec.Credit(envOr("UMI_SEED_ASSET", "PROP-GREEN-VALLEY-PUNE-001"), envOr("UMI_SEED_OWNER", "originator1"), 15000)
-			srv.UMI.FundWallet("investor1", 100000)
-			srv.UMI.FundWallet("investor2", 50000)
+		// Seeding is skipped when state was restored from the database, so a
+		// restart never re-credits wallets (that would break conservation).
+		if os.Getenv("UMI_SEED_DEMO") != "false" && srv.UMI.IsEmpty() {
+			// via the rail so the seeded position is mirrored to the store too
+			_, _ = srv.UMI.SeedPosition(envOr("UMI_SEED_ASSET", "PROP-GREEN-VALLEY-PUNE-001"), envOr("UMI_SEED_OWNER", "originator1"), 15000)
+			_, _, _ = srv.UMI.FundWallet("investor1", 100000)
+			_, _, _ = srv.UMI.FundWallet("investor2", 50000)
 			log.Printf("UMI demo state seeded: 15000 tokens to %s, e₹-W wallets investor1 ₹1,00,000 / investor2 ₹50,000",
 				envOr("UMI_SEED_OWNER", "originator1"))
 		}

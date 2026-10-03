@@ -1,5 +1,7 @@
 # Deploying the UMI rail (fixing "Rail offline" on the hosted site)
 
+> **Looking for exact clicks for Render + Vercel?** See **[UMI_VERCEL_SETUP.md](./UMI_VERCEL_SETUP.md)**.
+
 ## Why you see "Rail offline"
 
 All UMI settlement logic is **Go** (`drunix-gateway/umi.go`). Vercel runs only the Node
@@ -80,6 +82,64 @@ Then open `/umi` — wallets and the pilot register should be populated.
 
 ---
 
+## Persistence (Neon Postgres) — state survives restarts
+
+Set **`DATABASE_URL`** on the Go service (the project's existing Neon connection string) and the
+rail becomes durable: wallets, securities positions, pilot ISINs, instructions (with their full
+ISO 20022 trace) and the lifetime counters are written through on every mutation and reloaded at
+boot. Without it the rail is in-memory exactly as before.
+
+It creates five tables, all prefixed `umi_`, with `CREATE TABLE IF NOT EXISTS` — your existing
+schema (`user`, `account`, `session`, `properties`, `balances`, `npci_payments`, …) is untouched:
+
+| Table | Holds |
+|---|---|
+| `umi_wallet` | e₹-W wallets (participant, wallet id, balance/reserved in **paise**) |
+| `umi_position` | securities holdings (asset_id, holder, tokens) |
+| `umi_isin` | pilot ISIN register |
+| `umi_instruction` | settlement instructions + full JSONB payload (ISO 20022 trace) |
+| `umi_meta` | lifetime funded paise, settled/failed counters (conservation baseline) |
+| `umi_block` | **the Drunix block chain itself** — append-only, one row per block |
+
+### The ledger is append-only and permanent
+
+`umi_block` is written with `INSERT ... ON CONFLICT (height) DO NOTHING`. There is no `UPDATE` and
+no `DELETE` anywhere in the code path — `BlockStore` deliberately exposes only `AppendBlock`. A
+committed block cannot be rewritten, by the application or by a bug.
+
+At boot the chain is **replayed and re-verified** from genesis (SHA-512 linkage, merkle roots,
+block hashes). Three outcomes:
+
+- **Empty table** → genesis is cut once and persisted.
+- **Valid history** → blocks are restored and new blocks continue from the restored tip, with
+  heights continuing (…, 3, 4, 5) rather than restarting at 1.
+- **Tampered history** → the node logs the exact broken height and reason, marks the chain
+  **sealed**, and *refuses to append*. It serves the history read-only rather than silently
+  building on forged data.
+
+Inspect it at **`GET /drunix/chain`** (`?from=&limit=`): every block, the verification anyone can
+recompute, and a `durability` block showing mode/durable/sealed.
+
+Behaviour guarantees:
+
+- **Persistence never breaks settlement.** Writes are best-effort; a database outage is logged and
+  reported in `/umi/config.persistence.lastError`, while the in-memory engine keeps settling. Proven
+  by `TestUMIStoreOutageDoesNotBreakSettlement`.
+- **No double-seeding.** Boot seeding is skipped when state was restored, so a restart cannot
+  re-credit wallets and break conservation.
+- **Reservations are not restored** — an earmark belongs to an in-flight instruction, and a restart
+  has none.
+- **Single writer.** One gateway instance owns the rail. Running several replicas against one
+  database needs row locks or an SQL-side settlement engine; don't scale past 1 instance as-is.
+
+**Running tests against a persisted rail:** the regression suite deliberately creates throwaway
+participants and failed settlements. With persistence on, those rows stay in the database forever
+and clutter the demo. Run load/regression traffic with `UMI_PERSIST=false`, or point the rail at a
+scratch database with `UMI_DATABASE_URL`, and keep the Neon instance for the real demo.
+
+Verified end to end against Neon: boot → settle → servicing → kill → restart → wallets
+(₹56,000 / ₹44,000 post-servicing), pilot ISIN, instruction trace and `conserved: true` all came back.
+
 ## What the hosted rail seeds at boot
 
 So the page is never empty for a visitor (`UMI_SEED_DEMO=false` to disable):
@@ -96,12 +156,14 @@ So the page is never empty for a visitor (`UMI_SEED_DEMO=false` to disable):
 | `UMI_ENABLED` | Go service | `true` | `false` unmounts `/umi/*` entirely |
 | `UMI_SEED_DEMO` | Go service | `true` | seed demo positions/wallets at boot |
 | `DRUNIX_MODE` | Go service | `mock` | `real` + `-tags real` for a live Fabric network |
+| `DATABASE_URL` | Go service | unset | Neon Postgres DSN — persists rail state (`umi_*` tables) |
+| `UMI_DATABASE_URL` | Go service | unset | use a *different* database than the app for the rail |
+| `UMI_PERSIST` | Go service | `true` | `false` forces in-memory even when `DATABASE_URL` is set |
 
 ## Known limits of a free-tier deployment
 
-- **State is in-memory.** A restart or a free-instance sleep resets wallets, instructions and
-  the chain. Fine for a labelled simulation; wire a StateDB (the `SecuritiesLedger` interface
-  and `DrunixChain` are the seams) if you need continuity.
+- **State is in-memory unless `DATABASE_URL` is set** (see Persistence above). With Neon wired in,
+  wallets, positions, ISINs, instructions **and the block chain itself** all survive restarts.
 - **Cold start** on Render free is ~30–50 s; the first `/umi` load after idle will spin.
 - **The rail is unauthenticated** — it is a sandbox demo surface. Do not put anything real
   behind it; put it behind the existing auth middleware first if you ever do.
