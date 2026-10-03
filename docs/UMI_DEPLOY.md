@@ -99,6 +99,26 @@ schema (`user`, `account`, `session`, `properties`, `balances`, `npci_payments`,
 | `umi_isin` | pilot ISIN register |
 | `umi_instruction` | settlement instructions + full JSONB payload (ISO 20022 trace) |
 | `umi_meta` | lifetime funded paise, settled/failed counters (conservation baseline) |
+| `umi_block` | **the Drunix block chain itself** — append-only, one row per block |
+
+### The ledger is append-only and permanent
+
+`umi_block` is written with `INSERT ... ON CONFLICT (height) DO NOTHING`. There is no `UPDATE` and
+no `DELETE` anywhere in the code path — `BlockStore` deliberately exposes only `AppendBlock`. A
+committed block cannot be rewritten, by the application or by a bug.
+
+At boot the chain is **replayed and re-verified** from genesis (SHA-512 linkage, merkle roots,
+block hashes). Three outcomes:
+
+- **Empty table** → genesis is cut once and persisted.
+- **Valid history** → blocks are restored and new blocks continue from the restored tip, with
+  heights continuing (…, 3, 4, 5) rather than restarting at 1.
+- **Tampered history** → the node logs the exact broken height and reason, marks the chain
+  **sealed**, and *refuses to append*. It serves the history read-only rather than silently
+  building on forged data.
+
+Inspect it at **`GET /drunix/chain`** (`?from=&limit=`): every block, the verification anyone can
+recompute, and a `durability` block showing mode/durable/sealed.
 
 Behaviour guarantees:
 
@@ -143,8 +163,7 @@ So the page is never empty for a visitor (`UMI_SEED_DEMO=false` to disable):
 ## Known limits of a free-tier deployment
 
 - **State is in-memory unless `DATABASE_URL` is set** (see Persistence above). With Neon wired in,
-  wallets/positions/ISINs/instructions survive; the Drunix *block chain* itself still rebuilds from
-  genesis on restart, so block heights restart from 0 while balances stay correct.
+  wallets, positions, ISINs, instructions **and the block chain itself** all survive restarts.
 - **Cold start** on Render free is ~30–50 s; the first `/umi` load after idle will spin.
 - **The rail is unauthenticated** — it is a sandbox demo surface. Do not put anything real
   behind it; put it behind the existing auth middleware first if you ever do.

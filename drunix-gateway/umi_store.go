@@ -331,7 +331,11 @@ func (s *PostgresUMIStore) SaveMeta(fundedPaise, settled, failed int64) error {
 // point the rail at a different database than the app). Returns nil when
 // persistence is not configured or unreachable — the rail then runs purely
 // in-memory exactly as before.
-func OpenUMIStoreFromEnv() UMIStore {
+// OpenUMIStoreFromEnv returns the concrete store so callers can use both the
+// UMIStore (rail state) and BlockStore (ledger blocks) halves of it — one
+// connection pool backs both. nil means "run in memory", and every caller
+// treats that as the normal, supported case.
+func OpenUMIStoreFromEnv() *PostgresUMIStore {
 	if os.Getenv("UMI_PERSIST") == "false" {
 		log.Printf("UMI persistence disabled (UMI_PERSIST=false) — in-memory only")
 		return nil

@@ -38,8 +38,25 @@ func main() {
 	// Embedded Drunix pipeline: LP → Orderer(RAFT) → VS(VSCC) → CP(MVCC+commit)
 	state := drunix.NewStateDB()
 	transient := drunix.NewTransientStore()
-	chain := drunix.NewChain()
+	// The block chain is durable when DATABASE_URL is set: blocks are appended
+	// to umi_block (append-only — no UPDATE, no DELETE) and replayed at boot,
+	// re-verified before the node will extend them. Without a database the
+	// chain is in-memory, exactly as before.
+	blockStore := drunix.OpenUMIStoreFromEnv()
+	var chain *drunix.DrunixChain
+	var chainV drunix.ChainVerification
+	if blockStore != nil {
+		chain, chainV = drunix.NewChainWithStore(blockStore)
+	} else {
+		chain, chainV = drunix.NewChain(), drunix.ChainVerification{Valid: true}
+	}
+	if !chainV.Valid {
+		log.Printf("WARNING: stored chain failed verification at block %d (%s) — serving read-only", chainV.BrokenAt, chainV.Reason)
+	}
 	srv.Pipeline = drunix.NewPipeline(state, transient, chain)
+	if blockStore != nil {
+		defer blockStore.Close()
+	}
 	// UMI rail — RBI Unified Market Interface pattern (atomic DvP in wholesale
 	// CBDC) mounted on the same service. Disable with UMI_ENABLED=false.
 	if os.Getenv("UMI_ENABLED") != "false" {
@@ -48,9 +65,8 @@ func main() {
 		// Durable mirror: DATABASE_URL (the project's Neon Postgres) makes rail
 		// state survive restarts and free-instance sleeps. Absent/unreachable =>
 		// in-memory, exactly as before. UMI_PERSIST=false forces in-memory.
-		if store := drunix.OpenUMIStoreFromEnv(); store != nil {
-			srv.UMI = srv.UMI.WithStore(store)
-			defer store.Close()
+		if blockStore != nil {
+			srv.UMI = srv.UMI.WithStore(blockStore)
 		}
 		log.Printf("UMI rail mounted at /umi/* — SEBI Demat 2.0 pattern: Drunix securities leg + e₹-W wholesale CBDC cash leg, atomic DvP (simulation)")
 		// Hosted deployments start empty, which makes the demo page look broken.

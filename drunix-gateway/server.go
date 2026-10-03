@@ -43,6 +43,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
+	mux.HandleFunc("/drunix/chain", s.handleChain)
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
 	return logCORS(mux)
 }
@@ -288,6 +289,55 @@ func errStr(err error) string {
 	return ""
 }
 
+// handleChain serves the block chain itself: every block, the replay
+// verification anyone can recompute, and whether history is durable.
+// ?from=&limit= page through a long chain, newest-last.
+func (s *Server) handleChain(w http.ResponseWriter, r *http.Request) {
+	if s.Pipeline == nil || s.Pipeline.CP == nil || s.Pipeline.CP.Ledger == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ledger not wired"})
+		return
+	}
+	c := s.Pipeline.CP.Ledger
+	v := c.Verify()
+	blocks := c.Snapshot()
+
+	from := atoiDefault(r.URL.Query().Get("from"), 0)
+	limit := atoiDefault(r.URL.Query().Get("limit"), 50)
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	if from < 0 || from > len(blocks) {
+		from = 0
+	}
+	end := from + limit
+	if end > len(blocks) {
+		end = len(blocks)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"chainId":      DrunixChainID,
+		"height":       v.Height,
+		"totalBlocks":  len(blocks),
+		"verification": v,
+		"durability":   c.Durability(),
+		"from":         from,
+		"returned":     end - from,
+		"blocks":       blocks[from:end],
+		"note":         "Append-only. Blocks are never updated or deleted; verification replays SHA-512 linkage and merkle roots from genesis.",
+	})
+}
+
+func atoiDefault(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
 // handlePipelineStats reports live pipeline state (judge dashboard).
 func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 	if s.Pipeline == nil {
@@ -299,7 +349,8 @@ func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"stateDB":        map[string]interface{}{"keys": p.CP.State.Size(), "engine": "in-memory (YugabyteDB in production)"},
 		"transientStore": map[string]interface{}{"entries": p.CP.Transient.Size(), "engine": "KeyDB (in-memory, never persisted)"},
-		"ledger":         map[string]interface{}{"blocks": len(p.CP.Ledger.Blocks), "height": v.Height, "valid": v.Valid, "chainId": DrunixChainID},
+		"ledger": map[string]interface{}{"blocks": len(p.CP.Ledger.Blocks), "height": v.Height, "valid": v.Valid,
+			"chainId": DrunixChainID, "durability": p.CP.Ledger.Durability()},
 		"orderer": map[string]interface{}{
 			"nodes": p.Order.Nodes, "sequence": p.Order.Seq, "leader": p.Order.Leader(),
 			"consensus": "RAFT (simulated)", "batchMax": p.Order.BatchMax,
