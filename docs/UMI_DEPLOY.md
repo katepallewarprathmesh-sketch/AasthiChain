@@ -175,3 +175,31 @@ So the page is never empty for a visitor (`UMI_SEED_DEMO=false` to disable):
 - **Cold start** on Render free is ~30–50 s; the first `/umi` load after idle will spin.
 - **The rail is unauthenticated** — it is a sandbox demo surface. Do not put anything real
   behind it; put it behind the existing auth middleware first if you ever do.
+
+## Private operator dashboard (`/insights`)
+
+An operator-only analytics page, derived entirely from this deployment's own
+data. No third-party analytics, no tracking script, nothing leaves the box.
+Traffic metrics (pageviews, referrers, SEO rank) are deliberately **not**
+included — nothing in the stack records a pageview today.
+
+| Item | Value |
+|---|---|
+| Page | `/insights` — intentionally absent from the nav; reachable only by typing the URL |
+| API | `GET /api/admin/insights` (auth required) |
+| Status probe | `GET /api/admin/insights/status` → `{ "enabled": bool }` (unauthenticated, boolean only) |
+| Auth | `x-admin-key` header (or `?key=`), compared in constant time against `ADMIN_DASHBOARD_KEY` |
+| Key unset | Endpoint returns **503 and is disabled** — it never falls open |
+| Wrong key | **401**, with no hint about the correct value |
+
+Set the key on **both** Render and Vercel:
+
+```bash
+openssl rand -hex 32        # generate
+ADMIN_DASHBOARD_KEY=<that value>
+```
+
+The browser keeps the key in `sessionStorage` and sends it as a header, so it
+never lands in a URL, a server log, or the browser history. Aggregation lives
+in `lib/insights.js`, shared by `mock-api-server.js` (Express) and
+`frontend/api/index.js` (Vercel), so the two deployments cannot drift.
