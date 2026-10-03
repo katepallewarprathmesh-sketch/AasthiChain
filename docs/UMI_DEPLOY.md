@@ -192,12 +192,18 @@ included — nothing in the stack records a pageview today.
 | Key unset | Endpoint returns **503 and is disabled** — it never falls open |
 | Wrong key | **401**, with no hint about the correct value |
 
-Set the key on **both** Render and Vercel:
+Set the key on **Vercel only**. Render runs just the Go gateway
+(`drunix-gateway/Dockerfile` per `render.yaml`), which never reads this
+variable - the insights endpoint lives in the JS layer:
 
 ```bash
 openssl rand -hex 32        # generate
 ADMIN_DASHBOARD_KEY=<that value>
 ```
+
+Vercel bakes env vars in at build time, so after adding it you must redeploy
+**without** the build cache. Confirm with
+`curl https://<app>/api/admin/insights/status` -> `{"enabled":true}`.
 
 The browser keeps the key in `sessionStorage` and sends it as a header, so it
 never lands in a URL, a server log, or the browser history. Aggregation lives
