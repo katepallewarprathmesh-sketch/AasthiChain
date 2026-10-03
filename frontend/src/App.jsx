@@ -56,6 +56,7 @@ const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
 const Support = lazy(() => import('./pages/Support.jsx'))
 const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
 const InvestorDashboard = lazy(() => import('./pages/InvestorDashboard.jsx'))
+const Insights = lazy(() => import('./pages/Insights.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
 
 function RouteFallback() {
@@ -387,6 +388,8 @@ function AppContent({ user, setUser }) {
           <Route path="/login" element={<Login onLogin={setUser} />} />
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/dashboard" element={effectiveUser ? <InvestorDashboard user={effectiveUser} /> : <Navigate to="/login" />} />
+          {/* Private operator dashboard: no nav link, guarded server-side by ADMIN_DASHBOARD_KEY */}
+          <Route path="/insights" element={<Insights />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
