@@ -1877,9 +1877,9 @@ app.post('/api/swap', authMiddleware, (req, res) => {
 
 // ============ PRIVATE OPERATOR INSIGHTS (additive) ============
 // Locked to the operator by ADMIN_DASHBOARD_KEY. Disabled (503) when unset —
-// it fails closed, never open. Aggregation lives in lib/insights.js so this
+// it fails closed, never open. Aggregation lives in frontend/api/lib/insights.cjs so this
 // server and the Vercel handler cannot drift apart.
-const { authorise: insightsAuth, buildInsights, configuredKey } = require('./lib/insights.js');
+const { authorise: insightsAuth, buildInsights, configuredKey } = require('./frontend/api/lib/insights.cjs');
 
 app.get('/api/admin/insights', async (req, res) => {
   const denied = insightsAuth(req);
