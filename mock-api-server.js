@@ -1883,6 +1883,24 @@ app.post('/api/swap', authMiddleware, (req, res) => {
 // CommonJS, so it is pulled in with a dynamic import once at startup and the
 // routes await the same promise. One copy of the logic, two module systems.
 const insightsReady = import('./frontend/api/lib/insights.mjs');
+const trafficReady = import('./frontend/api/lib/traffic.mjs');
+
+// Public beacon. Unauthenticated by necessity - visitors' browsers call it.
+// It only ever increments counters, returns no data, and answers 204 so a
+// failure here can never surface to a visitor or block a page.
+app.post('/api/track', async (req, res) => {
+  res.status(204).end();
+  try {
+    const { recordHit } = await trafficReady;
+    const b = req.body || {};
+    await recordHit({
+      path: b.path,
+      referrer: b.referrer,
+      visitorId: b.vid,
+      userAgent: req.get('user-agent') || '',
+    });
+  } catch (e) { console.error('[traffic]', e.message); }
+});
 
 app.get('/api/admin/insights', async (req, res) => {
   const { authorise: insightsAuth, buildInsights } = await insightsReady;
@@ -1910,7 +1928,14 @@ app.get('/api/admin/insights', async (req, res) => {
     }
   } catch { /* rail optional — the report says so */ }
 
-  res.json(buildInsights({ properties, balances, transfers, kycRecords, chain: drunixChain }, rail));
+  const report = buildInsights({ properties, balances, transfers, kycRecords, chain: drunixChain }, rail);
+  try {
+    const { trafficSummary } = await trafficReady;
+    report.traffic = await trafficSummary(14);
+  } catch (e) {
+    report.traffic = { unavailable: true, message: e.message };
+  }
+  res.json(report);
 });
 
 // Lets the UI tell "wrong password" apart from "feature not configured".
