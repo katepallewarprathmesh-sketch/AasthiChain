@@ -3568,7 +3568,25 @@ export default async function handler(req, res) {
           body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(req.body || {})
         });
         const text = await upstream.text();
+        // The Go gateway answers unknown routes with Go's default plain-text
+        // "404 page not found". Forwarding that verbatim under a JSON content
+        // type made the browser throw an opaque "Request failed 404" with no
+        // clue what was wrong. Wrap any non-JSON upstream body in a real JSON
+        // error that names the likely cause.
+        let isJson = true;
+        try { JSON.parse(text); } catch { isJson = false; }
         res.setHeader('Content-Type', 'application/json');
+        if (!isJson) {
+          return res.status(upstream.status === 404 ? 502 : upstream.status).json({
+            error: upstream.status === 404 ? 'ERR_DRUNIX_ROUTE_UNKNOWN' : 'ERR_DRUNIX_BAD_RESPONSE',
+            message: upstream.status === 404
+              ? `The Drunix gateway at ${base} is running but does not serve ${'/drunix' + suffix}. It is almost certainly an older build - redeploy the Go gateway (Render) from the current main.`
+              : `The Drunix gateway returned a non-JSON response (HTTP ${upstream.status}).`,
+            upstreamStatus: upstream.status,
+            upstreamBody: text.slice(0, 200),
+            gateway: base,
+          });
+        }
         return res.status(upstream.status).send(text);
       } catch (e) {
         return res.status(503).json({
