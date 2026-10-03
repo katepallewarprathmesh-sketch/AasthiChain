@@ -33,7 +33,11 @@ export default function UMIPortfolioPanel({ identityId }) {
 
   const load = useCallback(async () => {
     try {
-      const [w, ins] = await Promise.all([api.umiWallets(), api.umiInstructions()])
+      // allSettled: one unavailable endpoint should not blank the other panel.
+      const [wR, iR] = await Promise.allSettled([api.umiWallets(), api.umiInstructions()])
+      if (wR.status === 'rejected' && iR.status === 'rejected') throw (wR.reason || iR.reason)
+      const w = wR.status === 'fulfilled' ? wR.value : { wallets: [] }
+      const ins = iR.status === 'fulfilled' ? iR.value : { instructions: [] }
       if (w && w.error) throw new Error(w.message || w.error)
       setWallet((w.wallets || []).find(x => x.participant === identityId) || null)
       const mine = (ins.instructions || [])
