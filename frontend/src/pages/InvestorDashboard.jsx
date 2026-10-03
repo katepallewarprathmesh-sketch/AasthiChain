@@ -41,6 +41,7 @@ export default function InvestorDashboard({ user }) {
   const [settlements, setSettlements] = useState([])
   const [income, setIncome] = useState(null)
   const [railDown, setRailDown] = useState(false)
+  const [incomeUnavailable, setIncomeUnavailable] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -53,18 +54,30 @@ export default function InvestorDashboard({ user }) {
     try { setNav(await api.portfolioNav(identityId)) } catch { /* optional */ }
 
     // settlement rail — may be unconfigured or asleep; never fatal
-    try {
-      const [w, ins, inc] = await Promise.all([
-        api.umiWallets(), api.umiInstructions(), api.umiIncome(identityId)
-      ])
-      if (w && w.error) throw new Error(w.message || w.error)
-      setWallet((w.wallets || []).find(x => x.participant === identityId) || null)
-      setSettlements((ins.instructions || []).filter(i => i.buyer === identityId || i.seller === identityId).reverse())
-      setIncome(inc && !inc.error ? inc : null)
-      setRailDown(false)
-    } catch {
-      setRailDown(true)
-    }
+    // allSettled, deliberately: these three are independent. A gateway running
+    // an older build can 404 one endpoint (income, say) while wallets and
+    // instructions answer perfectly well. Promise.all used to reject the whole
+    // batch and declare the rail unreachable, blanking two working panels
+    // because of one missing route.
+    const [wRes, insRes, incRes] = await Promise.allSettled([
+      api.umiWallets(), api.umiInstructions(), api.umiIncome(identityId)
+    ])
+
+    const ok = (r) => r.status === 'fulfilled' && r.value && !r.value.error
+
+    if (ok(wRes)) setWallet((wRes.value.wallets || []).find(x => x.participant === identityId) || null)
+    else setWallet(null)
+
+    if (ok(insRes)) setSettlements((insRes.value.instructions || [])
+      .filter(i => i.buyer === identityId || i.seller === identityId).reverse())
+    else setSettlements([])
+
+    setIncome(ok(incRes) ? incRes.value : null)
+
+    // Only a total loss of the rail counts as "not reachable". If any call
+    // succeeded the rail is up and the specific gap is reported in place.
+    setRailDown(!ok(wRes) && !ok(insRes) && !ok(incRes))
+    setIncomeUnavailable(ok(wRes) && !ok(incRes))
     setLoading(false)
   }, [identityId])
 
@@ -102,7 +115,13 @@ export default function InvestorDashboard({ user }) {
         <Metric label="Portfolio value" value={money(portfolio)} sub="property + e₹-W cash" color="#1E3A5F" />
         <Metric label="Property value" value={money(assetsValue)} sub={`${tokenCount.toLocaleString('en-IN')} tokens · ${holdings.length} ${holdings.length === 1 ? 'property' : 'properties'}`} />
         <Metric label="e₹-W cash" value={railDown ? '—' : money(cash)} sub={wallet?.walletId || 'wholesale CBDC wallet'} color="#6D28D9" />
-        <Metric label="Income received" value={railDown ? '—' : money(totalIncome)} sub={`${income?.count || 0} rent / coupon payouts`} color="#065F46" />
+        <Metric
+          label="Income received"
+          value={railDown || incomeUnavailable ? '—' : money(totalIncome)}
+          sub={incomeUnavailable
+            ? 'Income history needs a newer gateway build'
+            : `${income?.count || 0} rent / coupon payouts`}
+          color="#065F46" />
       </div>
 
       {railDown && (
