@@ -7,12 +7,14 @@ import (
 	"testing"
 )
 
+type posRow struct{ tokens, rev int64 }
+
 // fakeStore is an in-process UMIStore used to prove the persistence contract
 // without needing a database in CI.
 type fakeStore struct {
 	mu           sync.Mutex
 	wallets      map[string]CBDCWallet
-	positions    map[string]int64 // assetID|holder
+	positions    map[string]posRow // assetID|holder
 	isins        map[string]PilotISIN
 	instructions map[string]SettlementInstruction
 	funded       int64
@@ -26,7 +28,7 @@ type fakeStore struct {
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		wallets:      map[string]CBDCWallet{},
-		positions:    map[string]int64{},
+		positions:    map[string]posRow{},
 		isins:        map[string]PilotISIN{},
 		instructions: map[string]SettlementInstruction{},
 	}
@@ -39,16 +41,25 @@ func (f *fakeStore) LoadSnapshot(ctx context.Context) (*UMISnapshot, error) {
 	defer f.mu.Unlock()
 	snap := &UMISnapshot{FundedPaise: f.funded, Settled: f.settled, Failed: f.failed}
 	for _, w := range f.wallets {
+		if w.Rev > snap.MaxRev {
+			snap.MaxRev = w.Rev
+		}
 		snap.Wallets = append(snap.Wallets, w)
 	}
 	for k, v := range f.positions {
 		asset, holder := splitKey(k)
-		snap.Positions = append(snap.Positions, PositionRow{AssetID: asset, Holder: holder, Tokens: v})
+		if v.rev > snap.MaxRev {
+			snap.MaxRev = v.rev
+		}
+		snap.Positions = append(snap.Positions, PositionRow{AssetID: asset, Holder: holder, Tokens: v.tokens, Rev: v.rev})
 	}
 	for _, p := range f.isins {
 		snap.ISINs = append(snap.ISINs, p)
 	}
 	for _, si := range f.instructions {
+		if si.Rev > snap.MaxRev {
+			snap.MaxRev = si.Rev
+		}
 		snap.Instructions = append(snap.Instructions, si)
 	}
 	return snap, nil
@@ -77,17 +88,24 @@ func (f *fakeStore) SaveWallet(w CBDCWallet) error {
 	if err := f.guard(); err != nil {
 		return err
 	}
+	if prev, ok := f.wallets[w.Participant]; ok && prev.Rev > w.Rev {
+		return nil // rev guard
+	}
 	f.wallets[w.Participant] = w
 	return nil
 }
 
-func (f *fakeStore) SavePosition(assetID, holder string, tokens int64) error {
+func (f *fakeStore) SavePosition(assetID, holder string, tokens, rev int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.guard(); err != nil {
 		return err
 	}
-	f.positions[assetID+"|"+holder] = tokens
+	k := assetID + "|" + holder
+	if prev, ok := f.positions[k]; ok && prev.rev >= rev {
+		return nil // rev guard, same as the SQL WHERE clause
+	}
+	f.positions[k] = posRow{tokens: tokens, rev: rev}
 	return nil
 }
 
@@ -234,8 +252,130 @@ func TestUMIStoreNilSafeHelpers(t *testing.T) {
 	rail, _, _ := newTestRail(t)
 	// these must all be silent no-ops without a store
 	rail.pWallet(CBDCWallet{Participant: "x"})
-	rail.pPosition(tAsset, "x")
+	rail.pPosition([]PositionRow{{AssetID: tAsset, Holder: "x"}})
 	rail.pISIN(PilotISIN{AssetID: tAsset})
 	rail.pInstruction(SettlementInstruction{InstructionID: "x"})
 	rail.pMeta()
+}
+
+func TestInstructionBlockAnchorSurvivesRestart(t *testing.T) {
+	store := newFakeStore()
+	sec := NewMemorySecurities()
+	rail := NewUMIRail(sec, NewChain()).WithStore(store)
+	rail.SeedPosition(tAsset, "originator1", 15000)
+	rail.FundWallet("investor1", 100000)
+
+	si, err := rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
+		Tokens: 100, PricePerTokenINR: 500, AutoAssignISIN: true})
+	if err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	if si.BlockHeight == 0 || si.BlockHash == "" {
+		t.Fatalf("settled instruction has no block anchor: height=%d hash=%q", si.BlockHeight, si.BlockHash)
+	}
+
+	// restart: the anchor must come back, or the UI cannot link a settlement
+	// to the block that proves it
+	rail2 := NewUMIRail(NewMemorySecurities(), NewChain()).WithStore(store)
+	got, err := rail2.Instruction(si.InstructionID)
+	if err != nil {
+		t.Fatalf("instruction not restored: %v", err)
+	}
+	if got.BlockHeight != si.BlockHeight {
+		t.Errorf("blockHeight after restart = %d, want %d", got.BlockHeight, si.BlockHeight)
+	}
+	if got.BlockHash != si.BlockHash {
+		t.Errorf("blockHash after restart = %q, want %q", got.BlockHash, si.BlockHash)
+	}
+}
+
+// reorderingStore delivers writes out of order, the way concurrent settlements
+// racing after the mutex is released actually behave in production.
+type reorderingStore struct {
+	*fakeStore
+	held []CBDCWallet
+}
+
+func (r *reorderingStore) SaveWallet(w CBDCWallet) error {
+	r.held = append(r.held, w)
+	return nil
+}
+
+// flushReversed applies the buffered writes newest-first — the worst case.
+func (r *reorderingStore) flushReversed() {
+	for i := len(r.held) - 1; i >= 0; i-- {
+		w := r.held[i]
+		prev, exists := r.fakeStore.wallets[w.Participant]
+		if exists && prev.Rev > w.Rev {
+			continue // the rev guard: a stale snapshot must not win
+		}
+		r.fakeStore.wallets[w.Participant] = w
+	}
+	r.held = nil
+}
+
+func TestStaleWalletWriteCannotWinTheRace(t *testing.T) {
+	base := newFakeStore()
+	store := &reorderingStore{fakeStore: base}
+
+	sec := NewMemorySecurities()
+	rail := NewUMIRail(sec, NewChain()).WithStore(store)
+	rail.SeedPosition(tAsset, "originator1", 15000)
+	rail.FundWallet("investor1", 100000)
+
+	// three sequential settlements; the buyer's balance strictly decreases
+	for i := 0; i < 3; i++ {
+		if _, err := rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
+			Tokens: 10, PricePerTokenINR: 500, AutoAssignISIN: true}); err != nil {
+			t.Fatalf("settle %d: %v", i, err)
+		}
+	}
+	want, _ := rail.Wallet("investor1")
+
+	// writes land in reverse order — without the rev guard the oldest, richest
+	// snapshot would be the one left in the database
+	store.flushReversed()
+
+	got := base.wallets["investor1"]
+	if got.BalancePaise != want.BalancePaise {
+		t.Fatalf("persisted balance = %d, want %d — a stale write overwrote newer state (money invented/destroyed)",
+			got.BalancePaise, want.BalancePaise)
+	}
+
+	// and a restart must agree with the live rail
+	rail2 := NewUMIRail(NewMemorySecurities(), NewChain()).WithStore(base)
+	if rec := rail2.Reconcile(); !rec.Conserved {
+		t.Errorf("conservation broken after restart: funded ₹%.2f vs held ₹%.2f",
+			rec.TotalFundedINR, rec.TotalBalanceINR)
+	}
+}
+
+func TestRevisionsResumeAboveRestoredHighWaterMark(t *testing.T) {
+	store := newFakeStore()
+	sec := NewMemorySecurities()
+	rail := NewUMIRail(sec, NewChain()).WithStore(store)
+	rail.SeedPosition(tAsset, "originator1", 15000)
+	rail.FundWallet("investor1", 100000)
+	rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
+		Tokens: 10, PricePerTokenINR: 500, AutoAssignISIN: true})
+
+	before := store.wallets["investor1"].Rev
+	if before == 0 {
+		t.Fatal("no revision was stamped")
+	}
+
+	// restart, then keep trading: writes must still land
+	rail2 := NewUMIRail(NewMemorySecurities(), NewChain()).WithStore(store)
+	rail2.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
+		Tokens: 10, PricePerTokenINR: 500, AutoAssignISIN: true})
+
+	after := store.wallets["investor1"]
+	if after.Rev <= before {
+		t.Fatalf("revision after restart = %d, not above restored high-water mark %d — later writes would be discarded",
+			after.Rev, before)
+	}
+	live, _ := rail2.Wallet("investor1")
+	if after.BalancePaise != live.BalancePaise {
+		t.Errorf("persisted balance %d != live balance %d after restart", after.BalancePaise, live.BalancePaise)
+	}
 }

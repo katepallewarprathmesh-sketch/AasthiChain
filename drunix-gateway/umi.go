@@ -166,15 +166,20 @@ func (m *MemorySecurities) Move(assetID, from, to string, tokens int64) error {
 
 // CBDCWallet is a participant's wholesale e₹ wallet. Balances are PAISE.
 type CBDCWallet struct {
-	WalletID      string    `json:"walletId"`
-	Participant   string    `json:"participant"`
-	Bank          string    `json:"bank"`
-	BalancePaise  int64     `json:"balancePaise"`
-	ReservedPaise int64     `json:"reservedPaise"` // earmarked by in-flight instructions
-	BalanceINR    float64   `json:"balanceINR"`
-	AvailableINR  float64   `json:"availableINR"`
-	OpenedAt      time.Time `json:"openedAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	WalletID      string `json:"walletId"`
+	Participant   string `json:"participant"`
+	Bank          string `json:"bank"`
+	BalancePaise  int64  `json:"balancePaise"`
+	ReservedPaise int64  `json:"reservedPaise"` // earmarked by in-flight instructions
+	// Rev is a monotonic revision stamped under the rail's mutex. Persistence
+	// happens after the mutex is released, so without it two concurrent
+	// settlements on one wallet could write their snapshots out of order and
+	// leave a stale balance in the database. Not part of the public JSON.
+	Rev          int64     `json:"-"`
+	BalanceINR   float64   `json:"balanceINR"`
+	AvailableINR float64   `json:"availableINR"`
+	OpenedAt     time.Time `json:"openedAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 func (w *CBDCWallet) available() int64 { return w.BalancePaise - w.ReservedPaise }
@@ -254,6 +259,7 @@ type SettlementInstruction struct {
 	SecuritiesLeg    string       `json:"securitiesLeg"`
 	CashLeg          string       `json:"cashLeg"`
 	BlockHeight      int64        `json:"blockHeight"`
+	Rev              int64        `json:"-"` // monotonic persistence revision
 	BlockHash        string       `json:"blockHash,omitempty"`
 	Messages         []UMIMessage `json:"messages"`
 	CreatedAt        time.Time    `json:"createdAt"`
@@ -291,6 +297,7 @@ type UMIRail struct {
 	fundedPaise  int64    // lifetime sandbox funding in
 	settledCount int64
 	failedCount  int64
+	rev          int64 // monotonic persistence revision (see nextRev)
 }
 
 // NewUMIRail wires the rail to a securities ledger and the Drunix chain (DIP).
@@ -341,6 +348,10 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 		r.instructions[si.InstructionID] = &cp
 		r.order = append(r.order, si.InstructionID)
 	}
+	// Resume above the highest persisted revision. Without this the rev guard
+	// would reject every write made after a restart — persistence would look
+	// healthy and silently stop recording.
+	r.rev = snap.MaxRev
 	r.fundedPaise = snap.FundedPaise
 	r.settledCount = snap.Settled
 	r.failedCount = snap.Failed
@@ -358,19 +369,48 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 
 // persistence helpers — all no-ops when no store is attached.
 
+// nextRev returns the next monotonic revision. Caller must hold r.mu, so the
+// order of revisions matches the order state actually changed.
+func (r *UMIRail) nextRev() int64 {
+	r.rev++
+	return r.rev
+}
+
+// snapWallet stamps and copies a wallet for persistence. Caller must hold r.mu.
+func (r *UMIRail) snapWallet(w *CBDCWallet) CBDCWallet {
+	w.Rev = r.nextRev()
+	return *w
+}
+
 func (r *UMIRail) pWallet(w CBDCWallet) {
 	if r.store != nil {
 		_ = r.store.SaveWallet(w)
 	}
 }
 
-func (r *UMIRail) pPosition(assetID string, holders ...string) {
+// pPosition persists holdings. Values and revisions are captured under the
+// mutex by the caller via snapPositions, so a slow write cannot resurrect a
+// stale token count.
+func (r *UMIRail) pPosition(rows []PositionRow) {
 	if r.store == nil {
 		return
 	}
-	for _, h := range holders {
-		_ = r.store.SavePosition(assetID, h, r.securities.Position(assetID, h))
+	for _, p := range rows {
+		_ = r.store.SavePosition(p.AssetID, p.Holder, p.Tokens, p.Rev)
 	}
+}
+
+// snapPositions reads holdings and stamps revisions. Caller must hold r.mu.
+func (r *UMIRail) snapPositions(assetID string, holders ...string) []PositionRow {
+	if r.store == nil {
+		return nil
+	}
+	out := make([]PositionRow, 0, len(holders))
+	for _, h := range holders {
+		out = append(out, PositionRow{AssetID: assetID, Holder: h,
+			Tokens: r.securities.Position(assetID, h), Rev: r.nextRev()})
+	}
+	return out
 }
 
 func (r *UMIRail) pInstruction(si SettlementInstruction) {
@@ -405,7 +445,10 @@ func (r *UMIRail) SeedPosition(assetID, holder string, tokens int64) (int64, err
 		return 0, ErrUMIInvalidAmount
 	}
 	mem.Credit(assetID, holder, tokens)
-	r.pPosition(assetID, holder)
+	r.mu.Lock()
+	snap := r.snapPositions(assetID, holder)
+	r.mu.Unlock()
+	r.pPosition(snap)
 	return mem.Position(assetID, holder), nil
 }
 
@@ -493,7 +536,7 @@ func (r *UMIRail) FundWallet(participant string, amountINR float64) (*CBDCWallet
 	w.BalancePaise += paise
 	r.fundedPaise += paise
 	w.refresh()
-	snapshot := *w
+	snapshot := r.snapWallet(w)
 	r.mu.Unlock()
 
 	r.pWallet(snapshot)
@@ -635,6 +678,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	// an ISIN minted inline below is mirrored to the store after the lock drops
 	var autoAssigned *PilotISIN
 
+	// stampRev assigns the instruction's persistence revision. Caller holds r.mu.
+	stampRev := func(si *SettlementInstruction) { si.Rev = r.nextRev() }
+
 	fail := func(err error, detail string) (*SettlementInstruction, error) {
 		si.Status = UMIStatusFailed
 		si.FailureReason = err.Error()
@@ -646,12 +692,12 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 			r.instructions[si.InstructionID] = si
 			r.order = append(r.order, si.InstructionID)
 		}
+		stampRev(si)
 		r.mu.Unlock()
 		if !req.DryRun {
 			if autoAssigned != nil {
 				r.pISIN(*autoAssigned)
 			}
-			r.pInstruction(*si)
 			r.pMeta()
 			if blk := r.append(BlockUMIDvPFailed, map[string]interface{}{
 				"kind":          "umi-dvp",
@@ -667,6 +713,8 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 			}); blk != nil {
 				si.BlockHeight, si.BlockHash = blk.Height, blk.Hash
 			}
+			// persisted after the block so the anchor survives a restart
+			r.pInstruction(*si)
 		}
 		return si, err
 	}
@@ -757,7 +805,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	r.instructions[si.InstructionID] = si
 	r.order = append(r.order, si.InstructionID)
 	r.settledCount++
-	buyerSnapshot, sellerSnapshot := *buyerWallet, *sellerWallet
+	buyerSnapshot, sellerSnapshot := r.snapWallet(buyerWallet), r.snapWallet(sellerWallet)
+	posSnapshot := r.snapPositions(si.AssetID, si.Seller, si.Buyer)
+	si.Rev = r.nextRev()
 	r.mu.Unlock()
 
 	if autoAssigned != nil {
@@ -765,8 +815,7 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	}
 	r.pWallet(buyerSnapshot)
 	r.pWallet(sellerSnapshot)
-	r.pPosition(si.AssetID, si.Seller, si.Buyer)
-	r.pInstruction(*si)
+	r.pPosition(posSnapshot)
 	r.pMeta()
 	if blk := r.append(BlockUMIDvPSettled, map[string]interface{}{
 		"kind":          "umi-dvp",
@@ -781,6 +830,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	}); blk != nil {
 		si.BlockHeight, si.BlockHash = blk.Height, blk.Hash
 	}
+	// Persisted only now: the instruction is not fully described until it knows
+	// which block anchors it, and a restart must restore that link.
+	r.pInstruction(*si)
 	return si, nil
 }
 
@@ -881,10 +933,10 @@ func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*Servicing
 	res.DistributedINR = paiseToINR(distributed)
 	res.RemainderINR = paiseToINR(gross - distributed)
 	touched := make([]CBDCWallet, 0, len(res.Payouts)+1)
-	touched = append(touched, *payerWallet)
+	touched = append(touched, r.snapWallet(payerWallet))
 	for _, p := range res.Payouts {
 		if w, ok := r.wallets[p.Holder]; ok {
-			touched = append(touched, *w)
+			touched = append(touched, r.snapWallet(w))
 		}
 	}
 	r.mu.Unlock()
