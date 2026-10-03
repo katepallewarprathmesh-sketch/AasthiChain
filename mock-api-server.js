@@ -2060,6 +2060,21 @@ async function umiProxy(req, res) {
     const upstream = await fetch(target, init);
     clearTimeout(timer);
     const text = await upstream.text();
+    // Go answers unknown routes with plain-text "404 page not found". Sending
+    // that under a JSON content type produced an opaque "Request failed 404"
+    // in the browser, so wrap any non-JSON body in a real JSON error.
+    let isJson = true;
+    try { JSON.parse(text); } catch { isJson = false; }
+    if (!isJson) {
+      return res.status(upstream.status === 404 ? 502 : upstream.status).json({
+        error: upstream.status === 404 ? 'ERR_DRUNIX_ROUTE_UNKNOWN' : 'ERR_DRUNIX_BAD_RESPONSE',
+        message: upstream.status === 404
+          ? 'The Drunix gateway is running but does not serve this route. It is almost certainly an older build - rebuild and restart the Go gateway.'
+          : `The Drunix gateway returned a non-JSON response (HTTP ${upstream.status}).`,
+        upstreamStatus: upstream.status,
+        upstreamBody: text.slice(0, 200),
+      });
+    }
     res.status(upstream.status).type('application/json').send(text);
   } catch (e) {
     res.status(503).json({
@@ -2086,6 +2101,21 @@ async function drunixProxy(req, res) {
     const upstream = await fetch(target, init);
     clearTimeout(timer);
     const text = await upstream.text();
+    // Go answers unknown routes with plain-text "404 page not found". Sending
+    // that under a JSON content type produced an opaque "Request failed 404"
+    // in the browser, so wrap any non-JSON body in a real JSON error.
+    let isJson = true;
+    try { JSON.parse(text); } catch { isJson = false; }
+    if (!isJson) {
+      return res.status(upstream.status === 404 ? 502 : upstream.status).json({
+        error: upstream.status === 404 ? 'ERR_DRUNIX_ROUTE_UNKNOWN' : 'ERR_DRUNIX_BAD_RESPONSE',
+        message: upstream.status === 404
+          ? 'The Drunix gateway is running but does not serve this route. It is almost certainly an older build - rebuild and restart the Go gateway.'
+          : `The Drunix gateway returned a non-JSON response (HTTP ${upstream.status}).`,
+        upstreamStatus: upstream.status,
+        upstreamBody: text.slice(0, 200),
+      });
+    }
     res.status(upstream.status).type('application/json').send(text);
   } catch (e) {
     res.status(503).json({
