@@ -92,6 +92,54 @@ balances[propId + '~originator1'] = { docType: 'balance', assetId: propId, owner
 balances[propId + '~investor1'] = { docType: 'balance', assetId: propId, ownerId: 'investor1', balance: 2000, updatedAt: now };
 balances[propId + '~investor2'] = { docType: 'balance', assetId: propId, ownerId: 'investor2', balance: 1000, updatedAt: now };
 
+// ---- marketplace catalogue (additive) --------------------------------------
+// A marketplace with one listing is a demo, not a marketplace. These are seeded
+// from frontend/api/lib/catalogue.json, the SAME file the Vercel handler reads,
+// so both deployments show an identical catalogue. The original Pune property
+// is the first entry, so its id, token count and balances are unchanged.
+try {
+  const catalogue = JSON.parse(
+    require('fs').readFileSync(require('path').join(__dirname, 'frontend/api/lib/catalogue.json'), 'utf8'));
+  for (const c of catalogue) {
+    const existing = properties[c.assetId];
+    properties[c.assetId] = {
+      ...(existing || {}),
+      assetId: c.assetId,
+      docType: 'property',
+      originatorId: (existing && existing.originatorId) || 'originator1',
+      title: c.title,
+      location: c.location,
+      propertyType: c.propertyType,
+      valuationINR: c.valuationINR,
+      totalTokens: c.totalTokens,
+      pricePerTokenINR: c.pricePerTokenINR,
+      expectedYieldPct: c.expectedYieldPct,
+      areaSqft: c.areaSqft,
+      yearBuilt: c.yearBuilt,
+      description: c.description,
+      documentHash: c.documentHash,
+      registrarValidationStatus: 'VALIDATED',
+      status: 'TOKENIZED',
+      createdAt: (existing && existing.createdAt) || new Date(Date.now() - 24 * 3600 * 1000),
+      updatedAt: now,
+      version: (existing && existing.version) || 1,
+    };
+    // Seed holdings only for the new listings; never touch the original three.
+    if (!existing) {
+      const sold = Math.round(c.totalTokens * c.seedSoldFraction);
+      balances[c.assetId + '~originator1'] = { docType: 'balance', assetId: c.assetId, ownerId: 'originator1', balance: c.totalTokens - sold, updatedAt: now };
+      if (sold > 0) {
+        const a = Math.round(sold * 0.6), b = sold - a;
+        balances[c.assetId + '~investor1'] = { docType: 'balance', assetId: c.assetId, ownerId: 'investor1', balance: a, updatedAt: now };
+        if (b > 0) balances[c.assetId + '~investor2'] = { docType: 'balance', assetId: c.assetId, ownerId: 'investor2', balance: b, updatedAt: now };
+      }
+    }
+  }
+  console.log(`Marketplace catalogue: ${catalogue.length} properties seeded`);
+} catch (e) {
+  console.error('Catalogue seed skipped:', e.message);
+}
+
 for (let i = 0; i < 25; i++) {
   const tid = `TXN-${crypto.randomUUID().slice(0,8)}-${String(i).padStart(2,'0')}`;
   transfers[tid] = {
@@ -370,11 +418,51 @@ if (!documentHash || documentHash.length !== 64) return res.status(400).json({ e
   res.status(201).json(resp);
 });
 
+// Marketplace economics are DERIVED from live balances, never stored, so a
+// listing can never disagree with the ledger about how much is actually left.
+function marketplaceView(p) {
+  const held = Object.values(balances).filter(b => b.assetId === p.assetId && Number(b.balance) > 0);
+  const ownerBal = held.find(b => b.ownerId === p.originatorId);
+  const available = ownerBal ? Math.max(0, Number(ownerBal.balance)) : 0;
+  const total = Number(p.totalTokens) || 0;
+  const sold = Math.max(0, total - available);
+  const price = Number(p.pricePerTokenINR) || (total ? p.valuationINR / total : 0);
+  return {
+    ...p,
+    subscription: subscriptionOf(p),
+    pricePerTokenINR: Math.round(price * 100) / 100,
+    tokensAvailable: available,
+    tokensSold: sold,
+    fundedPct: total ? Math.round((sold / total) * 1000) / 10 : 0,
+    holderCount: held.filter(b => b.ownerId !== p.originatorId).length,
+    minInvestmentINR: Math.round(price * 100) / 100,
+    annualRentPerTokenINR: Math.round(price * ((Number(p.expectedYieldPct) || 0) / 100) * 100) / 100,
+  };
+}
+
 app.get('/api/properties', authMiddleware, (req, res) => {
-  const status = req.query.status;
-  let list = Object.values(properties);
+  const { status, city, type, minYield, maxPrice, sort } = req.query;
+  let list = Object.values(properties).map(marketplaceView);
   if (status) list = list.filter(p => p.status === status);
-  res.json({ properties: list.map(p => ({ ...p, subscription: subscriptionOf(p) })), count: list.length, fabricMode: 'mock', indexUsed: 'idx_property_status' });
+  if (city) list = list.filter(p => (p.location && p.location.city || '').toLowerCase() === String(city).toLowerCase());
+  if (type) list = list.filter(p => (p.propertyType || '').toLowerCase() === String(type).toLowerCase());
+  if (minYield) list = list.filter(p => Number(p.expectedYieldPct || 0) >= Number(minYield));
+  if (maxPrice) list = list.filter(p => Number(p.pricePerTokenINR || 0) <= Number(maxPrice));
+  const sorters = {
+    yield: (a, b) => (b.expectedYieldPct || 0) - (a.expectedYieldPct || 0),
+    priceAsc: (a, b) => (a.pricePerTokenINR || 0) - (b.pricePerTokenINR || 0),
+    priceDesc: (a, b) => (b.pricePerTokenINR || 0) - (a.pricePerTokenINR || 0),
+    funded: (a, b) => (b.fundedPct || 0) - (a.fundedPct || 0),
+    valuation: (a, b) => (b.valuationINR || 0) - (a.valuationINR || 0),
+  };
+  if (sort && sorters[sort]) list = list.sort(sorters[sort]);
+  res.json({
+    properties: list, count: list.length, fabricMode: 'mock', indexUsed: 'idx_property_status',
+    facets: {
+      cities: [...new Set(Object.values(properties).map(p => p.location && p.location.city).filter(Boolean))].sort(),
+      types: [...new Set(Object.values(properties).map(p => p.propertyType).filter(Boolean))].sort(),
+    },
+  });
 });
 
 app.get('/api/properties/:id', authMiddleware, (req, res) => {

@@ -365,6 +365,39 @@ async function initState() {
     balances[propId + '~investor1'] = { docType: 'balance', assetId: propId, ownerId: 'investor1', balance: 2000, updatedAt: now };
     balances[propId + '~investor2'] = { docType: 'balance', assetId: propId, ownerId: 'investor2', balance: 1000, updatedAt: now };
 
+    // ---- marketplace catalogue (additive) ----------------------------------
+    // Same catalogue.json the Express server reads, so both deployments list an
+    // identical set. The Pune property above is entry #1, so its id, tokens and
+    // balances are left exactly as they were.
+    try {
+      const cat = JSON.parse(fs.readFileSync(new URL('./lib/catalogue.json', import.meta.url), 'utf8'));
+      for (const c of cat) {
+        const existing = properties[c.assetId];
+        properties[c.assetId] = {
+          ...(existing || {}),
+          assetId: c.assetId, docType: 'property',
+          originatorId: (existing && existing.originatorId) || 'originator1',
+          title: c.title, location: c.location, propertyType: c.propertyType,
+          valuationINR: c.valuationINR, totalTokens: c.totalTokens,
+          pricePerTokenINR: c.pricePerTokenINR, expectedYieldPct: c.expectedYieldPct,
+          areaSqft: c.areaSqft, yearBuilt: c.yearBuilt, description: c.description,
+          documentHash: c.documentHash,
+          registrarValidationStatus: 'VALIDATED', status: 'TOKENIZED',
+          createdAt: (existing && existing.createdAt) || new Date(Date.now() - 24*3600*1000),
+          updatedAt: now, version: (existing && existing.version) || 1,
+        };
+        if (!existing) {
+          const sold = Math.round(c.totalTokens * c.seedSoldFraction);
+          balances[c.assetId + '~originator1'] = { docType: 'balance', assetId: c.assetId, ownerId: 'originator1', balance: c.totalTokens - sold, updatedAt: now };
+          if (sold > 0) {
+            const a = Math.round(sold * 0.6), b = sold - a;
+            balances[c.assetId + '~investor1'] = { docType: 'balance', assetId: c.assetId, ownerId: 'investor1', balance: a, updatedAt: now };
+            if (b > 0) balances[c.assetId + '~investor2'] = { docType: 'balance', assetId: c.assetId, ownerId: 'investor2', balance: b, updatedAt: now };
+          }
+        }
+      }
+    } catch (e) { console.error('Catalogue seed skipped:', e.message); }
+
     for (let i = 0; i < 25; i++) {
       const tid = `TXN-${safeUUID().slice(0,8)}-${String(i).padStart(2,'0')}`;
       transfers[tid] = {
@@ -2483,10 +2516,47 @@ export default async function handler(req, res) {
     }
     if (path === '/api/properties' && method === 'GET') {
       try {
-        const status = url.searchParams.get('status');
-        let list = Object.values(properties);
-        if (status) list = list.filter(p => p.status === status);
-        return res.json({ properties: list.map(p => ({ ...p, subscription: subscriptionOf(p) })), count: list.length });
+        // Economics are DERIVED from live balances, never stored, so a listing
+        // cannot disagree with the ledger about what is actually left.
+        const view = (p) => {
+          const held = Object.values(balances).filter(b => b.assetId === p.assetId && Number(b.balance) > 0);
+          const ownerBal = held.find(b => b.ownerId === p.originatorId);
+          const available = ownerBal ? Math.max(0, Number(ownerBal.balance)) : 0;
+          const total = Number(p.totalTokens) || 0;
+          const sold = Math.max(0, total - available);
+          const price = Number(p.pricePerTokenINR) || (total ? p.valuationINR / total : 0);
+          return {
+            ...p, subscription: subscriptionOf(p),
+            pricePerTokenINR: Math.round(price * 100) / 100,
+            tokensAvailable: available, tokensSold: sold,
+            fundedPct: total ? Math.round((sold / total) * 1000) / 10 : 0,
+            holderCount: held.filter(b => b.ownerId !== p.originatorId).length,
+            minInvestmentINR: Math.round(price * 100) / 100,
+            annualRentPerTokenINR: Math.round(price * ((Number(p.expectedYieldPct) || 0) / 100) * 100) / 100,
+          };
+        };
+        const q = (k) => url.searchParams.get(k);
+        let list = Object.values(properties).map(view);
+        if (q('status')) list = list.filter(p => p.status === q('status'));
+        if (q('city')) list = list.filter(p => ((p.location && p.location.city) || '').toLowerCase() === q('city').toLowerCase());
+        if (q('type')) list = list.filter(p => (p.propertyType || '').toLowerCase() === q('type').toLowerCase());
+        if (q('minYield')) list = list.filter(p => Number(p.expectedYieldPct || 0) >= Number(q('minYield')));
+        if (q('maxPrice')) list = list.filter(p => Number(p.pricePerTokenINR || 0) <= Number(q('maxPrice')));
+        const sorters = {
+          yield: (a, b) => (b.expectedYieldPct || 0) - (a.expectedYieldPct || 0),
+          priceAsc: (a, b) => (a.pricePerTokenINR || 0) - (b.pricePerTokenINR || 0),
+          priceDesc: (a, b) => (b.pricePerTokenINR || 0) - (a.pricePerTokenINR || 0),
+          funded: (a, b) => (b.fundedPct || 0) - (a.fundedPct || 0),
+          valuation: (a, b) => (b.valuationINR || 0) - (a.valuationINR || 0),
+        };
+        if (q('sort') && sorters[q('sort')]) list = list.sort(sorters[q('sort')]);
+        return res.json({
+          properties: list, count: list.length,
+          facets: {
+            cities: [...new Set(Object.values(properties).map(p => p.location && p.location.city).filter(Boolean))].sort(),
+            types: [...new Set(Object.values(properties).map(p => p.propertyType).filter(Boolean))].sort(),
+          },
+        });
       } catch (e) {
         return res.status(500).json({ error: e.message, properties: [] });
       }

@@ -246,3 +246,37 @@ Without it, counts live in a temp file and reset on every serverless cold start
 
 Optionally set `TRAFFIC_SALT` to a random value; it defaults to
 `ADMIN_DASHBOARD_KEY`. Changing it resets visitor-uniqueness going forward.
+
+## Marketplace catalogue
+
+`frontend/api/lib/catalogue.json` is the single source for seeded listings and
+is read by BOTH `mock-api-server.js` and `frontend/api/index.js`, so the local
+and Vercel deployments always show the same set.
+
+Nine properties across six cities and five asset classes (Residential,
+Commercial, Retail, Industrial, Land), with yields from 0% (land) to 11.3%
+(cold chain) and entry prices from ₹100 to ₹5,000 per token.
+
+The original `PROP-GREEN-VALLEY-PUNE-001` is entry #1: its id, token count and
+the three seeded balances are unchanged, so existing links and tests keep
+working. Holdings are seeded only for listings that do not already exist, so a
+restart never overwrites real positions.
+
+### Derived, never stored
+
+`tokensAvailable`, `tokensSold`, `fundedPct`, `holderCount`,
+`annualRentPerTokenINR` and `minInvestmentINR` are computed from live balances
+on every request. A listing therefore cannot drift out of agreement with the
+ledger about how much is actually left.
+
+### Query parameters on `GET /api/properties`
+
+`status`, `city`, `type`, `minYield`, `maxPrice`, and
+`sort` = `yield` | `priceAsc` | `priceDesc` | `funded` | `valuation`.
+The response also carries `facets.cities` and `facets.types` for building
+filter menus without a second request.
+
+**Vercel note:** `frontend/vercel.json` sets
+`functions."api/index.js".includeFiles = "api/lib/**"`. The catalogue is read at
+runtime with `fs`, which the bundler does not trace on its own — without this
+the function would deploy without the JSON and fall back to one property.
