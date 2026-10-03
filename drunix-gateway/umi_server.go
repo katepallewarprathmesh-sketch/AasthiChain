@@ -39,6 +39,8 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/instructions", s.handleUMIInstructions)
 	mux.HandleFunc("/umi/instructions/", s.handleUMIInstruction)
 	mux.HandleFunc("/umi/servicing", s.handleUMIServicing)
+	mux.HandleFunc("/umi/servicing/history", s.handleUMIServicingHistory)
+	mux.HandleFunc("/umi/income/", s.handleUMIIncome)
 	mux.HandleFunc("/umi/reconciliation", s.handleUMIReconciliation)
 	mux.HandleFunc("/umi/seed", s.handleUMISeed)
 }
@@ -231,6 +233,40 @@ func (s *Server) handleUMIInstruction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"instruction": si, "mode": UMIMode, "disclaimer": UMIDisclaimer,
 	})
+}
+
+// handleUMIIncome answers "what rent or coupon has this holder actually been
+// paid?" — the per-investor view the ledger block alone cannot provide.
+func (s *Server) handleUMIIncome(w http.ResponseWriter, r *http.Request) {
+	if s.UMI == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ERR_UMI_DISABLED"})
+		return
+	}
+	participant := strings.Trim(strings.TrimPrefix(r.URL.Path, "/umi/income/"), "/")
+	if participant == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ERR_UMI_PARTICIPANT_REQUIRED",
+			"message": "GET /umi/income/{participant}"})
+		return
+	}
+	total, rows := s.UMI.Income(participant)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"participant":    participant,
+		"totalIncomeINR": total,
+		"payouts":        rows,
+		"count":          len(rows),
+		"asset":          "e₹-W wholesale CBDC (simulated)",
+		"note":           "Servicing credited directly to the holder's CBDC wallet by smart contract — no registrar file exchange.",
+	})
+}
+
+// handleUMIServicingHistory lists every payout across all holders.
+func (s *Server) handleUMIServicingHistory(w http.ResponseWriter, r *http.Request) {
+	if s.UMI == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ERR_UMI_DISABLED"})
+		return
+	}
+	rows := s.UMI.ServicingHistory(atoiDefault(r.URL.Query().Get("limit"), 100))
+	writeJSON(w, http.StatusOK, map[string]interface{}{"payouts": rows, "count": len(rows)})
 }
 
 func (s *Server) handleUMIServicing(w http.ResponseWriter, r *http.Request) {

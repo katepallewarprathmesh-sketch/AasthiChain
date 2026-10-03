@@ -55,6 +55,7 @@ const Regulator = lazy(() => import('./pages/Regulator.jsx'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
 const Support = lazy(() => import('./pages/Support.jsx'))
 const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
+const InvestorDashboard = lazy(() => import('./pages/InvestorDashboard.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
 
 function RouteFallback() {
@@ -218,6 +219,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
           <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0 }}>
             {(user
               ? [
+                  { path: '/dashboard', label: 'Dashboard' },
                   { path: '/marketplace', label: 'Marketplace' },
                   { path: '/wallet', label: 'Wallet' },
                   { path: '/ledger', label: 'Ledger' },
@@ -384,6 +386,7 @@ function AppContent({ user, setUser }) {
           <Route path="/" element={<Landing user={effectiveUser} />} />
           <Route path="/login" element={<Login onLogin={setUser} />} />
           <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
+          <Route path="/dashboard" element={effectiveUser ? <InvestorDashboard user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />

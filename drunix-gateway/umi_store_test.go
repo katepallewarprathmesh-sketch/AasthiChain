@@ -20,6 +20,7 @@ type fakeStore struct {
 	funded       int64
 	settled      int64
 	failed       int64
+	servicing    []ServicingRecord
 	failWrites   bool
 	writes       int
 	initCalled   bool
@@ -55,6 +56,12 @@ func (f *fakeStore) LoadSnapshot(ctx context.Context) (*UMISnapshot, error) {
 	}
 	for _, p := range f.isins {
 		snap.ISINs = append(snap.ISINs, p)
+	}
+	for _, rec := range f.servicing {
+		if rec.Rev > snap.MaxRev {
+			snap.MaxRev = rec.Rev
+		}
+		snap.Servicing = append(snap.Servicing, rec)
 	}
 	for _, si := range f.instructions {
 		if si.Rev > snap.MaxRev {
@@ -136,6 +143,16 @@ func (f *fakeStore) SaveMeta(funded, settled, failed int64) error {
 		return err
 	}
 	f.funded, f.settled, f.failed = funded, settled, failed
+	return nil
+}
+
+func (f *fakeStore) SaveServicing(rec ServicingRecord) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.guard(); err != nil {
+		return err
+	}
+	f.servicing = append(f.servicing, rec)
 	return nil
 }
 
@@ -377,5 +394,58 @@ func TestRevisionsResumeAboveRestoredHighWaterMark(t *testing.T) {
 	live, _ := rail2.Wallet("investor1")
 	if after.BalancePaise != live.BalancePaise {
 		t.Errorf("persisted balance %d != live balance %d after restart", after.BalancePaise, live.BalancePaise)
+	}
+}
+
+func TestServicingIncomeIsPerHolderAndSurvivesRestart(t *testing.T) {
+	store := newFakeStore()
+	sec := NewMemorySecurities()
+	rail := NewUMIRail(sec, NewChain()).WithStore(store)
+	rail.SeedPosition(tAsset, "originator1", 1000)
+	rail.FundWallet("originator1", 100000)
+	rail.FundWallet("investor1", 100000)
+	rail.FundWallet("investor2", 100000)
+
+	// two investors with different stakes => different shares of the rent
+	if _, err := rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
+		Tokens: 300, PricePerTokenINR: 100, AutoAssignISIN: true}); err != nil {
+		t.Fatalf("dvp1: %v", err)
+	}
+	if _, err := rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor2",
+		Tokens: 100, PricePerTokenINR: 100, AutoAssignISIN: true}); err != nil {
+		t.Fatalf("dvp2: %v", err)
+	}
+	if _, err := rail.Servicing(tAsset, "originator1", 10000); err != nil {
+		t.Fatalf("servicing: %v", err)
+	}
+
+	t1, rows1 := rail.Income("investor1")
+	t2, rows2 := rail.Income("investor2")
+	if len(rows1) != 1 || len(rows2) != 1 {
+		t.Fatalf("expected one payout each, got %d and %d", len(rows1), len(rows2))
+	}
+	if !(t1 > t2) {
+		t.Errorf("investor1 holds 3x the tokens but earned ₹%.2f vs ₹%.2f", t1, t2)
+	}
+	if rows1[0].BlockHeight == 0 {
+		t.Error("payout is not anchored to a ledger block")
+	}
+	if rows1[0].Holder != "investor1" || rows1[0].Payer != "originator1" {
+		t.Errorf("payout attributed wrongly: %+v", rows1[0])
+	}
+
+	// a holder with no servicing must get an empty answer, not someone else's
+	if total, rows := rail.Income("nobody"); total != 0 || len(rows) != 0 {
+		t.Errorf("unknown holder leaked data: %v %v", total, rows)
+	}
+
+	// restart
+	rail2 := NewUMIRail(NewMemorySecurities(), NewChain()).WithStore(store)
+	r1, got1 := rail2.Income("investor1")
+	if len(got1) != 1 || r1 != t1 {
+		t.Fatalf("income after restart = ₹%.2f (%d rows), want ₹%.2f (1 row)", r1, len(got1), t1)
+	}
+	if got1[0].BlockHeight != rows1[0].BlockHeight {
+		t.Errorf("block anchor lost across restart: %d != %d", got1[0].BlockHeight, rows1[0].BlockHeight)
 	}
 }

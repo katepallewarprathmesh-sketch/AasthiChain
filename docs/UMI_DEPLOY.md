@@ -99,6 +99,7 @@ schema (`user`, `account`, `session`, `properties`, `balances`, `npci_payments`,
 | `umi_isin` | pilot ISIN register |
 | `umi_instruction` | settlement instructions + full JSONB payload (ISO 20022 trace) |
 | `umi_meta` | lifetime funded paise, settled/failed counters (conservation baseline) |
+| `umi_servicing` | per-holder rent/coupon payouts (what each investor was actually paid) |
 | `umi_block` | **the Drunix block chain itself** — append-only, one row per block |
 
 ### The ledger is append-only and permanent
