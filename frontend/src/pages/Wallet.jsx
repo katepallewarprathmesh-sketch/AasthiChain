@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { money } from '../lib/format.js'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
+import UMIPortfolioPanel from '../components/UMIPortfolioPanel.jsx'
 import { useLocalCache } from '../hooks/useLocalCache.js'
 
 // SOLID: Single Responsibility Only wallet display + transfer for layman
@@ -315,6 +316,8 @@ export default function Wallet({ user }) {
           </div>
         )}
       </div>
+
+      <UMIPortfolioPanel identityId={identityId} />
 
       <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 24, minWidth: 0 }}>
         {nav && (

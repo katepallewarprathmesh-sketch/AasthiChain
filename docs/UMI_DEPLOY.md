@@ -120,6 +120,13 @@ block hashes). Three outcomes:
 Inspect it at **`GET /drunix/chain`** (`?from=&limit=`): every block, the verification anyone can
 recompute, and a `durability` block showing mode/durable/sealed.
 
+**Ordering under concurrency.** Writes are issued after the rail's mutex is released, so two
+concurrent settlements touching one wallet can reach the database out of order. Every wallet,
+position and instruction row therefore carries a monotonic `rev` stamped *under* the lock, and
+upserts apply only `WHERE stored.rev < incoming.rev`. The last *logical* state wins, not the last
+packet to arrive. Counters in `umi_meta` are monotonic and merged with `GREATEST`. On restart the
+rail resumes above the highest stored revision.
+
 Behaviour guarantees:
 
 - **Persistence never breaks settlement.** Writes are best-effort; a database outage is logged and
