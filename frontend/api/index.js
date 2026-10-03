@@ -3502,6 +3502,36 @@ export default async function handler(req, res) {
         });
       }
     }
+    // ===== PRIVATE OPERATOR INSIGHTS =====
+    // Same contract as the local server; shared aggregation in lib/insights.js.
+    if (path === '/api/admin/insights/status') {
+      return res.status(200).json({ enabled: !!(process.env.ADMIN_DASHBOARD_KEY || '').trim() });
+    }
+    if (path === '/api/admin/insights') {
+      const { authorise: insightsAuth, buildInsights } = require('../../lib/insights.js');
+      const denied = insightsAuth({ headers: req.headers, query: Object.fromEntries(url.searchParams) });
+      if (denied) return res.status(denied.status).json(denied.body);
+
+      let rail = null;
+      const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+      if (base) {
+        try {
+          const get = async (p) => { const r = await fetch(base + p); return r.ok ? await r.json() : null; };
+          const [config, reconciliation, instructions, wallets, chain] = await Promise.all([
+            get('/umi/config'), get('/umi/reconciliation'), get('/umi/instructions'),
+            get('/umi/wallets'), get('/drunix/chain?limit=500')
+          ]);
+          if (reconciliation) {
+            rail = { config, reconciliation, instructions: (instructions && instructions.instructions) || [],
+                     wallets: (wallets && wallets.wallets) || [], chain };
+          }
+        } catch { /* rail optional */ }
+      }
+      return res.status(200).json(buildInsights(
+        { properties, balances, transfers, kycRecords, chain: drunixChain }, rail));
+    }
+    // ===== END PRIVATE OPERATOR INSIGHTS =====
+
     // Drunix ledger proxy — the Ledger Explorer reads the durable settlement
     // chain through this. Same contract as /api/umi/*: pure forwarding, zero
     // logic here, 503 (not 404) when the rail is not configured.

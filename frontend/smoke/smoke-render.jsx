@@ -19,6 +19,7 @@ import Marketplace from '../src/pages/Marketplace.jsx'
 import Wallet from '../src/pages/Wallet.jsx'
 import LedgerExplorer from '../src/pages/LedgerExplorer.jsx'
 import InvestorDashboard from '../src/pages/InvestorDashboard.jsx'
+import Insights from '../src/pages/Insights.jsx'
 import UMISettlement from '../src/pages/UMISettlement.jsx'
 import Support from '../src/pages/Support.jsx'
 import Admin from '../src/pages/Admin.jsx'
@@ -33,6 +34,7 @@ const ROUTES = [
   ['/marketplace', <Marketplace user={user} />],
   ['/wallet', <Wallet user={user} />],
   ['/dashboard', <InvestorDashboard user={user} />],
+  ['/insights', <Insights />],
   ['/ledger', <LedgerExplorer />],
   ['/umi', <UMISettlement />],
   ['/support', <Support />],
