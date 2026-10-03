@@ -36,7 +36,8 @@ function SimpleStatus({ status, validationStatus }) {
 }
 
 export default function SimplePropertyCard({ property }) {
-  const tokenPrice = property.totalTokens ? Math.floor(property.valuationINR / property.totalTokens) : (property.tokenPrice || 500)
+  const tokenPrice = Number(property.pricePerTokenINR) ||
+    (property.totalTokens ? Math.floor(property.valuationINR / property.totalTokens) : (property.tokenPrice || 500))
   const city = property.location?.city || 'Pune'
   const state = property.location?.state || 'Maharashtra'
 
@@ -65,6 +66,28 @@ export default function SimplePropertyCard({ property }) {
         </div>
       </div>
 
+      {/* Asset class and income yield — the two things an investor compares
+          listings on. Yield is omitted for land, which produces no rent. */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: -6 }}>
+        {property.propertyType && (
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+            background: '#F3F4F6', color: '#374151', border: '1px solid #E5E7EB' }}>
+            {property.propertyType}
+          </span>
+        )}
+        {Number(property.expectedYieldPct) > 0 ? (
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+            background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}>
+            {property.expectedYieldPct}% expected yield
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+            background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }}>
+            No rental income
+          </span>
+        )}
+      </div>
+
       <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, border: '1px solid #F3F4F6' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
@@ -77,7 +100,9 @@ export default function SimplePropertyCard({ property }) {
           </div>
         </div>
         <div style={{ fontSize: 11, color: '#6B7280', marginTop: 8 }}>
-          Own from ₹500 {property.totalTokens?.toLocaleString('en-IN') || ''} tokens total
+          Own from ₹{tokenPrice.toLocaleString('en-IN')} · {property.totalTokens?.toLocaleString('en-IN') || ''} tokens total
+          {Number(property.annualRentPerTokenINR) > 0 &&
+            <> · about ₹{Number(property.annualRentPerTokenINR).toLocaleString('en-IN')}/token a year</>}
         </div>
         {property.subscription && property.subscription.totalTokens > 0 && (
           <div style={{ marginTop: 10 }}>

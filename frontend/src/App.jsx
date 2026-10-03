@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import { trackPageview } from './lib/track'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
 class ErrorBoundary extends React.Component {
@@ -287,6 +288,10 @@ function AppContent({ user, setUser }) {
   useEffect(() => { setInternalUser(user) }, [user])
 
   useEffect(() => { prefetchLikelyRoutes() }, [])
+
+  // First-party pageview beacon. Fires on every route change; silent, honours
+  // Do Not Track, and cannot throw into the render path.
+  useEffect(() => { trackPageview(location.pathname) }, [location.pathname])
 
   useEffect(() => {
     if (!isClerkConfigured) return

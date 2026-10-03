@@ -1,0 +1,173 @@
+[
+ {
+  "assetId": "PROP-GREEN-VALLEY-PUNE-001",
+  "title": "Green Valley Villas - Pune",
+  "location": {
+   "city": "Pune",
+   "state": "Maharashtra",
+   "pincode": "411045"
+  },
+  "propertyType": "Residential",
+  "valuationINR": 7500000,
+  "totalTokens": 15000,
+  "pricePerTokenINR": 500.0,
+  "expectedYieldPct": 7.4,
+  "areaSqft": 2400,
+  "yearBuilt": 2019,
+  "description": "Gated villa community in Baner with 24x7 security, clubhouse and covered parking. Fully let to three corporate tenants on three-year leases.",
+  "documentHash": "f979b86655c44c5d3ea91254afa5297d2d45e09ec49c3d21f761c6d7e1ee5f5f",
+  "seedSoldFraction": 0.2
+ },
+ {
+  "assetId": "PROP-MARINE-HEIGHTS-MUM-002",
+  "title": "Marine Heights Residences - Mumbai",
+  "location": {
+   "city": "Mumbai",
+   "state": "Maharashtra",
+   "pincode": "400018"
+  },
+  "propertyType": "Residential",
+  "valuationINR": 24000000,
+  "totalTokens": 4800,
+  "pricePerTokenINR": 5000.0,
+  "expectedYieldPct": 5.1,
+  "areaSqft": 1850,
+  "yearBuilt": 2021,
+  "description": "Sea-facing apartments at Worli with concierge and private parking. Premium location, lower yield, historically strong capital appreciation.",
+  "documentHash": "ae6fc8b129a0cd2197106b6eaa4e647f2a41b343ed2c27927a18360bdb90417e",
+  "seedSoldFraction": 0.62
+ },
+ {
+  "assetId": "PROP-CYBER-TOWERS-BLR-003",
+  "title": "Cyber Towers Office Block - Bengaluru",
+  "location": {
+   "city": "Bengaluru",
+   "state": "Karnataka",
+   "pincode": "560103"
+  },
+  "propertyType": "Commercial",
+  "valuationINR": 41000000,
+  "totalTokens": 16400,
+  "pricePerTokenINR": 2500.0,
+  "expectedYieldPct": 8.6,
+  "areaSqft": 12500,
+  "yearBuilt": 2018,
+  "description": "Grade-A office floor in the Outer Ring Road IT corridor. Single IT tenant, nine-year lease with 5% annual escalation and a six-month deposit.",
+  "documentHash": "1188634c1e0e6395a462aa696fbaeebbce2ebb44790f43f9509b40610237fc0e",
+  "seedSoldFraction": 0.78
+ },
+ {
+  "assetId": "PROP-SALTLAKE-RETAIL-KOL-004",
+  "title": "Salt Lake Retail Arcade - Kolkata",
+  "location": {
+   "city": "Kolkata",
+   "state": "West Bengal",
+   "pincode": "700091"
+  },
+  "propertyType": "Retail",
+  "valuationINR": 13500000,
+  "totalTokens": 54000,
+  "pricePerTokenINR": 250.0,
+  "expectedYieldPct": 9.2,
+  "areaSqft": 6200,
+  "yearBuilt": 2016,
+  "description": "Ground-floor retail arcade with eleven units; anchor tenant is a national pharmacy chain. High footfall from the adjacent metro entrance.",
+  "documentHash": "326d066e06081b1cd2d45555fe1e638ed11a5aebfaed7498e2ccf0d2de922412",
+  "seedSoldFraction": 0.41
+ },
+ {
+  "assetId": "PROP-LOGIPARK-WH-CHN-005",
+  "title": "LogiPark Warehouse Unit 7 - Chennai",
+  "location": {
+   "city": "Chennai",
+   "state": "Tamil Nadu",
+   "pincode": "601206"
+  },
+  "propertyType": "Industrial",
+  "valuationINR": 18800000,
+  "totalTokens": 37600,
+  "pricePerTokenINR": 500.0,
+  "expectedYieldPct": 10.4,
+  "areaSqft": 38000,
+  "yearBuilt": 2020,
+  "description": "Grade-A warehousing near the Oragadam auto cluster. 12m clear height, leased to a 3PL operator on a seven-year triple-net lease.",
+  "documentHash": "a5707c41ba40984ca92112e567b3c8c06d05058e7e4d39ceeefe1287ba3b2b90",
+  "seedSoldFraction": 0.55
+ },
+ {
+  "assetId": "PROP-ARAVALI-PLOTS-JAI-006",
+  "title": "Aravali Residency Plots - Jaipur",
+  "location": {
+   "city": "Jaipur",
+   "state": "Rajasthan",
+   "pincode": "302026"
+  },
+  "propertyType": "Land",
+  "valuationINR": 6200000,
+  "totalTokens": 24800,
+  "pricePerTokenINR": 250.0,
+  "expectedYieldPct": 0.0,
+  "areaSqft": 9000,
+  "yearBuilt": null,
+  "description": "Approved residential plots on the Ajmer Road growth corridor. No rental income - this is a pure land-appreciation holding.",
+  "documentHash": "c835cbfb46df542000a82896737f9db5e4def25a8a6deae66513eca8950297c3",
+  "seedSoldFraction": 0.12
+ },
+ {
+  "assetId": "PROP-HITEC-SERVICED-HYD-007",
+  "title": "HITEC Serviced Apartments - Hyderabad",
+  "location": {
+   "city": "Hyderabad",
+   "state": "Telangana",
+   "pincode": "500081"
+  },
+  "propertyType": "Residential",
+  "valuationINR": 15600000,
+  "totalTokens": 20800,
+  "pricePerTokenINR": 750.0,
+  "expectedYieldPct": 8.1,
+  "areaSqft": 4100,
+  "yearBuilt": 2022,
+  "description": "Twelve serviced apartments let to a managed-stay operator on a revenue share with a guaranteed floor. Steady corporate demand.",
+  "documentHash": "d4478704ebc1dcab1e4d7a1eb6aa3c12b276e2b15a1d54276ea2cf025daea66a",
+  "seedSoldFraction": 0.33
+ },
+ {
+  "assetId": "PROP-RIVERFRONT-COMM-AHM-008",
+  "title": "Riverfront Commercial Plaza - Ahmedabad",
+  "location": {
+   "city": "Ahmedabad",
+   "state": "Gujarat",
+   "pincode": "380015"
+  },
+  "propertyType": "Commercial",
+  "valuationINR": 21500000,
+  "totalTokens": 8600,
+  "pricePerTokenINR": 2500.0,
+  "expectedYieldPct": 7.9,
+  "areaSqft": 8800,
+  "yearBuilt": 2017,
+  "description": "Mixed commercial plaza near the Sabarmati riverfront. Six tenants across banking, diagnostics and food service; weighted lease term 4.2 years.",
+  "documentHash": "ef1d39f42b359d4a428eaf7ecd3968caec077b0f56be267dd482b00c816e9261",
+  "seedSoldFraction": 0.69
+ },
+ {
+  "assetId": "PROP-COLD-CHAIN-NSK-009",
+  "title": "Cold Chain Facility - Nashik",
+  "location": {
+   "city": "Nashik",
+   "state": "Maharashtra",
+   "pincode": "422010"
+  },
+  "propertyType": "Industrial",
+  "valuationINR": 9400000,
+  "totalTokens": 94000,
+  "pricePerTokenINR": 100.0,
+  "expectedYieldPct": 11.3,
+  "areaSqft": 15000,
+  "yearBuilt": 2021,
+  "description": "Temperature-controlled storage serving the Nashik grape and onion belt. Highest yield in the catalogue, and the most tenant-concentration risk.",
+  "documentHash": "ed87e6323a74a9483e1d67d31ff91d8405b30cf259ccb36a796b11a77529013f",
+  "seedSoldFraction": 0.08
+ }
+]

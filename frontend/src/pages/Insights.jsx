@@ -40,6 +40,101 @@ function Bars({ series }) {
   )
 }
 
+function TrafficBars({ series }) {
+  const max = Math.max(1, ...series.map(d => d.views))
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 110, marginTop: 12 }}>
+      {series.map(d => (
+        <div key={d.date} style={{ flex: 1, textAlign: 'center', minWidth: 0 }} title={`${d.date} · ${d.views} views · ${d.visitors} visitors`}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2, height: 86 }}>
+            <div style={{ width: '42%', height: `${(d.views / max) * 100}%`, background: '#0E7490', borderRadius: '3px 3px 0 0', minHeight: d.views ? 2 : 0 }} />
+            <div style={{ width: '42%', height: `${(d.visitors / max) * 100}%`, background: '#F59E0B', borderRadius: '3px 3px 0 0', minHeight: d.visitors ? 2 : 0 }} />
+          </div>
+          <div style={{ fontSize: 8.5, color: '#9CA3AF', marginTop: 4 }}>{d.date.slice(8)}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RankList({ title, rows, labelKey, empty }) {
+  const max = Math.max(1, ...rows.map(r => r.views))
+  return (
+    <div style={card}>
+      <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>{title}</h2>
+      {rows.length === 0 ? (
+        <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8 }}>{empty}</p>
+      ) : (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {rows.map(r => (
+            <div key={r[labelKey]} style={{ position: 'relative', border: '1px solid #F3F4F6', borderRadius: 8, padding: '7px 11px', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', inset: 0, width: `${(r.views / max) * 100}%`, background: '#ECFEFF' }} />
+              <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5 }}>
+                <span style={{ color: '#374151', overflowWrap: 'anywhere' }}>{r[labelKey]}</span>
+                <b style={{ color: '#0E7490', whiteSpace: 'nowrap' }}>{r.views} · {r.sharePct}%</b>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TrafficSection({ t }) {
+  if (!t || t.unavailable) {
+    return (
+      <div style={{ ...card, marginTop: 20 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Web traffic</h2>
+        <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8 }}>
+          Traffic data unavailable{t && t.message ? ` — ${t.message}` : ''}.
+        </p>
+      </div>
+    )
+  }
+  const a = t.acquisition || {}
+  return (
+    <>
+      <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 19, color: '#1E3A5F', margin: '26px 0 2px' }}>
+        Web traffic · last {t.windowDays} days
+      </h2>
+      <p style={{ fontSize: 12, color: '#6B7280', margin: '0 0 12px' }}>
+        First-party measurement. {t.durable
+          ? 'Stored in Postgres — survives restarts.'
+          : 'No DATABASE_URL: counts sit in a temp file and reset on a cold start.'}
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+        <Metric label="Pageviews" value={Number(t.totalViews || 0).toLocaleString('en-IN')} color="#0E7490" />
+        <Metric label="Unique visitors" value={Number(t.uniqueVisitors || 0).toLocaleString('en-IN')} sub="daily-rotating ids" color="#B45309" />
+        <Metric label="Views / visitor" value={t.viewsPerVisitor} />
+        <Metric label="From search" value={pct(a.searchPct)} sub={`${a.searchViews || 0} views`} color="#047857" />
+        <Metric label="Direct" value={pct(a.directPct)} sub={`${a.directViews || 0} views`} />
+      </div>
+
+      <div style={{ ...card, marginTop: 14 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Views and visitors per day</h2>
+        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 3 }}>
+          <span style={{ color: '#0E7490', fontWeight: 700 }}>■</span> views &nbsp;
+          <span style={{ color: '#F59E0B', fontWeight: 700 }}>■</span> visitors
+        </div>
+        <TrafficBars series={t.series || []} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 12, marginTop: 14 }}>
+        <RankList title="Top pages" rows={t.topPages || []} labelKey="path"
+          empty="No pageviews recorded yet. Visit a page and refresh." />
+        <RankList title="Where visitors come from" rows={t.topReferrers || []} labelKey="source"
+          empty="No referrers recorded yet." />
+      </div>
+
+      <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 12, lineHeight: 1.7 }}>
+        {(t.notes || []).map((n, i) => <div key={i}>{n}</div>)}
+      </div>
+    </>
+  )
+}
+
 export default function Insights() {
   const [key, setKey] = useState(() => {
     try { return sessionStorage.getItem(KEY_STORE) || '' } catch { return '' }
@@ -215,6 +310,8 @@ export default function Insights() {
           )}
         </div>
       </div>
+
+      <TrafficSection t={data.traffic} />
 
       <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 16, lineHeight: 1.7 }}>
         {(data.notes || []).map((n, i) => <div key={i}>{n}</div>)}

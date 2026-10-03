@@ -33,6 +33,23 @@ async function umi(path, options = {}) {
   return { ok: res.ok, status: res.status, data }
 }
 
+// The rail returns machine codes. Operators need a sentence that says what to do.
+const ERRORS = {
+  ERR_UMI_NO_HOLDERS: 'Nobody holds this asset except the payer, so there is nobody to pay. Settle a DvP to a buyer first, then distribute.',
+  ERR_UMI_INSUFFICIENT_CBDC: 'The buyer\u2019s e\u20B9-W wallet does not hold enough cash for this instruction. Fund it in Card 1 and retry.',
+  ERR_UMI_INSUFFICIENT_TOKENS: 'The seller does not hold that many tokens. Use \u201CSeed demo position for seller\u201D, or lower the token count.',
+  ERR_UMI_INVALID_AMOUNT: 'Amount must be a positive number.',
+  ERR_UMI_UNKNOWN_ASSET: 'No such assetId on the rail. Check the asset identifier.',
+  ERR_UMI_SELF_TRADE: 'Buyer and seller are the same participant.',
+}
+
+const explain = (d) => {
+  const code = d && d.error
+  if (code && ERRORS[code]) return `${ERRORS[code]} (${code})`
+  const msg = d && d.message && d.message !== code ? d.message : ''
+  return [code || 'Request failed', msg].filter(Boolean).join(' \u2014 ')
+}
+
 function Card({ title, sub, children, right }) {
   return (
     <section style={{ background: 'white', border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
@@ -96,12 +113,20 @@ export default function UMISettlement() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  // Successes clear themselves; errors persist until dismissed so they can be read.
+  useEffect(() => {
+    if (flash && flash.kind === 'ok') {
+      const t = setTimeout(() => setFlash(null), 9000)
+      return () => clearTimeout(t)
+    }
+  }, [flash])
+
   const run = async (fn, okMsg) => {
     setBusy(true); setFlash(null)
     try {
       const res = await fn()
       if (res.ok) setFlash({ kind: 'ok', text: okMsg(res.data) })
-      else setFlash({ kind: 'err', text: `${res.data.error || 'Failed'} — ${res.data.message || ''}` })
+      else setFlash({ kind: 'err', text: explain(res.data) })
       await refresh()
       return res
     } catch (e) {
@@ -156,13 +181,47 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         <p style={{ color: C.mut, fontSize: 12, maxWidth: 820 }}>{config?.disclaimer}</p>
       </header>
 
+      {/* Feedback is rendered as a FIXED toast, not an in-flow banner. The action
+          buttons live far down the page; an in-flow banner at the top scrolls out
+          of view, so a click looked like it did nothing at all. */}
       {flash && (
-        <div style={{
-          marginBottom: 14, padding: '11px 14px', borderRadius: 10, fontSize: 13,
-          background: flash.kind === 'ok' ? C.okBg : C.badBg,
-          border: `1px solid ${flash.kind === 'ok' ? C.okLine : C.badLine}`,
-          color: flash.kind === 'ok' ? C.ok : C.bad,
-        }}>{flash.text}</div>
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24,
+            zIndex: 1000, maxWidth: 'min(720px, calc(100vw - 32px))',
+            display: 'flex', alignItems: 'flex-start', gap: 12,
+            padding: '12px 14px', borderRadius: 12, fontSize: 13,
+            boxShadow: '0 10px 30px rgba(15,23,42,.18)',
+            background: flash.kind === 'ok' ? C.okBg : C.badBg,
+            border: `1px solid ${flash.kind === 'ok' ? C.okLine : C.badLine}`,
+            color: flash.kind === 'ok' ? C.ok : C.bad,
+          }}
+        >
+          <span style={{ flex: 1 }}>{flash.text}</span>
+          <button
+            onClick={() => setFlash(null)}
+            aria-label="Dismiss"
+            style={{
+              border: 'none', background: 'transparent', cursor: 'pointer',
+              color: 'inherit', fontSize: 16, lineHeight: 1, padding: 0, opacity: .65,
+            }}
+          >×</button>
+        </div>
+      )}
+
+      {busy && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24,
+            zIndex: 1000, padding: '12px 18px', borderRadius: 12, fontSize: 13,
+            boxShadow: '0 10px 30px rgba(15,23,42,.18)',
+            background: 'white', border: `1px solid ${C.line}`, color: C.navy,
+          }}
+        >Working…</div>
       )}
 
       <Card
