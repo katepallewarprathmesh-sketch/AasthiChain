@@ -29,15 +29,27 @@ class ApiClient {
     const headers = { ...this.getAuthHeaders(), ...(options.headers || {}) }
     const res = await fetch(path, { ...options, headers })
     
+    // Read as text first: a non-JSON body (an HTML error page, or a plain-text
+    // 404 from an upstream service) used to collapse into "Request failed 404"
+    // with no indication of what had actually gone wrong.
+    const raw = await res.text()
     let data
     try {
-      data = await res.json()
+      data = raw ? JSON.parse(raw) : {}
     } catch {
-      throw new Error(`Request failed ${res.status} ${path}`)
+      const snippet = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140)
+      const error = new Error(
+        res.status === 404
+          ? `${path} is not available on this deployment (HTTP 404).${snippet ? ' Server said: ' + snippet : ''}`
+          : `The server returned an unreadable response (HTTP ${res.status}).${snippet ? ' ' + snippet : ''}`
+      )
+      error.status = res.status
+      error.nonJson = true
+      throw error
     }
-    
+
     if (!res.ok) {
-      const error = new Error(data.error || data.message || `HTTP ${res.status}`)
+      const error = new Error(data.message || data.error || `HTTP ${res.status}`)
       error.data = data
       error.status = res.status
       throw error

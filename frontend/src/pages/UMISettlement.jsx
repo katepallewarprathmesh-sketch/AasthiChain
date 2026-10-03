@@ -50,6 +50,32 @@ const explain = (d) => {
   return [code || 'Request failed', msg].filter(Boolean).join(' \u2014 ')
 }
 
+// Result of an action, shown INSIDE the card that triggered it. An earlier
+// version put this in a floating box at the bottom of the window, which read
+// like a system alert detached from whatever the user had just clicked.
+function Notice({ flash, where, onClose }) {
+  if (!flash || flash.where !== where) return null
+  const ok = flash.kind === 'ok'
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+        background: ok ? C.okBg : C.badBg,
+        border: `1px solid ${ok ? C.okLine : C.badLine}`,
+        color: ok ? C.ok : C.bad,
+      }}
+    >
+      <span aria-hidden="true" style={{ fontWeight: 700, lineHeight: 1.45 }}>{ok ? '✓' : '!'}</span>
+      <span style={{ flex: 1, lineHeight: 1.45 }}>{flash.text}</span>
+      <button onClick={onClose} aria-label="Dismiss"
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0, opacity: .6 }}>×</button>
+    </div>
+  )
+}
+
 function Card({ title, sub, children, right }) {
   return (
     <section style={{ background: 'white', border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
@@ -113,44 +139,39 @@ export default function UMISettlement() {
 
   useEffect(() => { refresh() }, [refresh])
 
-  // Successes clear themselves; errors persist until dismissed so they can be read.
-  useEffect(() => {
-    if (flash && flash.kind === 'ok') {
-      const t = setTimeout(() => setFlash(null), 9000)
-      return () => clearTimeout(t)
-    }
-  }, [flash])
-
-  const run = async (fn, okMsg) => {
-    setBusy(true); setFlash(null)
+  // Results stay put until the next action or an explicit dismiss: they sit
+  // inside the relevant card now, so nothing is covering the page while a
+  // user reads them.
+  const run = async (fn, okMsg, where) => {
+    setBusy(where || true); setFlash(null)
     try {
       const res = await fn()
-      if (res.ok) setFlash({ kind: 'ok', text: okMsg(res.data) })
-      else setFlash({ kind: 'err', text: explain(res.data) })
+      if (res.ok) setFlash({ kind: 'ok', where, text: okMsg(res.data) })
+      else setFlash({ kind: 'err', where, text: explain(res.data) })
       await refresh()
       return res
     } catch (e) {
-      setFlash({ kind: 'err', text: e.message })
+      setFlash({ kind: 'err', where, text: e.message })
     } finally { setBusy(false) }
   }
 
   const seed = () => run(
     () => umi('/seed', { body: { assetId, holder: seller, tokens: 15000 } }),
-    (d) => `Demo position seeded: ${seller} holds ${num(d.position)} tokens of ${assetId}`)
+    (d) => `Demo position seeded: ${seller} holds ${num(d.position)} tokens of ${assetId}`, 'dvp')
 
   const fund = () => run(
     () => umi(`/wallets/${encodeURIComponent(fundWho)}/fund`, { body: { amountINR: Number(fundAmt) } }),
-    (d) => `e₹-W wallet ${d.wallet.walletId} funded ${money(d.fundedINR)} · block #${d.blockHeight}`)
+    (d) => `e₹-W wallet ${d.wallet.walletId} funded ${money(d.fundedINR)} · block #${d.blockHeight}`, 'wallet')
 
   const settle = (dryRun) => run(
     () => umi('/dvp', { body: { assetId, seller, buyer, tokens: Number(tokens), pricePerTokenINR: Number(price), dryRun } }),
     (d) => dryRun
       ? `Pre-trade check: settleable — ${num(d.instruction.tokens)} tokens for ${money(d.instruction.cashINR)}. Nothing moved.`
-      : `DvP SETTLED atomically · ${num(d.instruction.tokens)} tokens ⇄ ${money(d.instruction.cashINR)} in e₹-W · block #${d.instruction.blockHeight}`)
+      : `DvP SETTLED atomically · ${num(d.instruction.tokens)} tokens ⇄ ${money(d.instruction.cashINR)} in e₹-W · block #${d.instruction.blockHeight}`, 'dvp')
 
   const servicing = () => run(
     () => umi('/servicing', { body: { assetId, payer: seller, amountINR: Number(servAmt) } }),
-    (d) => `Servicing paid: ${money(d.servicing.distributedINR)} credited pro-rata into ${d.servicing.payouts.length} CBDC wallet(s) · block #${d.servicing.blockHeight}`)
+    (d) => `Servicing paid: ${money(d.servicing.distributedINR)} credited pro-rata into ${d.servicing.payouts.length} CBDC wallet(s) · block #${d.servicing.blockHeight}`, 'servicing')
 
   if (railDown) {
     return (
@@ -181,59 +202,19 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         <p style={{ color: C.mut, fontSize: 12, maxWidth: 820 }}>{config?.disclaimer}</p>
       </header>
 
-      {/* Feedback is rendered as a FIXED toast, not an in-flow banner. The action
-          buttons live far down the page; an in-flow banner at the top scrolls out
-          of view, so a click looked like it did nothing at all. */}
-      {flash && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24,
-            zIndex: 1000, maxWidth: 'min(720px, calc(100vw - 32px))',
-            display: 'flex', alignItems: 'flex-start', gap: 12,
-            padding: '12px 14px', borderRadius: 12, fontSize: 13,
-            boxShadow: '0 10px 30px rgba(15,23,42,.18)',
-            background: flash.kind === 'ok' ? C.okBg : C.badBg,
-            border: `1px solid ${flash.kind === 'ok' ? C.okLine : C.badLine}`,
-            color: flash.kind === 'ok' ? C.ok : C.bad,
-          }}
-        >
-          <span style={{ flex: 1 }}>{flash.text}</span>
-          <button
-            onClick={() => setFlash(null)}
-            aria-label="Dismiss"
-            style={{
-              border: 'none', background: 'transparent', cursor: 'pointer',
-              color: 'inherit', fontSize: 16, lineHeight: 1, padding: 0, opacity: .65,
-            }}
-          >×</button>
-        </div>
-      )}
-
-      {busy && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24,
-            zIndex: 1000, padding: '12px 18px', borderRadius: 12, fontSize: 13,
-            boxShadow: '0 10px 30px rgba(15,23,42,.18)',
-            background: 'white', border: `1px solid ${C.line}`, color: C.navy,
-          }}
-        >Working…</div>
-      )}
-
       <Card
         title="1 · Cash leg — wholesale CBDC (e₹-W) wallets"
         sub="Institutional central-bank-money wallets. Balances are held as integer paise, so the rail can prove it never creates or destroys money."
-        right={<button style={btn(false)} onClick={refresh} disabled={busy}>Refresh</button>}
+        right={<button style={btn(false)} onClick={refresh} disabled={!!busy}>Refresh</button>}
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <input style={{ ...input, maxWidth: 190 }} value={fundWho} onChange={e => setFundWho(e.target.value)} placeholder="participant" />
           <input style={{ ...input, maxWidth: 150 }} type="number" value={fundAmt} onChange={e => setFundAmt(e.target.value)} placeholder="amount ₹" />
-          <button style={btn(true)} onClick={fund} disabled={busy}>Fund from settlement bank</button>
+          <button style={btn(true)} onClick={fund} disabled={!!busy}>
+            {busy === 'wallet' ? 'Funding…' : 'Fund from settlement bank'}
+          </button>
         </div>
+        <Notice flash={flash} where="wallet" onClose={() => setFlash(null)} />
         {wallets.length === 0 ? <p style={{ fontSize: 13, color: C.mut }}>No wallets yet — fund one to begin.</p> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -267,11 +248,14 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           <input style={input} type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="₹ / token" />
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button style={btn(true)} onClick={() => settle(false)} disabled={busy}>Settle DvP</button>
-          <button style={btn(false)} onClick={() => settle(true)} disabled={busy}>Dry run (no state change)</button>
-          <button style={btn(false)} onClick={seed} disabled={busy}>Seed demo position for seller</button>
+          <button style={btn(true)} onClick={() => settle(false)} disabled={!!busy}>
+            {busy === 'dvp' ? 'Settling…' : 'Settle DvP'}
+          </button>
+          <button style={btn(false)} onClick={() => settle(true)} disabled={!!busy}>Dry run (no state change)</button>
+          <button style={btn(false)} onClick={seed} disabled={!!busy}>Seed demo position for seller</button>
           <span style={{ fontSize: 12.5, color: C.mut }}>Cash leg: <strong>{money(Number(tokens) * Number(price))}</strong></span>
         </div>
+        <Notice flash={flash} where="dvp" onClose={() => setFlash(null)} />
       </Card>
 
       <Card
@@ -280,9 +264,12 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...input, maxWidth: 150 }} type="number" value={servAmt} onChange={e => setServAmt(e.target.value)} />
-          <button style={btn(true)} onClick={servicing} disabled={busy}>Distribute from {seller}</button>
+          <button style={btn(true)} onClick={servicing} disabled={!!busy}>
+            {busy === 'servicing' ? 'Distributing…' : `Distribute from ${seller}`}
+          </button>
           <span style={{ fontSize: 12.5, color: C.mut }}>pro-rata across holders of {assetId}</span>
         </div>
+        <Notice flash={flash} where="servicing" onClose={() => setFlash(null)} />
       </Card>
 
       <Card title="4 · Instructions & ISO 20022 trace" sub="Every instruction keeps the message family a real securities-settlement rail would emit — sese.023 → sese.024 → pacs.009 → sese.025 → camt.054.">
