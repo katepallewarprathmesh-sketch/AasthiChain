@@ -209,3 +209,40 @@ The browser keeps the key in `sessionStorage` and sends it as a header, so it
 never lands in a URL, a server log, or the browser history. Aggregation lives
 in `frontend/api/lib/insights.mjs`, shared by `mock-api-server.js` (Express) and
 `frontend/api/index.js` (Vercel), so the two deployments cannot drift.
+
+## Web traffic analytics (first-party)
+
+Pageview and referrer measurement with no third party involved. The browser
+posts a small beacon to our own `/api/track`; that is the whole data path.
+
+| Item | Value |
+|---|---|
+| Collector | `POST /api/track` — public by necessity, returns **204**, never returns data |
+| Report | Included as `traffic` in `GET /api/admin/insights` (admin key required) |
+| Client | `frontend/src/lib/track.js`, fired on route change from `App.jsx` |
+| Storage | Postgres (`DATABASE_URL`/`POSTGRES_URL`) when set, else a temp JSON file |
+| Tables | `site_traffic (day, path, referrer, hits)`, `site_visitors (day, visitor)` |
+
+### Privacy properties
+
+These are design guarantees, not settings:
+
+- **No IP addresses are stored** — not hashed, not truncated, never written.
+- **No cookies.** The visitor id is a random value in `sessionStorage`; it dies
+  with the tab and cannot follow anyone to another site.
+- **Daily-rotating hash.** The id is hashed with a server salt plus the date, so
+  the same person is not linkable across two days. The raw value never reaches
+  the database.
+- **No event log.** Hits are aggregated into counters on write, so there is no
+  per-visit history to leak or subpoena.
+- **Do Not Track and Global Privacy Control are honoured** in the client.
+- Bots are filtered by user-agent; asset and `/api/*` paths are never counted.
+
+### Required for durable counts
+
+Set `DATABASE_URL` (the same Neon instance the rail uses) on the deployment.
+Without it, counts live in a temp file and reset on every serverless cold start
+— the dashboard states which mode is active rather than hiding it.
+
+Optionally set `TRAFFIC_SALT` to a random value; it defaults to
+`ADMIN_DASHBOARD_KEY`. Changing it resets visitor-uniqueness going forward.

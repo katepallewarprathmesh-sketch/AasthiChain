@@ -8,6 +8,7 @@ import { realDB } from './lib/db_real.js';
 // ESM serverless handler and the CommonJS local server, and so it lives
 // INSIDE the Vercel project root (frontend/) and actually gets bundled.
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
+import { recordHit, trafficSummary } from './lib/traffic.mjs';
 import { authStore } from './lib/authstore.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
@@ -3508,6 +3509,22 @@ export default async function handler(req, res) {
     }
     // ===== PRIVATE OPERATOR INSIGHTS =====
     // Same contract as the local server; shared aggregation in lib/insights.mjs.
+    // Public beacon - visitors' browsers post here. Counters only, no data
+    // returned, always 204 so analytics can never break a page.
+    if (path === '/api/track' && req.method === 'POST') {
+      try {
+        let b = req.body;
+        if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = {}; } }
+        b = b || {};
+        recordHit({
+          path: b.path,
+          referrer: b.referrer,
+          visitorId: b.vid,
+          userAgent: req.headers['user-agent'] || '',
+        }).catch(() => {});
+      } catch { /* never surface */ }
+      return res.status(204).end();
+    }
     if (path === '/api/admin/insights/status') {
       return res.status(200).json({
         enabled: !!(process.env.ADMIN_DASHBOARD_KEY || '').trim(),
@@ -3536,8 +3553,14 @@ export default async function handler(req, res) {
           }
         } catch { /* rail optional */ }
       }
-      return res.status(200).json(buildInsights(
-        { properties, balances, transfers, kycRecords, chain: drunixChain }, rail));
+      const report = buildInsights(
+        { properties, balances, transfers, kycRecords, chain: drunixChain }, rail);
+      try {
+        report.traffic = await trafficSummary(14);
+      } catch (e) {
+        report.traffic = { unavailable: true, message: e.message };
+      }
+      return res.status(200).json(report);
     }
     // ===== END PRIVATE OPERATOR INSIGHTS =====
 
