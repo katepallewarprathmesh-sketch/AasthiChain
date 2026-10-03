@@ -13,7 +13,7 @@
 //     one operator looking at their own numbers; it is not an auth system, and
 //     it should never guard anything with personal data in it.
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 function configuredKey() {
   const k = process.env.ADMIN_DASHBOARD_KEY || '';
@@ -178,4 +178,5 @@ function buildInsights(app, rail) {
   };
 }
 
-module.exports = { authorise, buildInsights, configuredKey };
+export { authorise, buildInsights, configuredKey };
+export default { authorise, buildInsights, configuredKey };

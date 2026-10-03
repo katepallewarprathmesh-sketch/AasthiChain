@@ -207,5 +207,5 @@ Vercel bakes env vars in at build time, so after adding it you must redeploy
 
 The browser keeps the key in `sessionStorage` and sends it as a header, so it
 never lands in a URL, a server log, or the browser history. Aggregation lives
-in `frontend/api/lib/insights.cjs`, shared by `mock-api-server.js` (Express) and
+in `frontend/api/lib/insights.mjs`, shared by `mock-api-server.js` (Express) and
 `frontend/api/index.js` (Vercel), so the two deployments cannot drift.

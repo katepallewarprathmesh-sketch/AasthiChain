@@ -1877,11 +1877,15 @@ app.post('/api/swap', authMiddleware, (req, res) => {
 
 // ============ PRIVATE OPERATOR INSIGHTS (additive) ============
 // Locked to the operator by ADMIN_DASHBOARD_KEY. Disabled (503) when unset —
-// it fails closed, never open. Aggregation lives in frontend/api/lib/insights.cjs so this
+// it fails closed, never open. Aggregation lives in frontend/api/lib/insights.mjs so this
 // server and the Vercel handler cannot drift apart.
-const { authorise: insightsAuth, buildInsights, configuredKey } = require('./frontend/api/lib/insights.cjs');
+// The shared module is ESM (the Vercel handler is ESM too). This file is
+// CommonJS, so it is pulled in with a dynamic import once at startup and the
+// routes await the same promise. One copy of the logic, two module systems.
+const insightsReady = import('./frontend/api/lib/insights.mjs');
 
 app.get('/api/admin/insights', async (req, res) => {
+  const { authorise: insightsAuth, buildInsights } = await insightsReady;
   const denied = insightsAuth(req);
   if (denied) return res.status(denied.status).json(denied.body);
 
@@ -1910,8 +1914,15 @@ app.get('/api/admin/insights', async (req, res) => {
 });
 
 // Lets the UI tell "wrong password" apart from "feature not configured".
-app.get('/api/admin/insights/status', (req, res) => {
-  res.json({ enabled: !!configuredKey() });
+app.get('/api/admin/insights/status', async (req, res) => {
+  const { configuredKey } = await insightsReady;
+  res.json({
+    enabled: !!configuredKey(),
+    // Build stamp: lets an operator confirm which commit a deployment is
+    // actually serving, instead of guessing whether a redeploy took effect.
+    build: process.env.VERCEL_GIT_COMMIT_SHA || process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'local',
+    runtime: 'esm',
+  });
 });
 // ============ END PRIVATE OPERATOR INSIGHTS ============
 

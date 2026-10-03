@@ -7,7 +7,7 @@ import { realDB } from './lib/db_real.js';
 // Shared with the Express server. Kept as .cjs so one copy serves both the
 // ESM serverless handler and the CommonJS local server, and so it lives
 // INSIDE the Vercel project root (frontend/) and actually gets bundled.
-import insightsLib from './lib/insights.cjs';
+import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
 import { authStore } from './lib/authstore.js';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
@@ -3507,12 +3507,17 @@ export default async function handler(req, res) {
       }
     }
     // ===== PRIVATE OPERATOR INSIGHTS =====
-    // Same contract as the local server; shared aggregation in lib/insights.cjs.
+    // Same contract as the local server; shared aggregation in lib/insights.mjs.
     if (path === '/api/admin/insights/status') {
-      return res.status(200).json({ enabled: !!(process.env.ADMIN_DASHBOARD_KEY || '').trim() });
+      return res.status(200).json({
+        enabled: !!(process.env.ADMIN_DASHBOARD_KEY || '').trim(),
+        // Build stamp: confirms which commit this deployment is actually
+        // serving, so a stale build is obvious instead of mysterious.
+        build: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT || 'local',
+        runtime: 'esm',
+      });
     }
     if (path === '/api/admin/insights') {
-      const { authorise: insightsAuth, buildInsights } = insightsLib;
       const denied = insightsAuth({ headers: req.headers, query: Object.fromEntries(url.searchParams) });
       if (denied) return res.status(denied.status).json(denied.body);
 
