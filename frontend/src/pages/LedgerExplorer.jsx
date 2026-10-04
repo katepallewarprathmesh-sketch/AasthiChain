@@ -44,41 +44,29 @@ export default function LedgerExplorer() {
   const [busy, setBusy] = useState(false)
   const [labMsg, setLabMsg] = useState(null)
   const [highlightTx, setHighlightTx] = useState(null)
-  // Two chains exist and conflating them would be dishonest:
-  //  'property' — the Node demo chain (in-memory, resets with the process)
-  //  'umi'      — the Go settlement chain (append-only, Postgres-backed)
-  const [source, setSource] = useState('property')
+  // One chain. The old Node demo chain was in-memory and reset on every
+  // restart, so showing it next to the durable rail only invited the question
+  // of which one was real. This view is the Go settlement chain: append-only,
+  // Postgres-backed, replayed and re-verified from genesis at every start.
   const [umi, setUmi] = useState(null)
-  const isUMI = source === 'umi'
 
   const load = useCallback(async () => {
-    if (source === 'umi') {
-      try {
-        const d = await api.getUmiChain(60)
-        if (d && d.error) throw new Error(d.message || d.error)
-        setUmi(d)
-        // the Go rail returns its blocks oldest-first; this view is latest-first
-        setChain({
-          chainId: d.chainId, height: d.height, blocks: d.totalBlocks,
-          blocksList: [...(d.blocks || [])].reverse(), contract: 'aasthi.umi-v1'
-        })
-        setVerify({ ...d.verification, blocks: d.totalBlocks })
-        setLabMsg(null)
-      } catch (e) {
-        setUmi(null); setChain(null); setVerify(null)
-        setLabMsg({ kind: 'err', text: 'UMI settlement rail (Go) not reachable: ' + e.message })
-      }
-      return
-    }
     try {
-      const c = await api.getChain(60)
-      setChain(c)
-      setVerify(await api.verifyChain())
+      const d = await api.getUmiChain(60)
+      if (d && d.error) throw new Error(d.message || d.error)
+      setUmi(d)
+      // the Go rail returns its blocks oldest-first; this view is latest-first
+      setChain({
+        chainId: d.chainId, height: d.height, blocks: d.totalBlocks,
+        blocksList: [...(d.blocks || [])].reverse(), contract: 'aasthi.umi-v1'
+      })
+      setVerify({ ...d.verification, blocks: d.totalBlocks })
       setLabMsg(null)
     } catch (e) {
-      setLabMsg({ kind: 'err', text: 'Could not reach the ledger API: ' + e.message })
+      setUmi(null); setChain(null); setVerify(null)
+      setLabMsg({ kind: 'err', text: 'UMI settlement rail (Go) not reachable: ' + e.message })
     }
-  }, [source])
+  }, [])
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -88,55 +76,21 @@ export default function LedgerExplorer() {
 
   const runVerify = async () => {
     setBusy(true)
-    try { setVerify(await api.verifyChain()); setLabMsg({ kind: 'ok', text: 'Chain replayed from genesis linkage, merkle roots and hashes recomputed.' }) }
-    finally { setBusy(false) }
-  }
-  const simulateTamper = async () => {
-    setBusy(true)
     try {
-      const r = await api.tamperChain()
-      setLabMsg({ kind: 'warn', text: `SIMULATION: altered block #${r.height} behind the chain's back (txn: ${JSON.stringify(r.altered)}). Now hit "Verify chain" watch anyone detect it.` })
-      setVerify(await api.verifyChain())
-      const c = await api.getChain(60); setChain(c)
-    } finally { setBusy(false) }
-  }
-  const restore = async () => {
-    setBusy(true)
-    try {
-      await api.restoreChain(-1)
-      setLabMsg({ kind: 'ok', text: 'Restored the original committed contents the recorded hash matches again.' })
-      setVerify(await api.verifyChain())
-      const c = await api.getChain(60); setChain(c)
+      await load()
+      setLabMsg({ kind: 'ok', text: 'Chain replayed from genesis — linkage, merkle roots and hashes recomputed by the settlement rail.' })
     } finally { setBusy(false) }
   }
 
-  const stats = isUMI ? [
+  const stats = [
     ['Chain', chain?.chainId || 'aasthichain'],
     ['Height', chain ? `#${chain.height}` : ''],
     ['Blocks', chain?.blocks ?? ''],
     ['Hash algo', 'SHA-512'],
     ['Storage', umi?.durability?.durable ? 'Postgres · append-only' : 'in-memory'],
     ['Settlement', 'Atomic DvP · e₹-W'],
-  ] : [
-    ['Chain', chain?.chainId || 'aasthi-drunix'],
-    ['Height', chain ? `#${chain.height}` : ''],
-    ['Blocks', chain?.blocks ?? ''],
-    ['Hash algo', 'SHA-512'],
-    ['Contract', chain?.contract || 'aasthi.dvp-v1'],
-    ['Orgs (MSP)', chain?.orgs ? chain.orgs.map(o => o.msp.replace('MSP', '')).join(' · ') : ''],
   ]
 
-  const tabBtn = (id, label, sub) => (
-    <button key={id} onClick={() => setSource(id)} style={{
-      padding: '9px 14px', borderRadius: 9, cursor: 'pointer', textAlign: 'left',
-      border: `1px solid ${source === id ? '#1E3A5F' : '#E5E7EB'}`,
-      background: source === id ? '#1E3A5F' : 'white',
-      color: source === id ? 'white' : '#374151'
-    }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 10.5, opacity: 0.8, marginTop: 1 }}>{sub}</div>
-    </button>
-  )
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -162,13 +116,8 @@ export default function LedgerExplorer() {
         )}
       </div>
 
-      {/* Which ledger am I looking at? */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-        {tabBtn('property', 'Property ledger', 'Node demo · in-memory')}
-        {tabBtn('umi', 'UMI settlement ledger', 'Go rail · durable')}
-      </div>
 
-      {isUMI && umi && (
+      {umi && (
         <div style={{
           marginTop: 12, padding: '12px 16px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.6,
           background: umi.durability?.sealed ? '#FEF2F2' : umi.durability?.durable ? '#F0FDF4' : '#FFFBEB',
@@ -199,12 +148,10 @@ export default function LedgerExplorer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: '#111827' }}>Integrity Lab</div>
-            <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>Recompute the whole chain from genesis or prove tamper-evidence live.</div>
+            <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>Recompute every block from genesis — linkage, merkle roots and hashes. Tampering with stored blocks is detected here and the rail then refuses to append.</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={runVerify} disabled={busy} style={{ padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Verify chain</button>
-            {!isUMI && <button onClick={simulateTamper} disabled={busy} title="Demo-only simulation" style={{ padding: '9px 14px', background: 'white', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>⚠ Simulate tampering (SIMULATION)</button>}
-            {!isUMI && <button onClick={restore} disabled={busy} style={{ padding: '9px 14px', background: 'white', color: '#374151', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Restore &amp; re-verify</button>}
           </div>
         </div>
         {labMsg && (
@@ -224,13 +171,11 @@ export default function LedgerExplorer() {
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Programmable finance on-chain</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 1.6 }}>
-            Contract <b>aasthi.dvp-v1</b>: delivery-versus-payment as code money CONFIRMED ⇄ tokens moved atomically, escrow then RELEASED. Watch any purchase appear as a linked <b>Token Transferred</b> + <b>Escrow Released</b> pair below.
+            Contract <b>aasthi.umi-dvp-v1</b>: delivery-versus-payment as code — the securities leg and the e₹-W cash leg commit inside a single block, or neither moves. A failed settlement is recorded too, as <b>UMI · DvP Failed</b>, with both legs rolled back.
           </div>
           {chain && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              {(isUMI
-                ? ['UMI_DVP_SETTLED', 'UMI_DVP_FAILED', 'UMI_SERVICING_PAID', 'UMI_ISIN_ASSIGNED']
-                : ['TOKEN_MINTED', 'TOKEN_TRANSFERRED', 'ESCROW_RELEASED']).map(t => (
+              {['UMI_DVP_SETTLED', 'UMI_DVP_FAILED', 'UMI_SERVICING_PAID', 'UMI_ISIN_ASSIGNED'].map(t => (
                 <span key={t} style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999, color: TYPE_STYLES[t].color, background: TYPE_STYLES[t].bg, border: `1px solid ${TYPE_STYLES[t].border}` }}>
                   {(chain.blocksList || []).filter(b => b.type === t).length} × {TYPE_STYLES[t].label}
                 </span>
