@@ -46,6 +46,11 @@ export const ROUTE_SEO = {
     description:
       'Calculate gross and net rental yield on any property. Accounts for maintenance, property tax, insurance, vacancy and stamp duty to show what you actually earn.',
   },
+  '/tools/stamp-duty-calculator': {
+    title: 'Stamp Duty Calculator 2026 — All Indian States | AasthiChain',
+    description:
+      'Calculate stamp duty and registration charges for any Indian state. Accounts for circle rate, women buyer concessions, registration caps, TDS and the section 80C deduction. Free, no signup.',
+  },
   '/tools/fractional-investment-calculator': {
     title: 'Fractional Investment Calculator for Property | AasthiChain',
     description:

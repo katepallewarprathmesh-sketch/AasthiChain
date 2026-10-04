@@ -13,6 +13,11 @@ const TOOLS = [
     blurb: 'Gross and net rental yield on any property, after maintenance, property tax, insurance and vacancy.',
   },
   {
+    to: '/tools/stamp-duty-calculator',
+    name: 'Stamp Duty & Registration Calculator',
+    blurb: 'What a purchase costs beyond the price, for any Indian state — circle rate, women concessions, registration caps, TDS and the 80C deduction.',
+  },
+  {
     to: '/tools/fractional-investment-calculator',
     name: 'Fractional Investment Calculator',
     blurb: 'How many tokens your money buys, the ownership share it represents, and what it could be worth years later.',
