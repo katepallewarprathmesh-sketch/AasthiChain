@@ -19,6 +19,24 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://aasthi-chain.vercel.app/tools</loc>
+    <lastmod>2026-10-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://aasthi-chain.vercel.app/tools/fractional-investment-calculator</loc>
+    <lastmod>2026-10-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://aasthi-chain.vercel.app/tools/rental-yield-calculator</loc>
+    <lastmod>2026-10-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://aasthi-chain.vercel.app/umi</loc>
     <lastmod>2026-10-04</lastmod>
     <changefreq>weekly</changefreq>

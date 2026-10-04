@@ -25,6 +25,9 @@ import Support from '../src/pages/Support.jsx'
 import Admin from '../src/pages/Admin.jsx'
 import Regulator from '../src/pages/Regulator.jsx'
 import PropertyDetail from '../src/pages/PropertyDetail.jsx'
+import ToolsIndex from '../src/pages/tools/ToolsIndex.jsx'
+import RentalYieldCalculator from '../src/pages/tools/RentalYieldCalculator.jsx'
+import FractionalCalculator from '../src/pages/tools/FractionalCalculator.jsx'
 
 const user = { identityId: 'investor1', role: 'Investor', name: 'Demo Investor' }
 
@@ -40,7 +43,10 @@ const ROUTES = [
   ['/support', <Support />],
   ['/admin', <Admin user={user} />],
   ['/regulator', <Regulator user={user} />],
-  ['/property/PROP-GREEN-VALLEY-PUNE-001', <PropertyDetail user={user} />]
+  ['/property/PROP-GREEN-VALLEY-PUNE-001', <PropertyDetail user={user} />],
+  ['/tools', <ToolsIndex />],
+  ['/tools/rental-yield-calculator', <RentalYieldCalculator />],
+  ['/tools/fractional-investment-calculator', <FractionalCalculator />]
 ]
 
 let failed = 0

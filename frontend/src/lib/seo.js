@@ -36,6 +36,21 @@ export const ROUTE_SEO = {
     description:
       "Watch an atomic delivery-versus-payment settle on a simulation of RBI's Unified Market Interface: securities leg and wholesale CBDC cash leg commit in one block, or neither moves.",
   },
+  '/tools': {
+    title: 'Free Property Investment Calculators | AasthiChain',
+    description:
+      'Free calculators for property investors: rental yield and fractional investment returns. No signup, nothing stored, everything runs in your browser.',
+  },
+  '/tools/rental-yield-calculator': {
+    title: 'Rental Yield Calculator — Gross & Net | AasthiChain',
+    description:
+      'Calculate gross and net rental yield on any property. Accounts for maintenance, property tax, insurance, vacancy and stamp duty to show what you actually earn.',
+  },
+  '/tools/fractional-investment-calculator': {
+    title: 'Fractional Investment Calculator for Property | AasthiChain',
+    description:
+      'Work out returns on fractional property ownership: tokens purchased, ownership share, rental income and projected value after appreciation. Free, no signup.',
+  },
   '/support': {
     title: 'Help & Support | AasthiChain',
     description:

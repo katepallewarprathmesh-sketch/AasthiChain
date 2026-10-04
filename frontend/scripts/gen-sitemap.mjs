@@ -23,8 +23,16 @@ const AUTH_GATED = new Set(['/marketplace', '/dashboard', '/wallet', '/admin', '
 
 // Priority is a hint, not a ranking factor. Home first, then the pages that
 // explain what the project is.
-const PRIORITY = { '/': '1.0', '/ledger': '0.8', '/umi': '0.8', '/support': '0.5' }
-const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/support': 'monthly' }
+const PRIORITY = {
+  '/': '1.0',
+  '/tools/rental-yield-calculator': '0.9',
+  '/tools/fractional-investment-calculator': '0.9',
+  '/tools': '0.8',
+  '/ledger': '0.8',
+  '/umi': '0.8',
+  '/support': '0.5',
+}
+const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/support': 'monthly', '/tools': 'monthly' }
 
 const today = new Date().toISOString().slice(0, 10)
 

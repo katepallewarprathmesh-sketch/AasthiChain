@@ -60,6 +60,11 @@ const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
 const InvestorDashboard = lazy(() => import('./pages/InvestorDashboard.jsx'))
 const Insights = lazy(() => import('./pages/Insights.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
+// Public free tools. No auth, no API calls - they exist to be found in search
+// and to be useful on their own.
+const ToolsIndex = lazy(() => import('./pages/tools/ToolsIndex.jsx'))
+const RentalYieldCalculator = lazy(() => import('./pages/tools/RentalYieldCalculator.jsx'))
+const FractionalCalculator = lazy(() => import('./pages/tools/FractionalCalculator.jsx'))
 
 function RouteFallback() {
   return (
@@ -404,6 +409,9 @@ function AppContent({ user, setUser }) {
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/tools" element={<ToolsIndex />} />
+          <Route path="/tools/rental-yield-calculator" element={<RentalYieldCalculator />} />
+          <Route path="/tools/fractional-investment-calculator" element={<FractionalCalculator />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/property/:id" element={effectiveUser ? <PropertyDetail user={effectiveUser} /> : <Navigate to="/login" />} />
