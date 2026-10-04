@@ -19,7 +19,10 @@ const { ROUTE_SEO, SITE_URL } = await import(join(root, 'src/lib/seo.js'))
 
 // Routes that React Router gates behind a logged-in user. Keep in sync with
 // App.jsx; the check below fails loudly if a route disappears.
-const AUTH_GATED = new Set(['/marketplace', '/dashboard', '/wallet', '/admin', '/regulator'])
+// Routes React Router still gates behind a logged-in user. /marketplace and
+// /property/:id were removed from this set when they became publicly
+// readable - browsing is open, investing still needs an account.
+const AUTH_GATED = new Set(['/dashboard', '/wallet', '/admin', '/regulator'])
 
 // Priority is a hint, not a ranking factor. Home first, then the pages that
 // explain what the project is.
@@ -36,9 +39,18 @@ const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/supp
 
 const today = new Date().toISOString().slice(0, 10)
 
-const urls = Object.entries(ROUTE_SEO)
-  .filter(([path, seo]) => !seo.noindex && !AUTH_GATED.has(path))
-  .map(([path]) => path)
+// Every property is its own landing page - these are the URLs with real
+// search intent behind them ("fractional investment in Pune"), so they belong
+// in the sitemap. Read from the catalogue so the two can never drift apart.
+const catalogue = JSON.parse(readFileSync(join(root, 'api/lib/catalogue.json'), 'utf8'))
+const propertyUrls = catalogue.map((p) => `/property/${p.assetId}`)
+
+const urls = [
+  ...Object.entries(ROUTE_SEO)
+    .filter(([path, seo]) => !seo.noindex && !AUTH_GATED.has(path))
+    .map(([path]) => path),
+  ...propertyUrls,
+]
   .sort((a, b) => (a === '/' ? -1 : b === '/' ? 1 : a.localeCompare(b)))
 
 if (urls.length === 0) throw new Error('sitemap would be empty - check ROUTE_SEO')
@@ -72,4 +84,3 @@ for (const u of urls) console.log('  ' + u)
 const noindexed = Object.entries(ROUTE_SEO).filter(([, s]) => s.noindex).map(([p]) => p)
 const leaked = noindexed.filter((p) => xml.includes(`<loc>${SITE_URL}${p}</loc>`))
 if (leaked.length) throw new Error('noindex routes leaked into sitemap: ' + leaked.join(', '))
-void readFileSync

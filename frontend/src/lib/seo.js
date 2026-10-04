@@ -22,9 +22,9 @@ export const ROUTE_SEO = {
       'Invest in fractional real estate from ₹500. Tokenised property ownership settled on a hash-chained ledger with atomic delivery-versus-payment. Interactive demo, no signup cost.',
   },
   '/marketplace': {
-    title: 'Tokenised Property Marketplace in India | AasthiChain',
+    title: 'Fractional Property Investments in India | AasthiChain',
     description:
-      'Browse fractional property investments across Indian cities. Compare rental yield, token price and minimum investment on residential and commercial real estate.',
+      'Browse fractional property investments across Indian cities. Compare rental yield, token price and minimum investment on residential and commercial real estate. Free to browse.',
   },
   '/ledger': {
     title: 'Ownership Ledger Explorer — Verify Every Block | AasthiChain',
@@ -78,6 +78,8 @@ export function seoForPath(pathname) {
   if (!pathname) return FALLBACK
   if (ROUTE_SEO[pathname]) return ROUTE_SEO[pathname]
   if (pathname.startsWith('/property/')) {
+    // Filled in from the live catalogue by PropertyDetail once loaded; this is
+    // the pre-load fallback.
     return {
       title: `Property Details | ${SITE_NAME}`,
       description: 'Rental yield, token price, ownership split and settlement history for this fractional property investment.',

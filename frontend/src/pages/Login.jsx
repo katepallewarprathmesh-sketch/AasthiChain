@@ -1,11 +1,24 @@
 import React, { useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { SignIn, useUser, useAuth, Show, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
 const isClerkConfigured = (() => {
   const k = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
   return k && k.startsWith('pk_') && !k.includes('placeholder') && !k.includes('your-key-here') && k.length > 20
 })()
+
+// Where to land after signing in. A logged-out visitor can now browse the
+// marketplace and individual properties, so "sign in to invest" sends them
+// back to the property they were looking at rather than dumping them on a
+// generic page. Only same-site paths are honoured, so the parameter cannot be
+// used to bounce someone to another domain.
+function safeNext(search) {
+  try {
+    const raw = new URLSearchParams(search).get('next')
+    if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw
+  } catch {}
+  return '/marketplace'
+}
 
 const ROLES = [
   { id: 'originator1', role: 'Originator', label: 'Property Owner', mspId: 'OriginatorMSP', desc: 'List & tokenize', color:'#1E3A5F' },
@@ -16,6 +29,8 @@ const ROLES = [
 
 function DemoPresets({ onLogin, title }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const next = safeNext(location.search)
   const [loadingId, setLoadingId] = React.useState(null)
 
   const handleDemo = (roleData) => {
@@ -34,7 +49,7 @@ function DemoPresets({ onLogin, title }) {
       localStorage.setItem('aasthi_token', token)
       localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
       onLogin(demoUser)
-      navigate('/marketplace')
+      navigate(next)
     } catch (e) {
       console.error('demo login failed', e)
       setLoadingId(null)
@@ -99,7 +114,7 @@ function ClerkLogin({ onLogin }) {
         localStorage.setItem('aasthi_user', JSON.stringify(aasthiUser))
         if (token) localStorage.setItem('aasthi_token', token)
         onLogin(aasthiUser)
-        navigate('/marketplace')
+        navigate(next)
       } catch (err) {
         console.error('[Clerk] Login failed:', err)
       }

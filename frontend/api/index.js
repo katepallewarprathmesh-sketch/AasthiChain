@@ -2648,7 +2648,18 @@ export default async function handler(req, res) {
           .filter(b => b.assetId === (prop.assetId || id) && parseInt(b.balance) > 0)
           .map(b => ({ ownerId: b.ownerId, balance: parseInt(b.balance) }))
           .sort((a, b) => b.balance - a.balance);
-        return res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders, subscription: subscriptionOf(prop) });
+        // Holder identities are personal data. This endpoint is public so the
+        // listing can be crawled and shared, so anonymous callers get the
+        // distribution without the names behind it.
+        const viewer = decodeToken((req.headers.authorization || '').split(' ')[1] || '');
+        const totalHeld = holders.reduce((sum, h) => sum + h.balance, 0) || 1;
+        const holderView = viewer ? holders : holders.map((h, i) => ({
+          ownerId: 'Investor ' + String.fromCharCode(65 + Math.min(i, 25)),
+          balance: h.balance,
+          sharePct: Math.round((h.balance / totalHeld) * 10000) / 100,
+          anonymised: true,
+        }));
+        return res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders: holderView, holderCount: holders.length, subscription: subscriptionOf(prop) });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }

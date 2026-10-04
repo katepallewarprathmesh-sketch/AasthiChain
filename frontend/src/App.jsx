@@ -401,7 +401,7 @@ function AppContent({ user, setUser }) {
         <Routes>
           <Route path="/" element={<Landing user={effectiveUser} />} />
           <Route path="/login" element={<Login onLogin={setUser} />} />
-          <Route path="/marketplace" element={effectiveUser ? <Marketplace user={effectiveUser} /> : <Navigate to="/login" />} />
+          <Route path="/marketplace" element={<Marketplace user={effectiveUser} />} />
           <Route path="/dashboard" element={effectiveUser ? <InvestorDashboard user={effectiveUser} /> : <Navigate to="/login" />} />
           {/* Private operator dashboard: no nav link, guarded server-side by ADMIN_DASHBOARD_KEY */}
           <Route path="/insights" element={<Insights />} />
@@ -414,7 +414,7 @@ function AppContent({ user, setUser }) {
           <Route path="/tools/fractional-investment-calculator" element={<FractionalCalculator />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />
-          <Route path="/property/:id" element={effectiveUser ? <PropertyDetail user={effectiveUser} /> : <Navigate to="/login" />} />
+          <Route path="/property/:id" element={<PropertyDetail user={effectiveUser} />} />
         </Routes>
         </Suspense>
       </main>

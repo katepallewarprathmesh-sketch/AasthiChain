@@ -1,13 +1,34 @@
 import React, { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { useProperty } from '../hooks/useProperties.js'
 import SimpleBuyFlow from '../components/SimpleBuyFlow.jsx'
 import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
+import { applySeo } from '../lib/seo.js'
 
 export default function PropertyDetail({ user }) {
   const { id } = useParams()
+  const location = useLocation()
   const { property, loading, error, refresh } = useProperty(id)
+
+  // Per-property search metadata. Each listing is its own landing page for a
+  // real query ("fractional investment Pune"), so the title and description
+  // are built from the property rather than left generic.
+  useEffect(() => {
+    if (!property) return
+    const city = property.location?.city
+    const where = city ? ` in ${city}` : ''
+    const yieldPct = property.expectedYieldPct
+    const price = property.pricePerTokenINR
+    applySeo(location.pathname, {
+      title: `${property.title} — Fractional Investment${where} | AasthiChain`,
+      description:
+        `Invest from ₹${Math.round(price || 0).toLocaleString('en-IN')} per token in ${property.title}` +
+        `${where}. ${yieldPct ? `Expected yield ${yieldPct}%. ` : ''}` +
+        `${property.propertyType || 'Property'} · ${property.areaSqft ? property.areaSqft + ' sq ft · ' : ''}` +
+        'Tokenised ownership recorded on a verifiable ledger.',
+    })
+  }, [property, location.pathname])
   const [balances, setBalances] = useState([])
   const [refreshKey, setRefreshKey] = useState(0)
   const [sub, setSub] = useState(null)
@@ -257,6 +278,31 @@ export default function PropertyDetail({ user }) {
                 </ul>
               </div>
             </div>
+          ) : !user ? (
+            // Logged-out visitor: the listing is public so it can be found and
+            // shared, but investing needs an account. Send them to sign in and
+            // come straight back to this property.
+            <Link
+              to={`/login?next=${encodeURIComponent(location.pathname)}`}
+              style={{
+                display: 'block',
+                width: '100%',
+                marginTop: 20,
+                padding: '14px',
+                background: '#1E3A5F',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                textAlign: 'center',
+                textDecoration: 'none',
+                boxSizing: 'border-box',
+              }}
+            >
+              Sign in to invest →
+            </Link>
           ) : !showBuy ? (
             <button
               onClick={() => setShowBuy(true)}

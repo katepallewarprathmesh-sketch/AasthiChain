@@ -440,7 +440,27 @@ function marketplaceView(p) {
   };
 }
 
-app.get('/api/properties', authMiddleware, (req, res) => {
+// Anonymous callers come through optionalAuth with the sentinel identity
+// 'public' (role 'Public'), so a plain truthiness check on req.user would
+// treat a stranger as signed in. Test the role.
+function isAuthenticated(req) {
+  return !!req.user && req.user.role !== 'Public' && req.user.identityId !== 'public';
+}
+
+// Holder identities are personal data: who owns what. Anonymous callers get
+// the shape of the distribution (how many holders, how concentrated) without
+// the identities behind it.
+function publicHolderView(holders) {
+  const total = holders.reduce((s, h) => s + h.balance, 0) || 1;
+  return holders.map((h, i) => ({
+    ownerId: 'Investor ' + String.fromCharCode(65 + Math.min(i, 25)),
+    balance: h.balance,
+    sharePct: Math.round((h.balance / total) * 10000) / 100,
+    anonymised: true,
+  }));
+}
+
+app.get('/api/properties', optionalAuth, (req, res) => {
   const { status, city, type, minYield, maxPrice, sort } = req.query;
   let list = Object.values(properties).map(marketplaceView);
   if (status) list = list.filter(p => p.status === status);
@@ -465,7 +485,7 @@ app.get('/api/properties', authMiddleware, (req, res) => {
   });
 });
 
-app.get('/api/properties/:id', authMiddleware, (req, res) => {
+app.get('/api/properties/:id', optionalAuth, (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
   const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0;
@@ -478,7 +498,9 @@ app.get('/api/properties/:id', authMiddleware, (req, res) => {
     .filter(b => b.assetId === req.params.id && parseInt(b.balance) > 0)
     .map(b => ({ ownerId: b.ownerId, balance: parseInt(b.balance) }))
     .sort((a, b) => b.balance - a.balance);
-  res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders, subscription: subscriptionOf(prop), documentHashVerified: true, fabricMode: 'mock' });
+  // Identities only for authenticated callers; everyone else sees the shape.
+  const holderView = isAuthenticated(req) ? holders : publicHolderView(holders);
+  res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders: holderView, holderCount: holders.length, subscription: subscriptionOf(prop), documentHashVerified: true, fabricMode: 'mock' });
 });
 
 app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
