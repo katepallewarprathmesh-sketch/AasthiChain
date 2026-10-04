@@ -1072,7 +1072,7 @@ export default async function handler(req, res) {
           secondary: 'Sepolia PaymentEscrow.sol (experimental, cross-chain pattern)',
           npciMode: process.env.NPCI_MODE || 'mock',
           realProviders: ['Setu (Pine Labs) — NPCI-certified switch, direct NPCI access', 'ICICI Bank UPI Collect API', 'Decentro UPI Stack', 'Razorpay/Cashfree aggregator'],
-          note: 'NPCI has no public production API — API Setu sandbox-only. Real access via PSP Bank partnership. See /api/npci/real-config and docs/NPCI_REAL_API_INTEGRATION.md'
+          note: 'NPCI has no public production API — API Setu sandbox-only. Real access via PSP Bank partnership. See /api/npci/real-config'
         }
       });
     }
@@ -1156,7 +1156,7 @@ export default async function handler(req, res) {
         ourSimulation: {
           honest: 'Same state machine PENDING→CONFIRMED→RELEASED/REFUNDED, same IDs NPCI-xxx RRN 12-digit 418... UTR IMPS+RRN, same edge cases, inspired by upi-mock-engine + PPRO Sandbox Not Available',
           badge: 'SIMULATION — No live NPCI — Track A6 honest labeling > overclaim',
-          mapping: '1:1 with real bank API — see docs/NPCI_REAL_API_INTEGRATION.md table'
+          mapping: '1:1 with real bank API'
         },
         productionToggle: {
           mock: 'NPCI_MODE=mock (default, hackathon, no creds, honest simulation)',
@@ -3568,7 +3568,7 @@ export default async function handler(req, res) {
           error: 'ERR_UMI_RAIL_UNAVAILABLE',
           message: 'UMI settlement rail (Go) is not configured for this deployment. Set UMI_GATEWAY_URL to a hosted drunix-gateway, or run it locally: cd drunix-gateway && go run ./cmd/gateway',
           rail: 'RBI Unified Market Interface (simulation)', language: 'golang',
-          docs: 'docs/UMI_INTEGRATION.md'
+          repo: 'https://github.com/katepallewarprathmesh-sketch/AasthiChain'
         });
       }
       const suffix = path.replace(/^\/api\/umi/, '') || '/config';
@@ -3672,7 +3672,7 @@ export default async function handler(req, res) {
         return res.status(503).json({
           error: 'ERR_DRUNIX_GATEWAY_UNAVAILABLE',
           message: 'Drunix gateway (Go) is not configured for this deployment. Set UMI_GATEWAY_URL to a hosted drunix-gateway.',
-          docs: 'docs/UMI_DEPLOY.md'
+          repo: 'https://github.com/katepallewarprathmesh-sketch/AasthiChain'
         });
       }
       const suffix = path.replace(/^\/api\/drunix/, '') || '/chain';

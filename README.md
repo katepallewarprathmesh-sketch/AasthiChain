@@ -68,7 +68,7 @@ AasthiChain already had both ends (Drunix fraction tokens + UPI money leg); v1.9
 - UI: new page **`/umi`** (nav: *UMI*). Everything else untouched; rail offline ⇒ `/api/umi/*` 503s and the
   rest of the app is unaffected.
 - Labelled `"mode": "simulation"` everywhere — there is no public UMI API; real access is the SEBI
-  Regulatory Sandbox. Full design: **`docs/UMI_INTEGRATION.md`**.
+  Regulatory Sandbox.
 
 Run: `cd drunix-gateway && go test ./... && go run ./cmd/gateway` (rail at `:21100/umi/*`), then
 `node mock-api-server.js` (proxy at `/api/umi/*`, override with `UMI_GATEWAY_URL`).
@@ -76,7 +76,7 @@ Run: `cd drunix-gateway && go test ./... && go run ./cmd/gateway` (rail at `:211
 **Deployed site shows "Rail offline"?** Expected — Vercel runs only the Node proxy; the Go rail
 needs a host. Either run it locally (`make umi`) or deploy it: `render.yaml` (free tier) and
 `drunix-gateway/Dockerfile` / `fly.toml` are included — then set `UMI_GATEWAY_URL` on Vercel and
-redeploy. Step-by-step: **`docs/UMI_DEPLOY.md`**. Hosted instances auto-seed demo wallets/positions
+redeploy. Hosted instances auto-seed demo wallets/positions
 (`UMI_SEED_DEMO=false` to disable).
 
 ### Programmable Ownership (beyond tokenization)
