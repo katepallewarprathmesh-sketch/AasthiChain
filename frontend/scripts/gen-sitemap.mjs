@@ -33,12 +33,16 @@ const PRIORITY = {
   '/tools': '0.8',
   '/ledger': '0.8',
   '/umi': '0.8',
+  '/learn/what-is-demat-2': '0.9',
+  '/learn/what-is-atomic-dvp': '0.9',
+  '/learn/what-is-umi': '0.9',
+  '/learn': '0.8',
   '/about': '0.7',
   '/support': '0.5',
   '/privacy': '0.3',
   '/terms': '0.3',
 }
-const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/support': 'monthly', '/tools': 'monthly', '/about': 'monthly', '/privacy': 'yearly', '/terms': 'yearly' }
+const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/support': 'monthly', '/tools': 'monthly', '/about': 'monthly', '/learn': 'monthly', '/privacy': 'yearly', '/terms': 'yearly' }
 
 const today = new Date().toISOString().slice(0, 10)
 

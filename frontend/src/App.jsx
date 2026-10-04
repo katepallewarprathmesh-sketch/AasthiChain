@@ -69,6 +69,11 @@ const FractionalCalculator = lazy(() => import('./pages/tools/FractionalCalculat
 const About = lazy(() => import('./pages/legal/About.jsx'))
 const Privacy = lazy(() => import('./pages/legal/Privacy.jsx'))
 const Terms = lazy(() => import('./pages/legal/Terms.jsx'))
+// Explainer articles. These are the pages built to be found and cited.
+const LearnIndex = lazy(() => import('./pages/learn/LearnIndex.jsx'))
+const Demat2 = lazy(() => import('./pages/learn/Demat2.jsx'))
+const AtomicDvP = lazy(() => import('./pages/learn/AtomicDvP.jsx'))
+const UMIExplainer = lazy(() => import('./pages/learn/UMI.jsx'))
 
 function RouteFallback() {
   return (
@@ -153,13 +158,14 @@ function Footer() {
   const cols = [
     { h: 'Product', links: [['Marketplace', '/marketplace'], ['My Wallet', '/wallet'], ['List a Property', '/admin'], ['Regulator Audit', '/regulator']] },
     { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Free calculators', '/tools'], ['Trust & Transparency', '/#trust'], ['Support the project', '/support']] },
+    { h: 'Learn', links: [['Demat 2.0 explained', '/learn/what-is-demat-2'], ['Atomic DvP explained', '/learn/what-is-atomic-dvp'], ['UMI explained', '/learn/what-is-umi']] },
     { h: 'Legal', links: [['About', '/about'], ['Privacy', '/privacy'], ['Terms of Use', '/terms']] },
   ]
 
   return (
     <footer className="site-footer" data-look={look} style={{ padding: '44px 0 28px', marginTop: 0 }}>
       <div className="container">
-        <div style={{ display: 'grid', gridTemplateColumns: isMobileF ? '1fr' : '1.6fr 1fr 1fr 1fr', gap: isMobileF ? 26 : 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobileF ? '1fr' : '1.5fr 1fr 1fr 1fr 1fr', gap: isMobileF ? 26 : 32 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800 }}>A</div>
@@ -414,6 +420,10 @@ function AppContent({ user, setUser }) {
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/learn" element={<LearnIndex />} />
+          <Route path="/learn/what-is-demat-2" element={<Demat2 />} />
+          <Route path="/learn/what-is-atomic-dvp" element={<AtomicDvP />} />
+          <Route path="/learn/what-is-umi" element={<UMIExplainer />} />
           <Route path="/about" element={<About />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />

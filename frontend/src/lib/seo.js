@@ -51,6 +51,26 @@ export const ROUTE_SEO = {
     description:
       'Work out returns on fractional property ownership: tokens purchased, ownership share, rental income and projected value after appreciation. Free, no signup.',
   },
+  '/learn': {
+    title: 'Learn: Tokenised Settlement in India | AasthiChain',
+    description:
+      'Plain explanations of Demat 2.0, the RBI Unified Market Interface and atomic DvP settlement — each next to a working demonstration you can run.',
+  },
+  '/learn/what-is-demat-2': {
+    title: 'What is Demat 2.0? SEBI Tokenised Bond Pilot Explained',
+    description:
+      "Demat 2.0 explained: SEBI's sandbox pilot issuing corporate bonds as native digital tokens on a depository ledger, settled atomically against wholesale CBDC. What changes and what stays the same.",
+  },
+  '/learn/what-is-atomic-dvp': {
+    title: 'What is Atomic DvP Settlement? Delivery Versus Payment',
+    description:
+      'Atomic delivery-versus-payment explained: the settlement risk it removes, how the instruction lifecycle works, why central bank money matters, and the pre-funding trade-off.',
+  },
+  '/learn/what-is-umi': {
+    title: "What is RBI's Unified Market Interface (UMI)? Explained",
+    description:
+      "The RBI's Unified Market Interface explained: a common platform connecting tokenised assets to settlement in wholesale CBDC (e₹-W), the Demat 2.0 link, and what is still at pilot stage.",
+  },
   '/about': {
     title: 'About AasthiChain — Tokenised Property Settlement Demo',
     description:

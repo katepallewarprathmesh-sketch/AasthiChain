@@ -31,6 +31,10 @@ import FractionalCalculator from '../src/pages/tools/FractionalCalculator.jsx'
 import About from '../src/pages/legal/About.jsx'
 import Privacy from '../src/pages/legal/Privacy.jsx'
 import Terms from '../src/pages/legal/Terms.jsx'
+import LearnIndex from '../src/pages/learn/LearnIndex.jsx'
+import Demat2 from '../src/pages/learn/Demat2.jsx'
+import AtomicDvP from '../src/pages/learn/AtomicDvP.jsx'
+import UMIExplainer from '../src/pages/learn/UMI.jsx'
 
 const user = { identityId: 'investor1', role: 'Investor', name: 'Demo Investor' }
 
@@ -52,7 +56,11 @@ const ROUTES = [
   ['/tools/fractional-investment-calculator', <FractionalCalculator />],
   ['/about', <About />],
   ['/privacy', <Privacy />],
-  ['/terms', <Terms />]
+  ['/terms', <Terms />],
+  ['/learn', <LearnIndex />],
+  ['/learn/what-is-demat-2', <Demat2 />],
+  ['/learn/what-is-atomic-dvp', <AtomicDvP />],
+  ['/learn/what-is-umi', <UMIExplainer />]
 ]
 
 let failed = 0
