@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -427,13 +428,28 @@ func OpenUMIStoreFromEnv() *PostgresUMIStore {
 	if dsn == "" {
 		dsn = os.Getenv("DATABASE_URL")
 	}
-	if strings.TrimSpace(dsn) == "" {
+	dsn = strings.TrimSpace(dsn)
+	if dsn == "" {
 		log.Printf("UMI persistence: no DATABASE_URL — rail state is in-memory and resets on restart")
+		return nil
+	}
+	// Guard against a DATABASE_URL that is set but is not a connection string
+	// (a placeholder, a shell-quoted paste, a bare hostname). pgx would accept
+	// it as a keyword/value DSN, find no recognised keys, and silently fall
+	// back to a local unix socket - producing the baffling
+	// "host=/tmp user=nonroot database=" error against a machine that has no
+	// Postgres on it at all. Say plainly what was received instead.
+	if !strings.HasPrefix(dsn, "postgres://") && !strings.HasPrefix(dsn, "postgresql://") && !strings.Contains(dsn, "host=") {
+		log.Printf("UMI persistence: DATABASE_URL is set but is not a Postgres connection string "+
+			"(got %q). It must start with postgres:// or postgresql:// — for Neon, copy the "+
+			"pooled connection string and keep ?sslmode=require. Falling back to in-memory.",
+			redactDSN(dsn))
 		return nil
 	}
 	store, err := NewPostgresUMIStore(dsn)
 	if err != nil {
-		log.Printf("UMI persistence: cannot reach Postgres (%v) — falling back to in-memory, demo unaffected", err)
+		log.Printf("UMI persistence: cannot reach Postgres at %s (%v) — falling back to in-memory, demo unaffected",
+			redactDSN(dsn), err)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -445,4 +461,22 @@ func OpenUMIStoreFromEnv() *PostgresUMIStore {
 	}
 	log.Printf("UMI persistence: Postgres connected (umi_* tables ready) — rail state survives restarts")
 	return store
+}
+
+// redactDSN returns a connection string with any password removed, safe to put
+// in a log. Credentials must never reach a log aggregator.
+func redactDSN(dsn string) string {
+	if u, err := url.Parse(dsn); err == nil && u.Host != "" {
+		if u.User != nil {
+			if name := u.User.Username(); name != "" {
+				u.User = url.UserPassword(name, "REDACTED")
+			}
+		}
+		return u.Redacted()
+	}
+	// not a URL: show only the first 24 characters so a pasted secret is not logged
+	if len(dsn) > 24 {
+		return dsn[:24] + "..."
+	}
+	return dsn
 }
