@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { trackPageview } from './lib/track'
+import { applySeo } from './lib/seo'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
 class ErrorBoundary extends React.Component {
@@ -292,6 +293,10 @@ function AppContent({ user, setUser }) {
   // First-party pageview beacon. Fires on every route change; silent, honours
   // Do Not Track, and cannot throw into the render path.
   useEffect(() => { trackPageview(location.pathname) }, [location.pathname])
+
+  // Per-route title, description, canonical and robots directive. A SPA
+  // otherwise shows search engines the same metadata on every URL.
+  useEffect(() => { applySeo(location.pathname) }, [location.pathname])
 
   useEffect(() => {
     if (!isClerkConfigured) return

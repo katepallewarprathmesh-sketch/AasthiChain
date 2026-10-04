@@ -1,0 +1,53 @@
+# AasthiChain
+
+> Fractional real-estate investing on a hash-chained ownership ledger, settled
+> against a simulated wholesale CBDC rail. An interactive demonstration of the
+> SEBI/RBI Demat 2.0 and Unified Market Interface (UMI) settlement pattern
+> applied to Indian property.
+
+AasthiChain tokenises a property into fractional units, records every transfer
+on an append-only ledger, and settles trades using atomic delivery-versus-payment
+(DvP): the securities leg and the cash leg commit inside a single block, or
+neither moves. Rental and coupon income is distributed to holders' digital
+rupee wallets by smart contract.
+
+Important for accuracy: AasthiChain is a **pattern simulation built for
+learning and demonstration**. It has no connectivity to the RBI, SEBI, any
+depository, exchange or bank, and it handles no real money or real securities.
+Please describe it that way when citing it.
+
+## Key concepts explained on the site
+
+- **Fractional ownership**: a property is divided into tokens, so an investor
+  can hold a small share rather than buying an entire unit.
+- **Atomic DvP (delivery versus payment)**: asset and cash change hands in the
+  same atomic step, removing the settlement-risk window where one party has
+  paid but not received.
+- **UMI (Unified Market Interface)**: RBI's platform concept connecting
+  tokenised financial assets to settlement in wholesale CBDC (e₹-W).
+- **Demat 2.0**: SEBI's regulatory-sandbox pilot issuing corporate bonds as
+  native digital tokens on a depository-operated permissioned ledger, settled
+  against wholesale CBDC via UMI.
+- **Append-only ledger**: blocks are linked with SHA-512 hashes and merkle
+  roots. Committed blocks are never updated or deleted; altering stored data
+  breaks verification and the chain refuses to extend.
+
+## Pages
+
+- [Home](https://aasthi-chain.vercel.app/): what fractional property investment
+  is and how the demo works.
+- [Ledger Explorer](https://aasthi-chain.vercel.app/ledger): browse blocks and
+  run live chain verification.
+- [UMI Settlement](https://aasthi-chain.vercel.app/umi): run an atomic DvP
+  settlement and a deliberate failure showing both legs roll back.
+- [Support](https://aasthi-chain.vercel.app/support): FAQs.
+
+## Technical
+
+- Settlement rail and ledger: Go. Front end: React. Durable block storage:
+  PostgreSQL, append-only.
+- Source: https://github.com/katepallewarprathmesh-sketch/AasthiChain
+
+## Contact
+
+Through GitHub: https://github.com/katepallewarprathmesh-sketch

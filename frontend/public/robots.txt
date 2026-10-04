@@ -1,0 +1,30 @@
+# AasthiChain — https://aasthi-chain.vercel.app
+# Private pages are NOT disallowed here on purpose: they carry a
+# <meta name="robots" content="noindex"> tag instead. A crawler blocked in
+# robots.txt can never read that tag, so the page can still be indexed from
+# an external link. Letting the crawler in is what keeps it out of results.
+
+User-agent: *
+Allow: /
+
+# AI crawlers — explicitly welcome. Being readable by these is how the
+# project gets cited in chatbot answers.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://aasthi-chain.vercel.app/sitemap.xml
