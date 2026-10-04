@@ -51,6 +51,21 @@ export const ROUTE_SEO = {
     description:
       'Work out returns on fractional property ownership: tokens purchased, ownership share, rental income and projected value after appreciation. Free, no signup.',
   },
+  '/about': {
+    title: 'About AasthiChain — Tokenised Property Settlement Demo',
+    description:
+      'Why AasthiChain exists: an open-source demonstration of atomic delivery-versus-payment settlement for tokenised real estate, following the SEBI Demat 2.0 and RBI UMI pattern.',
+  },
+  '/privacy': {
+    title: 'Privacy Policy | AasthiChain',
+    description:
+      'No third-party trackers, no advertising, and your IP address is never stored. What this site collects, what it does not, and how Do Not Track is honoured.',
+  },
+  '/terms': {
+    title: 'Terms of Use | AasthiChain',
+    description:
+      'Conditions for using AasthiChain. This is a demonstration of settlement technology: no real money, no real property, no investment advice.',
+  },
   '/support': {
     title: 'Help & Support | AasthiChain',
     description:

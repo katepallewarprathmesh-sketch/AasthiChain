@@ -65,6 +65,10 @@ const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rai
 const ToolsIndex = lazy(() => import('./pages/tools/ToolsIndex.jsx'))
 const RentalYieldCalculator = lazy(() => import('./pages/tools/RentalYieldCalculator.jsx'))
 const FractionalCalculator = lazy(() => import('./pages/tools/FractionalCalculator.jsx'))
+// Trust pages. People and AI agents both check these before trusting a site.
+const About = lazy(() => import('./pages/legal/About.jsx'))
+const Privacy = lazy(() => import('./pages/legal/Privacy.jsx'))
+const Terms = lazy(() => import('./pages/legal/Terms.jsx'))
 
 function RouteFallback() {
   return (
@@ -148,13 +152,14 @@ function Footer() {
 
   const cols = [
     { h: 'Product', links: [['Marketplace', '/marketplace'], ['My Wallet', '/wallet'], ['List a Property', '/admin'], ['Regulator Audit', '/regulator']] },
-    { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Payments & Settlement', '/#payments'], ['Trust & Transparency', '/#trust'], ['Support the project', '/support']] },
+    { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Free calculators', '/tools'], ['Trust & Transparency', '/#trust'], ['Support the project', '/support']] },
+    { h: 'Legal', links: [['About', '/about'], ['Privacy', '/privacy'], ['Terms of Use', '/terms']] },
   ]
 
   return (
     <footer className="site-footer" data-look={look} style={{ padding: '44px 0 28px', marginTop: 0 }}>
       <div className="container">
-        <div style={{ display: 'grid', gridTemplateColumns: isMobileF ? '1fr' : '1.6fr 1fr 1fr', gap: isMobileF ? 26 : 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobileF ? '1fr' : '1.6fr 1fr 1fr 1fr', gap: isMobileF ? 26 : 32 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800 }}>A</div>
@@ -409,6 +414,9 @@ function AppContent({ user, setUser }) {
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/tools" element={<ToolsIndex />} />
           <Route path="/tools/rental-yield-calculator" element={<RentalYieldCalculator />} />
           <Route path="/tools/fractional-investment-calculator" element={<FractionalCalculator />} />

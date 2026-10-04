@@ -28,6 +28,9 @@ import PropertyDetail from '../src/pages/PropertyDetail.jsx'
 import ToolsIndex from '../src/pages/tools/ToolsIndex.jsx'
 import RentalYieldCalculator from '../src/pages/tools/RentalYieldCalculator.jsx'
 import FractionalCalculator from '../src/pages/tools/FractionalCalculator.jsx'
+import About from '../src/pages/legal/About.jsx'
+import Privacy from '../src/pages/legal/Privacy.jsx'
+import Terms from '../src/pages/legal/Terms.jsx'
 
 const user = { identityId: 'investor1', role: 'Investor', name: 'Demo Investor' }
 
@@ -46,7 +49,10 @@ const ROUTES = [
   ['/property/PROP-GREEN-VALLEY-PUNE-001', <PropertyDetail user={user} />],
   ['/tools', <ToolsIndex />],
   ['/tools/rental-yield-calculator', <RentalYieldCalculator />],
-  ['/tools/fractional-investment-calculator', <FractionalCalculator />]
+  ['/tools/fractional-investment-calculator', <FractionalCalculator />],
+  ['/about', <About />],
+  ['/privacy', <Privacy />],
+  ['/terms', <Terms />]
 ]
 
 let failed = 0
