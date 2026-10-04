@@ -3580,7 +3580,7 @@ export default async function handler(req, res) {
           return res.status(upstream.status === 404 ? 502 : upstream.status).json({
             error: upstream.status === 404 ? 'ERR_DRUNIX_ROUTE_UNKNOWN' : 'ERR_DRUNIX_BAD_RESPONSE',
             message: upstream.status === 404
-              ? `The Drunix gateway at ${base} is running but does not serve ${'/drunix' + suffix}. It is almost certainly an older build - redeploy the Go gateway (Render) from the current main.`
+              ? `The gateway at ${base} is running but does not serve ${'/umi' + suffix}. It is almost certainly an older build - redeploy the Go gateway (Render) from the current main.`
               : `The Drunix gateway returned a non-JSON response (HTTP ${upstream.status}).`,
             upstreamStatus: upstream.status,
             upstreamBody: text.slice(0, 200),

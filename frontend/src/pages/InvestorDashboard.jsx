@@ -42,6 +42,7 @@ export default function InvestorDashboard({ user }) {
   const [income, setIncome] = useState(null)
   const [railDown, setRailDown] = useState(false)
   const [incomeUnavailable, setIncomeUnavailable] = useState(false)
+  const [railIssues, setRailIssues] = useState([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -78,6 +79,20 @@ export default function InvestorDashboard({ user }) {
     // succeeded the rail is up and the specific gap is reported in place.
     setRailDown(!ok(wRes) && !ok(insRes) && !ok(incRes))
     setIncomeUnavailable(ok(wRes) && !ok(incRes))
+
+    // Name exactly what failed so the page never makes a blanket claim.
+    const reasonOf = (r) => {
+      if (r.status === 'fulfilled') return (r.value && r.value.error) ? (r.value.message || r.value.error) : null
+      const m = (r.reason && r.reason.message) || String(r.reason || 'request failed')
+      return /does not serve|ROUTE_UNKNOWN|404/i.test(m)
+        ? 'this gateway build does not have that endpoint yet'
+        : m
+    }
+    setRailIssues([
+      ['Cash balance', reasonOf(wRes)],
+      ['Settlement history', reasonOf(insRes)],
+      ['Income history', reasonOf(incRes)],
+    ].filter(([, why]) => why))
     setLoading(false)
   }, [identityId])
 
@@ -124,12 +139,22 @@ export default function InvestorDashboard({ user }) {
           color="#065F46" />
       </div>
 
-      {railDown && (
+      {/* Only claim a total outage when everything really failed. Otherwise
+          list precisely what is missing, so the page never tells the user that
+          cash is unavailable while the cash figure is sitting right above. */}
+      {railDown ? (
         <div style={{ ...card, marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12.5, lineHeight: 1.6 }}>
           The UMI settlement rail is not reachable, so cash, income and settlement history are unavailable.
           Your holdings and valuation above are unaffected.
         </div>
-      )}
+      ) : railIssues.length > 0 ? (
+        <div style={{ ...card, marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12.5, lineHeight: 1.6 }}>
+          <strong>The settlement rail is online.</strong> Everything below is live except:
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {railIssues.map(([what, why]) => <li key={what}>{what} — {why}</li>)}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Holdings */}
       <div style={{ ...card, marginTop: 16 }}>
