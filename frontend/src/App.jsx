@@ -115,8 +115,56 @@ const ROLES = [
   { id: 'regulator1', role: 'Regulator', label: 'Regulator', mspId: 'RegulatorMSP' },
 ]
 
+// Demo identities are a local-development convenience. Must match Login.jsx
+// and Landing.jsx, both of which hide the demo entry points unless this is on.
+const demoAuthAllowed = import.meta.env.VITE_DEMO_AUTH === 'true'
+
+function clearStoredSession() {
+  try {
+    localStorage.removeItem('aasthi_user')
+    localStorage.removeItem('aasthi_token')
+    localStorage.removeItem('aasthi_clerk_demo_identity')
+  } catch {}
+}
+
+// Restores a stored session, and refuses two kinds that were previously
+// accepted without question.
+//
+// 1. Demo sessions, once demo auth is switched off. Removing the demo buttons
+//    only stops NEW demo logins — everyone who already pressed one keeps a
+//    {isDemo:true} blob in localStorage and stays signed in as investor1
+//    forever. They have to be evicted explicitly or the bypass effectively
+//    lives on in every browser that ever used it.
+//
+// 2. Expired tokens. The mock token always carried an `exp`, but nothing ever
+//    read it, so a one-hour session lasted indefinitely.
 function getStoredUser() {
-  try { const s=localStorage.getItem('aasthi_user'); return s?JSON.parse(s):null } catch { return null }
+  try {
+    const s = localStorage.getItem('aasthi_user')
+    if (!s) return null
+    const u = JSON.parse(s)
+    if (!u) return null
+
+    if (u.isDemo && !demoAuthAllowed) {
+      clearStoredSession()
+      return null
+    }
+
+    // Mock tokens are base64 JSON carrying an exp in epoch milliseconds.
+    // Clerk tokens are JWTs and are validated by Clerk, so leave those alone.
+    if (typeof u.token === 'string' && !u.token.startsWith('clerk-')) {
+      try {
+        const claims = JSON.parse(atob(u.token))
+        if (claims && typeof claims.exp === 'number' && Date.now() > claims.exp) {
+          clearStoredSession()
+          return null
+        }
+      } catch {
+        // Not a token we can read. Leave it; the API will reject it if invalid.
+      }
+    }
+    return u
+  } catch { return null }
 }
 
 function useIsMobile(breakpoint = 860) {
