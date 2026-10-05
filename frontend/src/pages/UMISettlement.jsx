@@ -156,7 +156,7 @@ export default function UMISettlement() {
   }
 
   const seed = () => run(
-    () => umi('/seed', { body: { assetId, holder: seller, tokens: 15000 } }),
+    () => umi('/seed', { body: { assetId, holder: seller, tokens: 15000, authorisedTokens: 15000 } }),
     (d) => `Demo position seeded: ${seller} holds ${num(d.position)} tokens of ${assetId}`, 'dvp')
 
   const fund = () => run(
@@ -168,6 +168,20 @@ export default function UMISettlement() {
     (d) => dryRun
       ? `Pre-trade check: settleable — ${num(d.instruction.tokens)} tokens for ${money(d.instruction.cashINR)}. Nothing moved.`
       : `DvP SETTLED atomically · ${num(d.instruction.tokens)} tokens ⇄ ${money(d.instruction.cashINR)} in e₹-W · block #${d.instruction.blockHeight}`, 'dvp')
+
+  // The rail rejected a lot of settlements for ERR_UMI_INSUFFICIENT_CBDC
+  // simply because nothing here compared the cash leg against the buyer's
+  // wallet before sending it. A buyer who cannot pay is now visible before
+  // the click, not reported afterwards as a failed settlement.
+  const cashINR = Number(tokens) * Number(price)
+  const buyerWallet = wallets.find(w => w.participant === buyer)
+  const buyerAvailable = buyerWallet ? Number(buyerWallet.availableINR || 0) : 0
+  const shortfall = buyerWallet ? Math.max(0, cashINR - buyerAvailable) : cashINR
+  const canAfford = cashINR > 0 && shortfall === 0
+
+  const fundShortfall = () => run(
+    () => umi(`/wallets/${encodeURIComponent(buyer)}/fund`, { body: { amountINR: shortfall } }),
+    (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)} — the cash leg is now covered`, 'dvp')
 
   const servicing = () => run(
     () => umi('/servicing', { body: { assetId, payer: seller, amountINR: Number(servAmt) } }),
@@ -248,13 +262,32 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           <input style={input} type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="₹ / token" />
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button style={btn(true)} onClick={() => settle(false)} disabled={!!busy}>
+          <button style={btn(true)} onClick={() => settle(false)} disabled={!!busy || !canAfford}>
             {busy === 'dvp' ? 'Settling…' : 'Settle DvP'}
           </button>
           <button style={btn(false)} onClick={() => settle(true)} disabled={!!busy}>Dry run (no state change)</button>
           <button style={btn(false)} onClick={seed} disabled={!!busy}>Seed demo position for seller</button>
-          <span style={{ fontSize: 12.5, color: C.mut }}>Cash leg: <strong>{money(Number(tokens) * Number(price))}</strong></span>
+          <span style={{ fontSize: 12.5, color: C.mut }}>Cash leg: <strong>{money(cashINR)}</strong></span>
         </div>
+
+        {cashINR > 0 && !canAfford && (
+          <div style={{ marginTop: 10, background: C.warnBg, border: `1px solid ${C.warnLine}`,
+            borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: '#7C4A03' }}>
+            <strong>{buyer} cannot cover this cash leg.</strong>{' '}
+            {buyerWallet
+              ? <>Wallet holds {money(buyerAvailable)} available against {money(cashINR)} due — short {money(shortfall)}.</>
+              : <>{buyer} has no e₹-W wallet yet, so the whole {money(cashINR)} is unfunded.</>}
+            <div style={{ marginTop: 8 }}>
+              <button style={btn(false)} onClick={fundShortfall} disabled={!!busy}>
+                Fund {money(shortfall)} into {buyer}
+              </button>
+            </div>
+            <div style={{ marginTop: 7, color: '#92602A' }}>
+              Settling anyway would be rejected as <code>ERR_UMI_INSUFFICIENT_CBDC</code> and recorded as a
+              failed settlement — the rail refuses to move one leg without the other.
+            </div>
+          </div>
+        )}
         <Notice flash={flash} where="dvp" onClose={() => setFlash(null)} />
       </Card>
 

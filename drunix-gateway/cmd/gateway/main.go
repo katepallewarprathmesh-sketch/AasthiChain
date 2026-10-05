@@ -84,7 +84,7 @@ func main() {
 		// restart never re-credits wallets (that would break conservation).
 		if os.Getenv("UMI_SEED_DEMO") != "false" && srv.UMI.IsEmpty() {
 			// via the rail so the seeded position is mirrored to the store too
-			_, _ = srv.UMI.SeedPosition(envOr("UMI_SEED_ASSET", "PROP-GREEN-VALLEY-PUNE-001"), envOr("UMI_SEED_OWNER", "originator1"), 15000)
+			_, _ = srv.UMI.SeedPosition(envOr("UMI_SEED_ASSET", "PROP-GREEN-VALLEY-PUNE-001"), envOr("UMI_SEED_OWNER", "originator1"), 15000, 15000)
 			_, _, _ = srv.UMI.FundWallet("investor1", 100000)
 			_, _, _ = srv.UMI.FundWallet("investor2", 50000)
 			log.Printf("UMI demo state seeded: 15000 tokens to %s, e₹-W wallets investor1 ₹1,00,000 / investor2 ₹50,000",

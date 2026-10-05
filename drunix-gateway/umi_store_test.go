@@ -166,7 +166,7 @@ func TestUMIStoreRoundTripRestoresEverything(t *testing.T) {
 	// --- first "process" ---
 	sec := NewMemorySecurities()
 	rail := NewUMIRail(sec, NewChain()).WithStore(store)
-	if _, err := rail.SeedPosition(tAsset, "originator1", 15000); err != nil {
+	if _, err := rail.SeedPosition(tAsset, "originator1", 15000, 0); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	if _, _, err := rail.FundWallet("investor1", 100000); err != nil {
@@ -279,7 +279,7 @@ func TestInstructionBlockAnchorSurvivesRestart(t *testing.T) {
 	store := newFakeStore()
 	sec := NewMemorySecurities()
 	rail := NewUMIRail(sec, NewChain()).WithStore(store)
-	rail.SeedPosition(tAsset, "originator1", 15000)
+	rail.SeedPosition(tAsset, "originator1", 15000, 0)
 	rail.FundWallet("investor1", 100000)
 
 	si, err := rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
@@ -337,7 +337,7 @@ func TestStaleWalletWriteCannotWinTheRace(t *testing.T) {
 
 	sec := NewMemorySecurities()
 	rail := NewUMIRail(sec, NewChain()).WithStore(store)
-	rail.SeedPosition(tAsset, "originator1", 15000)
+	rail.SeedPosition(tAsset, "originator1", 15000, 0)
 	rail.FundWallet("investor1", 100000)
 
 	// three sequential settlements; the buyer's balance strictly decreases
@@ -371,7 +371,7 @@ func TestRevisionsResumeAboveRestoredHighWaterMark(t *testing.T) {
 	store := newFakeStore()
 	sec := NewMemorySecurities()
 	rail := NewUMIRail(sec, NewChain()).WithStore(store)
-	rail.SeedPosition(tAsset, "originator1", 15000)
+	rail.SeedPosition(tAsset, "originator1", 15000, 0)
 	rail.FundWallet("investor1", 100000)
 	rail.SettleDvP(DvPRequest{AssetID: tAsset, Seller: "originator1", Buyer: "investor1",
 		Tokens: 10, PricePerTokenINR: 500, AutoAssignISIN: true})
@@ -401,7 +401,7 @@ func TestServicingIncomeIsPerHolderAndSurvivesRestart(t *testing.T) {
 	store := newFakeStore()
 	sec := NewMemorySecurities()
 	rail := NewUMIRail(sec, NewChain()).WithStore(store)
-	rail.SeedPosition(tAsset, "originator1", 1000)
+	rail.SeedPosition(tAsset, "originator1", 1000, 0)
 	rail.FundWallet("originator1", 100000)
 	rail.FundWallet("investor1", 100000)
 	rail.FundWallet("investor2", 100000)

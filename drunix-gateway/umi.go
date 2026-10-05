@@ -72,6 +72,7 @@ const (
 var (
 	ErrUMINoWallet               = errors.New("ERR_UMI_NO_WALLET")
 	ErrUMIInsufficientCBDC       = errors.New("ERR_UMI_INSUFFICIENT_CBDC")
+	ErrUMISupplyExceeded         = errors.New("ERR_UMI_SUPPLY_EXCEEDED")
 	ErrUMIInsufficientSecurities = errors.New("ERR_UMI_INSUFFICIENT_SECURITIES")
 	ErrUMINotPilotEligible       = errors.New("ERR_UMI_NOT_PILOT_ELIGIBLE")
 	ErrUMISelfSettlement         = errors.New("ERR_UMI_SELF_SETTLEMENT")
@@ -299,6 +300,13 @@ type UMIRail struct {
 	failedCount  int64
 	rev          int64             // monotonic persistence revision (see nextRev)
 	servicing    []ServicingRecord // per-holder income history, oldest first
+
+	// authorised is the issued supply per asset: the maximum number of tokens
+	// that may exist. Seeding cannot push outstanding above it, which is what
+	// stops a property showing as 101% allocated. Derived on restore from the
+	// restored outstanding, or set by the first seed / an explicit
+	// authorisedTokens, whichever comes first.
+	authorised map[string]int64
 }
 
 // ServicingRecord is one holder's share of one servicing run — the row an
@@ -327,6 +335,7 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 	}
 	return &UMIRail{
 		wallets:      make(map[string]*CBDCWallet),
+		authorised:   make(map[string]int64),
 		isins:        make(map[string]*PilotISIN),
 		instructions: make(map[string]*SettlementInstruction),
 		securities:   sec,
@@ -370,6 +379,14 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	// Resume above the highest persisted revision. Without this the rev guard
 	// would reject every write made after a restart — persistence would look
 	// healthy and silently stop recording.
+	// Whatever was legitimately outstanding at restore time becomes the
+	// authorised supply. Without this a restart would forget every cap and the
+	// next seed could inflate the book again.
+	for _, pos := range snap.Positions {
+		if pos.Tokens > 0 {
+			r.authorised[pos.AssetID] += pos.Tokens
+		}
+	}
 	r.servicing = append(r.servicing, snap.Servicing...)
 	r.rev = snap.MaxRev
 	r.fundedPaise = snap.FundedPaise
@@ -464,8 +481,17 @@ func (r *UMIRail) pMeta() {
 	_ = r.store.SaveMeta(funded, settled, failed)
 }
 
-// SeedPosition credits demo securities and mirrors them to the store.
-func (r *UMIRail) SeedPosition(assetID, holder string, tokens int64) (int64, error) {
+// SeedPosition establishes a demo holding. It is ABSOLUTE, not additive: it
+// sets the holder's position to exactly `tokens`. The old behaviour credited
+// on every call, so clicking "seed" twice created tokens out of nothing and a
+// property could report 101% allocated — more tokens in existence than were
+// ever issued.
+//
+// authorisedTokens is the issued supply. Passed on the first seed for an asset
+// it fixes the cap (use the property's declared total). Omitted, the first
+// seed itself defines the supply. Either way no seed may push the asset's
+// outstanding total above that cap.
+func (r *UMIRail) SeedPosition(assetID, holder string, tokens, authorisedTokens int64) (int64, error) {
 	mem, ok := r.securities.(*MemorySecurities)
 	if !ok {
 		return 0, fmt.Errorf("ERR_UMI_LEDGER_NOT_SEEDABLE")
@@ -473,12 +499,92 @@ func (r *UMIRail) SeedPosition(assetID, holder string, tokens int64) (int64, err
 	if assetID == "" || holder == "" || tokens <= 0 {
 		return 0, ErrUMIInvalidAmount
 	}
-	mem.Credit(assetID, holder, tokens)
+
+	r.mu.Lock()
+	cap0, known := r.authorised[assetID]
+	if !known {
+		// First sight of this asset: its supply is whatever is being declared,
+		// or the size of this first seed.
+		cap0 = authorisedTokens
+		if cap0 <= 0 {
+			cap0 = tokens
+		}
+		r.authorised[assetID] = cap0
+	} else if authorisedTokens > 0 && authorisedTokens != cap0 {
+		// Supply is decided once. Re-declaring it would make the cap
+		// meaningless, so the attempt is refused rather than silently ignored.
+		r.mu.Unlock()
+		return 0, fmt.Errorf("%w: %s supply is already %d tokens, cannot redeclare as %d",
+			ErrUMISupplyExceeded, assetID, cap0, authorisedTokens)
+	}
+	r.mu.Unlock()
+
+	// Outstanding excluding this holder, because the write is absolute.
+	outstanding := int64(0)
+	for h, v := range mem.Holders(assetID) {
+		if h != holder {
+			outstanding += v
+		}
+	}
+	if outstanding+tokens > cap0 {
+		return 0, fmt.Errorf("%w: %s has %d of %d tokens issued to other holders, cannot seed %d more",
+			ErrUMISupplyExceeded, assetID, outstanding, cap0, tokens)
+	}
+
+	mem.Set(assetID, holder, tokens)
 	r.mu.Lock()
 	snap := r.snapPositions(assetID, holder)
 	r.mu.Unlock()
 	r.pPosition(snap)
 	return mem.Position(assetID, holder), nil
+}
+
+// AuthorisedSupply reports the issued supply and the outstanding total for an
+// asset. outstanding > authorised means the book was inflated before the cap
+// existed; /umi/reconciliation surfaces that rather than hiding it.
+func (r *UMIRail) AuthorisedSupply(assetID string) (authorised, outstanding int64) {
+	r.mu.Lock()
+	authorised = r.authorised[assetID]
+	r.mu.Unlock()
+	if mem, ok := r.securities.(*MemorySecurities); ok {
+		for _, v := range mem.Holders(assetID) {
+			outstanding += v
+		}
+	}
+	return authorised, outstanding
+}
+
+// SupplyBreaches lists assets whose outstanding tokens exceed the authorised
+// supply — the conservation check for the securities leg, mirroring what
+// /umi/reconciliation already does for cash.
+func (r *UMIRail) SupplyBreaches() []map[string]interface{} {
+	mem, ok := r.securities.(*MemorySecurities)
+	if !ok {
+		return nil
+	}
+	r.mu.Lock()
+	caps := make(map[string]int64, len(r.authorised))
+	for k, v := range r.authorised {
+		caps[k] = v
+	}
+	r.mu.Unlock()
+	out := []map[string]interface{}{}
+	for assetID, cap0 := range caps {
+		outstanding := int64(0)
+		for _, v := range mem.Holders(assetID) {
+			outstanding += v
+		}
+		if outstanding > cap0 {
+			out = append(out, map[string]interface{}{
+				"assetId": assetID, "authorisedTokens": cap0,
+				"outstandingTokens": outstanding, "excessTokens": outstanding - cap0,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i]["assetId"].(string) < out[j]["assetId"].(string)
+	})
+	return out
 }
 
 // IsEmpty reports whether the rail has no state yet (used to decide whether
@@ -1102,6 +1208,11 @@ type Reconciliation struct {
 	Chain            ChainVerification `json:"chain"`
 	Mode             string            `json:"mode"`
 	Disclaimer       string            `json:"disclaimer"`
+	// Securities-leg conservation. The cash leg has always been checked; the
+	// token book was not, which is how an asset came to report 101% allocated.
+	SupplyConserved  bool                     `json:"supplyConserved"`
+	SupplyNote       string                   `json:"supplyNote"`
+	SupplyBreaches   []map[string]interface{} `json:"supplyBreaches,omitempty"`
 }
 
 // Reconcile asserts that no paisa was created or destroyed by the rail:
@@ -1134,6 +1245,15 @@ func (r *UMIRail) Reconcile() Reconciliation {
 	} else {
 		rec.ConservationNote = "MISMATCH — settlement engine created or destroyed central bank money. This must never happen."
 	}
+	breaches := r.SupplyBreaches()
+	rec.SupplyBreaches = breaches
+	rec.SupplyConserved = len(breaches) == 0
+	if rec.SupplyConserved {
+		rec.SupplyNote = "No asset has more tokens outstanding than were issued."
+	} else {
+		rec.SupplyNote = "MISMATCH — tokens exist beyond the issued supply. Seeding inflated the book before the cap was enforced."
+	}
+
 	if r.chain != nil {
 		rec.Chain = r.chain.Verify()
 	}

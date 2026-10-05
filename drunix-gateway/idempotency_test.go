@@ -18,7 +18,7 @@ func idemTestServer(t *testing.T) *Server {
 	t.Helper()
 	sec := NewMemorySecurities()
 	srv := &Server{Ledger: NewMockLedger(), UMI: NewUMIRail(sec, NewChain()), Idem: NewIdemStore()}
-	if _, err := srv.UMI.SeedPosition("PROP-X", "seller1", 1000); err != nil {
+	if _, err := srv.UMI.SeedPosition("PROP-X", "seller1", 1000, 0); err != nil {
 		t.Fatalf("seed position: %v", err)
 	}
 	if _, _, err := srv.UMI.FundWallet("buyer1", 500000); err != nil {

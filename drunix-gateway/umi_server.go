@@ -5,6 +5,8 @@ package drunix
 // rail is simply absent and every existing endpoint behaves exactly as before.
 
 import (
+	"os"
+	"errors"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -336,10 +338,17 @@ func (s *Server) handleUMISeed(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
 	}
+	// Seeding issues securities. It is a demo fixture, so it must be possible
+	// to switch it off entirely in an environment that holds real positions.
+	if os.Getenv("UMI_SEED_DEMO") == "false" {
+		umiErr(w, http.StatusNotFound, "ERR_NOT_FOUND", "demo seeding is disabled on this deployment")
+		return
+	}
 	var body struct {
-		AssetID string `json:"assetId"`
-		Holder  string `json:"holder"`
-		Tokens  int64  `json:"tokens"`
+		AssetID          string `json:"assetId"`
+		Holder           string `json:"holder"`
+		Tokens           int64  `json:"tokens"`
+		AuthorisedTokens int64  `json:"authorisedTokens"`
 	}
 	if err := umiDecode(r, &body); err != nil {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
@@ -349,17 +358,25 @@ func (s *Server) handleUMISeed(w http.ResponseWriter, r *http.Request) {
 		umiErr(w, http.StatusBadRequest, ErrUMIInvalidAmount.Error(), "assetId, holder and positive tokens required")
 		return
 	}
-	pos, err := s.UMI.SeedPosition(body.AssetID, body.Holder, body.Tokens)
+	pos, err := s.UMI.SeedPosition(body.AssetID, body.Holder, body.Tokens, body.AuthorisedTokens)
 	if err != nil {
 		if err.Error() == "ERR_UMI_LEDGER_NOT_SEEDABLE" {
 			umiErr(w, http.StatusConflict, "ERR_UMI_LEDGER_NOT_SEEDABLE", "securities leg is backed by a real ledger")
 			return
 		}
+		if errors.Is(err, ErrUMISupplyExceeded) {
+			// 409, not 400: the request is well formed, it is the ledger state
+			// that forbids it.
+			umiErr(w, http.StatusConflict, ErrUMISupplyExceeded.Error(), err.Error())
+			return
+		}
 		umiErr(w, http.StatusBadRequest, err.Error(), "assetId, holder and positive tokens required")
 		return
 	}
+	authorised, outstanding := s.UMI.AuthorisedSupply(body.AssetID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true, "assetId": body.AssetID, "holder": body.Holder,
-		"position": pos, "mode": UMIMode,
+		"position": pos, "authorisedTokens": authorised, "outstandingTokens": outstanding,
+		"mode": UMIMode,
 	})
 }

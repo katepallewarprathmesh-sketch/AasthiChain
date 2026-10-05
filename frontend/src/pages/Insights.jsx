@@ -274,8 +274,15 @@ export default function Insights() {
                     <span style={{ color: '#6B7280', flexShrink: 0 }}>{pct(r.pctAllocated)}</span>
                   </div>
                   <div style={{ height: 6, background: '#F3F4F6', borderRadius: 999, marginTop: 4, overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(100, r.pctAllocated)}%`, height: '100%', background: '#1E3A5F' }} />
+                    <div style={{ width: `${Math.min(100, r.pctAllocated)}%`, height: '100%',
+                      background: r.pctAllocated > 100 ? '#B91C1C' : '#1E3A5F' }} />
                   </div>
+                  {r.pctAllocated > 100 && (
+                    <div style={{ fontSize: 10.5, color: '#B91C1C', marginTop: 3, fontWeight: 600 }}>
+                      {Number(r.tokensHeld - r.totalTokens).toLocaleString('en-IN')} tokens beyond the issued supply —
+                      seeded before the cap was enforced
+                    </div>
+                  )}
                   <div style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 3 }}>
                     {Number(r.tokensHeld).toLocaleString('en-IN')} / {Number(r.totalTokens).toLocaleString('en-IN')} tokens
                     {r.valuationINR ? ` · ${money(r.valuationINR)}` : ''}
