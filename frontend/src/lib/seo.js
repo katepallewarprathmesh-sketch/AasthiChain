@@ -51,6 +51,10 @@ export const ROUTE_SEO = {
     description:
       'Calculate stamp duty and registration charges for any Indian state. Accounts for circle rate, women buyer concessions, registration caps, TDS and the section 80C deduction. Free, no signup.',
   },
+  '/tools/home-loan-emi-calculator': {
+    title: 'Home Loan EMI Calculator — Interest, Prepayment & Tax Saving',
+    description: 'Free home loan EMI calculator. See your monthly EMI, total interest, what one extra EMI a year saves, affordability against your income, and section 24(b) and 80C tax relief.',
+  },
   '/tools/fractional-investment-calculator': {
     title: 'Fractional Investment Calculator for Property | AasthiChain',
     description:

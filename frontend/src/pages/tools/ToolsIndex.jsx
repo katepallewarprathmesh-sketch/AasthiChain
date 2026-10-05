@@ -18,6 +18,11 @@ const TOOLS = [
     blurb: 'What a purchase costs beyond the price, for any Indian state — circle rate, women concessions, registration caps, TDS and the 80C deduction.',
   },
   {
+    to: '/tools/home-loan-emi-calculator',
+    name: 'Home Loan EMI Calculator',
+    blurb: 'Monthly EMI, the total interest you actually pay, what one extra EMI a year saves, affordability against your income, and the tax relief you can really claim.',
+  },
+  {
     to: '/tools/fractional-investment-calculator',
     name: 'Fractional Investment Calculator',
     blurb: 'How many tokens your money buys, the ownership share it represents, and what it could be worth years later.',
