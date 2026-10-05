@@ -2,6 +2,16 @@ import React, { useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { SignIn, useUser, useAuth, Show, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
+// Demo presets used to let anyone click straight past sign-in as investor1.
+// That is why almost nobody signed up: the fastest path through the door
+// skipped the door. They are now off unless explicitly switched on for local
+// development (VITE_DEMO_AUTH=true), so production has exactly one way in.
+//
+// Kept rather than deleted because they are also the fallback when Clerk is
+// not configured at all — without that, a fresh clone with no Clerk key would
+// have no way to reach the authenticated pages at all.
+const demoAuthAllowed = import.meta.env.VITE_DEMO_AUTH === 'true'
+
 const isClerkConfigured = (() => {
   const k = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
   return k && k.startsWith('pk_') && !k.includes('placeholder') && !k.includes('your-key-here') && k.length > 20
@@ -133,7 +143,7 @@ function ClerkLogin({ onLogin }) {
               <span style={{fontFamily:'Fraunces', fontWeight:700, fontSize:20, color:'#111827'}}>AasthiChain</span>
             </Link>
             <h1 style={{fontSize:24, fontWeight:700, color:'#111827'}}>Sign in to AasthiChain</h1>
-            <p style={{fontSize:13, color:'#6B7280', marginTop:6}}>Clerk auth available or use instant demo presets below (no verification, works LIVE + local)</p>
+            <p style={{fontSize:13, color:'#6B7280', marginTop:6}}>Create an account or sign in to hold a wallet, invest and track a portfolio. Browsing the marketplace, tools and ledger needs no account.</p>
           </div>
 
           <div className="card" style={{padding:20}}>
@@ -164,9 +174,11 @@ function ClerkLogin({ onLogin }) {
               </Show>
             </div>
 
-            <div style={{borderTop:'1px solid #F1F5F9', paddingTop:16}}>
-              <DemoPresets onLogin={onLogin} title="Or Quick Demo Access (bypass Clerk, instant)" />
-            </div>
+            {demoAuthAllowed && (
+              <div style={{borderTop:'1px solid #F1F5F9', paddingTop:16}}>
+                <DemoPresets onLogin={onLogin} title="Local development only (VITE_DEMO_AUTH)" />
+              </div>
+            )}
           </div>
 
           <div style={{textAlign:'center', marginTop:16}}>
@@ -189,11 +201,11 @@ function SimpleLogin({ onLogin }) {
           <span style={{fontFamily:'Fraunces', fontWeight:700, fontSize:22}}>AasthiChain</span>
         </div>
         <h1 style={{fontSize:24, fontWeight:700}}>Sign in</h1>
-        <p style={{fontSize:13, color:'#6B7280', marginTop:8}}>One easy auth demo presets work LIVE + local, no verification</p>
+        <p style={{fontSize:13, color:'#6B7280', marginTop:8}}>Sign in to hold a wallet, invest and track a portfolio.</p>
       </div>
       
       <div className="card" style={{padding:20}}>
-        <p style={{fontSize:11, color:'#6B7280', marginBottom:8}}>Clerk not configured in this env (.env missing VITE_CLERK_PUBLISHABLE_KEY) using demo auth. On LIVE https://aasthi-chain.vercel.app Clerk IS configured, but demo presets still work instantly below.</p>
+        <p style={{fontSize:11, color:'#6B7280', marginBottom:8}}>Clerk is not configured in this environment (VITE_CLERK_PUBLISHABLE_KEY is missing), so local demo identities are shown instead. Production uses Clerk only.</p>
         <DemoPresets onLogin={onLogin} title="Quick Demo Access Click any role" />
         <div style={{marginTop:16, textAlign:'center'}}>
           <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home https://aasthi-chain.vercel.app</Link>

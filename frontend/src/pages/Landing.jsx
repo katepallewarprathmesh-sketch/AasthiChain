@@ -172,6 +172,9 @@ function Pipeline() {
 }
 
 /* ============================================================ */
+// Demo identities are a development convenience, not a way into production.
+const demoAuthAllowed = import.meta.env.VITE_DEMO_AUTH === 'true'
+
 export default function Landing({ user }) {
   const [showDev, setShowDev] = useState(false)
   const [mode, toggleTheme] = useLandingTheme()
@@ -430,43 +433,48 @@ export default function Landing({ user }) {
       </section>
 
       {/* ================= DEMO ACCESS (preserved behavior) ================= */}
-      <section id="demo" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 30 }}>
-        <div className="acx-card-glass rv" style={{ padding: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Try every role instantly</h3>
-              <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-                One-click demo identities with instant mock sign-in. Works on the live deployment and locally no verification, under 2 seconds.
-              </p>
+      {/* One-click role switcher. This lived on the homepage and was the
+          reason almost nobody signed up: the fastest route into the product
+          skipped the account entirely. Now local-development only. */}
+      {demoAuthAllowed && (
+        <section id="demo" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 30 }}>
+          <div className="acx-card-glass rv" style={{ padding: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Try every role instantly</h3>
+                <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
+                  One-click demo identities with instant mock sign-in. Works on the live deployment and locally no verification, under 2 seconds.
+                </p>
+              </div>
+              <span className="acx-chip" style={{ fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> LIVE + LOCAL</span>
             </div>
-            <span className="acx-chip" style={{ fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> LIVE + LOCAL</span>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 22 }}>
-            {[
-              { id: 'originator1', role: 'Originator', label: 'Owner', desc: 'List & tokenize property', color: 'var(--accent)' },
-              { id: 'registrar1', role: 'Registrar', label: 'Registrar', desc: 'Validate title & approve', color: 'var(--ok)' },
-              { id: 'investor1', role: 'Investor', label: 'Investor', desc: 'Buy via UPI & own', color: 'var(--accent-2)' },
-              { id: 'regulator1', role: 'Regulator', label: 'Regulator', desc: 'Audit & freeze', color: 'var(--warn)' },
-            ].map(r => (
-              <button
-                key={r.id}
-                onClick={() => handleDemoLogin(r)}
-                className="acx-card"
-                style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: 'var(--panel)', color: 'var(--text)' }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, background: r.color, color: 'var(--accent-ink)' }}>{r.label[0]}</div>
-                  <span style={{ fontSize: 10, color: 'var(--faint)', fontFamily: 'Inter, monospace' }}>{r.id}</span>
-                </div>
-                <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 12 }}>{r.label}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{r.desc}</div>
-                <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}>Enter as {r.label} {I.arrow(12)}</div>
-              </button>
-            ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 22 }}>
+              {[
+                { id: 'originator1', role: 'Originator', label: 'Owner', desc: 'List & tokenize property', color: 'var(--accent)' },
+                { id: 'registrar1', role: 'Registrar', label: 'Registrar', desc: 'Validate title & approve', color: 'var(--ok)' },
+                { id: 'investor1', role: 'Investor', label: 'Investor', desc: 'Buy via UPI & own', color: 'var(--accent-2)' },
+                { id: 'regulator1', role: 'Regulator', label: 'Regulator', desc: 'Audit & freeze', color: 'var(--warn)' },
+              ].map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => handleDemoLogin(r)}
+                  className="acx-card"
+                  style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: 'var(--panel)', color: 'var(--text)' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, background: r.color, color: 'var(--accent-ink)' }}>{r.label[0]}</div>
+                    <span style={{ fontSize: 10, color: 'var(--faint)', fontFamily: 'Inter, monospace' }}>{r.id}</span>
+                  </div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 12 }}>{r.label}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{r.desc}</div>
+                  <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}>Enter as {r.label} {I.arrow(12)}</div>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ================= FINAL CTA ================= */}
       <section className="acx-wrap" style={{ paddingTop: 50, paddingBottom: 80 }}>
