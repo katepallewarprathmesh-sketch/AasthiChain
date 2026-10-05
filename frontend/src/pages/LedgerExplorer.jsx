@@ -117,19 +117,22 @@ export default function LedgerExplorer() {
       </div>
 
 
-      {umi && (
+      {/* Banner is shown only when something needs the reader's attention: a
+          sealed (tampered) chain, or a non-durable one. The healthy durable
+          case says nothing — the Storage stat already states it. */}
+      {umi && (umi.durability?.sealed || !umi.durability?.durable || umi.durability?.lastError) && (
         <div style={{
           marginTop: 12, padding: '12px 16px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.6,
-          background: umi.durability?.sealed ? '#FEF2F2' : umi.durability?.durable ? '#F0FDF4' : '#FFFBEB',
-          border: `1px solid ${umi.durability?.sealed ? '#FECACA' : umi.durability?.durable ? '#BBF7D0' : '#FDE68A'}`,
-          color: umi.durability?.sealed ? '#991B1B' : umi.durability?.durable ? '#065F46' : '#92400E'
+          background: umi.durability?.sealed ? '#FEF2F2' : '#FFFBEB',
+          border: `1px solid ${umi.durability?.sealed ? '#FECACA' : '#FDE68A'}`,
+          color: umi.durability?.sealed ? '#991B1B' : '#92400E'
         }}>
           {umi.durability?.sealed
             ? <><b>Chain sealed.</b> Stored history failed verification at block #{umi.verification?.brokenAt} ({umi.verification?.reason}). The node refuses to append to tampered history and is serving it read-only.</>
-            : umi.durability?.durable
-              ? <><b>Permanent ledger.</b> Blocks are appended to <code>umi_block</code> in {umi.durability.mode} — insert-only, never updated or deleted — and replayed and re-verified from genesis at every restart. Restarting the service cannot erase history.</>
-              : <><b>In-memory ledger.</b> No <code>DATABASE_URL</code> is configured, so these blocks are lost when the service restarts. Set it to make the chain permanent.</>}
-          {umi.durability?.lastError && <div style={{ marginTop: 6 }}><b>Last persistence error:</b> {umi.durability.lastError}</div>}
+            : !umi.durability?.durable
+              ? <><b>In-memory ledger.</b> No <code>DATABASE_URL</code> is configured, so these blocks are lost when the service restarts. Set it to make the chain permanent.</>
+              : null}
+          {umi.durability?.lastError && <div style={{ marginTop: umi.durability?.sealed || !umi.durability?.durable ? 6 : 0 }}><b>Last persistence error:</b> {umi.durability.lastError}</div>}
         </div>
       )}
 
