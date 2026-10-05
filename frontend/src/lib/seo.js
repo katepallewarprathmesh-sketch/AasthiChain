@@ -59,6 +59,10 @@ export const ROUTE_SEO = {
     title: 'Rent vs Buy Calculator India — Year by Year Net Worth',
     description: 'Should you rent or buy? Free calculator comparing net worth year by year, counting the down payment and stamp duty the renter can invest. Shows the break-even year.',
   },
+  '/tools/capital-gains-tax-calculator': {
+    title: 'Capital Gains Tax Calculator on Property Sale India 2026',
+    description: 'Free LTCG calculator for property. Compares 12.5% without indexation against the grandfathered 20% with indexation and shows which is cheaper, with CII, cess and section 54 relief.',
+  },
   '/tools/fractional-investment-calculator': {
     title: 'Fractional Investment Calculator for Property | AasthiChain',
     description:

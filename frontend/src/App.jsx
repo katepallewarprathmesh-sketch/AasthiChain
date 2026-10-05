@@ -68,6 +68,7 @@ const FractionalCalculator = lazy(() => import('./pages/tools/FractionalCalculat
 const StampDutyCalculator = lazy(() => import('./pages/tools/StampDutyCalculator.jsx'))
 const EmiCalculator = lazy(() => import('./pages/tools/EmiCalculator.jsx'))
 const RentVsBuyCalculator = lazy(() => import('./pages/tools/RentVsBuyCalculator.jsx'))
+const CapitalGainsCalculator = lazy(() => import('./pages/tools/CapitalGainsCalculator.jsx'))
 // Trust pages. People and AI agents both check these before trusting a site.
 const About = lazy(() => import('./pages/legal/About.jsx'))
 const Privacy = lazy(() => import('./pages/legal/Privacy.jsx'))
@@ -436,6 +437,7 @@ function AppContent({ user, setUser }) {
           <Route path="/tools/stamp-duty-calculator" element={<StampDutyCalculator />} />
           <Route path="/tools/home-loan-emi-calculator" element={<EmiCalculator />} />
           <Route path="/tools/rent-vs-buy-calculator" element={<RentVsBuyCalculator />} />
+          <Route path="/tools/capital-gains-tax-calculator" element={<CapitalGainsCalculator />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/property/:id" element={<PropertyDetail user={effectiveUser} />} />

@@ -28,6 +28,11 @@ const TOOLS = [
     blurb: 'A year-by-year net worth comparison that counts the down payment the renter still has — the part most rent-vs-buy pages quietly ignore.',
   },
   {
+    to: '/tools/capital-gains-tax-calculator',
+    name: 'Capital Gains Tax Calculator',
+    blurb: 'LTCG on a property sale under the rules rewritten in July 2024 — runs both the 12.5% and the grandfathered 20%-with-indexation routes and tells you which is cheaper.',
+  },
+  {
     to: '/tools/fractional-investment-calculator',
     name: 'Fractional Investment Calculator',
     blurb: 'How many tokens your money buys, the ownership share it represents, and what it could be worth years later.',
