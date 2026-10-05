@@ -255,3 +255,117 @@ func TestFingerprintStability(t *testing.T) {
 		t.Error("different bodies produced the same fingerprint")
 	}
 }
+
+// --- servicing and funding ------------------------------------------------
+//
+// A rail where DvP is retry-safe but a coupon run is not would be worse than
+// one where neither is, because it invites the caller to assume a guarantee
+// that only sometimes holds. These prove the guarantee is uniform.
+
+func postJSON(t *testing.T, srv *Server, path, key string, payload map[string]interface{}) *httptest.ResponseRecorder {
+	t.Helper()
+	b, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(b))
+	if key != "" {
+		req.Header.Set("Idempotency-Key", key)
+	}
+	rec := httptest.NewRecorder()
+	srv.Router().ServeHTTP(rec, req)
+	return rec
+}
+
+// Funding mints money from the settlement bank. Paying it twice on a retry
+// breaks conservation, which is the one invariant the rail must not lose.
+func TestFundWalletIsIdempotent(t *testing.T) {
+	srv := idemTestServer(t)
+	before := walletBalance(t, srv, "buyer1")
+	body := map[string]interface{}{"amountINR": 1000}
+
+	r1 := postJSON(t, srv, "/umi/wallets/buyer1/fund", "fund-1", body)
+	if r1.Code != http.StatusOK {
+		t.Fatalf("first funding failed: %d %s", r1.Code, r1.Body.String())
+	}
+	afterFirst := walletBalance(t, srv, "buyer1")
+	if afterFirst != before+100000 { // ₹1000 = 100000 paise
+		t.Fatalf("expected +100000 paise, got %d -> %d", before, afterFirst)
+	}
+
+	r2 := postJSON(t, srv, "/umi/wallets/buyer1/fund", "fund-1", body)
+	if r2.Code != http.StatusOK {
+		t.Fatalf("replay should return the original status, got %d", r2.Code)
+	}
+	if got := walletBalance(t, srv, "buyer1"); got != afterFirst {
+		t.Fatalf("RETRY MINTED MONEY: balance %d -> %d", afterFirst, got)
+	}
+	if r2.Header().Get("Idempotent-Replay") != "true" {
+		t.Errorf("funding replay not flagged")
+	}
+}
+
+// A coupon or rental run credits every holder. Twice pays everybody twice.
+func TestServicingIsIdempotent(t *testing.T) {
+	srv := idemTestServer(t)
+	// seller1 holds the asset, so servicing pays seller1 from the payer.
+	if _, _, err := srv.UMI.FundWallet("issuer1", 1000000); err != nil {
+		t.Fatalf("fund issuer: %v", err)
+	}
+	before := walletBalance(t, srv, "seller1")
+	body := map[string]interface{}{"assetId": "PROP-X", "payer": "issuer1", "amountINR": 5000}
+
+	r1 := postJSON(t, srv, "/umi/servicing", "svc-1", body)
+	if r1.Code != http.StatusOK {
+		t.Fatalf("first servicing run failed: %d %s", r1.Code, r1.Body.String())
+	}
+	afterFirst := walletBalance(t, srv, "seller1")
+	if afterFirst <= before {
+		t.Fatalf("expected the holder to be credited, %d -> %d", before, afterFirst)
+	}
+
+	r2 := postJSON(t, srv, "/umi/servicing", "svc-1", body)
+	if r2.Code != http.StatusOK {
+		t.Fatalf("replay should return the original status, got %d", r2.Code)
+	}
+	if got := walletBalance(t, srv, "seller1"); got != afterFirst {
+		t.Fatalf("RETRY PAID THE HOLDER TWICE: %d -> %d", afterFirst, got)
+	}
+}
+
+// Keys must not leak across endpoints: the same key on a different route is a
+// different request, and the fingerprint check must catch it rather than
+// replaying a DvP response to a funding call.
+func TestKeyIsScopedByRequestBody(t *testing.T) {
+	srv := idemTestServer(t)
+	if r := postJSON(t, srv, "/umi/wallets/buyer1/fund", "shared", map[string]interface{}{"amountINR": 1000}); r.Code != http.StatusOK {
+		t.Fatalf("funding failed: %d", r.Code)
+	}
+	// Same key, a servicing payload: different body => must be refused.
+	r := postJSON(t, srv, "/umi/servicing", "shared", map[string]interface{}{
+		"assetId": "PROP-X", "payer": "buyer1", "amountINR": 100,
+	})
+	if r.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 when a key crosses endpoints, got %d %s", r.Code, r.Body.String())
+	}
+}
+
+// The same key with the SAME bytes on two different routes must not replay
+// one endpoint's response to the other. The fingerprint covers the route.
+func TestSameBodyDifferentRouteDoesNotCrossReplay(t *testing.T) {
+	srv := idemTestServer(t)
+	body := map[string]interface{}{"amountINR": 1000}
+
+	r1 := postJSON(t, srv, "/umi/wallets/buyer1/fund", "same-bytes", body)
+	if r1.Code != http.StatusOK {
+		t.Fatalf("funding failed: %d %s", r1.Code, r1.Body.String())
+	}
+	// Identical bytes, different route. Must be refused, never replayed.
+	r2 := postJSON(t, srv, "/umi/wallets/seller1/fund", "same-bytes", body)
+	if r2.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 across routes with identical bodies, got %d %s", r2.Code, r2.Body.String())
+	}
+	if r2.Header().Get("Idempotent-Replay") == "true" {
+		t.Fatal("one route's response was replayed to another route")
+	}
+}

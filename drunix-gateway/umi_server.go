@@ -5,9 +5,7 @@ package drunix
 // rail is simply absent and every existing endpoint behaves exactly as before.
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -103,6 +101,15 @@ func (s *Server) handleUMIWallet(w http.ResponseWriter, r *http.Request) {
 		if !requirePost(w, r) {
 			return
 		}
+		// Funding credits a wallet from the settlement bank. A retried
+		// funding call mints money that was never debited anywhere, which
+		// breaks conservation — the one invariant the rail must not lose.
+		tx, proceed := s.beginIdem(w, r)
+		if !proceed {
+			return
+		}
+		defer tx.release()
+
 		var body struct {
 			AmountINR float64 `json:"amountINR"`
 		}
@@ -112,7 +119,10 @@ func (s *Server) handleUMIWallet(w http.ResponseWriter, r *http.Request) {
 		}
 		wallet, blk, err := s.UMI.FundWallet(participant, body.AmountINR)
 		if err != nil {
-			umiErr(w, http.StatusBadRequest, err.Error(), "amountINR must be positive")
+			tx.finish(w, http.StatusBadRequest, map[string]interface{}{
+				"ok": false, "error": err.Error(), "message": "amountINR must be positive",
+				"mode": UMIMode, "disclaimer": UMIDisclaimer,
+			})
 			return
 		}
 		resp := map[string]interface{}{
@@ -122,7 +132,7 @@ func (s *Server) handleUMIWallet(w http.ResponseWriter, r *http.Request) {
 		if blk != nil {
 			resp["blockHeight"], resp["blockHash"], resp["blockType"] = blk.Height, blk.Hash, blk.Type
 		}
-		writeJSON(w, http.StatusOK, resp)
+		tx.finish(w, http.StatusOK, resp)
 		return
 	}
 
@@ -188,53 +198,13 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
 	}
-	// Read the body once so it can be both fingerprinted and decoded. DvP
-	// payloads are tiny, so buffering costs nothing.
-	raw, rErr := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if rErr != nil {
-		umiErr(w, http.StatusBadRequest, "ERR_BAD_BODY", rErr.Error())
-		return
-	}
-	r.Body = io.NopCloser(bytes.NewReader(raw))
-
 	// Idempotency: a retry of a settlement that already happened must replay
 	// the original response, never settle a second time.
-	idemKey := r.Header.Get("Idempotency-Key")
-	if idemKey == "" {
-		idemKey = r.Header.Get("X-Idempotency-Key")
-	}
-	if len(idemKey) > idemMaxKeyLen {
-		umiErr(w, http.StatusBadRequest, "ERR_IDEMPOTENCY_KEY_TOO_LONG",
-			"Idempotency-Key must be at most 255 characters")
+	tx, proceed := s.beginIdem(w, r)
+	if !proceed {
 		return
 	}
-	var claimed string
-	if s.Idem != nil && idemKey != "" {
-		outcome, rec := s.Idem.Begin(idemKey, Fingerprint(raw))
-		switch outcome {
-		case IdemReplay:
-			// The original response, verbatim, flagged as a replay.
-			w.Header().Set("Idempotent-Replay", "true")
-			writeRaw(w, rec.Status, idemReplayBody(rec.Body))
-			return
-		case IdemInFlight:
-			umiErr(w, http.StatusConflict, "ERR_IDEMPOTENCY_IN_FLIGHT",
-				"a request with this Idempotency-Key is still being processed")
-			return
-		case IdemConflict:
-			umiErr(w, http.StatusUnprocessableEntity, "ERR_IDEMPOTENCY_KEY_REUSED",
-				"this Idempotency-Key was already used with a different request body")
-			return
-		}
-		claimed = idemKey
-		// If the handler dies before responding, free the key rather than
-		// locking the caller out for the full TTL.
-		defer func() {
-			if claimed != "" {
-				s.Idem.Release(claimed)
-			}
-		}()
-	}
+	defer tx.release()
 
 	var body DvPRequest
 	body.AutoAssignISIN = true // demo-friendly default; override with explicit false
@@ -246,42 +216,15 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Instruction object is still returned: it carries the full ISO 20022
 		// trace showing exactly where the settlement stopped.
-		// A failed settlement is still an outcome, and it is recorded: a
-		// retry must not get a second bite because the first one failed.
-		// Rejecting the duplicate and replaying the failure is what lets the
-		// caller distinguish "it failed" from "it never ran".
-		claimed = recordIdem(s, claimed, http.StatusBadRequest, map[string]interface{}{
+		tx.finish(w, http.StatusBadRequest, map[string]interface{}{
 			"ok": false, "error": si.FailureReason, "message": si.FailureDetail,
 			"instruction": si, "mode": UMIMode, "disclaimer": UMIDisclaimer,
-		}, w)
+		})
 		return
 	}
-	claimed = recordIdem(s, claimed, http.StatusOK, map[string]interface{}{
+	tx.finish(w, http.StatusOK, map[string]interface{}{
 		"ok": true, "instruction": si, "mode": UMIMode, "disclaimer": UMIDisclaimer,
-	}, w)
-}
-
-// recordIdem writes the response and stores it against the idempotency key so
-// a retry replays it. Returns "" so the deferred Release becomes a no-op: the
-// key is now completed, not abandoned.
-func recordIdem(s *Server, key string, status int, payload map[string]interface{}, w http.ResponseWriter) string {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		writeJSON(w, status, payload)
-		return key
-	}
-	if s.Idem != nil && key != "" {
-		s.Idem.Complete(key, status, body)
-	}
-	writeRaw(w, status, body)
-	return ""
-}
-
-// writeRaw emits an already-encoded JSON body.
-func writeRaw(w http.ResponseWriter, status int, body []byte) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_, _ = w.Write(body)
+	})
 }
 
 func (s *Server) handleUMIInstructions(w http.ResponseWriter, r *http.Request) {
@@ -350,6 +293,14 @@ func (s *Server) handleUMIServicing(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
 	}
+	// A coupon or rental run credits every holder's wallet. Running it twice
+	// pays everybody twice, so it needs the same protection as DvP.
+	tx, proceed := s.beginIdem(w, r)
+	if !proceed {
+		return
+	}
+	defer tx.release()
+
 	var body struct {
 		AssetID   string  `json:"assetId"`
 		Payer     string  `json:"payer"`
@@ -365,10 +316,13 @@ func (s *Server) handleUMIServicing(w http.ResponseWriter, r *http.Request) {
 		if i := strings.Index(reason, ":"); i > 0 && strings.HasPrefix(reason, "ERR_") {
 			reason = reason[:i]
 		}
-		umiErr(w, http.StatusBadRequest, reason, err.Error())
+		tx.finish(w, http.StatusBadRequest, map[string]interface{}{
+			"ok": false, "error": reason, "message": err.Error(),
+			"mode": UMIMode, "disclaimer": UMIDisclaimer,
+		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "servicing": res})
+	tx.finish(w, http.StatusOK, map[string]interface{}{"ok": true, "servicing": res})
 }
 
 func (s *Server) handleUMIReconciliation(w http.ResponseWriter, r *http.Request) {
