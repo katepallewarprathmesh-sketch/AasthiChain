@@ -55,6 +55,82 @@ function authorise(req) {
 const paise = n => Math.round(Number(n || 0) * 100);
 const inr = p => Math.round(Number(p || 0)) / 100;
 
+
+/**
+ * integrityChecks turns the numbers already gathered into pass/fail verdicts.
+ *
+ * Every signal here was previously on the page somewhere, but only as a raw
+ * figure in a card — a property reading 101.1% allocated sat on the dashboard
+ * unnoticed because nothing said it was WRONG. These are invariants: each one
+ * must hold, and a failure names the consequence rather than the symptom.
+ */
+function integrityChecks(rail, propertyRows) {
+  const checks = [];
+  const add = (id, ok, label, detail, severity = 'critical') =>
+    checks.push({ id, ok, label, detail, severity });
+
+  const rec = rail && rail.reconciliation;
+
+  if (!rec) {
+    add('rail', false, 'Settlement rail unreachable',
+      'No reconciliation available, so none of the money or supply invariants can be checked right now.', 'warning');
+  } else {
+    add('cash-conserved', rec.conserved === true,
+      'Central bank money is conserved',
+      rec.conserved
+        ? 'Sum of wallet balances equals lifetime funding.'
+        : 'Wallet balances do not equal lifetime funding — the engine created or destroyed money.');
+
+    // supplyConserved only exists on builds carrying the supply cap. Treat a
+    // missing field as "cannot tell" rather than silently passing.
+    if (typeof rec.supplyConserved === 'boolean') {
+      const breaches = rec.supplyBreaches || [];
+      const excess = breaches.reduce((n, b) => n + Number(b.excessTokens || 0), 0);
+      add('supply-conserved', rec.supplyConserved,
+        'No tokens exist beyond the issued supply',
+        rec.supplyConserved
+          ? 'Every asset is within its authorised supply.'
+          : `${excess.toLocaleString('en-IN')} excess token(s) across ${breaches.length} asset(s): ` +
+            breaches.map(b => `${b.assetId} ${b.outstandingTokens}/${b.authorisedTokens}`).join(', '));
+    } else {
+      add('supply-conserved', false, 'Supply cap not deployed',
+        'This rail build predates the authorised-supply cap, so seeding can still create tokens from nothing. Deploy the current drunix-gateway.', 'warning');
+    }
+
+    const ver = rail.chain && rail.chain.verification;
+    if (ver) {
+      add('chain-valid', ver.valid === true, 'Ledger hash chain verifies',
+        ver.valid ? 'Every block links to its predecessor.' : 'Chain verification FAILED — blocks were altered after commit.');
+    }
+
+    const dur = rail.chain && rail.chain.durability;
+    if (dur) {
+      add('durable', dur.durable === true, 'Blocks survive a restart',
+        dur.durable ? 'Blocks are written to durable storage before commit.'
+                    : 'Blocks are in memory only — a restart loses the ledger. Set DATABASE_URL.', 'warning');
+    }
+  }
+
+  // Allocation above 100% is the same fault seen from the app side rather than
+  // the rail side; worth reporting separately because the two can disagree.
+  const over = (propertyRows || []).filter(r => Number(r.pctAllocated) > 100);
+  add('allocation', over.length === 0, 'No property is over-allocated',
+    over.length === 0
+      ? 'Every property holds at most its issued token count.'
+      : over.map(r => `${r.title} ${r.tokensHeld}/${r.totalTokens}`).join(', '));
+
+  const failed = checks.filter(c => !c.ok);
+  return {
+    ok: failed.length === 0,
+    critical: failed.filter(c => c.severity === 'critical').length,
+    warnings: failed.filter(c => c.severity === 'warning').length,
+    summary: failed.length === 0
+      ? 'All invariants hold.'
+      : `${failed.length} check(s) failing.`,
+    checks
+  };
+}
+
 /**
  * buildInsights aggregates operator metrics from the app's own state plus the
  * UMI rail. Everything is derived — no new tracking, no third party, nothing
@@ -170,6 +246,7 @@ function buildInsights(app, rail) {
       durable: !!(rail && rail.chain && rail.chain.durability && rail.chain.durability.durable),
       sealed: !!(rail && rail.chain && rail.chain.durability && rail.chain.durability.sealed)
     },
+    integrity: integrityChecks(rail, propertyRows),
     activity: series,
     notes: [
       'Derived from your own data — no third-party analytics, no tracking script, nothing leaves this deployment.',

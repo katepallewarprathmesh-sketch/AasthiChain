@@ -307,6 +307,7 @@ cd frontend         && npm run build && npm run smoke       # 26 routes render
 node tests/clerkjwt.test.mjs                # 21 Clerk JWT cases incl. alg:none and HS256 confusion
 node tests/demotoken.test.mjs               # 8 demo-token cases, read from the real source file
 node tests/transferhistory.test.mjs         # 11 paging/ordering/privacy checks (servers must be up)
+node tests/integrity.test.mjs               # 11 operator integrity verdicts under injected faults
 bash regression.sh                          # 44 end-to-end checks
 ```
 

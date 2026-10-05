@@ -135,7 +135,57 @@ function TrafficSection({ t }) {
   )
 }
 
-export default function Insights() {
+export default // A dashboard full of correct numbers can still hide a fault: the 101.1%
+// allocation sat in a card for days because nothing on the page said it was
+// wrong. This states a verdict first, and only then the detail.
+function IntegrityPanel({ integrity }) {
+  if (!integrity) return null
+  const bad = (integrity.checks || []).filter(c => !c.ok)
+  const ok = integrity.ok
+  const tone = ok
+    ? { bg: '#ECFDF5', line: '#A7F3D0', fg: '#065F46' }
+    : integrity.critical > 0
+      ? { bg: '#FEF2F2', line: '#FECACA', fg: '#991B1B' }
+      : { bg: '#FFFBEB', line: '#FDE68A', fg: '#92400E' }
+
+  return (
+    <div style={{ background: tone.bg, border: `1px solid ${tone.line}`, borderRadius: 12,
+      padding: '14px 16px', marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: tone.fg }}>
+          {ok ? 'All integrity checks pass' : integrity.critical > 0
+            ? `${integrity.critical} integrity check${integrity.critical === 1 ? '' : 's'} failing`
+            : `${integrity.warnings} warning${integrity.warnings === 1 ? '' : 's'}`}
+        </span>
+        <span style={{ fontSize: 12, color: tone.fg, opacity: 0.85 }}>
+          {(integrity.checks || []).filter(c => c.ok).length} of {(integrity.checks || []).length} invariants hold
+        </span>
+      </div>
+
+      {bad.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {bad.map(c => (
+            <div key={c.id} style={{ background: 'white', border: `1px solid ${tone.line}`,
+              borderRadius: 9, padding: '9px 11px' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: c.severity === 'critical' ? '#991B1B' : '#92400E' }}>
+                {c.severity === 'critical' ? '✗' : '⚠'} {c.label}
+              </div>
+              <div style={{ fontSize: 12, color: '#4B5563', marginTop: 3, overflowWrap: 'anywhere' }}>{c.detail}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {ok && (
+        <div style={{ fontSize: 12, color: tone.fg, marginTop: 6, opacity: 0.9 }}>
+          Money conserved, supply within issue, chain verified.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Insights() {
   const [key, setKey] = useState(() => {
     try { return sessionStorage.getItem(KEY_STORE) || '' } catch { return '' }
   })
@@ -239,6 +289,8 @@ export default function Insights() {
           </button>
         </div>
       </div>
+
+      <IntegrityPanel integrity={data.integrity} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))', gap: 12, marginTop: 18 }}>
         <Metric label="Settled value" value={s.available ? money(s.settledValueINR) : '—'} sub={s.available ? `${s.settled} settlements` : 'rail unreachable'} color="#065F46" />
