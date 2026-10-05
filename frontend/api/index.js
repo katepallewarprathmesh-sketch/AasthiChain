@@ -741,7 +741,13 @@ function payuConfig() {
   const base = (process.env.PAYU_BASE_URL || 'https://test.payu.in').replace(/\/$/, '');
   return {
     key, salt, base,
-    active: !!(key && salt) && (process.env.NPCI_MODE === 'payu'),
+    // Kill switch. The PayU merchant account is currently provisioned as
+    // multi-currency while the legacy /_payment endpoint it posts to does not
+    // accept transactionCurrency, so every checkout dead-ends on PayU's error
+    // page. Set PAYU_DISABLED=true to fall back to the demo UPI rail until
+    // PayU support fixes the account.
+    active: !!(key && salt) && (process.env.NPCI_MODE === 'payu') &&
+      process.env.PAYU_DISABLED !== 'true',
     test: base.includes('test.payu.in')
   };
 }

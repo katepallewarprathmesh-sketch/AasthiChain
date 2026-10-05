@@ -84,5 +84,16 @@ t('an explicit currency is not overwritten', withPayUCurrency(already).payuCheck
 t('payment without a checkout is untouched', withPayUCurrency({ paymentId: 'N' }).paymentId === 'N');
 t('null is safe', withPayUCurrency(null) === null);
 
+// --- kill switch ------------------------------------------------------------
+// PayU's merchant account is provisioned multi-currency but /_payment rejects
+// the field, so checkout cannot succeed until PayU fixes the account.
+// PAYU_DISABLED must drop us back to the demo UPI rail.
+const cfg = new Function('process', grabFn('payuConfig', src) + '\nreturn payuConfig;');
+const base = { PAYU_MERCHANT_KEY: 'k', PAYU_SALT: 's', NPCI_MODE: 'payu' };
+t('PayU active when configured', cfg({ env: { ...base } })().active === true);
+t('PAYU_DISABLED=true turns PayU off', cfg({ env: { ...base, PAYU_DISABLED: 'true' } })().active === false);
+t('other values do not disable', cfg({ env: { ...base, PAYU_DISABLED: 'false' } })().active === true);
+t('no credentials means inactive', cfg({ env: { NPCI_MODE: 'payu' } })().active === false);
+
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);
