@@ -953,19 +953,62 @@ function isValidVPA(vpa) {
   } catch { return false; }
 }
 
+// Demo auth is a development convenience and must be switched on explicitly.
+// Production leaves it off, so /api/auth/login refuses to mint sessions and
+// unsigned tokens are rejected. Without this, anyone could POST an identityId
+// and a role and be issued a Regulator session.
+const DEMO_AUTH = String(process.env.DEMO_AUTH || '').toLowerCase() === 'true';
+
+// Secret used to sign demo tokens. Random per cold start when unset, which
+// means a forged token cannot be crafted offline even in demo mode.
+const DEMO_SECRET = process.env.DEMO_AUTH_SECRET || require('crypto').randomBytes(32).toString('hex');
+
+function signPayload(payloadB64) {
+  return require('crypto').createHmac('sha256', DEMO_SECRET).update(payloadB64).digest('base64url');
+}
+
+// Signed, not merely encoded: payload.signature. The old format was bare
+// base64 JSON, which anyone could author by hand.
 function mockJWT(identityId, mspId, role) {
   try {
-    return Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
+    const body = Buffer.from(JSON.stringify({ identityId, mspId, role, exp: Date.now()+3600000 })).toString('base64');
+    return `${body}.${signPayload(body)}`;
   } catch {
     return `mock-${identityId}-${Date.now()}`;
   }
 }
 
-function decodeToken(token) {
+function verifyMockToken(token) {
+  const i = token.lastIndexOf('.');
+  if (i < 1) return null;
+  const body = token.slice(0, i);
+  const sig = token.slice(i + 1);
+  let expected;
+  try { expected = signPayload(body); } catch { return null; }
+  const a = Buffer.from(sig); const b = Buffer.from(expected);
+  if (a.length !== b.length) return null;
+  let crypto_;
+  try { crypto_ = require('crypto'); } catch { return null; }
+  if (!crypto_.timingSafeEqual(a, b)) return null;
   try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
-    if (payload.identityId) return payload;
-  } catch {}
+    const payload = JSON.parse(Buffer.from(body, 'base64').toString());
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload.identityId ? payload : null;
+  } catch { return null; }
+}
+
+function decodeToken(token) {
+  // Signed demo token. Only honoured when demo auth is switched on.
+  if (DEMO_AUTH) {
+    const verified = verifyMockToken(token);
+    if (verified) return verified;
+    // Legacy unsigned tokens, still accepted in demo mode only so local
+    // tooling keeps working. NEVER reachable in production.
+    try {
+      const payload = JSON.parse(Buffer.from(token, 'base64').toString());
+      if (payload.identityId) return payload;
+    } catch {}
+  }
   try {
     const parts = token.split('.');
     if (parts.length === 3) {
@@ -2219,6 +2262,15 @@ export default async function handler(req, res) {
 
     // ============ Fabric mock — with robust error handling ============
     if (path === '/api/auth/login' && method === 'POST') {
+      // This endpoint issued a session to anyone who asked, with any role,
+      // and no credential of any kind. It is a development fixture, not a
+      // sign-in: production uses Clerk.
+      if (!DEMO_AUTH) {
+        return res.status(404).json({
+          error: 'ERR_NOT_FOUND',
+          message: 'Demo login is disabled. Sign in with an account.',
+        });
+      }
       try {
         const { identityId, role } = req.body || {};
         const mspMap = { Originator: 'OriginatorMSP', Registrar: 'RegistrarMSP', Investor: 'InvestorMSP', Regulator: 'RegulatorMSP' };
