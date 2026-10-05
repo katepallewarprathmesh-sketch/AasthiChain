@@ -405,23 +405,6 @@ is a legal structure, not a code change, and is documented as Phase 2 rather tha
 
 ---
 
-## Roadmap
-
-**Next:** Clerk JWKS signature verification · real property marketplace data · investment →
-payment → settlement polish · property verification and document workflow.
-
-**Then:** transaction history UI · admin dashboard · event-driven backend via a Postgres
-transactional outbox · WebSocket live updates (Redis pub/sub fan-out) · secondary market
-order-matching · notifications · observability · advanced analytics.
-
-**Deliberately not using Kafka** — the append-only block table is already the log; a transactional
-outbox in the same Postgres gets exactly-once delivery without a second system to operate.
-
-**Longer term:** custodian org (demat), DILRMP integration, DigiLocker KYC, real UPI AutoCollect
-mandates for rent collection, channel-per-asset-class, and the SPV legal wrapper.
-
----
-
 ## Support
 
 The in-app [Support page](https://aasthi-chain.vercel.app/support) carries UPI and GitHub Sponsors
