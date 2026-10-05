@@ -961,10 +961,10 @@ const DEMO_AUTH = String(process.env.DEMO_AUTH || '').toLowerCase() === 'true';
 
 // Secret used to sign demo tokens. Random per cold start when unset, which
 // means a forged token cannot be crafted offline even in demo mode.
-const DEMO_SECRET = process.env.DEMO_AUTH_SECRET || require('crypto').randomBytes(32).toString('hex');
+const DEMO_SECRET = process.env.DEMO_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
 function signPayload(payloadB64) {
-  return require('crypto').createHmac('sha256', DEMO_SECRET).update(payloadB64).digest('base64url');
+  return crypto.createHmac('sha256', DEMO_SECRET).update(payloadB64).digest('base64url');
 }
 
 // Signed, not merely encoded: payload.signature. The old format was bare
@@ -987,9 +987,7 @@ function verifyMockToken(token) {
   try { expected = signPayload(body); } catch { return null; }
   const a = Buffer.from(sig); const b = Buffer.from(expected);
   if (a.length !== b.length) return null;
-  let crypto_;
-  try { crypto_ = require('crypto'); } catch { return null; }
-  if (!crypto_.timingSafeEqual(a, b)) return null;
+  if (!crypto.timingSafeEqual(a, b)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64').toString());
     if (payload.exp && Date.now() > payload.exp) return null;
