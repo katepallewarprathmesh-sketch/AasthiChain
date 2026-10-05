@@ -63,12 +63,39 @@ t('same name at same city+pincode is refused', e1.status === 201 && e2.status ==
 t('name clash is attributed to name, not document', e2.body.matchedOn === 'title+city+pincode');
 
 // --- the old constant hash ---------------------------------------------------
+// This assertion used to read "two properties sharing the empty-string hash
+// still collide". That was the OLD behaviour and it is exactly what locked the
+// registry: a placeholder is not a document, so it must never be matched as
+// one. The server now normalises it away.
 const z1 = await list({ ...prop(6), documentHash: EMPTY_HASH });
 const z2 = await list({ ...prop(7), documentHash: EMPTY_HASH });
-t('two properties sharing the empty-string hash still collide (guard is right)',
-  z1.status === 201 && z2.status === 409);
-t('...which is exactly why the form must not send a constant',
-  (z2.body.matchedOn || '') === 'documentHash');
+t('empty-string hash is NOT treated as a document', z1.status === 201 && z2.status === 201);
+t('the two placeholder listings are distinct', z1.body.assetId !== z2.body.assetId);
+
+// --- a STALE cached browser ---------------------------------------------
+// Users keep old JS in cache. The pre-fix bundle sends the empty-string hash
+// for every property, so the server must treat a placeholder as "no document"
+// and fingerprint the property instead. Without this, a cached client can
+// never list anything again, no matter how many times the frontend is fixed.
+const s1 = await list({ ...prop(8), documentHash: EMPTY_HASH });
+const s2 = await list({ ...prop(9), documentHash: EMPTY_HASH });
+t('stale client: first listing works', s1.status === 201);
+t('stale client: SECOND distinct listing also works', s2.status === 201);
+t('stale client: distinct asset ids', s1.body.assetId !== s2.body.assetId);
+
+const allZero = await list({ ...prop(10), documentHash: '0'.repeat(64) });
+t('all-zero placeholder also normalised', allZero.status === 201);
+
+// ...but an identical resubmission from a stale client is STILL caught,
+// because the fingerprint is deterministic.
+const again = await list({ ...prop(8), documentHash: EMPTY_HASH });
+t('stale client: identical property still refused', again.status === 409);
+
+// a real document hash is never rewritten
+const realDoc = sha('a-genuine-deed-' + uniq);
+const g1 = await list({ ...prop(11), documentHash: realDoc });
+const g2 = await list({ ...prop(12), documentHash: realDoc });
+t('real document still enforces one-deed-one-tokenization', g1.status === 201 && g2.status === 409);
 
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);

@@ -1034,6 +1034,35 @@ function decodeToken(token) {
   return null;
 }
 
+
+// A placeholder hash is not a document. The listing form shipped one constant
+// value - the SHA-256 of an EMPTY STRING - for every property, so the first
+// listing claimed it and every later one collided. Clients cached in users'
+// browsers still send it, so the fix has to live here: a placeholder is
+// treated as "no document attached" and replaced with a fingerprint of the
+// property itself, which is unique per property and still catches a genuine
+// re-submission of the same one.
+const PLACEHOLDER_DOCUMENT_HASHES = new Set([
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  '0'.repeat(64),
+  'f'.repeat(64),
+]);
+
+function propertyFingerprint(fields, ownerId) {
+  const basis = ['aasthichain-property-v1', fields.title, fields.city, fields.state,
+    fields.pincode, fields.valuationINR, ownerId]
+    .map(v => String(v == null ? '' : v).trim().toLowerCase()).join('|');
+  return crypto.createHash('sha256').update(basis).digest('hex');
+}
+
+function normaliseDocumentHash(documentHash, fields, ownerId) {
+  const h = String(documentHash || '').trim().toLowerCase();
+  if (!h || PLACEHOLDER_DOCUMENT_HASHES.has(h)) {
+    return { hash: propertyFingerprint(fields, ownerId), derived: true };
+  }
+  return { hash: h, derived: false };
+}
+
 function getUser(req) {
   try {
     const auth = req.headers.authorization || '';
@@ -2661,10 +2690,14 @@ export default async function handler(req, res) {
 
     if (path === '/api/properties' && method === 'POST') {
       try {
-        const { title, state, city, pincode, valuationINR, documentHash } = req.body || {};
+        let { title, state, city, pincode, valuationINR, documentHash } = req.body || {};
         const idemKey = req.headers['x-idempotency-key'];
         if (idemKey && idempotency[idemKey]) return res.json(idempotency[idemKey]);
-        if (!documentHash || documentHash.length !== 64) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'documentHash must be 64 chars' });
+        if (documentHash && String(documentHash).trim().length !== 64) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'documentHash must be 64 hex chars' });
+        {
+          const normalisedDoc = normaliseDocumentHash(documentHash, { title, city, state, pincode, valuationINR }, user.identityId);
+          documentHash = normalisedDoc.hash;
+        }
         // Duplicate-property guard — same document (hash) or same title+location cannot be listed twice
         {
           const t = String(title || '').trim().toLowerCase();
