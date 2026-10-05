@@ -55,6 +55,10 @@ export const ROUTE_SEO = {
     title: 'Home Loan EMI Calculator — Interest, Prepayment & Tax Saving',
     description: 'Free home loan EMI calculator. See your monthly EMI, total interest, what one extra EMI a year saves, affordability against your income, and section 24(b) and 80C tax relief.',
   },
+  '/tools/rent-vs-buy-calculator': {
+    title: 'Rent vs Buy Calculator India — Year by Year Net Worth',
+    description: 'Should you rent or buy? Free calculator comparing net worth year by year, counting the down payment and stamp duty the renter can invest. Shows the break-even year.',
+  },
   '/tools/fractional-investment-calculator': {
     title: 'Fractional Investment Calculator for Property | AasthiChain',
     description:

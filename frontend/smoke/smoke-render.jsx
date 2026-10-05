@@ -30,6 +30,7 @@ import RentalYieldCalculator from '../src/pages/tools/RentalYieldCalculator.jsx'
 import FractionalCalculator from '../src/pages/tools/FractionalCalculator.jsx'
 import StampDutyCalculator from '../src/pages/tools/StampDutyCalculator.jsx'
 import EmiCalculator from '../src/pages/tools/EmiCalculator.jsx'
+import RentVsBuyCalculator from '../src/pages/tools/RentVsBuyCalculator.jsx'
 import About from '../src/pages/legal/About.jsx'
 import Privacy from '../src/pages/legal/Privacy.jsx'
 import Terms from '../src/pages/legal/Terms.jsx'
@@ -58,6 +59,7 @@ const ROUTES = [
   ['/tools/fractional-investment-calculator', <FractionalCalculator />],
   ['/tools/stamp-duty-calculator', <StampDutyCalculator />],
   ['/tools/home-loan-emi-calculator', <EmiCalculator />],
+  ['/tools/rent-vs-buy-calculator', <RentVsBuyCalculator />],
   ['/about', <About />],
   ['/privacy', <Privacy />],
   ['/terms', <Terms />],

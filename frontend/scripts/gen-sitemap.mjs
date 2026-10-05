@@ -31,6 +31,7 @@ const PRIORITY = {
   '/tools/rental-yield-calculator': '0.9',
   '/tools/stamp-duty-calculator': '0.9',
   '/tools/home-loan-emi-calculator': '0.9',
+  '/tools/rent-vs-buy-calculator': '0.9',
   '/tools/fractional-investment-calculator': '0.9',
   '/tools': '0.8',
   '/ledger': '0.8',

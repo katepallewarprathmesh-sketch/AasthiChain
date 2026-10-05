@@ -23,6 +23,11 @@ const TOOLS = [
     blurb: 'Monthly EMI, the total interest you actually pay, what one extra EMI a year saves, affordability against your income, and the tax relief you can really claim.',
   },
   {
+    to: '/tools/rent-vs-buy-calculator',
+    name: 'Rent vs Buy Calculator',
+    blurb: 'A year-by-year net worth comparison that counts the down payment the renter still has — the part most rent-vs-buy pages quietly ignore.',
+  },
+  {
     to: '/tools/fractional-investment-calculator',
     name: 'Fractional Investment Calculator',
     blurb: 'How many tokens your money buys, the ownership share it represents, and what it could be worth years later.',
