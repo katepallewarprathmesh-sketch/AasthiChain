@@ -22,6 +22,10 @@ type Server struct {
 	// UMI is the RBI Unified Market Interface settlement rail (optional, additive;
 	// nil means the /umi/* routes are simply not mounted — see umi.go).
 	UMI *UMIRail
+	// Idem gives the money-moving POSTs request-level idempotency when the
+	// caller sends an Idempotency-Key. nil means the old behaviour: every
+	// request is executed, including a retry of one that already settled.
+	Idem *IdemStore
 }
 
 // NewServer wires dependencies (DIP).

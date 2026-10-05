@@ -68,6 +68,15 @@ func main() {
 		if blockStore != nil {
 			srv.UMI = srv.UMI.WithStore(blockStore)
 		}
+		// Request-level idempotency for the money-moving POSTs. Durable when
+		// a database is present, so a retry after a restart still replays the
+		// original response instead of settling twice. Callers that send no
+		// Idempotency-Key are unaffected.
+		srv.Idem = drunix.NewIdemStore()
+		if blockStore != nil {
+			srv.Idem = srv.Idem.WithPersister(blockStore)
+		}
+		log.Printf("UMI idempotency: %s — send Idempotency-Key on POST /umi/dvp to make retries safe", srv.Idem.Mode())
 		log.Printf("UMI rail mounted at /umi/* — SEBI Demat 2.0 pattern: Drunix securities leg + e₹-W wholesale CBDC cash leg, atomic DvP (simulation)")
 		// Hosted deployments start empty, which makes the demo page look broken.
 		// Seed the same positions/wallets the local demo uses (UMI_SEED_DEMO=false to skip).

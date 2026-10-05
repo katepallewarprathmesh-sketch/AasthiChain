@@ -5,7 +5,9 @@ package drunix
 // rail is simply absent and every existing endpoint behaves exactly as before.
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -186,6 +188,54 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 	if !requirePost(w, r) {
 		return
 	}
+	// Read the body once so it can be both fingerprinted and decoded. DvP
+	// payloads are tiny, so buffering costs nothing.
+	raw, rErr := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if rErr != nil {
+		umiErr(w, http.StatusBadRequest, "ERR_BAD_BODY", rErr.Error())
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+
+	// Idempotency: a retry of a settlement that already happened must replay
+	// the original response, never settle a second time.
+	idemKey := r.Header.Get("Idempotency-Key")
+	if idemKey == "" {
+		idemKey = r.Header.Get("X-Idempotency-Key")
+	}
+	if len(idemKey) > idemMaxKeyLen {
+		umiErr(w, http.StatusBadRequest, "ERR_IDEMPOTENCY_KEY_TOO_LONG",
+			"Idempotency-Key must be at most 255 characters")
+		return
+	}
+	var claimed string
+	if s.Idem != nil && idemKey != "" {
+		outcome, rec := s.Idem.Begin(idemKey, Fingerprint(raw))
+		switch outcome {
+		case IdemReplay:
+			// The original response, verbatim, flagged as a replay.
+			w.Header().Set("Idempotent-Replay", "true")
+			writeRaw(w, rec.Status, idemReplayBody(rec.Body))
+			return
+		case IdemInFlight:
+			umiErr(w, http.StatusConflict, "ERR_IDEMPOTENCY_IN_FLIGHT",
+				"a request with this Idempotency-Key is still being processed")
+			return
+		case IdemConflict:
+			umiErr(w, http.StatusUnprocessableEntity, "ERR_IDEMPOTENCY_KEY_REUSED",
+				"this Idempotency-Key was already used with a different request body")
+			return
+		}
+		claimed = idemKey
+		// If the handler dies before responding, free the key rather than
+		// locking the caller out for the full TTL.
+		defer func() {
+			if claimed != "" {
+				s.Idem.Release(claimed)
+			}
+		}()
+	}
+
 	var body DvPRequest
 	body.AutoAssignISIN = true // demo-friendly default; override with explicit false
 	if err := umiDecode(r, &body); err != nil {
@@ -196,15 +246,42 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Instruction object is still returned: it carries the full ISO 20022
 		// trace showing exactly where the settlement stopped.
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+		// A failed settlement is still an outcome, and it is recorded: a
+		// retry must not get a second bite because the first one failed.
+		// Rejecting the duplicate and replaying the failure is what lets the
+		// caller distinguish "it failed" from "it never ran".
+		claimed = recordIdem(s, claimed, http.StatusBadRequest, map[string]interface{}{
 			"ok": false, "error": si.FailureReason, "message": si.FailureDetail,
 			"instruction": si, "mode": UMIMode, "disclaimer": UMIDisclaimer,
-		})
+		}, w)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	claimed = recordIdem(s, claimed, http.StatusOK, map[string]interface{}{
 		"ok": true, "instruction": si, "mode": UMIMode, "disclaimer": UMIDisclaimer,
-	})
+	}, w)
+}
+
+// recordIdem writes the response and stores it against the idempotency key so
+// a retry replays it. Returns "" so the deferred Release becomes a no-op: the
+// key is now completed, not abandoned.
+func recordIdem(s *Server, key string, status int, payload map[string]interface{}, w http.ResponseWriter) string {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		writeJSON(w, status, payload)
+		return key
+	}
+	if s.Idem != nil && key != "" {
+		s.Idem.Complete(key, status, body)
+	}
+	writeRaw(w, status, body)
+	return ""
+}
+
+// writeRaw emits an already-encoded JSON body.
+func writeRaw(w http.ResponseWriter, status int, body []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
 func (s *Server) handleUMIInstructions(w http.ResponseWriter, r *http.Request) {
