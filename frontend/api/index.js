@@ -10,6 +10,7 @@ import { realDB } from './lib/db_real.js';
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
 import { recordHit, trafficSummary } from './lib/traffic.mjs';
 import { authStore } from './lib/authstore.js';
+import { ensureClerkKeys, verifyClerkJWT, clerkVerificationEnabled, hasUnknownKid } from './lib/clerkjwt.mjs';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
 // In production, replace with Postgres/Redis per Drunix SQL state store advantage
@@ -1007,6 +1008,17 @@ function decodeToken(token) {
       if (payload.identityId) return payload;
     } catch {}
   }
+  // Clerk session token. When CLERK_ISSUER is configured the signature is
+  // verified against Clerk's JWKS and anything unverifiable is rejected.
+  if (clerkVerificationEnabled) {
+    const payload = verifyClerkJWT(token);
+    if (payload) return { clerk: true, sub: payload.sub, ...payload };
+    return null;   // fail closed: no issuer-signed proof, no session
+  }
+
+  // CLERK_ISSUER not set. Legacy decode-only path, kept so the API keeps
+  // working before the issuer is configured. This trusts the payload of any
+  // three-part JWT and is NOT a credential check - set CLERK_ISSUER.
   try {
     const parts = token.split('.');
     if (parts.length === 3) {
@@ -1067,6 +1079,20 @@ export default async function handler(req, res) {
     await initState();
   } catch (e) {
     console.error('initState outer failed', e);
+  }
+  
+  // decodeToken is synchronous and called from several places, so Clerk's
+  // signing keys are fetched and cached here, once per request and cheap after
+  // the first. A token whose kid we have never seen triggers one forced
+  // refresh, which is how key rotation is picked up without a redeploy.
+  if (clerkVerificationEnabled) {
+    try {
+      await ensureClerkKeys();
+      const bearer = (req.headers.authorization || '').split(' ')[1] || '';
+      if (bearer && hasUnknownKid(bearer)) await ensureClerkKeys({ force: true });
+    } catch (e) {
+      console.error('[clerk] key priming failed', e);
+    }
   }
   
   try {

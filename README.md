@@ -221,8 +221,18 @@ the articles — remain open to visitors and crawlers. Money routes (`/dashboard
 > **Operational note:** leave `DEMO_AUTH` **unset** in production. Setting it to `true` re-opens the
 > development login endpoint.
 
-> **Known gap, stated plainly:** Clerk JWT signatures are not yet verified against Clerk's JWKS — the
-> token payload is trusted after decoding. Closing this is the next security task.
+**Clerk signatures are verified** against Clerk's published JWKS (RS256, Node's built-in crypto, no
+added dependency). `alg: none` and HS256 key-confusion are rejected, as are unknown key IDs, expired
+or not-yet-valid tokens, and tokens from another issuer. Key rotation is picked up without a
+redeploy: an unrecognised `kid` triggers one forced JWKS refresh. If Clerk is unreachable the cached
+keys keep being used, because locking every user out during someone else's incident is worse than
+trusting a signing key for an extra hour.
+
+Verification is **opt-in via `CLERK_ISSUER`**. Unset, the API keeps the old decode-only behaviour —
+switching this on with the wrong issuer would lock out every real user, so it is a deliberate
+configuration step rather than a surprise. **Set `CLERK_ISSUER` to your Clerk Frontend API URL
+(`https://<your-instance>.clerk.accounts.dev`, or your production domain) to fail closed on anything
+unverifiable.**
 
 ---
 
@@ -279,6 +289,7 @@ then set `UMI_GATEWAY_URL` on Vercel and redeploy. Hosted instances auto-seed de
 | `DATABASE_URL` | Render | Postgres — durable blocks and idempotency. Without it, in-memory. |
 | `UMI_ENABLED`, `UMI_SEED_DEMO`, `DRUNIX_MODE` | Render | rail configuration |
 | `ADMIN_DASHBOARD_KEY` | Vercel only | private `/insights` analytics |
+| `CLERK_ISSUER` | Vercel | Clerk Frontend API URL. Set it to enforce JWT signature verification. |
 | `DEMO_AUTH` | — | **leave unset in production** |
 | `NPCI_MODE`, `PAYU_MERCHANT_KEY`, `PAYU_SALT` | local | `mock` · `payu` · `real` |
 
@@ -293,6 +304,8 @@ cd chaincode        && go test -v          # property, token, KYC, duplicate-dee
 cd drunix-gateway   && go test ./...       # 62 tests — pipeline, UMI, idempotency, durability
 cd payment-gateway  && go test -v && node gateway.test.js   # 43 tests incl. PayU
 cd frontend         && npm run build && npm run smoke       # 26 routes render
+node tests/clerkjwt.test.mjs                # 21 Clerk JWT cases incl. alg:none and HS256 confusion
+node tests/demotoken.test.mjs               # 8 demo-token cases, read from the real source file
 bash regression.sh                          # 44 end-to-end checks
 ```
 
