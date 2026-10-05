@@ -60,5 +60,29 @@ const go = fs.readFileSync(path.join(here, '../payment-gateway/real_payubank.go'
 t('local server sends it too', /transactionCurrency/.test(mock));
 t('Go gateway sends it too', /transactionCurrency/.test(go));
 
+// --- replayed payments ------------------------------------------------------
+// Payments persist and replay by idempotency key. One built before this fix
+// would replay its old params forever and keep failing at PayU, which is
+// exactly how the error outlived the deploy.
+const grabFn = (name, text) => {
+  const i = text.indexOf(`function ${name}(`);
+  let depth = 0;
+  for (let k = text.indexOf('{', i); k < text.length; k++) {
+    if (text[k] === '{') depth++;
+    else if (text[k] === '}') { depth--; if (depth === 0) return text.slice(i, k + 1); }
+  }
+};
+const { withPayUCurrency } = new Function('process',
+  grabFn('withPayUCurrency', src) + '\nreturn { withPayUCurrency };')({ env: {} });
+
+const stale = { paymentId: 'OLD1', payuCheckout: { action: 'x', params: { key: 'k', amount: '500.00' } } };
+t('stale stored checkout is backfilled', withPayUCurrency(stale).payuCheckout.params.transactionCurrency === 'INR');
+
+const already = { paymentId: 'NEW1', payuCheckout: { action: 'x', params: { transactionCurrency: 'USD' } } };
+t('an explicit currency is not overwritten', withPayUCurrency(already).payuCheckout.params.transactionCurrency === 'USD');
+
+t('payment without a checkout is untouched', withPayUCurrency({ paymentId: 'N' }).paymentId === 'N');
+t('null is safe', withPayUCurrency(null) === null);
+
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);

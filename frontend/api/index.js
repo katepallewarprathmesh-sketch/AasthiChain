@@ -769,6 +769,17 @@ function verifyPayUResponse(params, key, salt) {
       Buffer.from(want).length === Buffer.from(g('hash')).length;
   } catch { return false; }
 }
+// Payments are persisted and replayed by idempotency key, so a checkout built
+// before transactionCurrency was added would keep replaying without it and
+// keep being rejected by PayU. Backfill any stored checkout on the way out.
+function withPayUCurrency(pay) {
+  if (pay && pay.payuCheckout && pay.payuCheckout.params &&
+      !pay.payuCheckout.params.transactionCurrency) {
+    pay.payuCheckout.params.transactionCurrency = process.env.PAYU_CURRENCY || 'INR';
+  }
+  return pay;
+}
+
 function buildPayUCheckout(payu, pay, req, cbBase) {
   const firstname = String(req.payerVpa || 'payer').split('@')[0];
   const email = firstname + '@aasthichain.demo';
@@ -1310,7 +1321,7 @@ export default async function handler(req, res) {
         const idemKey = headerIdem || bodyIdem || '';
 
         if (idemKey && npciIdem[idemKey]) {
-          return res.json(npciIdem[idemKey]);
+          return res.json(withPayUCurrency(npciIdem[idemKey]));
         }
 
         if (!assetId) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'assetId required' });
@@ -1411,7 +1422,7 @@ export default async function handler(req, res) {
         globalThis._aasthi_npcipayments = npciPayments;
         globalThis._aasthi_npci_idem = npciIdem;
         await persistNpciState();
-        return res.status(201).json(pay);
+        return res.status(201).json(withPayUCurrency(pay));
       } catch (e) {
         console.error('npci/collect error', e);
         return res.status(500).json({ error: 'Internal error in collect', message: e.message });

@@ -1180,6 +1180,17 @@ function verifyPayUResponse(params, key, salt) {
     return got.length === want.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
   } catch { return false; }
 }
+// Payments are persisted and replayed by idempotency key, so a checkout built
+// before transactionCurrency was added would keep replaying without it and
+// keep being rejected by PayU. Backfill any stored checkout on the way out.
+function withPayUCurrency(pay) {
+  if (pay && pay.payuCheckout && pay.payuCheckout.params &&
+      !pay.payuCheckout.params.transactionCurrency) {
+    pay.payuCheckout.params.transactionCurrency = process.env.PAYU_CURRENCY || 'INR';
+  }
+  return pay;
+}
+
 function buildPayUCheckout(payu, pay, req, cbBase) {
   const firstname = String(req.payerVpa || 'payer').split('@')[0];
   const email = firstname + '@aasthichain.demo';
@@ -1324,7 +1335,7 @@ app.get('/api/drunix/info', (req, res) => {
 app.post('/api/npci/collect', authMiddleware, (req, res) => {
   const { assetId, tokenAmount, amountINR, payerVpa, payeeVpa, note, payerId, payeeId } = req.body || {};
   const idemKey = req.headers['x-idempotency-key'] || '';
-  if (idemKey && npciIdem[idemKey]) return res.json(npciIdem[idemKey]);
+  if (idemKey && npciIdem[idemKey]) return res.json(withPayUCurrency(npciIdem[idemKey]));
   if (!assetId) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'assetId required' });
   const amt = parseFloat(amountINR);
   if (!amt || amt <= 0) return res.status(400).json({ error: 'FAILED_INVALID_AMOUNT', message: 'amountINR must be > 0 in INR' });
