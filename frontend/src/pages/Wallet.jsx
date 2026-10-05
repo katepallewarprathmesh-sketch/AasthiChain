@@ -3,6 +3,7 @@ import { money } from '../lib/format.js'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
 import UMIPortfolioPanel from '../components/UMIPortfolioPanel.jsx'
+import TransactionHistory from '../components/TransactionHistory.jsx'
 import { useLocalCache } from '../hooks/useLocalCache.js'
 
 // SOLID: Single Responsibility Only wallet display + transfer for layman
@@ -318,6 +319,15 @@ export default function Wallet({ user }) {
       </div>
 
       <UMIPortfolioPanel identityId={identityId} />
+
+      <TransactionHistory
+        identityId={identityId}
+        titleFor={(assetId) => (allProps.find(p => p.assetId === assetId) || {}).title}
+        priceFor={(assetId) => {
+          const p = allProps.find(p => p.assetId === assetId) || {}
+          return p.pricePerTokenINR || p.tokenPrice || 0
+        }}
+      />
 
       <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 24, minWidth: 0 }}>
         {nav && (
