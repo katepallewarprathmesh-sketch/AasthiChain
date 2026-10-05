@@ -2670,11 +2670,24 @@ export default async function handler(req, res) {
           const t = String(title || '').trim().toLowerCase();
           const c = String(city || '').trim().toLowerCase();
           const p = String(pincode || '').trim();
-          const dup = Object.values(properties).find(x =>
-            (documentHash && x.documentHash === documentHash) ||
-            (t && x.title && x.title.trim().toLowerCase() === t && x.location && String(x.location.city || '').toLowerCase() === c && String(x.location.pincode || '') === p));
+          const byDoc = documentHash && Object.values(properties).find(x => x.documentHash === documentHash);
+          const byName = t && Object.values(properties).find(x =>
+            x.title && x.title.trim().toLowerCase() === t &&
+            x.location && String(x.location.city || '').toLowerCase() === c &&
+            String(x.location.pincode || '') === p);
+          const dup = byDoc || byName;
           if (dup) {
-            return res.status(409).json({ error: 'ERR_DUPLICATE_PROPERTY', assetId: dup.assetId, title: dup.title, message: `This property is already listed ("${dup.title}", ${dup.assetId}). Each document can be tokenized only once.` });
+            // Name the rule that matched. "Already listed" on a property that
+            // shares no name, city or value with the existing one reads as a
+            // broken registry.
+            const reason = byDoc
+              ? `the same document hash is already registered to "${dup.title}" (${dup.assetId}). If this is genuinely a different property, attach its own document — a shared or placeholder hash will always collide.`
+              : `a property named "${dup.title}" already exists at the same city and pincode (${dup.assetId}).`;
+            return res.status(409).json({
+              error: 'ERR_DUPLICATE_PROPERTY', assetId: dup.assetId, title: dup.title,
+              matchedOn: byDoc ? 'documentHash' : 'title+city+pincode',
+              message: `Cannot list: ${reason}`
+            });
           }
         }
         const assetId = 'PROP-' + safeUUID();

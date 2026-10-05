@@ -39,9 +39,14 @@ export default function Admin({ user }) {
     state: 'Maharashtra',
     city: 'Pune',
     pincode: '411045',
-    valuationINR: 6000000,
-    documentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    valuationINR: 6000000
   })
+  // The form used to send one hardcoded documentHash - the SHA-256 of an
+  // EMPTY string - for every listing. The server's duplicate guard matches on
+  // that hash, so the first property ever listed claimed it and every later
+  // one was rejected as a duplicate of it, however different. The hash must
+  // come from the actual property.
+  const [doc, setDoc] = useState({ name: '', hash: '', hashing: false, error: '' })
   const [result, setResult] = useState('')
   const [lastId, setLastId] = useState('')
   const [validationStatus, setValidationStatus] = useState('')
@@ -69,6 +74,33 @@ export default function Admin({ user }) {
     fetchStatus()
   }, [lastId])
 
+  const sha256Hex = async (buf) => {
+    const digest = await crypto.subtle.digest('SHA-256', buf)
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+
+  // The document is hashed in the browser and never uploaded: the registry
+  // needs proof the file exists and has not changed, not the file itself.
+  const onPickDocument = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) { setDoc({ name: '', hash: '', hashing: false, error: '' }); return }
+    setDoc({ name: file.name, hash: '', hashing: true, error: '' })
+    try {
+      const hash = await sha256Hex(await file.arrayBuffer())
+      setDoc({ name: file.name, hash, hashing: false, error: '' })
+    } catch (err) {
+      setDoc({ name: file.name, hash: '', hashing: false, error: 'Could not read that file: ' + err.message })
+    }
+  }
+
+  // No document attached: derive a hash from the property's own identity so
+  // two different properties can never collide. Deterministic on purpose -
+  // re-submitting the SAME property is still caught as a duplicate.
+  const fingerprintOf = async (f) => sha256Hex(new TextEncoder().encode(
+    ['aasthichain-property-v1', f.title, f.city, f.state, f.pincode, f.valuationINR,
+     user?.identityId || ''].map(v => String(v || '').trim().toLowerCase()).join('|')
+  ))
+
   const handleRegister = async (e) => {
     if (!isOwner) {
       setResult('Only a Property Owner can list a property. You are logged in as ' + (user?.role || 'unknown') + ' switch to "Property Owner" on the login page, otherwise the property would wrongly belong to you.')
@@ -77,13 +109,14 @@ export default function Admin({ user }) {
     e.preventDefault()
     setResult('Creating property... Please wait')
     try {
+      const documentHash = doc.hash || await fingerprintOf(form)
       const data = await api.registerProperty({
         title: form.title,
         state: form.state,
         city: form.city,
         pincode: form.pincode,
         valuationINR: parseInt(form.valuationINR),
-        documentHash: form.documentHash
+        documentHash
       })
       
       setLastId(data.assetId)
@@ -268,7 +301,28 @@ export default function Admin({ user }) {
               </div>
             </div>
 
-            <button type="submit" style={{
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                Property document <span style={{ color: '#9CA3AF', fontWeight: 500 }}>(sale deed or title — optional)</span>
+              </label>
+              <input
+                type="file"
+                onChange={onPickDocument}
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                style={{ width: '100%', marginTop: 6, fontSize: 12.5, color: '#374151' }}
+              />
+              <div style={{ fontSize: 11, color: doc.error ? '#991B1B' : '#9CA3AF', marginTop: 4, overflowWrap: 'anywhere' }}>
+                {doc.error
+                  ? doc.error
+                  : doc.hashing
+                    ? 'Hashing the document…'
+                    : doc.hash
+                      ? `✓ ${doc.name} — SHA-256 ${doc.hash.slice(0, 16)}… anchored on the ledger. The file itself stays on your device.`
+                      : 'Without a document we fingerprint the property details instead, so each listing is still unique.'}
+              </div>
+            </div>
+
+            <button type="submit" disabled={doc.hashing} style={{
               width: '100%',
               padding: '12px',
               background: '#1E3A5F',
