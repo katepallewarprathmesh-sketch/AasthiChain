@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import LegalShell, { H2, P, UL, SimulationNotice } from './LegalShell'
+import LegalShell, { H2, P, UL } from './LegalShell'
 import { C } from '../tools/ToolShell'
 
 export default function Terms() {
@@ -9,7 +9,6 @@ export default function Terms() {
       title="Terms of Use"
       subtitle="The conditions for using this site. The most important one: nothing here is real, and nothing here is investment advice."
     >
-      <SimulationNotice />
 
       <H2>1. What this site is</H2>
       <P>

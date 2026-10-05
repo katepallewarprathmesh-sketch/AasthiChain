@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import LegalShell, { H2, P, UL, SimulationNotice } from './LegalShell'
+import LegalShell, { H2, P, UL } from './LegalShell'
 import { C, card } from '../tools/ToolShell'
 
 export default function Privacy() {
@@ -103,8 +103,6 @@ export default function Privacy() {
         </a>. The analytics code is in that repository and can be read and verified rather
         than taken on trust.
       </P>
-
-      <SimulationNotice />
     </LegalShell>
   )
 }

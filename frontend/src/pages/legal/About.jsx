@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import LegalShell, { H2, P, UL, SimulationNotice } from './LegalShell'
+import LegalShell, { H2, P, UL } from './LegalShell'
 import { C, card } from '../tools/ToolShell'
 
 export default function About() {
@@ -77,8 +77,6 @@ export default function About() {
         works on market infrastructure and can point out where the model departs from how
         these systems really behave.
       </P>
-
-      <SimulationNotice />
     </LegalShell>
   )
 }

@@ -37,22 +37,6 @@ export function UL({ children }) {
 
 // The single most important statement on the site. It appears on all three
 // trust pages because a reader may land on any one of them first.
-export function SimulationNotice() {
-  return (
-    <div style={{ ...card, background: '#FFF8E6', borderColor: '#F0D493', marginTop: 22 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: '#7A5B10', margin: '0 0 8px' }}>
-        This is a demonstration, not an investment platform
-      </h2>
-      <p style={{ fontSize: 14.5, color: '#6B5213', lineHeight: 1.7, margin: 0 }}>
-        AasthiChain does not accept real money, does not sell real property or securities,
-        and is not connected to the Reserve Bank of India, SEBI, any depository, exchange,
-        bank or payment system. Every property, wallet, rupee and settlement you see is
-        simulated. Nothing here is an offer, a solicitation or investment advice.
-      </p>
-    </div>
-  )
-}
-
 export default function LegalShell({ title, subtitle, children }) {
   return (
     <div style={{ background: C.paper, minHeight: '100vh', padding: '36px 20px 64px' }}>
