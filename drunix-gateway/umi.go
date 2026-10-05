@@ -307,6 +307,13 @@ type UMIRail struct {
 	// restored outstanding, or set by the first seed / an explicit
 	// authorisedTokens, whichever comes first.
 	authorised map[string]int64
+
+	// derived marks a cap that was inferred from restored positions rather
+	// than declared at issuance. An inferred cap may be wrong - if the book
+	// was inflated before caps existed, restore would bake the inflated
+	// number in and the breach would vanish - so a derived cap can be
+	// corrected once by an explicit declaration. A declared one cannot.
+	derived map[string]bool
 }
 
 // ServicingRecord is one holder's share of one servicing run — the row an
@@ -336,6 +343,7 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 	return &UMIRail{
 		wallets:      make(map[string]*CBDCWallet),
 		authorised:   make(map[string]int64),
+		derived:      make(map[string]bool),
 		isins:        make(map[string]*PilotISIN),
 		instructions: make(map[string]*SettlementInstruction),
 		securities:   sec,
@@ -385,6 +393,7 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	for _, pos := range snap.Positions {
 		if pos.Tokens > 0 {
 			r.authorised[pos.AssetID] += pos.Tokens
+			r.derived[pos.AssetID] = true
 		}
 	}
 	r.servicing = append(r.servicing, snap.Servicing...)
@@ -511,11 +520,23 @@ func (r *UMIRail) SeedPosition(assetID, holder string, tokens, authorisedTokens 
 		}
 		r.authorised[assetID] = cap0
 	} else if authorisedTokens > 0 && authorisedTokens != cap0 {
-		// Supply is decided once. Re-declaring it would make the cap
-		// meaningless, so the attempt is refused rather than silently ignored.
-		r.mu.Unlock()
-		return 0, fmt.Errorf("%w: %s supply is already %d tokens, cannot redeclare as %d",
-			ErrUMISupplyExceeded, assetID, cap0, authorisedTokens)
+		if r.derived[assetID] {
+			// The cap was only inferred from restored positions, so it carries
+			// no authority. Accept the declared figure once - this is how an
+			// operator states the true issue size for a book that was inflated
+			// before caps existed.
+			cap0 = authorisedTokens
+			r.authorised[assetID] = cap0
+			r.derived[assetID] = false
+		} else {
+			// Declared at issuance. Re-declaring would make the cap
+			// meaningless, so refuse rather than silently ignore.
+			r.mu.Unlock()
+			return 0, fmt.Errorf("%w: %s supply is already %d tokens, cannot redeclare as %d",
+				ErrUMISupplyExceeded, assetID, cap0, authorisedTokens)
+		}
+	} else if authorisedTokens > 0 {
+		r.derived[assetID] = false
 	}
 	r.mu.Unlock()
 

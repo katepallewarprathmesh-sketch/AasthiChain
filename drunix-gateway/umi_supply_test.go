@@ -96,3 +96,28 @@ func TestReconciliationReportsSupplyBreach(t *testing.T) {
 		t.Fatalf("breach not reported correctly: %v", rec.SupplyBreaches)
 	}
 }
+
+// Restore infers the cap from whatever was in the book. If the book was
+// inflated before caps existed, that inferred number is the inflated one and
+// the breach would disappear at the next restart. An inferred cap must
+// therefore be correctable exactly once.
+func TestDerivedCapCanBeCorrectedOnce(t *testing.T) {
+	r := newSupplyRail()
+	r.securities.(*MemorySecurities).Credit("PROP-A", "originator1", 10110)
+	r.mu.Lock()
+	r.authorised["PROP-A"] = 10110 // as restore would have inferred it
+	r.derived["PROP-A"] = true
+	r.mu.Unlock()
+
+	// Operator states the real issue size.
+	if _, err := r.SeedPosition("PROP-A", "originator1", 10000, 10000); err != nil {
+		t.Fatalf("correcting a derived cap should be allowed: %v", err)
+	}
+	if auth, out := r.AuthorisedSupply("PROP-A"); auth != 10000 || out != 10000 {
+		t.Fatalf("authorised=%d outstanding=%d, want 10000/10000", auth, out)
+	}
+	// And now it is authoritative — no second correction.
+	if _, err := r.SeedPosition("PROP-A", "originator1", 10000, 12000); err == nil {
+		t.Fatal("a corrected cap was redeclared again")
+	}
+}
