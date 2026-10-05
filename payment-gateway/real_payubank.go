@@ -92,6 +92,13 @@ type PayUCheckout struct {
 }
 
 // payuRequestHash — sha512(key|txnid|amount|productinfo|firstname|email|udf1..5||||||salt)
+func payuCurrency() string {
+	if c := os.Getenv("PAYU_CURRENCY"); c != "" {
+		return c
+	}
+	return "INR"
+}
+
 func payuRequestHash(key, txnid, amount, productinfo, firstname, email string, udf [5]string, salt string) string {
 	seq := key + "|" + txnid + "|" + amount + "|" + productinfo + "|" + firstname + "|" + email +
 		"|" + udf[0] + "|" + udf[1] + "|" + udf[2] + "|" + udf[3] + "|" + udf[4] + "||||||" + salt
@@ -129,6 +136,9 @@ func (p *PayUProvider) BuildCheckout(req CollectRequest, payment *Payment) *PayU
 		"email":       email,
 		"phone":       "9999999999",
 		"vpa":         req.PayerVPA,
+		// Mandatory for merchants provisioned for multi-currency. PayU rejects
+		// the transaction outright without it. Not part of the request hash.
+		"transactionCurrency": payuCurrency(),
 		"surl":        p.Surl,
 		"furl":        p.Furl,
 		"udf1":        udf[0],

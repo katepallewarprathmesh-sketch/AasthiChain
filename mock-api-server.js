@@ -1189,6 +1189,7 @@ function buildPayUCheckout(payu, pay, req, cbBase) {
   const params = {
     key: payu.key, txnid: pay.paymentId, amount, productinfo, firstname, email,
     phone: '9999999999', vpa: req.payerVpa,
+    transactionCurrency: process.env.PAYU_CURRENCY || 'INR',
     // PayU requires ABSOLUTE redirect URLs — derive from request host when not configured
     surl: process.env.PAYU_SURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
     furl: process.env.PAYU_FURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
