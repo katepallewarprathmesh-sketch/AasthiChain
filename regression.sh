@@ -118,6 +118,12 @@ if command -v node >/dev/null 2>&1; then
 fi
 
 echo
+echo "== secrets =="
+SCAN=$(bash /home/user/repo/scripts/secret-scan.sh 2>&1); SCANRC=$?
+printf '%s\n' "$SCAN"
+chk "no credentials in tracked files" 0 "$SCANRC"
+
+echo
 echo "== node suites (tests/*.test.mjs) =="
 for f in /home/user/repo/tests/*.test.mjs; do
   [ -e "$f" ] || continue
