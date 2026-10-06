@@ -305,10 +305,20 @@ func (s *Server) handleChain(w http.ResponseWriter, r *http.Request) {
 	v := c.Verify()
 	blocks := c.Snapshot()
 
-	from := atoiDefault(r.URL.Query().Get("from"), 0)
 	limit := atoiDefault(r.URL.Query().Get("limit"), 50)
 	if limit <= 0 || limit > 500 {
 		limit = 50
+	}
+	// Without an explicit cursor, return the NEWEST blocks rather than the
+	// oldest. The ledger explorer asks for a fixed window and shows it as
+	// "latest first"; serving blocks[0:limit] meant that once the chain grew
+	// past that window it only ever showed genesis-era blocks, and a freshly
+	// settled purchase could never appear. Explicit ?from= still pages from
+	// the head for callers that walk the chain.
+	hasFrom := r.URL.Query().Has("from")
+	from := atoiDefault(r.URL.Query().Get("from"), 0)
+	if !hasFrom {
+		from = len(blocks) - limit
 	}
 	if from < 0 || from > len(blocks) {
 		from = 0
