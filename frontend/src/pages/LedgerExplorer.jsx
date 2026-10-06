@@ -52,8 +52,20 @@ export default function LedgerExplorer() {
 
   const load = useCallback(async () => {
     try {
-      const d = await api.getUmiChain(60)
+      const WINDOW = 60
+      let d = await api.getUmiChain(WINDOW)
       if (d && d.error) throw new Error(d.message || d.error)
+      // Older rail builds answer a cursor-less request with the OLDEST blocks,
+      // so once the chain outgrew this window the page showed genesis-era
+      // history forever and a just-settled purchase never appeared. Ask again
+      // with an explicit cursor at the tip, which both the old and the fixed
+      // rail honour. Harmless on the fixed rail: it already returns the tail.
+      const total = Number(d.totalBlocks || 0)
+      const got = Number(d.returned || (d.blocks || []).length)
+      if (total > got) {
+        const tail = await api.getUmiChain(WINDOW, Math.max(0, total - WINDOW))
+        if (tail && !tail.error && (tail.blocks || []).length) d = tail
+      }
       setUmi(d)
       // the Go rail returns its blocks oldest-first; this view is latest-first
       setChain({
