@@ -339,9 +339,13 @@ export default function Insights() {
                     <div style={{ width: `${Math.min(100, r.pctAllocated)}%`, height: '100%',
                       background: r.pctAllocated > 100 ? '#B91C1C' : '#1E3A5F' }} />
                   </div>
-                  {r.pctAllocated > 100 && (
+                  <div style={{ fontSize: 10.5, color: '#6B7280', marginTop: 3 }}>
+                    {Number(r.tokensHeld || 0).toLocaleString('en-IN')} sold to investors
+                    {r.originatorHolding > 0 && ` · ${Number(r.originatorHolding).toLocaleString('en-IN')} still with the originator`}
+                  </div>
+                  {r.tokensOutstanding > r.totalTokens && (
                     <div style={{ fontSize: 10.5, color: '#B91C1C', marginTop: 3, fontWeight: 600 }}>
-                      {Number(r.tokensHeld - r.totalTokens).toLocaleString('en-IN')} tokens beyond the issued supply —
+                      {Number(r.tokensOutstanding - r.totalTokens).toLocaleString('en-IN')} tokens beyond the issued supply —
                       seeded before the cap was enforced
                     </div>
                   )}

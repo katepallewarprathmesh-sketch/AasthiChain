@@ -159,17 +159,30 @@ function buildInsights(app, rail) {
   const top = holders[0];
 
   // ---- property funding progress ----
+  // "Allocated" means sold to investors. The old sum counted every balance,
+  // including the originator's own unsold inventory, so a property nobody had
+  // bought into still read ~100% allocated — and it could tip past 100% and
+  // look like over-issuance when it was only ever double counting.
   const propertyRows = properties.map(p => {
+    const id = p.assetId || p.propertyId || p.id;
+    const originator = p.originatorId || p.ownerId || p.issuerId || null;
     const total = Number(p.totalTokens || 0);
-    const sold = balances
-      .filter(b => (b.assetId || b.propertyId) === (p.assetId || p.propertyId || p.id))
+    const rows = balances.filter(b => (b.assetId || b.propertyId) === id);
+    // Every token in existence for this asset — used for the conservation
+    // check, which does care about the originator's holding.
+    const outstanding = rows.reduce((s, b) => s + Number(b.balance || 0), 0);
+    // Only what has actually left the originator.
+    const sold = rows
+      .filter(b => !originator || (b.ownerId || b.holder || b.identityId) !== originator)
       .reduce((s, b) => s + Number(b.balance || 0), 0);
     return {
-      assetId: p.assetId || p.propertyId || p.id,
+      assetId: id,
       title: p.title || p.name || p.assetId,
       city: p.city || p.location || '',
       totalTokens: total,
       tokensHeld: sold,
+      tokensOutstanding: outstanding,
+      originatorHolding: outstanding - sold,
       pctAllocated: total > 0 ? Math.round((sold / total) * 1000) / 10 : 0,
       tokenPriceINR: Number(p.tokenPrice || p.pricePerTokenINR || 0),
       valuationINR: Number(p.valuationINR || (p.tokenPrice || 0) * total)

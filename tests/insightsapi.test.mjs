@@ -41,5 +41,19 @@ t('portfolio counts properties', typeof d.portfolio?.properties === 'number');
 t('integrity reports a verdict', typeof d.integrity?.ok === 'boolean');
 t('traffic never breaks the report', d.traffic === undefined || typeof d.traffic === 'object');
 
+// Allocation used to count the originator's own unsold inventory as "sold",
+// so every property read 100% allocated and could tip past it.
+const rows = Array.isArray(d.properties) ? d.properties : [];
+t('there are properties to check', rows.length > 0);
+t('no property is allocated above 100%', rows.every(r => r.pctAllocated <= 100));
+t('allocation is not uniformly 100%', !rows.every(r => r.pctAllocated === 100));
+t('sold plus originator inventory equals everything outstanding',
+  rows.every(r => r.tokensHeld + r.originatorHolding === r.tokensOutstanding));
+t('outstanding never exceeds the issued supply',
+  rows.every(r => r.totalTokens === 0 || r.tokensOutstanding <= r.totalTokens));
+t('pctAllocated is measured against the issued supply',
+  rows.every(r => r.totalTokens === 0 ||
+    Math.abs(r.pctAllocated - Math.round((r.tokensHeld / r.totalTokens) * 1000) / 10) < 0.05));
+
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);
