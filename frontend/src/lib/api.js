@@ -133,6 +133,14 @@ class ApiClient {
       method: 'POST', body: JSON.stringify({ holder, units: Number(units) })
     })
   }
+  // Selling units for e₹-W cash. dryRun answers "would this work" and
+  // commits nothing, so the investor can be warned before they commit.
+  async umiBasketSell(basketId, { seller, buyer, units, pricePerUnitINR, dryRun = false }) {
+    return this.request(`/api/umi/baskets/${encodeURIComponent(basketId)}/dvp`, {
+      method: 'POST',
+      body: JSON.stringify({ seller, buyer, units: Number(units), pricePerUnitINR: Number(pricePerUnitINR), dryRun })
+    })
+  }
   async umiBasketRedeem(basketId, holder, units) {
     return this.request(`/api/umi/baskets/${encodeURIComponent(basketId)}/redeem`, {
       method: 'POST', body: JSON.stringify({ holder, units: Number(units) })

@@ -49,6 +49,96 @@ function UnitForm({ label, primary, onRun, busy }) {
   )
 }
 
+// Selling asks for a counterparty and a price, so it carries more ways to be
+// wrong than create/redeem. The dry run runs first and its result is shown
+// before anything commits — an investor should see the premium to NAV and the
+// cash they will receive BEFORE agreeing, not discover it afterwards.
+function SellForm({ basket, identityId, onSold, onError }) {
+  const [open, setOpen] = useState(false)
+  const [buyer, setBuyer] = useState('')
+  const [units, setUnits] = useState(1)
+  const [price, setPrice] = useState(Math.round(Number(basket.navPerUnitINR) || 0))
+  const [quote, setQuote] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const reset = () => { setQuote(null); setOpen(false); setBuyer(''); setUnits(1) }
+
+  const check = async () => {
+    setBusy(true); onError('')
+    try {
+      const r = await api.umiBasketSell(basket.basketId, {
+        seller: identityId, buyer, units, pricePerUnitINR: price, dryRun: true
+      })
+      setQuote(r.trade)
+    } catch (e) {
+      setQuote(null)
+      onError(e.message || 'That sale would not settle.')
+    } finally { setBusy(false) }
+  }
+
+  const confirm = async () => {
+    setBusy(true); onError('')
+    try {
+      await api.umiBasketSell(basket.basketId, {
+        seller: identityId, buyer, units, pricePerUnitINR: price
+      })
+      reset()
+      await onSold(`Sold ${units} unit${units === 1 ? '' : 's'} to ${buyer}.`)
+    } catch (e) {
+      onError(e.message || 'The rail refused that sale.')
+    } finally { setBusy(false) }
+  }
+
+  if (!open) {
+    return (
+      <button style={btn(false, false)} onClick={() => setOpen(true)}>Sell</button>
+    )
+  }
+
+  const premium = quote ? Number(quote.premiumToNavPct) : null
+
+  return (
+    <div style={{ width: '100%', marginTop: 8, padding: 10, border: '1px solid #E5E7EB', borderRadius: 10, background: '#FAFAFA' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input style={{ ...input, width: 150 }} placeholder="buyer id" value={buyer}
+          onChange={e => { setBuyer(e.target.value); setQuote(null) }} disabled={busy} />
+        <input style={input} type="number" min="1" value={units}
+          onChange={e => { setUnits(e.target.value); setQuote(null) }} disabled={busy} aria-label="units to sell" />
+        <input style={{ ...input, width: 96 }} type="number" min="1" value={price}
+          onChange={e => { setPrice(e.target.value); setQuote(null) }} disabled={busy} aria-label="price per unit" />
+        <span style={{ fontSize: 11, color: '#6B7280' }}>₹ per unit</span>
+      </div>
+
+      {quote && (
+        <div style={{ marginTop: 8, fontSize: 11.5, color: '#374151', lineHeight: 1.7 }}>
+          You receive <strong>{inr(quote.considerationINR)}</strong> for {quote.units} unit
+          {quote.units === 1 ? '' : 's'}.{' '}
+          {premium !== null && (
+            <span style={{ color: premium >= 0 ? '#065F46' : '#92400E' }}>
+              {premium >= 0 ? 'Premium' : 'Discount'} of {Math.abs(premium).toFixed(2)}% to NAV
+              ({inr(quote.navPerUnitINR)}).
+            </span>
+          )}{' '}
+          You would be left with {quote.sellerUnitsLeft} unit{quote.sellerUnitsLeft === 1 ? '' : 's'}.
+        </div>
+      )}
+
+      <div style={{ marginTop: 9, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {!quote ? (
+          <button style={btn(true, busy || !buyer || Number(units) <= 0 || Number(price) <= 0)}
+            disabled={busy || !buyer || Number(units) <= 0 || Number(price) <= 0}
+            onClick={check}>{busy ? 'Checking…' : 'Check this sale'}</button>
+        ) : (
+          <button style={btn(true, busy)} disabled={busy} onClick={confirm}>
+            {busy ? 'Settling…' : 'Confirm sale'}
+          </button>
+        )}
+        <button style={btn(false, busy)} disabled={busy} onClick={reset}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
 export default function BasketPanel({ holdings = [], catalogue = [], unavailable, identityId, onChanged }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
@@ -159,6 +249,12 @@ export default function BasketPanel({ holdings = [], catalogue = [], unavailable
                   <UnitForm label="Redeem"
                     busy={busy === `redeem:${h.basketId}`}
                     onRun={(u) => run('redeem', h.basketId, u)} />
+                  <SellForm
+                    basket={h}
+                    identityId={identityId}
+                    onError={setError}
+                    onSold={async (msg) => { setError(''); setDone(msg); if (onChanged) await onChanged() }}
+                  />
                 </div>
               </div>
             )
