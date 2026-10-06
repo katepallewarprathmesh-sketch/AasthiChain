@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { money } from '../lib/format.js'
 import api from '../lib/api.js'
 import { useProperties } from '../hooks/useProperties.js'
@@ -34,6 +35,10 @@ function SimpleStep({ number, title, active, done }) {
 
 export default function Admin({ user }) {
   const isOwner = (user?.role || '') === 'Originator'
+  // Title validation is registrar-only now: an owner approving their own
+  // listing made the check meaningless. The step used to fail with a 403 after
+  // the click, which reads like a bug rather than the rule it is.
+  const canValidate = ['Registrar', 'Regulator'].includes(user?.role || '')
   const [form, setForm] = useState({
     title: 'Sunrise Heights 2BHK',
     state: 'Maharashtra',
@@ -373,35 +378,49 @@ export default function Admin({ user }) {
               )}
             </div>
 
+            {!canValidate && (
+              <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 8, background: '#FFFBEB', border: '1px solid #FDE68A', fontSize: 12, color: '#92400E', lineHeight: 1.6 }}>
+                Only a <strong>Registrar</strong> can approve a title, and never the owner of the
+                property — otherwise the check proves nothing. You are signed in as{' '}
+                <strong>{user?.role || 'unknown'}</strong>.{' '}
+                <Link to="/login" style={{ color: '#92400E', fontWeight: 600 }}>Switch to Registrar</Link>{' '}
+                to review this listing.
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
               <button
+                disabled={!canValidate}
+                title={canValidate ? 'Approve this title' : 'Only a Registrar can approve a title'}
                 onClick={() => handleValidate('VALIDATED')}
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: '#059669',
+                  background: canValidate ? '#059669' : '#9CA3AF',
                   color: 'white',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: 'pointer'
+                  cursor: canValidate ? 'pointer' : 'not-allowed'
                 }}
               >
                 ✓ Approve
               </button>
               <button
+                disabled={!canValidate}
+                title={canValidate ? 'Reject this title' : 'Only a Registrar can reject a title'}
                 onClick={() => handleValidate('REJECTED')}
                 style={{
                   flex: 1,
                   padding: '10px',
                   background: 'white',
-                  color: '#DC2626',
-                  border: '1px solid #FECACA',
+                  color: canValidate ? '#DC2626' : '#9CA3AF',
+                  border: `1px solid ${canValidate ? '#FECACA' : '#E5E7EB'}`,
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: 'pointer'
+                  cursor: canValidate ? 'pointer' : 'not-allowed'
                 }}
               >
                 ✗ Reject
