@@ -71,10 +71,21 @@ const ROUTES = [
   ['/learn/what-is-umi', <UMIExplainer />]
 ]
 
+// A page that renders nothing is not a passing page. /insights shipped with
+// `export default` stuck on the wrong function, so the route rendered an
+// unrelated component that returned null — a blank screen that this smoke test
+// called "clean". Every route must put something real on the page.
+const MIN_HTML = 200
+
 let failed = 0
 for (const [path, element] of ROUTES) {
   try {
-    renderToString(<MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>)
+    const html = renderToString(<MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>)
+    if (html.trim().length < MIN_HTML) {
+      failed++
+      console.error(`  FAIL ${path} — rendered only ${html.trim().length} chars; the page is effectively blank`)
+      continue
+    }
     console.log(`  ok   ${path}`)
   } catch (e) {
     failed++
@@ -83,6 +94,6 @@ for (const [path, element] of ROUTES) {
 }
 
 console.log(failed === 0
-  ? `\nrender smoke: ${ROUTES.length} routes rendered cleanly`
-  : `\nrender smoke: ${failed}/${ROUTES.length} routes CRASH on render`)
+  ? `\nrender smoke: ${ROUTES.length} routes rendered real content`
+  : `\nrender smoke: ${failed}/${ROUTES.length} routes are broken or blank`)
 process.exit(failed === 0 ? 0 : 1)

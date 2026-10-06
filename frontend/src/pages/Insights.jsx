@@ -135,7 +135,7 @@ function TrafficSection({ t }) {
   )
 }
 
-export default // A dashboard full of correct numbers can still hide a fault: the 101.1%
+// A dashboard full of correct numbers can still hide a fault: the 101.1%
 // allocation sat in a card for days because nothing on the page said it was
 // wrong. This states a verdict first, and only then the detail.
 function IntegrityPanel({ integrity }) {
@@ -185,7 +185,7 @@ function IntegrityPanel({ integrity }) {
   )
 }
 
-function Insights() {
+export default function Insights() {
   const [key, setKey] = useState(() => {
     try { return sessionStorage.getItem(KEY_STORE) || '' } catch { return '' }
   })

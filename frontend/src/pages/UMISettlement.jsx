@@ -133,7 +133,10 @@ export default function UMISettlement() {
   // ISO 20022 traces. That is the right screen for someone running a
   // settlement rail and the wrong one for everybody else, so the detail is
   // now opt-in and the default view is the one thing people come here to do.
-  const [mode, setMode] = useState('simple')
+  // The rail used to open folded into a single buy box, so the wallets,
+  // instructions and reconciliation — the part that shows it is a real
+  // settlement rail — were behind a link nobody clicked. Open it all.
+  const [mode, setMode] = useState('advanced')
   // Result of a silent dry run against the current inputs. The rail can tell
   // us whether this trade would settle without moving anything, so there is
   // no reason to let someone click into a red error to find out.
@@ -224,7 +227,7 @@ export default function UMISettlement() {
   }
 
   useEffect(() => {
-    if (mode !== 'simple' || !assetId || !seller || !buyer) { setPreflight(null); return }
+    if (!assetId || !seller || !buyer) { setPreflight(null); return }
     const t = Number(tokens), pr = Number(price)
     if (!t || t <= 0 || !pr || pr <= 0) { setPreflight(null); return }
     let cancelled = false
@@ -308,13 +311,13 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         {mode === 'advanced' && (
           <button onClick={() => setMode('simple')}
             style={{ marginTop: 10, background: 'none', border: `1px solid ${C.line}`, borderRadius: 8, padding: '6px 12px', fontSize: 12.5, color: C.navy, cursor: 'pointer', fontWeight: 600 }}>
-            ← Back to the simple view
+            Hide the rail controls
           </button>
         )}
       </header>
 
       {/* ---------- Simple view: the one action, stated plainly ---------- */}
-      {mode === 'simple' && (
+      {(
         <section style={{ background: 'white', border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontSize: 18, color: C.navy }}>Buy tokens with central bank money</h2>
           <p style={{ fontSize: 13, color: C.mut, marginTop: 6, marginBottom: 14, maxWidth: 640 }}>
@@ -389,12 +392,14 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             </div>
           )}
 
+          {mode !== 'advanced' && (
           <div style={{ marginTop: 14, fontSize: 12.5, color: C.mut }}>
             Want the rail's own controls — wallets, dry runs, servicing, ISO 20022 traces, reconciliation?{' '}
             <button onClick={() => setMode('advanced')} style={{ background: 'none', border: 'none', color: C.navy, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 12.5 }}>
               Open the full rail
             </button>
           </div>
+          )}
         </section>
       )}
 
