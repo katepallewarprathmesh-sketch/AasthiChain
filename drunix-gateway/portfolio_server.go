@@ -85,8 +85,13 @@ func (s *Server) handleBasketByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Trading legs: units change hands, with or without a cash leg.
+	if action == "transfer" || action == "dvp" {
+		s.handleBasketTrade(w, r, id, action)
+		return
+	}
 	if action != "subscribe" && action != "redeem" {
-		umiErr(w, http.StatusNotFound, "ERR_NOT_FOUND", "use /subscribe or /redeem")
+		umiErr(w, http.StatusNotFound, "ERR_NOT_FOUND", "use /subscribe, /redeem, /transfer or /dvp")
 		return
 	}
 	if !requirePost(w, r) {
@@ -223,6 +228,67 @@ func basketHint(err error) string {
 		return "you do not hold that many units of this basket"
 	case errors.Is(err, ErrBasketNotFound):
 		return "no such basket on this rail"
+	case errors.Is(err, ErrBasketSelfTrade):
+		return "a trade needs two different parties"
+	case errors.Is(err, ErrBasketPrice):
+		return "pricePerUnitINR must be positive"
 	}
 	return err.Error()
+}
+
+// handleBasketTrade serves /umi/baskets/{id}/transfer and /umi/baskets/{id}/dvp.
+//
+// transfer moves units with no payment. dvp sells them for e₹-W cash in one
+// commit, so a buyer can never end up paying for units they did not receive.
+func (s *Server) handleBasketTrade(w http.ResponseWriter, r *http.Request, id, action string) {
+	if !requirePost(w, r) {
+		return
+	}
+	var body struct {
+		From            string  `json:"from"`
+		To              string  `json:"to"`
+		Seller          string  `json:"seller"`
+		Buyer           string  `json:"buyer"`
+		Units           int64   `json:"units"`
+		PricePerUnitINR float64 `json:"pricePerUnitINR"`
+		DryRun          bool    `json:"dryRun"`
+	}
+	if err := umiDecode(r, &body); err != nil {
+		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
+		return
+	}
+
+	statusFor := func(err error) int {
+		switch {
+		case errors.Is(err, ErrBasketNotFound):
+			return http.StatusNotFound
+		case errors.Is(err, ErrBasketInsufficientUnits), errors.Is(err, ErrUMIInsufficientCBDC):
+			// Well formed; the book or the wallet will not allow it.
+			return http.StatusConflict
+		}
+		return http.StatusBadRequest
+	}
+
+	if action == "transfer" {
+		b, blk, err := s.UMI.TransferUnits(id, body.From, body.To, body.Units)
+		if err != nil {
+			umiErr(w, statusFor(err), errCode(err), basketHint(err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok": true, "action": "transferred", "basketId": b.BasketID,
+			"from": body.From, "to": body.To, "units": body.Units, "block": blk,
+		})
+		return
+	}
+
+	trade, blk, err := s.UMI.SettleBasketDvP(id, body.Seller, body.Buyer,
+		body.Units, body.PricePerUnitINR, body.DryRun)
+	if err != nil {
+		umiErr(w, statusFor(err), errCode(err), basketHint(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok": true, "settleable": true, "trade": trade, "block": blk,
+	})
 }

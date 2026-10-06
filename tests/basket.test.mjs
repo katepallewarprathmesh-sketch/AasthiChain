@@ -137,5 +137,67 @@ const recon = await j('/api/umi/reconciliation');
 t('money still conserved after basket activity', recon.b?.conserved === true);
 t('chain still valid after basket activity', recon.b?.chain?.valid === true);
 
+// --- a basket unit must be TRADEABLE, not just creatable ---------------------
+// Creating and redeeming only lets a holder wrap and unwrap their own tokens.
+// Until units can be sold to somebody else for cash, in one movement, the
+// basket is not an instrument.
+const BUYER = `basket-buyer-${stamp}`;
+await post(`/api/umi/wallets/${BUYER}/fund`, { amountINR: 100000 });
+
+const dry = await post(`/api/umi/baskets/${BID}/dvp`, {
+  seller: HOLDER, buyer: BUYER, units: 2, pricePerUnitINR: 1400, dryRun: true
+});
+t('a unit sale can be dry run', dry.s === 200);
+t('the dry run says it is a dry run', dry.b?.trade?.dryRun === true);
+t('the dry run writes no block', !dry.b?.block);
+
+const beforeSeller = (await j(`/api/umi/holdings/${HOLDER}`)).b?.baskets?.[0]?.units;
+
+const sale = await post(`/api/umi/baskets/${BID}/dvp`, {
+  seller: HOLDER, buyer: BUYER, units: 2, pricePerUnitINR: 1400
+});
+t('units can be sold for cash', sale.s === 200);
+t('the trade is committed to the chain', !!sale.b?.block);
+t('consideration is units x price', sale.b?.trade?.considerationINR === 2800);
+t('the seller was paid', sale.b?.trade?.sellerCashINR >= 2800);
+t('the buyer paid', sale.b?.trade?.buyerCashINR === 97200);
+t('premium to NAV is reported', typeof sale.b?.trade?.premiumToNavPct === 'number');
+
+const buyerHold = await j(`/api/umi/holdings/${BUYER}`);
+t('the buyer now holds units', buyerHold.b?.baskets?.[0]?.units === 2);
+const sellerHold = await j(`/api/umi/holdings/${HOLDER}`);
+t('the seller holds fewer units', sellerHold.b?.baskets?.[0]?.units === beforeSeller - 2);
+
+const poor = `basket-poor-${stamp}`;
+const noCash = await post(`/api/umi/baskets/${BID}/dvp`, {
+  seller: HOLDER, buyer: poor, units: 2, pricePerUnitINR: 9999
+});
+t('a buyer who cannot pay gets nothing', noCash.s === 409);
+const stillNone = await j(`/api/umi/holdings/${poor}`);
+t('the failed buyer holds no units', (stillNone.b?.baskets || []).length === 0);
+
+const self = await post(`/api/umi/baskets/${BID}/dvp`, {
+  seller: HOLDER, buyer: HOLDER, units: 1, pricePerUnitINR: 100
+});
+t('selling to yourself is refused', self.s === 400);
+t('the refusal is readable', /two different parties/i.test(self.b?.message || ''));
+
+const moved = await post(`/api/umi/baskets/${BID}/transfer`, {
+  from: BUYER, to: `gift-${stamp}`, units: 1
+});
+t('units can be transferred without cash', moved.s === 200);
+
+// The buyer must be able to pull the underlying tokens out — that is what
+// makes the unit worth buying in the first place.
+const buyerRedeem = await post(`/api/umi/baskets/${BID}/redeem`, { holder: BUYER, units: 1 });
+t('a buyer can redeem units they bought', buyerRedeem.s === 200);
+const buyerOwn = await j(`/api/umi/ownership/${A}`);
+t('redeeming delivered real tokens to the buyer',
+  ((buyerOwn.b?.holders || []).find(h => h.holder === BUYER)?.tokens || 0) > 0);
+
+const recon2 = await j('/api/umi/reconciliation');
+t('money still conserved after unit trading', recon2.b?.conserved === true);
+t('chain still valid after unit trading', recon2.b?.chain?.valid === true);
+
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);

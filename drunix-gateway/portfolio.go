@@ -478,3 +478,153 @@ func (r *UMIRail) BasketHoldings(holder string) []map[string]interface{} {
 	})
 	return out
 }
+
+// --- making a basket unit actually tradeable ---
+//
+// Creating and redeeming units is not trading: it only lets a holder wrap and
+// unwrap their own tokens. For a basket to be a tradeable instrument someone
+// else has to be able to buy it, which means units must change hands against
+// cash in one movement — the same delivery-versus-payment discipline the
+// property leg already uses. Half a trade is worse than no trade.
+
+var (
+	// ErrBasketSelfTrade rejects a trade with yourself.
+	ErrBasketSelfTrade = errors.New("ERR_UMI_BASKET_SELF_TRADE")
+	// ErrBasketPrice rejects a non-positive price.
+	ErrBasketPrice = errors.New("ERR_UMI_BASKET_PRICE")
+)
+
+// TransferUnits moves units between holders with no cash leg. This is a
+// delivery instruction (a gift, a correction, a custody move) — for a sale,
+// use SettleBasketDvP so the cash cannot go missing.
+func (r *UMIRail) TransferUnits(basketID, from, to string, units int64) (*Basket, *DrunixBlock, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	b, ok := r.baskets[basketID]
+	if !ok {
+		return nil, nil, ErrBasketNotFound
+	}
+	if units <= 0 || from == "" || to == "" {
+		return nil, nil, ErrBasketUnits
+	}
+	if from == to {
+		return nil, nil, ErrBasketSelfTrade
+	}
+	if b.Units[from] < units {
+		return nil, nil, ErrBasketInsufficientUnits
+	}
+
+	b.Units[from] -= units
+	if b.Units[from] == 0 {
+		delete(b.Units, from)
+	}
+	b.Units[to] += units
+
+	blk := r.append("UMI_BASKET_TRANSFERRED", map[string]interface{}{
+		"basketId": b.BasketID, "from": from, "to": to, "units": units,
+		"navPerUnitINR": b.NAVPerUnitINR(),
+	})
+	return b, blk, nil
+}
+
+// BasketTrade is the outcome of a unit sale.
+type BasketTrade struct {
+	TradeID          string    `json:"tradeId"`
+	BasketID         string    `json:"basketId"`
+	Seller           string    `json:"seller"`
+	Buyer            string    `json:"buyer"`
+	Units            int64     `json:"units"`
+	PricePerUnitINR  float64   `json:"pricePerUnitINR"`
+	ConsiderationINR float64   `json:"considerationINR"`
+	NAVPerUnitINR    float64   `json:"navPerUnitINR"`
+	PremiumToNAVPct  float64   `json:"premiumToNavPct"`
+	SellerUnitsLeft  int64     `json:"sellerUnitsLeft"`
+	BuyerUnits       int64     `json:"buyerUnits"`
+	BuyerCashINR     float64   `json:"buyerCashINR"`
+	SellerCashINR    float64   `json:"sellerCashINR"`
+	SettledAt        time.Time `json:"settledAt"`
+	DryRun           bool      `json:"dryRun"`
+	Mode             string    `json:"mode"`
+}
+
+// SettleBasketDvP sells units for e₹-W cash atomically.
+//
+// Either the buyer gets the units and the seller gets the cash, or nothing
+// moves at all. dryRun answers "would this work" without committing, so a UI
+// can warn before the investor commits rather than after.
+func (r *UMIRail) SettleBasketDvP(basketID, seller, buyer string, units int64, pricePerUnitINR float64, dryRun bool) (*BasketTrade, *DrunixBlock, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	b, ok := r.baskets[basketID]
+	if !ok {
+		return nil, nil, ErrBasketNotFound
+	}
+	if units <= 0 || seller == "" || buyer == "" {
+		return nil, nil, ErrBasketUnits
+	}
+	if seller == buyer {
+		return nil, nil, ErrBasketSelfTrade
+	}
+	if pricePerUnitINR <= 0 {
+		return nil, nil, ErrBasketPrice
+	}
+	if b.Units[seller] < units {
+		return nil, nil, fmt.Errorf("%w: seller holds %d unit(s), not %d",
+			ErrBasketInsufficientUnits, b.Units[seller], units)
+	}
+
+	cash := INRToPaise(pricePerUnitINR * float64(units))
+	buyerWallet := r.walletLocked(buyer)
+	if buyerWallet.available() < cash {
+		return nil, nil, fmt.Errorf("%w: buyer e₹-W available ₹%.2f, trade needs ₹%.2f",
+			ErrUMIInsufficientCBDC, paiseToINR(buyerWallet.available()), paiseToINR(cash))
+	}
+	sellerWallet := r.walletLocked(seller)
+
+	nav := b.NAVPerUnitINR()
+	trade := &BasketTrade{
+		TradeID: r.nextID("UMIBSKT"), BasketID: b.BasketID,
+		Seller: seller, Buyer: buyer, Units: units,
+		PricePerUnitINR: pricePerUnitINR, ConsiderationINR: paiseToINR(cash),
+		NAVPerUnitINR: nav, SettledAt: time.Now().UTC(), DryRun: dryRun, Mode: UMIMode,
+	}
+	if nav > 0 {
+		trade.PremiumToNAVPct = round4((pricePerUnitINR - nav) / nav * 100)
+	}
+
+	if dryRun {
+		// Report what would happen; touch nothing.
+		trade.SellerUnitsLeft = b.Units[seller] - units
+		trade.BuyerUnits = b.Units[buyer] + units
+		trade.BuyerCashINR = paiseToINR(buyerWallet.BalancePaise - cash)
+		trade.SellerCashINR = paiseToINR(sellerWallet.BalancePaise + cash)
+		return trade, nil, nil
+	}
+
+	// Both legs, together.
+	b.Units[seller] -= units
+	if b.Units[seller] == 0 {
+		delete(b.Units, seller)
+	}
+	b.Units[buyer] += units
+	buyerWallet.BalancePaise -= cash
+	sellerWallet.BalancePaise += cash
+	buyerWallet.refresh()
+	sellerWallet.refresh()
+
+	trade.SellerUnitsLeft = b.Units[seller]
+	trade.BuyerUnits = b.Units[buyer]
+	trade.BuyerCashINR = buyerWallet.BalanceINR
+	trade.SellerCashINR = sellerWallet.BalanceINR
+
+	blk := r.append("UMI_BASKET_DVP_SETTLED", map[string]interface{}{
+		"tradeId": trade.TradeID, "basketId": b.BasketID,
+		"seller": seller, "buyer": buyer, "units": units,
+		"pricePerUnitINR": pricePerUnitINR, "considerationINR": trade.ConsiderationINR,
+		"navPerUnitINR": nav, "premiumToNavPct": trade.PremiumToNAVPct,
+		"atomic": "units and e₹-W cash moved in one commit",
+	})
+	return trade, blk, nil
+}

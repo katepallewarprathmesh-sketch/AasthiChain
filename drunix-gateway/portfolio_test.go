@@ -345,3 +345,143 @@ func TestTimeWeightedFallsBackWhenThereIsNoHistory(t *testing.T) {
 		t.Fatal("falling back to snapshot should still pay the holders")
 	}
 }
+
+func tradeableRail(t *testing.T) *UMIRail {
+	t.Helper()
+	rail := newPortfolioRail(t)
+	if _, _, err := rail.CreateBasket("MIX", "mix", "CUST", twoAssetBasket()); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, _, err := rail.Subscribe("MIX", "investor1", 10); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	return rail
+}
+
+func TestUnitsCanBeSoldForCashAtomically(t *testing.T) {
+	rail := tradeableRail(t)
+	rail.FundWallet("investor2", 50000)
+
+	trade, blk, err := rail.SettleBasketDvP("MIX", "investor1", "investor2", 4, 1400, false)
+	if err != nil {
+		t.Fatalf("trade: %v", err)
+	}
+	if trade.SellerUnitsLeft != 6 || trade.BuyerUnits != 4 {
+		t.Fatalf("units did not change hands: seller %d buyer %d", trade.SellerUnitsLeft, trade.BuyerUnits)
+	}
+	if trade.ConsiderationINR != 5600 {
+		t.Fatalf("consideration = %v, want 5600", trade.ConsiderationINR)
+	}
+	if trade.SellerCashINR != 5600 {
+		t.Fatalf("seller was not paid: %v", trade.SellerCashINR)
+	}
+	if trade.BuyerCashINR != 44400 {
+		t.Fatalf("buyer cash = %v, want 44400", trade.BuyerCashINR)
+	}
+	// Priced at 1400 against a NAV of 1300 is a premium, and saying so is the
+	// point of carrying NAV on the trade at all.
+	if trade.PremiumToNAVPct < 7.6 || trade.PremiumToNAVPct > 7.8 {
+		t.Fatalf("premium to NAV = %v, want about 7.69", trade.PremiumToNAVPct)
+	}
+	if blk == nil || blk.Type != "UMI_BASKET_DVP_SETTLED" {
+		t.Fatal("a unit sale must be committed to the chain")
+	}
+}
+
+func TestUnitSaleFailsWholeWhenTheBuyerCannotPay(t *testing.T) {
+	rail := tradeableRail(t)
+	rail.FundWallet("investor2", 100) // nowhere near enough
+
+	if _, _, err := rail.SettleBasketDvP("MIX", "investor1", "investor2", 4, 1400, false); err == nil {
+		t.Fatal("a buyer who cannot pay must not receive units")
+	}
+	view, _ := rail.BasketByID("MIX")
+	if view.Units["investor1"] != 10 {
+		t.Fatalf("seller lost units on a failed trade: %d", view.Units["investor1"])
+	}
+	if view.Units["investor2"] != 0 {
+		t.Fatalf("buyer gained units without paying: %d", view.Units["investor2"])
+	}
+}
+
+func TestUnitSaleDryRunCommitsNothing(t *testing.T) {
+	rail := tradeableRail(t)
+	rail.FundWallet("investor2", 50000)
+
+	trade, blk, err := rail.SettleBasketDvP("MIX", "investor1", "investor2", 4, 1400, true)
+	if err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	if blk != nil {
+		t.Fatal("a dry run must not write a block")
+	}
+	if !trade.DryRun {
+		t.Fatal("the result must say it was a dry run")
+	}
+	view, _ := rail.BasketByID("MIX")
+	if view.Units["investor1"] != 10 || view.Units["investor2"] != 0 {
+		t.Fatal("a dry run moved units")
+	}
+	if w, _ := rail.Wallet("investor2"); w.BalanceINR != 50000 {
+		t.Fatalf("a dry run moved cash: %v", w.BalanceINR)
+	}
+}
+
+func TestUnitSaleRejectsNonsense(t *testing.T) {
+	rail := tradeableRail(t)
+	rail.FundWallet("investor2", 50000)
+
+	if _, _, err := rail.SettleBasketDvP("MIX", "investor1", "investor1", 1, 100, false); err == nil {
+		t.Fatal("selling to yourself must be refused")
+	}
+	if _, _, err := rail.SettleBasketDvP("MIX", "investor1", "investor2", 1, 0, false); err == nil {
+		t.Fatal("a zero price must be refused")
+	}
+	if _, _, err := rail.SettleBasketDvP("MIX", "investor1", "investor2", 99, 100, false); err == nil {
+		t.Fatal("selling more units than held must be refused")
+	}
+	if _, _, err := rail.SettleBasketDvP("NOPE", "investor1", "investor2", 1, 100, false); err == nil {
+		t.Fatal("an unknown basket must be refused")
+	}
+}
+
+func TestUnitsCanBeTransferredWithoutCash(t *testing.T) {
+	rail := tradeableRail(t)
+
+	if _, blk, err := rail.TransferUnits("MIX", "investor1", "investor3", 3); err != nil || blk == nil {
+		t.Fatalf("transfer: %v", err)
+	}
+	view, _ := rail.BasketByID("MIX")
+	if view.Units["investor1"] != 7 || view.Units["investor3"] != 3 {
+		t.Fatalf("units wrong after transfer: %v", view.Units)
+	}
+	// Still fully backed: trading units does not touch custody.
+	if !view.FullyBacked {
+		t.Fatal("trading units must not disturb the backing")
+	}
+	if _, _, err := rail.TransferUnits("MIX", "investor1", "investor1", 1); err == nil {
+		t.Fatal("transfer to self must be refused")
+	}
+	if _, _, err := rail.TransferUnits("MIX", "investor1", "investor3", 999); err == nil {
+		t.Fatal("transferring more than held must be refused")
+	}
+}
+
+func TestBuyerCanRedeemUnitsTheyBought(t *testing.T) {
+	rail := tradeableRail(t)
+	rail.FundWallet("investor2", 50000)
+	if _, _, err := rail.SettleBasketDvP("MIX", "investor1", "investor2", 4, 1400, false); err != nil {
+		t.Fatalf("trade: %v", err)
+	}
+	// The whole point of a backed unit: whoever ends up holding it can pull
+	// the underlying tokens out.
+	if _, _, err := rail.Redeem("MIX", "investor2", 4); err != nil {
+		t.Fatalf("buyer could not redeem what they bought: %v", err)
+	}
+	if got := rail.securities.Position("PROP-A", "investor2"); got != 8 {
+		t.Fatalf("buyer received %d PROP-A tokens, want 8", got)
+	}
+	if got := rail.securities.Position("PROP-B", "investor2"); got != 12 {
+		t.Fatalf("buyer received %d PROP-B tokens, want 12", got)
+	}
+}
