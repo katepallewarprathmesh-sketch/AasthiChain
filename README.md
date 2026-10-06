@@ -360,11 +360,76 @@ All three settlement POSTs accept `Idempotency-Key`.
 Guardrails surfaced to the UI: `ERR_TOKENS_LOCKED`, `ERR_LTV_LIMIT`, `ERR_NO_VOTING_POWER`,
 `ERR_COUNTERPARTY_SHORT`, `ERR_ALREADY_RESOLVED`, `ERR_ALREADY_REPAID`.
 
+### Dynamic ownership
+
+Ownership is recorded as a **journal of changes over time**, not just a current balance. Every move
+is reason-tagged (`SEEDED`, `DVP_SETTLED`, `BASKET_SUBSCRIBE`, `BASKET_REDEEM`), so the cap table can
+be replayed for any window.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/umi/ownership/{assetId}?from=&to=` | cap table for a window — holders, `events`, `authorisedTokens`, `outstandingTokens` |
+
+Each holder carries two different percentages, and the difference is the point:
+
+| field | meaning |
+|---|---|
+| `pctNow` | position at this instant — a snapshot |
+| `pctTimeWeighted` | average position across the window, from `tokenDays` — the fair basis for splitting income |
+| `tokenDays` | the raw integral, exposed so a split can be audited |
+
+This drives real money. `POST /api/umi/servicing` takes `basis` — omit it for `"snapshot"` (original
+behaviour, unchanged), or pass `"timeWeighted"` to split by how long each holder actually held.
+Two holders with 100 tokens each, held 20 days versus 10 days, splitting ₹3,000 rent:
+
+| basis | holder A (20 d) | holder B (10 d) |
+|---|---|---|
+| `snapshot` | ₹1,500 | ₹1,500 |
+| `timeWeighted` | ₹2,000 | ₹1,000 |
+
+The payer is excluded, weights are scaled ×1000 so paise stay exact, and a window with no history
+falls back to snapshot rather than paying nobody. A holder who sold out mid-window still earns for
+the days they held; a holder who bought yesterday does not collect a full quarter's rent.
+
+### Cross-property portfolio tokens
+
+A **basket** is an actual wrapped unit — one tradeable token representing a fixed recipe of several
+properties — not an aggregated portfolio view. Subscribing *moves the underlying tokens into
+custody*, which is what makes the unit redeemable rather than notional.
+
+```
+ONE unit of PUNE-MUMBAI = 2 × PROP-DEMO-BASKET-PUNE + 1 × PROP-DEMO-BASKET-MUM
+custody: PUNE required 20 held 20 · MUM required 10 held 10 · fullyBacked true
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/umi/baskets` · `/baskets/{id}` | catalogue and one basket — recipe, `navPerUnitINR`, per-asset `backing`, `fullyBacked` |
+| `POST /api/umi/baskets` | define a basket · needs ≥2 distinct assets, each `tokensPerUnit > 0` |
+| `POST /api/umi/baskets/{id}/subscribe` | wrap — moves `tokensPerUnit × units` holder → custodian, all-or-nothing |
+| `POST /api/umi/baskets/{id}/redeem` | unwrap — the exact reverse, back into the real underlying tokens |
+| `POST /api/umi/baskets/{id}/dvp` | **sell units for e₹-W** · `{seller, buyer, units, pricePerUnitINR, dryRun?}` |
+| `POST /api/umi/baskets/{id}/transfer` | move units with no cash leg |
+| `GET /api/umi/holdings/{participant}` | units held per basket and `totalBasketValueINR` |
+
+The unit is genuinely tradeable: a buyer who never subscribed can resell, and can redeem what they
+bought into the underlying property tokens. Sales are atomic — a buyer who cannot pay gets nothing
+and the seller keeps every unit (`409 ERR_UMI_INSUFFICIENT_CBDC`, quoting available versus needed).
+`dryRun: true` returns the projected trade with `premiumToNavPct` and commits no block, which is what
+the dashboard's **Check this sale** button uses before it will show **Confirm sale**.
+
+Trading never touches custody, so `fullyBacked` is unaffected by who owns the units. An
+under-backed basket is never allowed to look healthy: the UI renders a red **Backing short** state
+off `fullyBacked === false`.
+
+Investors drive all of this from `/dashboard`; only *defining* a basket is operator-side.
+
 ### Block types on the chain
 
 `YIELD_DISTRIBUTED` · `GOVERNANCE_RESOLVED` · `LOAN_REPAID` · `ATOMIC_SWAP` ·
 `UMI_WALLET_FUNDED` · `UMI_ISIN_ASSIGNED` · `UMI_DVP_SETTLED` · `UMI_DVP_FAILED` ·
-`UMI_SERVICING_PAID`
+`UMI_SERVICING_PAID` · `UMI_BASKET_CREATED` · `UMI_BASKET_SUBSCRIBED` · `UMI_BASKET_REDEEMED` ·
+`UMI_BASKET_DVP_SETTLED` · `UMI_BASKET_TRANSFERRED`
 
 </details>
 
