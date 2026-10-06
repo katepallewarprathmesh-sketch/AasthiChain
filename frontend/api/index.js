@@ -553,6 +553,37 @@ function verifyWebhookSignature(rawBody, signature, secret, provider) {
 // against cash atomically. Best effort by design — the tokens have already
 // moved and the buyer has paid, so a rail hiccup must never fail the purchase
 // or throw. Keyed on paymentId so retries do not double-settle.
+// Issue a property's opening position on the UMI settlement rail.
+//
+// Tokenizing wrote the opening balance into the app's own ledger and stopped
+// there, so the rail had never heard of the asset. Every later purchase then
+// moved tokens app-side while the rail refused the DvP with
+// ERR_UMI_INSUFFICIENT_SECURITIES — "listed" and "settleable" drifted apart
+// and the chain filled with UMI_DVP_FAILED blocks for purchases the app had
+// already called successful. Seeding is absolute and idempotent, so repeating
+// it is safe. Never throws: tokenizing must not fail because the rail is down.
+async function seedRailPosition(assetId, holder, tokens) {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base || !assetId || !holder || !tokens) return { skipped: 'rail not configured' };
+  try {
+    const r = await fetch(base + '/umi/seed', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}` },
+      body: JSON.stringify({ assetId, holder, tokens, authorisedTokens: tokens }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status >= 400) {
+      console.error('[RAIL] could not issue opening position for', assetId, body.error || r.status);
+      return { ok: false, error: body.error };
+    }
+    console.log(`[RAIL] opening position issued: ${holder} holds ${tokens} of ${assetId}`);
+    return { ok: true, position: body.position };
+  } catch (e) {
+    console.error('[RAIL] seed unreachable for', assetId, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
   if (!base) return { skipped: 'UMI_GATEWAY_URL not set' };
@@ -3012,7 +3043,10 @@ export default async function handler(req, res) {
         }
         balances[key] = { docType: 'balance', assetId: id, ownerId: prop.originatorId, balance: totalTokens, updatedAt: new Date() };
         drunixAppend('TOKEN_MINTED', [{ kind: 'mint', assetId: id, to: prop.originatorId, msp: 'OriginatorMSP', totalTokens, endorsedBy: ['OriginatorMSP.peer', 'RegistrarMSP.peer'] }]);
-        const resp = { assetId: id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock-persisted-fixed', blockHeight: drunixChain.length - 1, validationStatus: prop.registrarValidationStatus, autoCreated: !!prop.autoCreated, tokenPrice: prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0, title: prop.title };
+        // Issue the same opening position on the settlement rail, so the
+        // property is tradeable the moment it is listed.
+        const rail = await seedRailPosition(id, prop.originatorId, totalTokens);
+        const resp = { assetId: id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock-persisted-fixed', blockHeight: drunixChain.length - 1, validationStatus: prop.registrarValidationStatus, autoCreated: !!prop.autoCreated, tokenPrice: prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0, title: prop.title, rail };
         if (idemKey) idempotency[idemKey] = resp;
         globalThis._aasthi_properties = properties;
         globalThis._aasthi_balances = balances;

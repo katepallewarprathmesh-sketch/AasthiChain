@@ -529,7 +529,7 @@ app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
   res.json({ assetId: req.params.id, validationStatus: req.body.decision, fabricMode: 'mock' });
 });
 
-app.post('/api/properties/:id/mint', authMiddleware, (req, res) => {
+app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
   if (prop.registrarValidationStatus !== 'VALIDATED') return res.status(400).json({ error: 'ERR_NOT_VALIDATED' });
@@ -546,7 +546,8 @@ app.post('/api/properties/:id/mint', authMiddleware, (req, res) => {
   if (balances[key]) return res.status(409).json({ error: 'ERR_DUPLICATE_MINT' });
   balances[key] = { docType: 'balance', assetId: req.params.id, ownerId: prop.originatorId, balance: totalTokens, updatedAt: new Date() };
   drunixAppend('TOKEN_MINTED', [{ kind: 'mint', assetId: req.params.id, to: prop.originatorId, msp: 'OriginatorMSP', totalTokens, endorsedBy: ['OriginatorMSP.peer', 'RegistrarMSP.peer'] }]);
-  const resp = { assetId: req.params.id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock', blockHeight: drunixChain.length - 1, endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer') enforced" };
+  const rail = await seedRailPosition(req.params.id, prop.originatorId, totalTokens);
+  const resp = { assetId: req.params.id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock', blockHeight: drunixChain.length - 1, endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer') enforced", rail };
   if (idemKey) idempotency[idemKey] = resp;
   res.json(resp);
 });
@@ -963,6 +964,37 @@ function genUTRRealistic() {
 // against cash atomically. Best effort by design — the tokens have already
 // moved and the buyer has paid, so a rail hiccup must never fail the purchase
 // or throw. Keyed on paymentId so retries do not double-settle.
+// Issue a property's opening position on the UMI settlement rail.
+//
+// Tokenizing wrote the opening balance into the app's own ledger and stopped
+// there, so the rail had never heard of the asset. Every later purchase then
+// moved tokens app-side while the rail refused the DvP with
+// ERR_UMI_INSUFFICIENT_SECURITIES — "listed" and "settleable" drifted apart
+// and the chain filled with UMI_DVP_FAILED blocks for purchases the app had
+// already called successful. Seeding is absolute and idempotent, so repeating
+// it is safe. Never throws: tokenizing must not fail because the rail is down.
+async function seedRailPosition(assetId, holder, tokens) {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base || !assetId || !holder || !tokens) return { skipped: 'rail not configured' };
+  try {
+    const r = await fetch(base + '/umi/seed', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}` },
+      body: JSON.stringify({ assetId, holder, tokens, authorisedTokens: tokens }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status >= 400) {
+      console.error('[RAIL] could not issue opening position for', assetId, body.error || r.status);
+      return { ok: false, error: body.error };
+    }
+    console.log(`[RAIL] opening position issued: ${holder} holds ${tokens} of ${assetId}`);
+    return { ok: true, position: body.position };
+  } catch (e) {
+    console.error('[RAIL] seed unreachable for', assetId, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
   if (!base) return { skipped: 'UMI_GATEWAY_URL not set' };
