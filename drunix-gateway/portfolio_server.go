@@ -124,7 +124,7 @@ func (s *Server) handleBasketByID(w http.ResponseWriter, r *http.Request) {
 			// Well formed, but the book will not allow it.
 			status = http.StatusConflict
 		}
-		umiErr(w, status, errCode(err), err.Error())
+		umiErr(w, status, errCode(err), basketHint(err))
 		return
 	}
 	view, _ := s.UMI.BasketByID(id)
@@ -219,6 +219,10 @@ func basketHint(err error) string {
 		return "this basket already has units outstanding; its recipe cannot be changed"
 	case errors.Is(err, ErrBasketUnits):
 		return "units must be positive and a holder is required"
+	case errors.Is(err, ErrBasketInsufficientUnits):
+		return "you do not hold that many units of this basket"
+	case errors.Is(err, ErrBasketNotFound):
+		return "no such basket on this rail"
 	}
 	return err.Error()
 }

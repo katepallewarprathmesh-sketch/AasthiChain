@@ -128,6 +128,16 @@ class ApiClient {
   async umiBaskets() { return this.request('/api/umi/baskets') }
   async umiBasket(basketId) { return this.request(`/api/umi/baskets/${encodeURIComponent(basketId)}`) }
   async umiBasketHoldings(participant) { return this.request(`/api/umi/holdings/${encodeURIComponent(participant)}`) }
+  async umiBasketSubscribe(basketId, holder, units) {
+    return this.request(`/api/umi/baskets/${encodeURIComponent(basketId)}/subscribe`, {
+      method: 'POST', body: JSON.stringify({ holder, units: Number(units) })
+    })
+  }
+  async umiBasketRedeem(basketId, holder, units) {
+    return this.request(`/api/umi/baskets/${encodeURIComponent(basketId)}/redeem`, {
+      method: 'POST', body: JSON.stringify({ holder, units: Number(units) })
+    })
+  }
   async umiOwnership(assetId, from, to) {
     const q = new URLSearchParams()
     if (from) q.set('from', from)

@@ -175,6 +175,8 @@ export default function InvestorDashboard({ user }) {
         holdings={basketHoldings}
         catalogue={basketCatalogue}
         unavailable={basketsUnavailable}
+        identityId={identityId}
+        onChanged={load}
       />
 
       {/* Holdings */}
