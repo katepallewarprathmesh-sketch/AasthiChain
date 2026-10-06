@@ -9,48 +9,37 @@
     <marker id="arrowNavy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#1E3A5F"/>
     </marker>
-    <style>
-      .t    { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-      .h1   { font-size: 23px; font-weight: 700; fill: #111827; }
-      .sub  { font-size: 13px; fill: #6B7280; }
-      .lyr  { font-size: 16px; font-weight: 700; fill: #1E3A5F; }
-      .body { font-size: 12.5px; fill: #374151; }
-      .mut  { font-size: 11.5px; fill: #6B7280; }
-      .tag  { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
-      .role { font-size: 13.5px; font-weight: 700; fill: #1E3A5F; }
-      .edge { font-size: 11.5px; fill: #6B7280; }
-    </style>
   </defs>
 
   <rect width="1180" height="860" fill="#F7F5F0"/>
 
-  <text x="40" y="52" class="t h1">AasthiChain</text>
-  <text x="40" y="76" class="t sub">Fractional property tokens · UPI money leg · atomic delivery-versus-payment in wholesale CBDC</text>
+  <text x="40" y="52" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="23" font-weight="700" fill="#111827">AasthiChain</text>
+  <text x="40" y="76" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#6B7280">Fractional property tokens · UPI money leg · atomic delivery-versus-payment in wholesale CBDC</text>
 
   <!-- ===== roles ===== -->
   <g>
     <rect x="40" y="104" width="1100" height="118" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
-    <text x="62" y="130" class="t lyr">People</text>
+    <text x="62" y="130" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1E3A5F">People</text>
 
     <g>
       <rect x="150" y="142" width="210" height="34" rx="8" fill="#EEF2F7" stroke="#C7D2E0"/>
-      <text x="255" y="164" class="t role" text-anchor="middle">Owner</text>
-      <text x="255" y="196" class="t edge" text-anchor="middle">lists property + deed hash</text>
+      <text x="255" y="164" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A5F" text-anchor="middle">Owner</text>
+      <text x="255" y="196" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280" text-anchor="middle">lists property + deed hash</text>
     </g>
     <g>
       <rect x="390" y="142" width="210" height="34" rx="8" fill="#EEF2F7" stroke="#C7D2E0"/>
-      <text x="495" y="164" class="t role" text-anchor="middle">Registrar</text>
-      <text x="495" y="196" class="t edge" text-anchor="middle">validates title before minting</text>
+      <text x="495" y="164" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A5F" text-anchor="middle">Registrar</text>
+      <text x="495" y="196" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280" text-anchor="middle">validates title before minting</text>
     </g>
     <g>
       <rect x="630" y="142" width="210" height="34" rx="8" fill="#EEF2F7" stroke="#C7D2E0"/>
-      <text x="735" y="164" class="t role" text-anchor="middle">Investor</text>
-      <text x="735" y="196" class="t edge" text-anchor="middle">buys, holds, sells fractions</text>
+      <text x="735" y="164" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A5F" text-anchor="middle">Investor</text>
+      <text x="735" y="196" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280" text-anchor="middle">buys, holds, sells fractions</text>
     </g>
     <g>
       <rect x="870" y="142" width="210" height="34" rx="8" fill="#EEF2F7" stroke="#C7D2E0"/>
-      <text x="975" y="164" class="t role" text-anchor="middle">Regulator</text>
-      <text x="975" y="196" class="t edge" text-anchor="middle">audits, can freeze an asset</text>
+      <text x="975" y="164" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A5F" text-anchor="middle">Regulator</text>
+      <text x="975" y="196" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280" text-anchor="middle">audits, can freeze an asset</text>
     </g>
   </g>
 
@@ -60,91 +49,91 @@
   <g>
     <rect x="40" y="246" width="1100" height="104" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
     <rect x="40" y="246" width="6" height="104" rx="3" fill="#61DAFB"/>
-    <text x="62" y="276" class="t lyr">Web app</text>
-    <text x="150" y="276" class="t mut">React + Vite · signed in with Clerk</text>
-    <text x="62" y="304" class="t body">Marketplace · Property detail with verification · Investor dashboard · Wallet · Ledger explorer</text>
-    <text x="62" y="328" class="t body">Settlement rail console · Free calculators · Explainers</text>
+    <text x="62" y="276" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1E3A5F">Web app</text>
+    <text x="150" y="276" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">React + Vite · signed in with Clerk</text>
+    <text x="62" y="304" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Marketplace · Property detail with verification · Investor dashboard · Wallet · Ledger explorer</text>
+    <text x="62" y="328" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Settlement rail console · Free calculators · Explainers</text>
   </g>
 
   <line x1="590" y1="352" x2="590" y2="386" stroke="#6B7280" stroke-width="1.6" marker-end="url(#arrow)"/>
-  <text x="600" y="374" class="t edge">REST · session auth · idempotency keys</text>
+  <text x="600" y="374" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">REST · session auth · idempotency keys</text>
 
   <!-- ===== node edge ===== -->
   <g>
     <rect x="40" y="388" width="1100" height="112" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
     <rect x="40" y="388" width="6" height="112" rx="3" fill="#8CC84B"/>
-    <text x="62" y="418" class="t lyr">Node edge</text>
-    <text x="178" y="418" class="t mut">hosted on Vercel</text>
-    <text x="62" y="446" class="t body">Property registry · title verification · token transfers · UPI payment lifecycle · KYC gate · fraud screening</text>
-    <text x="62" y="472" class="t mut">Settlement calls are proxied, not re-implemented — no money rule lives in JavaScript.</text>
+    <text x="62" y="418" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1E3A5F">Node edge</text>
+    <text x="178" y="418" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">hosted on Vercel</text>
+    <text x="62" y="446" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Property registry · title verification · token transfers · UPI payment lifecycle · KYC gate · fraud screening</text>
+    <text x="62" y="472" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">Settlement calls are proxied, not re-implemented — no money rule lives in JavaScript.</text>
   </g>
 
   <!-- money leg -->
   <g>
     <rect x="870" y="516" width="270" height="86" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
     <rect x="870" y="516" width="6" height="86" rx="3" fill="#D97706"/>
-    <text x="892" y="544" class="t lyr">Money leg</text>
-    <text x="892" y="568" class="t body">UPI Collect · PayU test mode</text>
-    <text x="892" y="590" class="t mut">amounts in integer paise</text>
+    <text x="892" y="544" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1E3A5F">Money leg</text>
+    <text x="892" y="568" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">UPI Collect · PayU test mode</text>
+    <text x="892" y="590" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">amounts in integer paise</text>
   </g>
   <line x1="950" y1="500" x2="950" y2="514" stroke="#6B7280" stroke-width="1.6" marker-end="url(#arrow)"/>
 
   <line x1="480" y1="502" x2="480" y2="538" stroke="#1E3A5F" stroke-width="1.8" marker-end="url(#arrowNavy)"/>
-  <text x="492" y="526" class="t edge">settlement only</text>
+  <text x="492" y="526" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">settlement only</text>
 
   <!-- ===== go rail ===== -->
   <g>
     <rect x="40" y="540" width="790" height="168" rx="12" fill="#FFFFFF" stroke="#C7D2E0" stroke-width="1.5"/>
     <rect x="40" y="540" width="6" height="168" rx="3" fill="#00ADD8"/>
-    <text x="62" y="570" class="t lyr">Settlement rail</text>
+    <text x="62" y="570" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1E3A5F">Settlement rail</text>
     <rect x="214" y="555" width="46" height="19" rx="5" fill="#00ADD8"/>
-    <text x="237" y="569" class="t tag" text-anchor="middle">Go</text>
-    <text x="276" y="570" class="t mut">the only place money rules live</text>
+    <text x="237" y="569" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">Go</text>
+    <text x="276" y="570" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">the only place money rules live</text>
 
     <g>
       <rect x="62" y="588" width="236" height="48" rx="8" fill="#F7F5F0" stroke="#E5E7EB"/>
-      <text x="76" y="608" class="t body">Atomic delivery-vs-payment</text>
-      <text x="76" y="626" class="t mut">both legs move, or neither does</text>
+      <text x="76" y="608" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Atomic delivery-vs-payment</text>
+      <text x="76" y="626" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">both legs move, or neither does</text>
     </g>
     <g>
       <rect x="310" y="588" width="236" height="48" rx="8" fill="#F7F5F0" stroke="#E5E7EB"/>
-      <text x="324" y="608" class="t body">Wholesale CBDC wallets</text>
-      <text x="324" y="626" class="t mut">balances reconcile to funding</text>
+      <text x="324" y="608" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Wholesale CBDC wallets</text>
+      <text x="324" y="626" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">balances reconcile to funding</text>
     </g>
     <g>
       <rect x="558" y="588" width="250" height="48" rx="8" fill="#F7F5F0" stroke="#E5E7EB"/>
-      <text x="572" y="608" class="t body">Rent and coupon servicing</text>
-      <text x="572" y="626" class="t mut">paid straight to holders</text>
+      <text x="572" y="608" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Rent and coupon servicing</text>
+      <text x="572" y="626" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">paid straight to holders</text>
     </g>
     <g>
       <rect x="62" y="646" width="236" height="48" rx="8" fill="#F7F5F0" stroke="#E5E7EB"/>
-      <text x="76" y="666" class="t body">Portfolio baskets</text>
-      <text x="76" y="684" class="t mut">many properties, one unit</text>
+      <text x="76" y="666" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Portfolio baskets</text>
+      <text x="76" y="684" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">many properties, one unit</text>
     </g>
     <g>
       <rect x="310" y="646" width="236" height="48" rx="8" fill="#F7F5F0" stroke="#E5E7EB"/>
-      <text x="324" y="666" class="t body">Ownership over time</text>
-      <text x="324" y="684" class="t mut">who held what, and for how long</text>
+      <text x="324" y="666" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Ownership over time</text>
+      <text x="324" y="684" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">who held what, and for how long</text>
     </g>
     <g>
       <rect x="558" y="646" width="250" height="48" rx="8" fill="#F7F5F0" stroke="#E5E7EB"/>
-      <text x="572" y="666" class="t body">Safe retries</text>
-      <text x="572" y="684" class="t mut">a repeat never settles twice</text>
+      <text x="572" y="666" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#374151">Safe retries</text>
+      <text x="572" y="684" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">a repeat never settles twice</text>
     </g>
   </g>
 
   <line x1="950" y1="604" x2="950" y2="700" stroke="#6B7280" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
-  <text x="962" y="660" class="t edge">confirmed</text>
-  <text x="962" y="676" class="t edge">payment</text>
+  <text x="962" y="660" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">confirmed</text>
+  <text x="962" y="676" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11.5" fill="#6B7280">payment</text>
 
   <line x1="435" y1="710" x2="435" y2="744" stroke="#1E3A5F" stroke-width="1.8" marker-end="url(#arrowNavy)"/>
 
   <!-- ===== ledger ===== -->
   <g>
     <rect x="40" y="746" width="1100" height="86" rx="12" fill="#1E3A5F"/>
-    <text x="62" y="778" class="t lyr" style="fill:#FFFFFF">Append-only ledger</text>
-    <text x="244" y="778" class="t" font-size="12.5" fill="#C7D2E0">every state change becomes a block, chained by hash</text>
-    <text x="62" y="806" class="t" font-size="12.5" fill="#E5E7EB">Once written, a block is never erased — including across restarts. Tampering is detectable by replay.</text>
-    <text x="900" y="806" class="t" font-size="12" fill="#C7D2E0">Postgres, or in memory</text>
+    <text x="62" y="778" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Append-only ledger</text>
+    <text x="244" y="778" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#C7D2E0">every state change becomes a block, chained by hash</text>
+    <text x="62" y="806" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#E5E7EB">Once written, a block is never erased — including across restarts. Tampering is detectable by replay.</text>
+    <text x="900" y="806" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#C7D2E0">Postgres, or in memory</text>
   </g>
 </svg>

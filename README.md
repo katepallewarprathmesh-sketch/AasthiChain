@@ -49,7 +49,7 @@ the ownership transfer are one atomic operation — both move, or neither does.
 
 <div align="center">
 
-<img src="docs/architecture.svg" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a Node edge handles property, payments and KYC and proxies settlement to a Go rail; every state change lands on a hash-chained append-only ledger." width="100%">
+<img src="docs/architecture.png" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a Node edge handles property, payments and KYC and proxies settlement to a Go rail; every state change lands on a hash-chained append-only ledger." width="100%">
 
 </div>
 
