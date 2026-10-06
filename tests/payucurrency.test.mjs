@@ -90,10 +90,10 @@ t('null is safe', withPayUCurrency(null) === null);
 // PAYU_DISABLED must drop us back to the demo UPI rail.
 const cfg = new Function('process', grabFn('payuConfig', src) + '\nreturn payuConfig;');
 const base = { PAYU_MERCHANT_KEY: 'k', PAYU_SALT: 's', NPCI_MODE: 'payu' };
-t('PayU active when configured', cfg({ env: { ...base } })().active === true);
-t('PAYU_DISABLED=true turns PayU off', cfg({ env: { ...base, PAYU_DISABLED: 'true' } })().active === false);
-t('other values do not disable', cfg({ env: { ...base, PAYU_DISABLED: 'false' } })().active === true);
-t('no credentials means inactive', cfg({ env: { NPCI_MODE: 'payu' } })().active === false);
+t('PayU is OFF by default even when fully configured', cfg({ env: { ...base } })().active === false);
+t('PAYU_ENABLED=true opts back in', cfg({ env: { ...base, PAYU_ENABLED: 'true' } })().active === true);
+t('any other value stays off', cfg({ env: { ...base, PAYU_ENABLED: '1' } })().active === false);
+t('no credentials means inactive', cfg({ env: { NPCI_MODE: 'payu', PAYU_ENABLED: 'true' } })().active === false);
 
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);
