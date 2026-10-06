@@ -519,14 +519,178 @@ app.get('/api/properties/:id', optionalAuth, (req, res) => {
   res.json({ property: prop, tokenPrice, availableTokens, soldTokens, holders: holderView, holderCount: holders.length, subscription: subscriptionOf(prop), documentHashVerified: true, fabricMode: 'mock' });
 });
 
+// Title validation is the whole basis of the verification story, so it has to
+// be (a) performed by someone other than the owner and (b) written to the
+// chain. It used to be neither: any logged-in role could validate, including
+// the Originator validating their own property and minting it straight after,
+// and the decision left no block behind to audit.
+const VALIDATION_DECISIONS = new Set(['VALIDATED', 'REJECTED']);
+
 app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
   if (prop.status !== 'DRAFT') return res.status(400).json({ error: `ERR_INVALID_INPUT: must be DRAFT, current ${prop.status}` });
-  prop.registrarValidationStatus = req.body.decision;
+
+  const role = req.user.role;
+  if (!['Registrar', 'Regulator'].includes(role)) {
+    return res.status(403).json({
+      error: 'ERR_NOT_REGISTRAR',
+      message: `Only a Registrar can validate title. You are signed in as ${role || 'unknown'}. An owner validating their own property would make the check meaningless.`,
+    });
+  }
+  if (req.user.identityId === prop.originatorId) {
+    return res.status(403).json({
+      error: 'ERR_SELF_VALIDATION',
+      message: 'The same identity registered this property, so it cannot also validate it.',
+    });
+  }
+
+  const decision = String(req.body.decision || '').toUpperCase();
+  if (!VALIDATION_DECISIONS.has(decision)) {
+    return res.status(400).json({
+      error: 'ERR_INVALID_INPUT',
+      message: "decision must be 'VALIDATED' or 'REJECTED'",
+    });
+  }
+
+  prop.registrarValidationStatus = decision;
+  prop.validatedBy = req.user.identityId;
+  prop.validatedByMsp = req.user.mspId || 'RegistrarMSP';
+  prop.validatedAt = new Date().toISOString();
+  prop.validationNote = String(req.body.note || '').slice(0, 300) || undefined;
   prop.updatedAt = new Date();
   properties[req.params.id] = prop;
-  res.json({ assetId: req.params.id, validationStatus: req.body.decision, fabricMode: 'mock' });
+
+  const block = drunixAppend('PROPERTY_VALIDATED', [{
+    kind: 'validation',
+    assetId: req.params.id,
+    decision,
+    documentHash: prop.documentHash,
+    validatedBy: prop.validatedBy,
+    msp: prop.validatedByMsp,
+    note: prop.validationNote,
+    endorsedBy: ['RegistrarMSP.peer'],
+  }]);
+
+  res.json({
+    assetId: req.params.id,
+    validationStatus: decision,
+    validatedBy: prop.validatedBy,
+    validatedAt: prop.validatedAt,
+    blockHeight: block.height,
+    blockHash: block.hash,
+    fabricMode: 'mock',
+  });
+});
+
+// The integrations table advertised GET /api/properties/:id/verify as live and
+// no such route existed. This is that endpoint: everything a buyer needs to
+// decide whether to trust a listing, with the chain evidence behind each claim.
+// Deliberately unauthenticated — a trust surface nobody can read is worthless.
+app.get('/api/properties/:id/verify', (req, res) => {
+  const prop = properties[req.params.id];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+
+  const evidence = drunixChain
+    .filter(b => (b.txns || []).some(t => t && t.assetId === prop.assetId))
+    .map(b => ({ height: b.height, type: b.type, timestamp: b.timestamp, hash: b.hash }));
+
+  const chain = drunixVerify();
+  const validated = prop.registrarValidationStatus === 'VALIDATED';
+  const independent = Boolean(prop.validatedBy) && prop.validatedBy !== prop.originatorId;
+  const dupes = Object.values(properties).filter(x => x.documentHash === prop.documentHash && x.assetId !== prop.assetId);
+
+  const checks = [
+    {
+      id: 'registrar',
+      ok: validated,
+      label: 'Title validated by a registrar',
+      detail: validated
+        ? `${prop.validatedBy || 'registrar'} (${prop.validatedByMsp || 'RegistrarMSP'}) validated this on ${prop.validatedAt || 'an earlier build, before validations were recorded'}`
+        : `Current status is ${prop.registrarValidationStatus || 'PENDING'}. Tokens cannot be minted until a registrar validates the title.`,
+    },
+    {
+      id: 'independence',
+      ok: independent || !prop.validatedBy,
+      warn: !prop.validatedBy && validated,
+      label: 'Validator is not the owner',
+      detail: prop.validatedBy
+        ? (independent
+          ? `Registered by ${prop.originatorId}, validated by ${prop.validatedBy} — different parties.`
+          : 'The owner validated their own property. This listing should be re-checked.')
+        : 'This property was validated before the validator identity was recorded, so independence cannot be proven from the chain.',
+    },
+    {
+      id: 'document',
+      ok: Boolean(prop.documentHash) && String(prop.documentHash).length === 64,
+      label: 'Title document fingerprinted',
+      detail: prop.documentHash
+        ? `SHA-256 ${prop.documentHash}. Hash your own copy of the deed and compare it with POST /api/properties/${prop.assetId}/verify-document.`
+        : 'No document hash on record.',
+    },
+    {
+      id: 'uniqueness',
+      ok: dupes.length === 0,
+      label: 'No duplicate deed',
+      detail: dupes.length === 0
+        ? 'No other listing shares this document hash.'
+        : `Shares a document hash with ${dupes.map(d => d.assetId).join(', ')} — possible double listing.`,
+    },
+    {
+      id: 'chain',
+      ok: Boolean(chain.valid),
+      label: 'Ledger intact from genesis',
+      detail: chain.valid
+        ? `All ${chain.blocks ?? drunixChain.length} blocks replay cleanly.`
+        : 'Hash chain verification FAILED — treat every claim above as unproven.',
+    },
+  ];
+
+  const failed = checks.filter(c => !c.ok);
+  res.json({
+    assetId: prop.assetId,
+    title: prop.title,
+    status: prop.status,
+    registrarValidationStatus: prop.registrarValidationStatus,
+    verified: failed.length === 0,
+    summary: failed.length === 0
+      ? 'Every verification check passed.'
+      : `${failed.length} check(s) did not pass: ${failed.map(c => c.label).join('; ')}.`,
+    checks,
+    documentHash: prop.documentHash,
+    owner: prop.originatorId,
+    validatedBy: prop.validatedBy || null,
+    validatedAt: prop.validatedAt || null,
+    chainEvidence: evidence,
+    chainVerified: Boolean(chain.valid),
+    checkedAt: new Date().toISOString(),
+    fabricMode: 'mock',
+  });
+});
+
+// Lets a buyer prove the deed they were sent is the one on the ledger, without
+// uploading the document itself — they hash it locally and send 64 hex chars.
+app.post('/api/properties/:id/verify-document', (req, res) => {
+  const prop = properties[req.params.id];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  const supplied = String(req.body.documentHash || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(supplied)) {
+    return res.status(400).json({
+      error: 'ERR_INVALID_INPUT',
+      message: 'documentHash must be 64 hex characters (SHA-256 of the file). Compute it with: sha256sum deed.pdf',
+    });
+  }
+  const match = supplied === String(prop.documentHash || '').toLowerCase();
+  res.json({
+    assetId: prop.assetId,
+    match,
+    message: match
+      ? 'This document matches the one registered on the ledger for this property.'
+      : 'This document does NOT match the registered title document. Do not rely on it.',
+    registeredHash: prop.documentHash,
+    suppliedHash: supplied,
+    checkedAt: new Date().toISOString(),
+  });
 });
 
 app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
