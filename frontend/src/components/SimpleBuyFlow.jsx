@@ -156,7 +156,21 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           localStorage.removeItem('aasthi_payu_pending')
           setResumeInfo('')
           setPayment(pay)
-          setError(pay.failureReason || `Payment ${pay.status} no tokens moved, nothing was kept`)
+          // Never claim nothing moved without checking. A payment that carries
+          // a transfer id HAS delivered its tokens, whatever its status string
+          // says — telling the buyer otherwise is the worst thing this screen
+          // can do.
+          if (pay.drunixTransferId) {
+            try {
+              const s = await api.settlePayment(pay.paymentId, pay)
+              if (cancelled) return
+              if (s?.transfer) setTransfer(s.transfer)
+              if (s?.payment) setPayment(s.payment)
+            } catch { /* the transfer exists either way */ }
+            setStep('success')
+            return
+          }
+          setError(pay.failureReason || `Payment ${pay.status} — the purchase did not complete. No tokens were transferred, and any amount debited is reversed.`)
           setStep('error')
           return
         }
