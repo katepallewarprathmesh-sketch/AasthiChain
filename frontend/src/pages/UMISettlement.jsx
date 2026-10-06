@@ -124,6 +124,11 @@ export default function UMISettlement() {
   const [fundWho, setFundWho] = useState('investor1')
   const [fundAmt, setFundAmt] = useState(100000)
   const [servAmt, setServAmt] = useState(6000)
+  // Card 3 used to borrow card 2's assetId and seller, so it silently acted on
+  // a property the reader never chose there. It picks its own now.
+  const [servAsset, setServAsset] = useState('PROP-GREEN-VALLEY-PUNE-001')
+  const [servPayer, setServPayer] = useState('originator1')
+  const [properties, setProperties] = useState([])
 
   const refresh = useCallback(async () => {
     const cfg = await umi('/config')
@@ -135,6 +140,12 @@ export default function UMISettlement() {
     setInstructions(i.data.instructions || [])
     setRecon(r.data)
     setIsins(s.data.register || [])
+    try {
+      const pr = await fetch('/api/properties')
+      const pd = await pr.json()
+      const list = (Array.isArray(pd) ? pd : pd.properties || []).filter(x => x.assetId)
+      setProperties(list)
+    } catch { /* pickers fall back to the ids already selected */ }
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
@@ -184,8 +195,46 @@ export default function UMISettlement() {
     (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)} — the cash leg is now covered`, 'dvp')
 
   const servicing = () => run(
-    () => umi('/servicing', { body: { assetId, payer: seller, amountINR: Number(servAmt) } }),
+    () => umi('/servicing', { body: { assetId: servAsset, payer: servPayer, amountINR: Number(servAmt) } }),
     (d) => `Servicing paid: ${money(d.servicing.distributedINR)} credited pro-rata into ${d.servicing.payouts.length} CBDC wallet(s) · block #${d.servicing.blockHeight}`, 'servicing')
+
+  // Everyone the rail already knows about, so the buyer/seller fields can be
+  // a choice instead of a spelling test.
+  const participants = Array.from(new Set([
+    ...wallets.map(w => w.participant),
+    ...properties.map(pr => pr.originatorId),
+    seller, buyer, servPayer,
+  ].filter(Boolean)))
+
+  const propLabel = (id) => {
+    const pr = properties.find(x => x.assetId === id)
+    return pr ? `${pr.title} (${num(pr.totalTokens || 0)} tokens)` : id
+  }
+
+  const Field = ({ label, hint, children }) => (
+    <label style={{ display: 'block', minWidth: 0 }}>
+      <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.navy, marginBottom: 4 }}>{label}</span>
+      {children}
+      {hint ? <span style={{ display: 'block', fontSize: 11, color: C.mut, marginTop: 3 }}>{hint}</span> : null}
+    </label>
+  )
+
+  const PropertyPicker = ({ value, onChange }) => (
+    properties.length
+      ? <select style={input} value={value} onChange={e => onChange(e.target.value)}>
+          {!properties.some(x => x.assetId === value) && <option value={value}>{value}</option>}
+          {properties.map(pr => <option key={pr.assetId} value={pr.assetId}>{propLabel(pr.assetId)}</option>)}
+        </select>
+      : <input style={input} value={value} onChange={e => onChange(e.target.value)} />
+  )
+
+  const PartyPicker = ({ value, onChange }) => (
+    participants.length
+      ? <select style={input} value={value} onChange={e => onChange(e.target.value)}>
+          {participants.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>
+      : <input style={input} value={value} onChange={e => onChange(e.target.value)} />
+  )
 
   if (railDown) {
     return (
@@ -254,21 +303,46 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         title="2 · Atomic DvP instruction"
         sub="Validate → match → lock BOTH legs → commit in one block. If either leg fails, nothing moves: there is no settlement-risk window."
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 12 }}>
-          <input style={input} value={assetId} onChange={e => setAssetId(e.target.value)} placeholder="assetId" />
-          <input style={input} value={seller} onChange={e => setSeller(e.target.value)} placeholder="seller" />
-          <input style={input} value={buyer} onChange={e => setBuyer(e.target.value)} placeholder="buyer" />
-          <input style={input} type="number" value={tokens} onChange={e => setTokens(e.target.value)} placeholder="tokens" />
-          <input style={input} type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="₹ / token" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
+          <Field label="Property">
+            <PropertyPicker value={assetId} onChange={(v) => {
+              setAssetId(v)
+              const pr = properties.find(x => x.assetId === v)
+              if (pr && pr.originatorId) setSeller(pr.originatorId)
+            }} />
+          </Field>
+          <Field label="Seller" hint="gives up tokens"><PartyPicker value={seller} onChange={setSeller} /></Field>
+          <Field label="Buyer" hint="pays in e₹-W"><PartyPicker value={buyer} onChange={setBuyer} /></Field>
+          <Field label="Tokens"><input style={input} type="number" value={tokens} onChange={e => setTokens(e.target.value)} /></Field>
+          <Field label="Price per token"><input style={input} type="number" value={price} onChange={e => setPrice(e.target.value)} /></Field>
         </div>
+
+        {/* Say the trade back in one plain sentence before anyone commits to it. */}
+        <div style={{ background: '#F8FAFC', border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#334155', marginBottom: 12 }}>
+          <strong>{buyer}</strong> pays <strong>{money(cashINR)}</strong> to <strong>{seller}</strong> for{' '}
+          <strong>{num(tokens)} tokens</strong> of {propLabel(assetId)} — {num(tokens)} × {money(price)}.
+          Both legs move together or neither does.
+        </div>
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button style={btn(true)} onClick={() => settle(false)} disabled={!!busy || !canAfford}>
-            {busy === 'dvp' ? 'Settling…' : 'Settle DvP'}
+            {busy === 'dvp' ? 'Settling…' : `Settle ${money(cashINR)}`}
           </button>
-          <button style={btn(false)} onClick={() => settle(true)} disabled={!!busy}>Dry run (no state change)</button>
-          <button style={btn(false)} onClick={seed} disabled={!!busy}>Seed demo position for seller</button>
-          <span style={{ fontSize: 12.5, color: C.mut }}>Cash leg: <strong>{money(cashINR)}</strong></span>
+          <button style={btn(false)} onClick={() => settle(true)} disabled={!!busy}>Check first</button>
+          <button
+            onClick={() => setOpen(open === 'demo' ? null : 'demo')}
+            style={{ background: 'none', border: 'none', color: C.mut, fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+            {open === 'demo' ? 'Hide demo setup' : 'Demo setup'}
+          </button>
         </div>
+        {open === 'demo' && (
+          <div style={{ marginTop: 10, border: `1px dashed ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+            <div style={{ fontSize: 12.5, color: C.mut, marginBottom: 8 }}>
+              Only needed on a fresh rail: give the seller a starting position to trade out of.
+            </div>
+            <button style={btn(false)} onClick={seed} disabled={!!busy}>Give {seller} 15,000 tokens of this property</button>
+          </div>
+        )}
 
         {cashINR > 0 && !canAfford && (
           <div style={{ marginTop: 10, background: C.warnBg, border: `1px solid ${C.warnLine}`,
@@ -295,13 +369,22 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         title="3 · Programmable asset servicing"
         sub="Rent / coupon paid pro-rata straight into holders' CBDC wallets on the due date — no registrar file exchange, no reconciliation batch."
       >
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input style={{ ...input, maxWidth: 150 }} type="number" value={servAmt} onChange={e => setServAmt(e.target.value)} />
-          <button style={btn(true)} onClick={servicing} disabled={!!busy}>
-            {busy === 'servicing' ? 'Distributing…' : `Distribute from ${seller}`}
-          </button>
-          <span style={{ fontSize: 12.5, color: C.mut }}>pro-rata across holders of {assetId}</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
+          <Field label="Property"><PropertyPicker value={servAsset} onChange={(v) => {
+            setServAsset(v)
+            const pr = properties.find(x => x.assetId === v)
+            if (pr && pr.originatorId) setServPayer(pr.originatorId)
+          }} /></Field>
+          <Field label="Paid by" hint="rent collected by"><PartyPicker value={servPayer} onChange={setServPayer} /></Field>
+          <Field label="Amount to distribute"><input style={input} type="number" value={servAmt} onChange={e => setServAmt(e.target.value)} /></Field>
         </div>
+        <div style={{ background: '#F8FAFC', border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#334155', marginBottom: 12 }}>
+          <strong>{money(servAmt)}</strong> from <strong>{servPayer}</strong>, split across everyone holding{' '}
+          {propLabel(servAsset)} in proportion to their tokens.
+        </div>
+        <button style={btn(true)} onClick={servicing} disabled={!!busy}>
+          {busy === 'servicing' ? 'Distributing…' : `Distribute ${money(servAmt)}`}
+        </button>
         <Notice flash={flash} where="servicing" onClose={() => setFlash(null)} />
       </Card>
 
