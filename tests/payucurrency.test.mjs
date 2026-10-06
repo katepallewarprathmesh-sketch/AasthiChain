@@ -35,8 +35,12 @@ const req = { assetId: 'PROP-X', tokenAmount: 100, amountINR: 50000, payerVpa: '
 const out = mod.buildPayUCheckout(payu, pay, req, 'https://aasthi-chain.vercel.app');
 const prm = out.params;
 
-t('transactionCurrency is present', 'transactionCurrency' in prm);
-t('currency is INR', prm.transactionCurrency === 'INR');
+// The live merchant is a plain INR account: sending transactionCurrency makes
+// PayU reject the transaction ("Invalid API version for transactionCurrency
+// request"). Verified by posting the signed form to test.payu.in, which 302s
+// to the hosted checkout only when the field is absent. So: omitted unless
+// PAYU_CURRENCY is explicitly configured for a multi-currency merchant.
+t('transactionCurrency omitted by default', !('transactionCurrency' in prm));
 t('posts to PayU', out.action === 'https://test.payu.in/_payment');
 
 // The hash sequence: key|txnid|amount|productinfo|firstname|email|udf1..5||||||salt
@@ -46,7 +50,14 @@ const expected = crypto.createHash('sha512').update([
   '', '', '', '', '', payu.salt,
 ].join('|')).digest('hex');
 t('request hash matches PayU formula', prm.hash === expected);
-t('currency is NOT in the signed sequence', !expected.includes(prm.transactionCurrency) && prm.hash === expected);
+t('hash unaffected by currency policy', prm.hash === expected);
+
+const withCur = new Function('crypto', 'process',
+  grab('payuRequestHash') + '\n' + grab('buildPayUCheckout') +
+  '\nreturn { buildPayUCheckout };')(crypto, { env: { PAYU_CURRENCY: 'INR' } })
+  .buildPayUCheckout(payu, pay, req, 'https://aasthi-chain.vercel.app').params;
+t('PAYU_CURRENCY opts the field back in', withCur.transactionCurrency === 'INR');
+t('opting in does not change the signature', withCur.hash === expected);
 
 // every mandatory field PayU checks before it even looks at the hash
 for (const k of ['key', 'txnid', 'amount', 'productinfo', 'firstname', 'email', 'phone', 'surl', 'furl', 'hash'])
@@ -57,8 +68,8 @@ t('amount has 2 decimals', /^\d+\.\d{2}$/.test(prm.amount));
 // the other two builders must agree
 const mock = fs.readFileSync(path.join(here, '../mock-api-server.js'), 'utf8');
 const go = fs.readFileSync(path.join(here, '../payment-gateway/real_payubank.go'), 'utf8');
-t('local server sends it too', /transactionCurrency/.test(mock));
-t('Go gateway sends it too', /transactionCurrency/.test(go));
+t('local server gates it on PAYU_CURRENCY too', /PAYU_CURRENCY \? \{ transactionCurrency/.test(mock));
+t('Go gateway gates it on PAYU_CURRENCY too', /Getenv\("PAYU_CURRENCY"\); c != ""/.test(go));
 
 // --- replayed payments ------------------------------------------------------
 // Payments persist and replay by idempotency key. One built before this fix
@@ -76,7 +87,11 @@ const { withPayUCurrency } = new Function('process',
   grabFn('withPayUCurrency', src) + '\nreturn { withPayUCurrency };')({ env: {} });
 
 const stale = { paymentId: 'OLD1', payuCheckout: { action: 'x', params: { key: 'k', amount: '500.00' } } };
-t('stale stored checkout is backfilled', withPayUCurrency(stale).payuCheckout.params.transactionCurrency === 'INR');
+t('no backfill when PAYU_CURRENCY is unset', !('transactionCurrency' in withPayUCurrency(stale).payuCheckout.params));
+const { withPayUCurrency: bf } = new Function('process',
+  grabFn('withPayUCurrency', src) + '\nreturn { withPayUCurrency };')({ env: { PAYU_CURRENCY: 'INR' } });
+const stale2 = { paymentId: 'OLD2', payuCheckout: { action: 'x', params: { key: 'k' } } };
+t('backfills when PAYU_CURRENCY is set', bf(stale2).payuCheckout.params.transactionCurrency === 'INR');
 
 const already = { paymentId: 'NEW1', payuCheckout: { action: 'x', params: { transactionCurrency: 'USD' } } };
 t('an explicit currency is not overwritten', withPayUCurrency(already).payuCheckout.params.transactionCurrency === 'USD');
@@ -90,10 +105,10 @@ t('null is safe', withPayUCurrency(null) === null);
 // PAYU_DISABLED must drop us back to the demo UPI rail.
 const cfg = new Function('process', grabFn('payuConfig', src) + '\nreturn payuConfig;');
 const base = { PAYU_MERCHANT_KEY: 'k', PAYU_SALT: 's', NPCI_MODE: 'payu' };
-t('PayU is OFF by default even when fully configured', cfg({ env: { ...base } })().active === false);
-t('PAYU_ENABLED=true opts back in', cfg({ env: { ...base, PAYU_ENABLED: 'true' } })().active === true);
-t('any other value stays off', cfg({ env: { ...base, PAYU_ENABLED: '1' } })().active === false);
-t('no credentials means inactive', cfg({ env: { NPCI_MODE: 'payu', PAYU_ENABLED: 'true' } })().active === false);
+t('PayU active when key, salt and NPCI_MODE are set', cfg({ env: { ...base } })().active === true);
+t('inactive without credentials', cfg({ env: { NPCI_MODE: 'payu' } })().active === false);
+t('inactive when NPCI_MODE is not payu', cfg({ env: { ...base, NPCI_MODE: 'mock' } })().active === false);
+t('inactive without a salt', cfg({ env: { ...base, PAYU_SALT: '' } })().active === false);
 
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);

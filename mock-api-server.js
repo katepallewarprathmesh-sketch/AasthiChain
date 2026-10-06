@@ -1153,16 +1153,7 @@ function payuConfig() {
   const base = (process.env.PAYU_BASE_URL || 'https://test.payu.in').replace(/\/$/, '');
   return {
     key, salt, base,
-    // PayU is opt-in and currently OFF by default on purpose. The merchant
-    // account is provisioned as multi-currency, but the legacy /_payment
-    // endpoint we post to rejects transactionCurrency outright, so every
-    // checkout dead-ends on PayU's error page no matter what we send. Proven
-    // by posting the signed form directly: without the field PayU says it is
-    // mandatory, with it PayU says the API version is invalid. Until PayU
-    // clears the multi-currency flag on the account, buyers go to the demo
-    // UPI rail. Set PAYU_ENABLED=true to turn the gateway back on.
-    active: !!(key && salt) && (process.env.NPCI_MODE === 'payu') &&
-      process.env.PAYU_ENABLED === 'true',
+    active: !!(key && salt) && (process.env.NPCI_MODE === 'payu'),
     test: base.includes('test.payu.in')
   };
 }
@@ -1193,9 +1184,13 @@ function verifyPayUResponse(params, key, salt) {
 // before transactionCurrency was added would keep replaying without it and
 // keep being rejected by PayU. Backfill any stored checkout on the way out.
 function withPayUCurrency(pay) {
-  if (pay && pay.payuCheckout && pay.payuCheckout.params &&
+  // Only multi-currency merchants accept this field; a plain INR account
+  // rejects the transaction outright when it is present. Opt in via
+  // PAYU_CURRENCY, which is also what buildPayUCheckout honours.
+  const cur = process.env.PAYU_CURRENCY;
+  if (cur && pay && pay.payuCheckout && pay.payuCheckout.params &&
       !pay.payuCheckout.params.transactionCurrency) {
-    pay.payuCheckout.params.transactionCurrency = process.env.PAYU_CURRENCY || 'INR';
+    pay.payuCheckout.params.transactionCurrency = cur;
   }
   return pay;
 }
@@ -1209,7 +1204,10 @@ function buildPayUCheckout(payu, pay, req, cbBase) {
   const params = {
     key: payu.key, txnid: pay.paymentId, amount, productinfo, firstname, email,
     phone: '9999999999', vpa: req.payerVpa,
-    transactionCurrency: process.env.PAYU_CURRENCY || 'INR',
+    // Sent ONLY when PAYU_CURRENCY is set. Multi-currency merchants require
+    // it; ordinary INR accounts reject the whole transaction when it is
+    // present ("Invalid API version for transactionCurrency request").
+    ...(process.env.PAYU_CURRENCY ? { transactionCurrency: process.env.PAYU_CURRENCY } : {}),
     // PayU requires ABSOLUTE redirect URLs — derive from request host when not configured
     surl: process.env.PAYU_SURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
     furl: process.env.PAYU_FURL || (cbBase ? cbBase + '/api/npci/payu/callback' : '/api/npci/payu/callback'),
