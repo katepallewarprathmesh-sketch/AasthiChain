@@ -1023,7 +1023,11 @@ async function railCommitForReleasedPayment(pay) {
 
 async function settleConfirmedPayment(pay) {
   if (!pay) return { ok: false, code: 404, error: 'ERR_PAYMENT_NOT_FOUND', message: 'Payment not found' };
-  if (pay.status === 'RELEASED' && pay.drunixTransferId) return { ok: true, already: true, payment: pay, message: 'Already settled' };
+  // Hand the transfer back on the already-settled path too. The browser
+  // needs it to render the success screen when the server got there first.
+  if (pay.status === 'RELEASED' && pay.drunixTransferId) {
+    return { ok: true, already: true, payment: pay, transfer: transfers[pay.drunixTransferId] || null, message: 'Already settled' };
+  }
   if (pay.status !== 'CONFIRMED') return { ok: false, code: 409, error: 'ERR_NOT_CONFIRMED', message: `Payment is ${pay.status} — only CONFIRMED payments settle. Use /payu/reconcile first for PayU payments.` };
   const assetId = pay.assetId, buyer = pay.payerId || 'investor1';
   if (!assetId) return { ok: false, code: 400, error: 'ERR_NO_ASSET', message: 'Payment has no assetId' };

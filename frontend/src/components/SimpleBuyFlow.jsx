@@ -113,6 +113,23 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             if (rec?.payment?.status) pay = rec.payment
           } catch { /* reconcile is best-effort; keep polling */ }
         }
+        // RELEASED means the server already finished the purchase — the PayU
+        // callback settles server-side now, so it usually beats this poll.
+        // Treating it as "not PENDING" reported a completed purchase as a
+        // failure: "Payment RELEASED — no tokens moved, nothing was kept".
+        if (pay.status === 'RELEASED') {
+          localStorage.removeItem('aasthi_payu_pending')
+          setResumeInfo('')
+          setPayment(pay)
+          try {
+            const s = await api.settlePayment(pay.paymentId, pay)
+            if (cancelled) return
+            if (s?.transfer) setTransfer(s.transfer)
+            if (s?.payment) setPayment(s.payment)
+          } catch { /* the payment is settled either way */ }
+          setStep('success')
+          return
+        }
         if (pay.status === 'CONFIRMED' && (!pending.assetId || pending.assetId === assetId)) {
           localStorage.removeItem('aasthi_payu_pending')
           setResumeInfo('Completing your purchase moving tokens to you…')
