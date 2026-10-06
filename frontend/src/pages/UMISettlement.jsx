@@ -134,6 +134,10 @@ export default function UMISettlement() {
   // settlement rail and the wrong one for everybody else, so the detail is
   // now opt-in and the default view is the one thing people come here to do.
   const [mode, setMode] = useState('simple')
+  // Result of a silent dry run against the current inputs. The rail can tell
+  // us whether this trade would settle without moving anything, so there is
+  // no reason to let someone click into a red error to find out.
+  const [preflight, setPreflight] = useState(null)
 
   const refresh = useCallback(async () => {
     const cfg = await umi('/config')
@@ -218,6 +222,19 @@ export default function UMISettlement() {
       setFlash({ kind: 'err', where: 'quick', text: e.message })
     } finally { setBusy(false) }
   }
+
+  useEffect(() => {
+    if (mode !== 'simple' || !assetId || !seller || !buyer) { setPreflight(null); return }
+    const t = Number(tokens), pr = Number(price)
+    if (!t || t <= 0 || !pr || pr <= 0) { setPreflight(null); return }
+    let cancelled = false
+    const id = setTimeout(async () => {
+      const d = await umi('/dvp', { body: { assetId, seller, buyer, tokens: t, pricePerTokenINR: pr, dryRun: true } })
+      if (cancelled) return
+      setPreflight(d.ok ? { ok: true } : { ok: false, code: d.data && d.data.error, message: explain(d.data) })
+    }, 400)
+    return () => { cancelled = true; clearTimeout(id) }
+  }, [mode, assetId, seller, buyer, tokens, price, wallets])
 
   const servicing = () => run(
     () => umi('/servicing', { body: { assetId: servAsset, payer: servPayer, amountINR: Number(servAmt) } }),
@@ -326,7 +343,31 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             )}
           </div>
 
-          <button style={{ ...btn(true), padding: '11px 20px', fontSize: 14 }} onClick={quickSettle} disabled={!!busy || !Number(tokens) || !Number(price)}>
+          {/* Blocked states are explained before the click, in the page's own
+              voice, with the one action that unblocks them. */}
+          {preflight && !preflight.ok && (
+            <div style={{ background: C.warnBg, border: `1px solid ${C.warnLine}`, borderRadius: 10, padding: '11px 13px', fontSize: 13, color: '#7C4A03', marginBottom: 12 }}>
+              {preflight.code === 'ERR_UMI_INSUFFICIENT_SECURITIES' ? (
+                <>
+                  <strong>{seller} has no tokens of this property on the settlement rail yet.</strong>
+                  <div style={{ marginTop: 4 }}>
+                    This property was listed in the marketplace, but its opening position was never issued on the rail — so there is nothing for {buyer} to buy.
+                  </div>
+                  <div style={{ marginTop: 9 }}>
+                    <button style={btn(false)} onClick={seed} disabled={!!busy}>
+                      Issue {seller}&rsquo;s opening position
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>{preflight.message}</>
+              )}
+            </div>
+          )}
+
+          <button style={{ ...btn(true), padding: '11px 20px', fontSize: 14, opacity: (preflight && !preflight.ok) ? 0.45 : 1 }}
+            onClick={quickSettle}
+            disabled={!!busy || !Number(tokens) || !Number(price) || !!(preflight && !preflight.ok)}>
             {busy === 'quick' ? 'Settling…' : (shortfall > 0 ? `Top up and settle ${money(cashINR)}` : `Settle ${money(cashINR)}`)}
           </button>
 
