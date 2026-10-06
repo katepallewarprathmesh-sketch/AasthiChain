@@ -442,7 +442,11 @@ function AppContent({ user, setUser }) {
 
   // Public pages must never wait on the auth SDK — they render immediately and
   // Clerk finishes initialising in the background. Only auth-gated routes pause.
-  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support', '/umi']
+  // /insights is operator-only and authenticates with an admin key, not with
+  // Clerk. Leaving it off this list made it wait on the Clerk SDK, so when
+  // Clerk never reported ready the page sat empty forever instead of showing
+  // its own unlock card.
+  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support', '/umi', '/insights']
   const isPublicPath = PUBLIC_PATHS.includes(location.pathname)
 
   if (isClerkConfigured && !isLoaded && !isPublicPath) {

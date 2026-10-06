@@ -55,5 +55,14 @@ t('pctAllocated is measured against the issued supply',
   rows.every(r => r.totalTokens === 0 ||
     Math.abs(r.pctAllocated - Math.round((r.tokensHeld / r.totalTokens) * 1000) / 10) < 0.05));
 
+// The dashboard authenticates with an admin key, not Clerk. When it was not
+// on PUBLIC_PATHS the route waited on the Clerk SDK, and a Clerk that never
+// reported ready left the page blank with no unlock card and no error.
+const app = await import('node:fs').then(fs =>
+  fs.readFileSync(new URL('../frontend/src/App.jsx', import.meta.url), 'utf8'));
+const publicPaths = (app.match(/const PUBLIC_PATHS = \[([^\]]*)\]/) || [, ''])[1];
+t('/insights does not wait on the Clerk SDK', publicPaths.includes("'/insights'"));
+t('/insights is still routed', /path="\/insights"/.test(app));
+
 console.log(`\n${p}/${p + f} passed`);
 process.exit(f ? 1 : 0);
