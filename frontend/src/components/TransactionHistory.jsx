@@ -136,7 +136,24 @@ export default function TransactionHistory({ identityId, titleFor = () => null, 
                       {t.status && t.status !== 'COMPLETED' ? ` · ${t.status}` : ''}
                     </div>
                     <div style={{ fontSize: 10.5, color: C.faint, marginTop: 3, overflowWrap: 'anywhere' }}>
-                      ledger ref {t.transferId}
+                      {/* Cite the id the ledger is actually keyed by. The
+                          settlement block records the UMI instruction, not our
+                          internal TXN- id, so linking the latter sent people to
+                          the explorer to hunt for a reference that was not
+                          there. Fall back to the transfer id for older rows
+                          that settled before the rail was wired in. */}
+                      {t.umiInstructionId ? (
+                        <>
+                          ledger ref{' '}
+                          <Link to={`/ledger?tx=${encodeURIComponent(t.umiInstructionId)}`}
+                            style={{ color: C.navy, fontWeight: 600, textDecoration: 'none' }}
+                            title="Find this settlement on the permanent ledger">
+                            {t.umiInstructionId} ↗
+                          </Link>
+                        </>
+                      ) : (
+                        <>ledger ref {t.transferId}</>
+                      )}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginLeft: 'auto', minWidth: 110 }}>

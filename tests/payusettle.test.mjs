@@ -71,7 +71,11 @@ t('a DvP settlement block was committed', (await chainTypes()).includes('UMI_DVP
 t('payment carries its UMI instruction id', Boolean(after.umiInstructionId));
 
 const { b: hist } = await j(`/api/transfers/history?ownerId=investor1&assetId=${ASSET}`, { headers: auth });
-t('transfer appears in history', (hist.transfers || []).some(x => x.transferId === after.drunixTransferId));
+const row = (hist.transfers || []).find(x => x.transferId === after.drunixTransferId);
+t('transfer appears in history', Boolean(row));
+// The explorer keys blocks by the UMI instruction, so the history row has to
+// cite that id — not our internal TXN- id, which appears nowhere on chain.
+t('history row carries the on-chain reference', row && row.umiInstructionId === after.umiInstructionId);
 
 // Replaying the same callback must not double-spend.
 const lenAfter = await chainLen();

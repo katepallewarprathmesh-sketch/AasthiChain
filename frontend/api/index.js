@@ -577,7 +577,15 @@ async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
       return { ok: false, status: dvp.status, error: dvp.body && dvp.body.error };
     }
     const iid = dvp.body && dvp.body.instruction && dvp.body.instruction.instructionId;
-    if (iid) { pay.umiInstructionId = iid; pay.umiIsin = dvp.body.instruction.isin; }
+    if (iid) {
+      pay.umiInstructionId = iid;
+      pay.umiIsin = dvp.body.instruction.isin;
+      // The settlement block on the chain is keyed by instructionId, not by
+      // our TXN- id, so carry it onto the transfer too. Transaction history
+      // was citing a "ledger ref" that appears nowhere on the ledger.
+      const tr = pay.drunixTransferId && transfers[pay.drunixTransferId];
+      if (tr) { tr.umiInstructionId = iid; tr.umiIsin = dvp.body.instruction.isin; }
+    }
     console.log(`[RAIL] ${pay.paymentId} settled on the UMI chain as ${iid}`);
     return { ok: true, instructionId: iid };
   } catch (e) {
