@@ -142,6 +142,19 @@ export default function UMISettlement() {
   // no reason to let someone click into a red error to find out.
   const [preflight, setPreflight] = useState(null)
 
+  // Defining a basket was curl-only: investors could create, sell and redeem
+  // units from the dashboard, but the basket itself had to be POSTed by hand.
+  // The recipe is the whole contract of the instrument, so it is spelled out
+  // per unit rather than hidden behind an id.
+  const [baskets, setBaskets] = useState([])
+  const [bId, setBId] = useState('PUNE-MUMBAI')
+  const [bName, setBName] = useState('Pune + Mumbai Residential')
+  const [legs, setLegs] = useState([
+    { assetId: '', tokensPerUnit: 2, indicativePriceINR: 500 },
+    { assetId: '', tokensPerUnit: 1, indicativePriceINR: 900 },
+  ])
+  const setLeg = (i, k, v) => setLegs(ls => ls.map((l, n) => (n === i ? { ...l, [k]: v } : l)))
+
   const refresh = useCallback(async () => {
     const cfg = await umi('/config')
     if (!cfg.ok) { setRailDown(cfg.data); return }
@@ -152,6 +165,8 @@ export default function UMISettlement() {
     setInstructions(i.data.instructions || [])
     setRecon(r.data)
     setIsins(s.data.register || [])
+    const bk = await umi('/baskets')
+    setBaskets(bk.ok ? (bk.data.baskets || []) : [])
     try {
       const pr = await fetch('/api/properties')
       const pd = await pr.json()
@@ -177,6 +192,23 @@ export default function UMISettlement() {
       setFlash({ kind: 'err', where, text: e.message })
     } finally { setBusy(false) }
   }
+
+  const createBasket = () => run(
+    () => umi('/baskets', {
+      body: {
+        basketId: bId.trim(),
+        name: bName.trim() || bId.trim(),
+        components: legs
+          .filter(l => l.assetId && Number(l.tokensPerUnit) > 0)
+          .map(l => ({
+            assetId: l.assetId,
+            tokensPerUnit: Number(l.tokensPerUnit),
+            indicativePriceINR: Number(l.indicativePriceINR) || 0,
+          })),
+      },
+    }),
+    (d) => `Basket ${d.basket.basketId} defined · one unit = ${d.basket.components.map(x => `${x.tokensPerUnit} × ${x.assetId}`).join(' + ')} · block #${d.block?.height}`,
+    'basket')
 
   const seed = () => run(
     () => umi('/seed', { body: { assetId, holder: seller, tokens: 15000, authorisedTokens: 15000 } }),
@@ -590,6 +622,104 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           <p style={{ fontSize: 12.5, color: C.mut, marginTop: 8 }}>
             Pilot register: {isins.map(i => `${i.isin} (${i.assetId})`).join(' · ')}
           </p>
+        )}
+      </Card>
+
+      <Card
+        title="6 · Baskets — cross-property portfolio tokens"
+        sub="One unit is a fixed recipe of several properties. Subscribing moves the underlying tokens into custody, so a unit is redeemable rather than notional. Investors create, sell and redeem units from their dashboard; defining the instrument happens here.">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+          <Field label="Basket id"><input style={input} value={bId} onChange={e => setBId(e.target.value)} /></Field>
+          <Field label="Name"><input style={input} value={bName} onChange={e => setBName(e.target.value)} /></Field>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 11, color: C.mut, textTransform: 'uppercase', letterSpacing: .4, marginBottom: 6 }}>
+            What one unit contains
+          </div>
+          {legs.map((l, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
+              <Field label={`Property ${i + 1}`}>
+                <select style={input} value={l.assetId} onChange={e => setLeg(i, 'assetId', e.target.value)}>
+                  <option value="">select a property…</option>
+                  {properties.map(p => <option key={p.assetId} value={p.assetId}>{p.assetId}</option>)}
+                </select>
+              </Field>
+              <Field label="Tokens per unit">
+                <input style={input} type="number" min="1" value={l.tokensPerUnit} onChange={e => setLeg(i, 'tokensPerUnit', e.target.value)} />
+              </Field>
+              <Field label="Indicative ₹/token">
+                <input style={input} type="number" min="0" value={l.indicativePriceINR} onChange={e => setLeg(i, 'indicativePriceINR', e.target.value)} />
+              </Field>
+              <button
+                onClick={() => setLegs(ls => ls.filter((_, n) => n !== i))}
+                disabled={legs.length <= 2}
+                title={legs.length <= 2 ? 'A basket needs at least two different properties' : 'Remove this leg'}
+                style={{ padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', color: C.mut, cursor: legs.length <= 2 ? 'not-allowed' : 'pointer', fontSize: 12 }}>
+                remove
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setLegs(ls => [...ls, { assetId: '', tokensPerUnit: 1, indicativePriceINR: 0 }])}
+            style={{ padding: '7px 12px', borderRadius: 8, border: `1px dashed ${C.line}`, background: 'white', color: C.navy, cursor: 'pointer', fontSize: 12.5 }}>
+            + another property
+          </button>
+        </div>
+
+        {(() => {
+          const chosen = legs.filter(l => l.assetId && Number(l.tokensPerUnit) > 0)
+          const ids = chosen.map(l => l.assetId)
+          const dupes = ids.length !== new Set(ids).size
+          const ok = chosen.length >= 2 && !dupes
+          const nav = chosen.reduce((t, l) => t + Number(l.tokensPerUnit) * (Number(l.indicativePriceINR) || 0), 0)
+          return (
+            <>
+              <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: C.paper, border: `1px solid ${C.line}`, fontSize: 12.5, color: C.navy }}>
+                {ok
+                  ? <>One unit = <strong>{chosen.map(l => `${l.tokensPerUnit} × ${l.assetId}`).join('  +  ')}</strong>
+                      {nav > 0 && <> · indicative NAV <strong>{money(nav)}</strong> per unit</>}</>
+                  : <span style={{ color: C.mut }}>
+                      {dupes
+                        ? 'Two legs point at the same property — a basket needs at least two different ones.'
+                        : 'Pick at least two different properties, each with tokens per unit above zero.'}
+                    </span>}
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={createBasket}
+                  disabled={!ok || !bId.trim() || busy === 'basket'}
+                  style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: (!ok || !bId.trim()) ? '#9CA3AF' : C.navy, color: 'white', fontWeight: 600, fontSize: 13.5, cursor: (!ok || !bId.trim()) ? 'not-allowed' : 'pointer' }}>
+                  {busy === 'basket' ? 'Defining…' : 'Define this basket'}
+                </button>
+              </div>
+            </>
+          )
+        })()}
+
+        <Notice flash={flash} where="basket" onClose={() => setFlash(null)} />
+
+        {baskets.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11, color: C.mut, textTransform: 'uppercase', letterSpacing: .4, marginBottom: 6 }}>
+              Defined baskets
+            </div>
+            {baskets.map(b => (
+              <div key={b.basketId} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 10, marginBottom: 8, background: 'white' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <strong style={{ color: C.navy, fontSize: 13.5 }}>{b.name || b.basketId}</strong>
+                  <Pill tone={b.fullyBacked === false ? 'bad' : 'ok'}>
+                    {b.fullyBacked === false ? 'Backing short' : 'Fully backed'}
+                  </Pill>
+                </div>
+                <div style={{ fontSize: 12, color: C.mut, marginTop: 4 }}>
+                  one unit = {(b.components || []).map(c => `${c.tokensPerUnit} × ${c.assetId}`).join(' + ')}
+                  {' · '}{num(b.unitsOutstanding)} unit(s) outstanding
+                  {b.navPerUnitINR ? <> · NAV {money(b.navPerUnitINR)}/unit</> : null}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </Card>
       </>)}
