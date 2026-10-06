@@ -1,34 +1,51 @@
-# Fly.io alternative to render.yaml for the Go Drunix gateway + UMI rail.
+# AasthiChain Drunix gateway + UMI settlement rail — Fly.io deployment.
+#
+# An alternative to render.yaml for the same image. Use it if Render's
+# auto-deploy is disconnected, or you would rather not use Render at all.
+#
+# This file lives in drunix-gateway/ on purpose: the Dockerfile does `COPY . .`
+# and builds ./cmd/gateway, so the build context must be THIS directory, not the
+# repo root. (The repo root has its own unrelated go.mod; a root-context build
+# fails.) render.yaml encodes the same thing via dockerContext: ./drunix-gateway.
 #
 #   cd drunix-gateway
 #   fly launch --no-deploy --copy-config --name aasthichain-umi-gateway
 #   fly deploy
-#   fly status            # → https://aasthichain-umi-gateway.fly.dev
+#   fly status            # note the hostname it prints
 #
-# Then set UMI_GATEWAY_URL on Vercel to that URL.
+# Then on Vercel: set UMI_GATEWAY_URL to https://<hostname> and REDEPLOY the
+# frontend — Vercel does not apply an env-var change to a running deployment.
+#
+# The rail keeps its ledger in memory unless DATABASE_URL is set, so a machine
+# stop resets the chain. Set DATABASE_URL (any Postgres) to make blocks durable:
+#   fly secrets set DATABASE_URL=postgres://...
 
 app = "aasthichain-umi-gateway"
-primary_region = "bom"   # Mumbai
+primary_region = "bom"   # Mumbai — closest to the users
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  PORT = "21100"
   UMI_ENABLED = "true"
   UMI_SEED_DEMO = "true"
   DRUNIX_MODE = "mock"
+  PORT = "21100"
 
 [http_service]
   internal_port = 21100
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = false   # keep the in-memory ledger alive between requests
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[http_service.checks]]
-    interval = "30s"
-    timeout = "5s"
     grace_period = "10s"
+    interval = "30s"
     method = "GET"
+    timeout = "5s"
     path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

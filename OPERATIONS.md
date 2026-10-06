@@ -6,11 +6,67 @@ Things only you can do, with the exact commands. Work top to bottom.
 
 ## 1 · Deploy the Go rail (blocking everything else)
 
-The supply cap is pushed but **not live**. Until Render builds `drunix-gateway`,
-`POST /api/umi/seed` still mints tokens from nothing.
+**The deployed rail is several commits behind and that is why features look
+missing in production.** It is reachable, not down — it answers `/api/umi/config`
+and `/api/umi/wallets` with 200 — but it is running a build from before the
+basket and ownership work landed, so those routes 404 on the live site while
+passing every test locally.
 
-- Render dashboard → the `drunix-gateway` service → **Manual Deploy → Deploy latest commit**
-- Confirm it took:
+Dated against production on 2026-10-06:
+
+| live endpoint | result | meaning |
+|---|---|---|
+| `/api/umi/income/{id}` | 200 | income work **is** live |
+| `/api/drunix/chain?limit=2` has `from`/`returned` | 200 | `02fae77` **is** live |
+| `/api/umi/ownership/{assetId}` | **404** | dynamic ownership **not** live |
+| `/api/umi/baskets` | **404** | basket tokens **not** live |
+| `/api/umi/holdings/{participant}` | **404** | basket holdings **not** live |
+
+The code is deployable: building `drunix-gateway/` in an isolated context with
+Render's exact command succeeds, and that binary serves all three routes. So the
+deploy has not run, rather than failed to compile. `render.yaml` sets
+`autoDeploy: true`, so if it is this far behind, check the service's **Events**
+tab for failed builds or a disconnected repo hook.
+
+The service in `render.yaml` is named **`aasthichain-umi-gateway`** (older notes
+below may call it `drunix-gateway`).
+
+- Render dashboard → the `aasthichain-umi-gateway` service → **Manual Deploy → Deploy latest commit**
+- Confirm the basket and ownership routes came alive:
+
+```bash
+for p in /api/umi/baskets /api/umi/holdings/investor1 /api/umi/ownership/PROP-GREEN-VALLEY-PUNE-001; do
+  printf '%s %s\n' "$(curl -s -o /dev/null -w '%{http_code}' https://aasthi-chain.vercel.app$p)" "$p"
+done
+# want 200 200 200 — anything 404 means the old build is still serving
+```
+
+```bash
+# the config endpoint should now advertise the basket block types
+curl -s https://aasthi-chain.vercel.app/api/umi/config | grep -o UMI_BASKET_DVP_SETTLED
+```
+
+### If you would rather not use Render
+
+Same Docker image, any host. `fly.toml` in the repo root is ready:
+
+```bash
+cd drunix-gateway        # the Dockerfile COPYs . and builds ./cmd/gateway,
+                         # so the build context must be this directory
+fly launch --no-deploy --copy-config --name aasthichain-umi-gateway
+fly deploy
+fly status                      # note the hostname
+```
+
+Then **Vercel → Settings → Environment Variables → `UMI_GATEWAY_URL`** = that
+base URL, and **redeploy the frontend**. Vercel does not apply an env-var change
+to an already-running deployment.
+
+Whichever host you pick, set `DATABASE_URL` as well. Without it the rail keeps
+blocks in memory and a restart wipes the chain, which contradicts the
+append-only durability requirement.
+
+- Older note, still true after any redeploy:
 
 ```bash
 curl -s https://aasthi-chain.vercel.app/api/umi/reconciliation | grep -o supplyConserved
