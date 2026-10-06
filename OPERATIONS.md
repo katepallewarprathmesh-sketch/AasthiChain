@@ -99,3 +99,44 @@ curl -s -X POST https://aasthi-chain.vercel.app/api/auth/login \
 # search engines
 cd frontend && npm run indexnow
 ```
+
+## Rotating the PayU salt
+
+The salt is the only thing standing between a stranger and a forged
+payment-success callback. The response hash is
+`sha512(salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)`
+— anyone holding the salt can compute a hash the gateway will accept and mark
+an unpaid order as settled. Treat any salt that has been pasted into a chat,
+an issue, a screenshot or a log as burned.
+
+The salt is not, and must never be, in this repository. It lives only in the
+environment. `scripts/secret-scan.sh` runs in the regression sweep and fails
+the build if a credential is ever committed.
+
+Rotation is a four-step job and the middle two must happen close together,
+because callbacks signed with the old salt stop verifying the moment PayU
+starts signing with the new one.
+
+1. **Generate** a new salt in the PayU dashboard
+   (Settings → Security / Salt & Key). Keep the old one visible — PayU shows
+   both during the overlap.
+2. **Update the environment** everywhere the gateway runs. Production is
+   Vercel: Project → Settings → Environment Variables → `PAYU_SALT`. Also
+   update any local `.env.payu`. Do not edit `.env.payu.example`; it holds
+   placeholders on purpose.
+3. **Redeploy.** Vercel does not apply an env-var change to the running
+   deployment — trigger a fresh deploy or the old salt stays live.
+4. **Verify** with a ₹1 test purchase end to end, and confirm the callback is
+   accepted rather than rejected for a hash mismatch. Then revoke the old salt
+   in the PayU dashboard.
+
+Checks that the rotation worked:
+
+    # the deployment is serving the build you expect
+    curl -s https://<host>/api/admin/insights/status
+
+    # a callback with a hash computed from the WRONG salt must be refused
+    node tests/payusettle.test.mjs    # covers the forged-hash rejection path
+
+If a callback starts failing after rotation, the usual cause is step 3: the
+env var changed but the deployment did not.
