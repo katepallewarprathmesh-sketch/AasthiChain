@@ -2247,7 +2247,18 @@ app.get('/api/admin/insights', async (req, res) => {
     }
   } catch { /* rail optional — the report says so */ }
 
-  const report = buildInsights({ properties, balances, transfers, kycRecords, chain: drunixChain }, rail);
+  // Report what broke instead of failing the whole dashboard opaquely.
+  let report;
+  try {
+    report = buildInsights({ properties, balances, transfers, kycRecords, chain: drunixChain }, rail);
+  } catch (e) {
+    console.error('[INSIGHTS] buildInsights threw', e);
+    return res.status(500).json({
+      error: 'ERR_INSIGHTS_BUILD_FAILED',
+      message: `Could not assemble the report: ${e.message}`,
+      railReachable: !!rail,
+    });
+  }
   try {
     const { trafficSummary } = await trafficReady;
     report.traffic = await trafficSummary(14);

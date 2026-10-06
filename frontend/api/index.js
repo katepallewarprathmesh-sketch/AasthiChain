@@ -3954,8 +3954,20 @@ export default async function handler(req, res) {
           }
         } catch { /* rail optional */ }
       }
-      const report = buildInsights(
-        { properties, balances, transfers, kycRecords, chain: drunixChain }, rail);
+      // One bad record used to take the whole dashboard down with an opaque
+      // failure. Report what broke, as JSON, so the page can say so.
+      let report;
+      try {
+        report = buildInsights(
+          { properties, balances, transfers, kycRecords, chain: drunixChain }, rail);
+      } catch (e) {
+        console.error('[INSIGHTS] buildInsights threw', e);
+        return res.status(500).json({
+          error: 'ERR_INSIGHTS_BUILD_FAILED',
+          message: `Could not assemble the report: ${e.message}`,
+          railReachable: !!rail,
+        });
+      }
       try {
         report.traffic = await trafficSummary(14);
       } catch (e) {

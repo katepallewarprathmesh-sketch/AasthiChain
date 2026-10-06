@@ -205,12 +205,22 @@ function Insights() {
     setBusy(true); setError('')
     try {
       const r = await fetch('/api/admin/insights', { headers: { 'x-admin-key': k } })
-      const d = await r.json()
+      // Not every failure comes back as JSON — a gateway timeout or a crash
+      // returns HTML, and parsing that threw, which surfaced as "could not
+      // reach the server" for a server that answered perfectly well.
+      const raw = await r.text()
+      let d = null
+      try { d = raw ? JSON.parse(raw) : null } catch { /* not JSON */ }
       if (!r.ok) {
-        setError(d.message || d.error || 'Request failed')
+        setError(
+          (d && (d.message || d.error)) ||
+          `Server returned ${r.status} ${r.statusText || ''}`.trim() +
+          (raw && !d ? ` — ${raw.slice(0, 160)}` : '')
+        )
         if (r.status === 401) { setData(null); setKey(''); try { sessionStorage.removeItem(KEY_STORE) } catch {} }
         return
       }
+      if (!d) { setError('The server replied with something that is not a report.'); return }
       setData(d)
     } catch (e) {
       setError('Could not reach the server: ' + e.message)
