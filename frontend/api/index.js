@@ -26,6 +26,19 @@ const PERSIST_FILES = {
   webhooks: path.join(TMP_DIR, 'aasthi_webhooks.json'),
 };
 
+// Tokens of this asset already credited to holders other than `exceptOwner`.
+// A self-heal may only hand out what is genuinely left of the issued supply,
+// otherwise healing mints tokens and allocation climbs past 100%.
+function supplyHeadroom(balanceMap, assetId, exceptOwner, totalTokens) {
+  let heldByOthers = 0;
+  for (const b of Object.values(balanceMap)) {
+    if (!b || b.assetId !== assetId) continue;
+    if (b.ownerId === exceptOwner) continue;
+    heldByOthers += parseInt(b.balance) || 0;
+  }
+  return Math.max(0, (parseInt(totalTokens) || 0) - heldByOthers);
+}
+
 function loadFromFile(filePath, fallback) {
   try {
     if (fs.existsSync(filePath)) {
@@ -3203,11 +3216,13 @@ export default async function handler(req, res) {
                 }
               } catch (eH) { console.error('receipt heal item failed', eH.message); }
             }
-            if (verifiedTokens >= amt) {
-              balances[fromKey] = { docType: 'balance', assetId: effectiveAssetId, ownerId: fromId, balance: verifiedTokens, updatedAt: new Date() };
+            const headroom = supplyHeadroom(balances, effectiveAssetId, fromId, prop.totalTokens);
+            const healable = Math.min(verifiedTokens, headroom);
+            if (healable >= amt) {
+              balances[fromKey] = { docType: 'balance', assetId: effectiveAssetId, ownerId: fromId, balance: healable, updatedAt: new Date() };
               fromBal = balances[fromKey];
               globalThis._aasthi_balances = balances;
-              console.log(`Transfer: healed balance for ${fromId} on ${effectiveAssetId} = ${verifiedTokens} tokens from receipts`);
+              console.log(`Transfer: healed balance for ${fromId} on ${effectiveAssetId} = ${healable} tokens from receipts`);
               try { await realDB.saveBalance(fromKey, balances[fromKey]); } catch (eP) {}
             } else {
               return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', fromId, effectiveAssetId, verifiedTokens, needed: amt, message: `Verified tokens from your purchase receipts: ${verifiedTokens}. Needed: ${amt}. If you just bought, tap Refresh — your purchase may still be syncing.` });
@@ -3216,7 +3231,9 @@ export default async function handler(req, res) {
           // 4) demo auto-fix: originator or auto-created property gets its supply
           if (!fromBal && (prop.originatorId === fromId || fromId === 'originator1' || prop.autoCreated)) {
             console.log(`Transfer: creating missing originator balance for ${fromKey} (demo auto-fix)`);
-            balances[fromKey] = { docType: 'balance', assetId: effectiveAssetId, ownerId: fromId, balance: prop.totalTokens || 10000, updatedAt: new Date() };
+            // Only the unsold remainder, never the whole supply again.
+            balances[fromKey] = { docType: 'balance', assetId: effectiveAssetId, ownerId: fromId,
+              balance: supplyHeadroom(balances, effectiveAssetId, fromId, prop.totalTokens || 10000), updatedAt: new Date() };
             fromBal = balances[fromKey];
             globalThis._aasthi_balances = balances;
           }

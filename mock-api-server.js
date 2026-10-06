@@ -710,6 +710,21 @@ app.post('/api/properties/:id/verify-document', (req, res) => {
   });
 });
 
+// Tokens of this asset already credited to holders other than `exceptOwner`.
+// A self-heal may only hand out what is genuinely left of the issued supply.
+// Without this cap, healing a missing balance mints tokens out of nothing and
+// the sum of holdings climbs past totalTokens — which is what put properties
+// above 100% allocated on the insights dashboard.
+function supplyHeadroom(balanceMap, assetId, exceptOwner, totalTokens) {
+  let heldByOthers = 0;
+  for (const b of Object.values(balanceMap)) {
+    if (!b || b.assetId !== assetId) continue;
+    if (b.ownerId === exceptOwner) continue;
+    heldByOthers += parseInt(b.balance) || 0;
+  }
+  return Math.max(0, (parseInt(totalTokens) || 0) - heldByOthers);
+}
+
 app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
@@ -817,17 +832,21 @@ app.post('/api/transfers', authMiddleware, (req, res) => {
         }
       }
     }
-    if (verifiedTokens >= amt) {
-      balances[fromKey] = { docType: 'balance', assetId, ownerId: fromId, balance: verifiedTokens, updatedAt: new Date() };
+    const headroom = supplyHeadroom(balances, assetId, fromId, prop.totalTokens);
+    const healable = Math.min(verifiedTokens, headroom);
+    if (healable >= amt) {
+      balances[fromKey] = { docType: 'balance', assetId, ownerId: fromId, balance: healable, updatedAt: new Date() };
       fromBal = balances[fromKey];
     } else {
-      return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', verifiedTokens, needed: amt, message: `Verified tokens from your purchase receipts: ${verifiedTokens}. Needed: ${amt}.` });
+      return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', verifiedTokens, headroom, needed: amt, message: `Verified tokens from your purchase receipts: ${verifiedTokens}. Needed: ${amt}.` });
     }
   }
   if (!fromBal) {
     // 3) demo auto-fix: originator gets supply
     if (fromId === prop.originatorId || fromId === 'originator1' || prop.autoCreated || prop.restoredFromClient) {
-      balances[fromKey] = { docType: 'balance', assetId, ownerId: fromId, balance: prop.totalTokens, updatedAt: new Date() };
+      // Only the unsold remainder, never the whole supply again.
+      balances[fromKey] = { docType: 'balance', assetId, ownerId: fromId,
+        balance: supplyHeadroom(balances, assetId, fromId, prop.totalTokens), updatedAt: new Date() };
       fromBal = balances[fromKey];
     } else {
       return res.status(400).json({ error: 'ERR_BALANCE_NOT_FOUND' });
