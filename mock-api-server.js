@@ -1004,6 +1004,23 @@ async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   }
 }
 
+// A purchase can reach RELEASED two ways: server-side via settleConfirmedPayment
+// (PayU callback) or client-side via POST /payments/{id}/release after the
+// frontend has done the token transfer itself. Only the first used to touch the
+// UMI rail, so UI purchases were RELEASED but absent from the chain. Both paths
+// now land here. Safe to call twice — the DvP is keyed by paymentId.
+async function railCommitForReleasedPayment(pay) {
+  if (!pay || pay.umiInstructionId) return { skipped: 'already on chain' };
+  const assetId = pay.assetId;
+  const tokens = parseInt(pay.tokenAmount);
+  if (!assetId || !tokens || tokens <= 0) return { skipped: 'payment has no asset or token amount' };
+  const prop = properties[assetId] || Object.values(properties).find(p => p.assetId === assetId);
+  const seller = (prop && prop.originatorId) || 'originator1';
+  const buyer = pay.payerId || 'investor1';
+  if (seller === buyer) return { skipped: 'seller and buyer are the same participant' };
+  return commitSettlementToRail(pay, assetId, seller, buyer, tokens);
+}
+
 async function settleConfirmedPayment(pay) {
   if (!pay) return { ok: false, code: 404, error: 'ERR_PAYMENT_NOT_FOUND', message: 'Payment not found' };
   if (pay.status === 'RELEASED' && pay.drunixTransferId) return { ok: true, already: true, payment: pay, message: 'Already settled' };
@@ -1771,7 +1788,7 @@ app.post('/api/npci/payments/:id/approve', authMiddleware, (req, res) => {
   res.json(pay);
 });
 
-app.post('/api/npci/payments/:id/release', authMiddleware, (req, res) => {
+app.post('/api/npci/payments/:id/release', authMiddleware, async (req, res) => {
   const pay = npciPayments[req.params.id];
   if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId: req.params.id });
   if (pay.status !== 'CONFIRMED') return res.status(400).json({ error: `Must be CONFIRMED before release, current ${pay.status}`, payment: pay });
@@ -1783,7 +1800,27 @@ app.post('/api/npci/payments/:id/release', authMiddleware, (req, res) => {
   npciPayments[pay.paymentId] = pay;
   const payeeVpa = pay.payeeVpa.toLowerCase();
   npciBalances[payeeVpa] = (npciBalances[payeeVpa] || 0) + pay.amountINRPaise;
-  res.json(pay);
+  const tr = transfers[drunixTransferId];
+  const rail = await railCommitForReleasedPayment(pay);
+  if (tr && pay.umiInstructionId) { tr.umiInstructionId = pay.umiInstructionId; tr.umiIsin = pay.umiIsin; }
+  res.json({ ...pay, rail });
+});
+
+app.post('/api/npci/rail/backfill', async (req, res) => {
+  const key = (process.env.ADMIN_DASHBOARD_KEY || '').trim();
+  if (!key || (req.headers['x-admin-key'] || '') !== key) return res.status(401).json({ error: 'ERR_ADMIN_KEY', message: 'x-admin-key required' });
+  const pending = Object.values(npciPayments)
+    .filter(p => p.status === 'RELEASED' && !p.umiInstructionId)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const results = [];
+  for (const pay of pending) {
+    const rail = await railCommitForReleasedPayment(pay);
+    const tr = pay.drunixTransferId && transfers[pay.drunixTransferId];
+    if (tr && pay.umiInstructionId) { tr.umiInstructionId = pay.umiInstructionId; tr.umiIsin = pay.umiIsin; }
+    results.push({ paymentId: pay.paymentId, instructionId: pay.umiInstructionId || null, rail });
+  }
+  const onChain = results.filter(r => r.instructionId).length;
+  res.json({ considered: pending.length, committed: onChain, skipped: pending.length - onChain, results });
 });
 
 app.post('/api/npci/payments/:id/refund', authMiddleware, (req, res) => {
