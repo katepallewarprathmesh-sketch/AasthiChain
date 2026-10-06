@@ -76,6 +76,18 @@ class ApiClient {
     })
   }
 
+  // Public on purpose: a verification surface nobody can read is worthless.
+  // Named for the dossier, not "verify", because verifyProperty() below is
+  // already the government land-record lookup.
+  async propertyVerification(assetId) {
+    return this.request(`/api/properties/${encodeURIComponent(assetId)}/verify`)
+  }
+  async verifyPropertyDocument(assetId, documentHash) {
+    return this.request(`/api/properties/${encodeURIComponent(assetId)}/verify-document`, {
+      method: 'POST',
+      body: JSON.stringify({ documentHash }),
+    })
+  }
   async validateProperty(assetId, decision) {
     return this.request(`/api/properties/${encodeURIComponent(assetId)}/validate`, {
       method: 'POST',

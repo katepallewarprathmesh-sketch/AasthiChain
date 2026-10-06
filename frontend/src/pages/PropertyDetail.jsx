@@ -44,9 +44,24 @@ export default function PropertyDetail({ user }) {
   const [ownMsg, setOwnMsg] = useState(null)
   const [myLoansHere, setMyLoansHere] = useState([])
   const [showBuy, setShowBuy] = useState(false)
+  // A buyer's first question is "is this real". The answer existed only as an
+  // API call, so the page showed a one-word status and nothing behind it.
+  const [verif, setVerif] = useState(null)
+  const [docHash, setDocHash] = useState('')
+  const [docResult, setDocResult] = useState(null)
+  const [docBusy, setDocBusy] = useState(false)
 
   // Returning from PayU hosted checkout: auto-open the buy panel so the
   // resume logic completes DvP and shows the receipt (UTR) no extra clicks.
+  useEffect(() => {
+    let alive = true
+    if (!id) return
+    api.propertyVerification(id)
+      .then(d => { if (alive) setVerif(d) })
+      .catch(() => { if (alive) setVerif(null) })
+    return () => { alive = false }
+  }, [id, refreshKey])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('payu') !== 'return') return
@@ -225,6 +240,87 @@ export default function PropertyDetail({ user }) {
           {property.status === 'TOKENIZED' ? 'Available' : property.registrarValidationStatus || property.status}
         </span>
       </div>
+
+      {verif && (
+        <section style={{ marginTop: 24, background: 'white', border: `1px solid ${verif.verified ? '#BBF7D0' : '#FDE68A'}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Verification</h3>
+            <span style={{
+              fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 20,
+              background: verif.verified ? '#F0FDF4' : '#FFFBEB',
+              color: verif.verified ? '#059669' : '#D97706',
+              border: `1px solid ${verif.verified ? '#BBF7D0' : '#FDE68A'}`,
+            }}>
+              {verif.verified ? 'All checks passed' : 'Needs attention'}
+            </span>
+          </div>
+          <p style={{ fontSize: 12.5, color: '#4B5563', marginTop: 8, lineHeight: 1.6 }}>{verif.summary}</p>
+
+          <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0' }}>
+            {(verif.checks || []).map(c => (
+              <li key={c.id} style={{ display: 'flex', gap: 10, padding: '9px 0', borderTop: '1px solid #F3F4F6' }}>
+                <span aria-hidden style={{ color: c.ok ? '#059669' : '#D97706', fontWeight: 800, lineHeight: 1.4 }}>{c.ok ? '✓' : '!'}</span>
+                <span>
+                  <strong style={{ fontSize: 13, color: '#111827' }}>{c.label}</strong>
+                  <span style={{ display: 'block', fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 1.55, wordBreak: 'break-word' }}>{c.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {(verif.chainEvidence || []).length > 0 && (
+            <p style={{ fontSize: 11.5, color: '#6B7280', marginTop: 12 }}>
+              On the ledger: {verif.chainEvidence.map(e => `#${e.height} ${e.type.replace(/_/g, ' ').toLowerCase()}`).join(' · ')}
+              {' — '}<Link to="/ledger" style={{ color: '#1E3A5F' }}>open the explorer</Link>
+            </p>
+          )}
+
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12.5, color: '#1E3A5F', fontWeight: 600 }}>
+              Check your copy of the title deed
+            </summary>
+            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
+              Hash the file you were sent and paste the result. The document never leaves your machine.
+              <br />
+              <code style={{ fontSize: 11.5, background: '#F9FAFB', padding: '2px 6px', borderRadius: 4 }}>sha256sum deed.pdf</code>
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <input
+                value={docHash}
+                onChange={e => { setDocHash(e.target.value.trim()); setDocResult(null) }}
+                placeholder="64-character SHA-256"
+                aria-label="document hash"
+                style={{ flex: '1 1 320px', padding: '8px 10px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12.5, fontFamily: 'monospace' }}
+              />
+              <button
+                onClick={async () => {
+                  setDocBusy(true); setDocResult(null)
+                  try { setDocResult(await api.verifyPropertyDocument(id, docHash)) }
+                  catch (e) { setDocResult({ match: false, message: e.message || 'That hash could not be checked.' }) }
+                  finally { setDocBusy(false) }
+                }}
+                disabled={docBusy || docHash.length !== 64}
+                style={{
+                  padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
+                  background: docHash.length === 64 ? '#1E3A5F' : '#9CA3AF', color: 'white',
+                  cursor: docHash.length === 64 ? 'pointer' : 'not-allowed',
+                }}>
+                {docBusy ? 'Checking…' : 'Check'}
+              </button>
+            </div>
+            {docResult && (
+              <p style={{
+                marginTop: 10, fontSize: 12.5, lineHeight: 1.6, padding: '9px 11px', borderRadius: 8,
+                background: docResult.match ? '#F0FDF4' : '#FEF2F2',
+                color: docResult.match ? '#065F46' : '#991B1B',
+                border: `1px solid ${docResult.match ? '#BBF7D0' : '#FECACA'}`,
+              }}>
+                {docResult.message}
+              </p>
+            )}
+          </details>
+        </section>
+      )}
 
       <div className="acx-r2" style={{ marginTop: 24 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>

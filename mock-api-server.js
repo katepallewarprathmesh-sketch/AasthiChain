@@ -429,7 +429,23 @@ if (documentHash && String(documentHash).trim().length !== 64) return res.status
     documentHash, registrarValidationStatus: 'PENDING', status: 'DRAFT',
     createdAt: now, updatedAt: now, version: 1
   };
-  const resp = { assetId, status: 'DRAFT', message: 'Property registered, pending registrar validation', fabricMode: 'mock' };
+  // Provenance used to start at validation, so the chain could not show when a
+  // property was first listed or by whom — the earliest fact about an asset was
+  // somebody else's approval of it.
+  const regBlock = drunixAppend('PROPERTY_REGISTERED', [{
+    kind: 'registration',
+    assetId,
+    title,
+    originatorId: req.user.identityId,
+    msp: req.user.mspId || 'OriginatorMSP',
+    documentHash,
+    documentHashDerived: normalisedDoc.derived,
+    location: { state, city, pincode },
+    valuationINR,
+    endorsedBy: ['OriginatorMSP.peer'],
+  }]);
+
+  const resp = { assetId, status: 'DRAFT', message: 'Property registered, pending registrar validation', fabricMode: 'mock', blockHeight: regBlock.height, blockHash: regBlock.hash };
   if (idemKey) idempotency[idemKey] = resp;
   res.status(201).json(resp);
 });
@@ -587,7 +603,8 @@ app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
 // no such route existed. This is that endpoint: everything a buyer needs to
 // decide whether to trust a listing, with the chain evidence behind each claim.
 // Deliberately unauthenticated — a trust surface nobody can read is worthless.
-app.get('/api/properties/:id/verify', (req, res) => {
+app.all('/api/properties/:id/verify', (req, res) => {
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'ERR_METHOD_NOT_ALLOWED' });
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
 
