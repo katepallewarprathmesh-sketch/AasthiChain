@@ -36,8 +36,8 @@ async function umi(path, options = {}) {
 // The rail returns machine codes. Operators need a sentence that says what to do.
 const ERRORS = {
   ERR_UMI_NO_HOLDERS: 'Nobody holds this asset except the payer, so there is nobody to pay. Settle a DvP to a buyer first, then distribute.',
-  ERR_UMI_INSUFFICIENT_CBDC: 'The buyer\u2019s e\u20B9-W wallet does not hold enough cash for this instruction. Fund it in Card 1 and retry.',
-  ERR_UMI_INSUFFICIENT_TOKENS: 'The seller does not hold that many tokens. Use \u201CSeed demo position for seller\u201D, or lower the token count.',
+  ERR_UMI_INSUFFICIENT_CBDC: 'The buyer\u2019s e\u20B9-W wallet does not hold enough cash for this instruction. Use the top-up button shown above, or add cash in step 1, then retry.',
+  ERR_UMI_INSUFFICIENT_TOKENS: 'The seller does not hold that many tokens. Open \u201CDemo setup\u201D to give them a starting position, or lower the token count.',
   ERR_UMI_INVALID_AMOUNT: 'Amount must be a positive number.',
   ERR_UMI_UNKNOWN_ASSET: 'No such assetId on the rail. Check the asset identifier.',
   ERR_UMI_SELF_TRADE: 'Buyer and seller are the same participant.',
