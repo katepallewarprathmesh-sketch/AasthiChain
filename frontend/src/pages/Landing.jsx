@@ -443,10 +443,10 @@ export default function Landing({ user }) {
               <div>
                 <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Try every role instantly</h3>
                 <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-                  One-click demo identities with instant mock sign-in. Works on the live deployment and locally no verification, under 2 seconds.
+                  One-click demo identities with instant mock sign-in. Local development only no verification, under 2 seconds.
                 </p>
               </div>
-              <span className="acx-chip" style={{ fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> LIVE + LOCAL</span>
+              <span className="acx-chip" style={{ fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--warn)' }} /> LOCAL ONLY</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 22 }}>
@@ -490,10 +490,17 @@ export default function Landing({ user }) {
           </p>
           <div style={{ marginTop: 28, display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', position: 'relative' }}>
             {ctaPrimary}
-            <a href="#demo" className="acx-btn acx-btn-ghost acx-btn-lg">Use a demo role</a>
+            {/* The demo-role section below is local-development only, so this
+                shortcut must not render in production it would link to an
+                anchor that does not exist on the page. */}
+            {demoAuthAllowed && (
+              <a href="#demo" className="acx-btn acx-btn-ghost acx-btn-lg">Use a demo role</a>
+            )}
           </div>
           <div style={{ marginTop: 18, fontSize: 11.5, color: 'var(--faint)', position: 'relative' }}>
-            Sign in with Clerk top-right, or use a demo preset both work on the live site and locally.
+            {demoAuthAllowed
+              ? 'Sign in with Clerk top-right, or jump in with a demo role below.'
+              : 'Sign in with Clerk using the button at the top right.'}
           </div>
         </div>
       </section>
