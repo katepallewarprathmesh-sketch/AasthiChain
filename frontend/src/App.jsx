@@ -54,6 +54,7 @@ const Marketplace = lazy(() => import('./pages/Marketplace.jsx'))
 const Wallet = lazy(() => import('./pages/Wallet.jsx'))
 const Admin = lazy(() => import('./pages/Admin.jsx'))
 const AdminOps = lazy(() => import('./pages/AdminOps.jsx'))
+const SecondaryMarket = lazy(() => import('./pages/SecondaryMarket.jsx'))
 const Regulator = lazy(() => import('./pages/Regulator.jsx'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
 const Support = lazy(() => import('./pages/Support.jsx'))
@@ -295,6 +296,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
                   { path: '/marketplace', label: 'Marketplace' },
                   { path: '/wallet', label: 'Wallet' },
                   { path: '/ledger', label: 'Ledger' },
+                  { path: '/market', label: 'Resale' },
                   { path: '/umi', label: 'UMI' },
                   ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
                   ...(user.role === 'Registrar' || user.role === 'Regulator' ? [{ path: '/admin/ops', label: 'Ops' }] : []),
@@ -492,6 +494,7 @@ function AppContent({ user, setUser }) {
           <Route path="/tools/home-loan-emi-calculator" element={<EmiCalculator />} />
           <Route path="/tools/rent-vs-buy-calculator" element={<RentVsBuyCalculator />} />
           <Route path="/tools/capital-gains-tax-calculator" element={<CapitalGainsCalculator />} />
+          <Route path="/market" element={<SecondaryMarket user={effectiveUser} />} />
           <Route path="/admin/ops" element={effectiveUser ? <AdminOps user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/admin" element={effectiveUser ? <Admin user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/regulator" element={effectiveUser ? <Regulator user={effectiveUser} /> : <Navigate to="/login" />} />

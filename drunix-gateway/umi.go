@@ -323,6 +323,11 @@ type UMIRail struct {
 	// authorisedTokens, whichever comes first.
 	authorised map[string]int64
 
+	// book is the secondary marketplace order book (see marketplace.go). It
+	// keeps its own lock and owns no value — offers settle through SettleDvP
+	// like any other trade.
+	book *offerBook
+
 	// derived marks a cap that was inferred from restored positions rather
 	// than declared at issuance. An inferred cap may be wrong - if the book
 	// was inflated before caps existed, restore would bake the inflated
@@ -365,7 +370,16 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		ownership:    &ownershipLog{},
 		securities:   sec,
 		chain:        chain,
+		book:         newOfferBook(),
 	}
+}
+
+// PositionOf reports a holder's token position, taking the rail lock. Callers
+// already holding it must use r.securities.Position directly.
+func (r *UMIRail) PositionOf(assetID, holder string) int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.securities.Position(assetID, holder)
 }
 
 // Securities exposes the asset-leg ledger (used by the HTTP layer for seeding).

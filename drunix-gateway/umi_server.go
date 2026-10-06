@@ -58,6 +58,7 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/reconciliation", s.handleUMIReconciliation)
 	mux.HandleFunc("/umi/seed", s.handleUMISeed)
 	s.registerPortfolioRoutes(mux)
+	s.registerMarketRoutes(mux)
 }
 
 func umiDecode(r *http.Request, v interface{}) error {

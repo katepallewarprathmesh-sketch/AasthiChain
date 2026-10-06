@@ -15,7 +15,6 @@ import { MemoryRouter } from 'react-router-dom'
 
 import Landing from '../src/pages/Landing.jsx'
 import Login from '../src/pages/Login.jsx'
-import Marketplace from '../src/pages/Marketplace.jsx'
 import Wallet from '../src/pages/Wallet.jsx'
 import LedgerExplorer from '../src/pages/LedgerExplorer.jsx'
 import InvestorDashboard from '../src/pages/InvestorDashboard.jsx'
@@ -24,6 +23,8 @@ import UMISettlement from '../src/pages/UMISettlement.jsx'
 import Support from '../src/pages/Support.jsx'
 import Admin from '../src/pages/Admin.jsx'
 import AdminOps from '../src/pages/AdminOps.jsx'
+import SecondaryMarket from '../src/pages/SecondaryMarket.jsx'
+import Marketplace from '../src/pages/Marketplace.jsx'
 import Regulator from '../src/pages/Regulator.jsx'
 import PropertyDetail from '../src/pages/PropertyDetail.jsx'
 import ToolsIndex from '../src/pages/tools/ToolsIndex.jsx'
@@ -55,6 +56,7 @@ const ROUTES = [
   ['/support', <Support />],
   ['/admin', <Admin user={user} />],
   ['/admin/ops', <AdminOps user={{ ...user, role: 'Registrar' }} />],
+  ['/market', <SecondaryMarket user={user} />],
   ['/regulator', <Regulator user={user} />],
   ['/property/PROP-GREEN-VALLEY-PUNE-001', <PropertyDetail user={user} />],
   ['/tools', <ToolsIndex />],

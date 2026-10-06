@@ -110,6 +110,30 @@ class ApiClient {
     })
   }
 
+  // Secondary marketplace — holders selling to each other. All of it settles
+  // through the same atomic DvP as a primary purchase.
+  async umiOffers(assetId, all = false) {
+    const q = new URLSearchParams()
+    if (assetId) q.set('assetId', assetId)
+    if (all) q.set('all', 'true')
+    const qs = q.toString()
+    return this.request(`/api/umi/offers${qs ? '?' + qs : ''}`)
+  }
+  async umiCreateOffer(body) {
+    return this.request('/api/umi/offers', { method: 'POST', body: JSON.stringify(body) })
+  }
+  async umiTakeOffer(offerId, body) {
+    return this.request(`/api/umi/offers/${encodeURIComponent(offerId)}/take`,
+      { method: 'POST', body: JSON.stringify(body) })
+  }
+  async umiCancelOffer(offerId, seller) {
+    return this.request(`/api/umi/offers/${encodeURIComponent(offerId)}/cancel`,
+      { method: 'POST', body: JSON.stringify({ seller }) })
+  }
+  async umiMarketDepth(assetId) {
+    return this.request(`/api/umi/market/${encodeURIComponent(assetId)}`)
+  }
+
   // Operations queue — Registrar/Regulator only, 403 otherwise.
   async getAdminOps() {
     return this.request('/api/admin/ops')
