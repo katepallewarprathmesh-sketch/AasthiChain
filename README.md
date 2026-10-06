@@ -9,7 +9,6 @@
 [![Live](https://img.shields.io/badge/live-aasthi--chain.vercel.app-1E3A5F?style=flat-square)](https://aasthi-chain.vercel.app)
 [![Backend](https://img.shields.io/badge/backend-Go%201.22-00ADD8?style=flat-square&logo=go&logoColor=white)](drunix-gateway/)
 [![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black)](frontend/)
-[![Tests](https://img.shields.io/badge/tests-111%20Go%20%2B%2044%20regression-2E7D32?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-555?style=flat-square)](LICENSE)
 
 [Live site](https://aasthi-chain.vercel.app) · [Free calculators](https://aasthi-chain.vercel.app/tools) · [Learn](https://aasthi-chain.vercel.app/learn) · [Ledger explorer](https://aasthi-chain.vercel.app/ledger) · [UMI rail](https://aasthi-chain.vercel.app/umi)
