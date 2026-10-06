@@ -292,6 +292,9 @@ type UMIRail struct {
 	order        []string                          // instruction ids, oldest first
 	seq          uint64
 
+	baskets   map[string]*Basket // basketId -> cross-property portfolio token
+	ownership *ownershipLog      // append-only journal of position changes
+
 	securities   SecuritiesLedger
 	chain        *DrunixChain
 	store        UMIStore // durable mirror (nil = in-memory only, original behaviour)
@@ -346,6 +349,8 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		derived:      make(map[string]bool),
 		isins:        make(map[string]*PilotISIN),
 		instructions: make(map[string]*SettlementInstruction),
+		baskets:      make(map[string]*Basket),
+		ownership:    &ownershipLog{},
 		securities:   sec,
 		chain:        chain,
 	}
@@ -553,6 +558,7 @@ func (r *UMIRail) SeedPosition(assetID, holder string, tokens, authorisedTokens 
 	}
 
 	mem.Set(assetID, holder, tokens)
+	r.RecordOwnership(assetID, holder, tokens, "SEEDED")
 	r.mu.Lock()
 	snap := r.snapPositions(assetID, holder)
 	r.mu.Unlock()
@@ -944,6 +950,11 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 		buyerWallet.refresh()
 		return fail(ErrUMIInsufficientSecurities, "securities leg rejected at commit: "+err.Error())
 	}
+	// Ownership changed hands: journal both sides so the stake can later be
+	// measured over a period, not just read off as a snapshot.
+	r.RecordOwnership(req.AssetID, req.Seller, r.securities.Position(req.AssetID, req.Seller), "DVP_SETTLED")
+	r.RecordOwnership(req.AssetID, req.Buyer, r.securities.Position(req.AssetID, req.Buyer), "DVP_SETTLED")
+
 	buyerWallet.ReservedPaise -= cashPaise
 	buyerWallet.BalancePaise -= cashPaise
 	sellerWallet.BalancePaise += cashPaise
