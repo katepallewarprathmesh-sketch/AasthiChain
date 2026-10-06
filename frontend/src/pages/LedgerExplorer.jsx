@@ -49,6 +49,11 @@ export default function LedgerExplorer() {
   // of which one was real. This view is the Go settlement chain: append-only,
   // Postgres-backed, replayed and re-verified from genesis at every start.
   const [umi, setUmi] = useState(null)
+  // How far back the rendered list reaches. The page used to fetch a single
+  // 60-block window and stop, so a 165-block chain showed only its newest 60
+  // and there was no way to tell that from the screen.
+  const [oldest, setOldest] = useState(0)
+  const [more, setMore] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -72,6 +77,7 @@ export default function LedgerExplorer() {
         chainId: d.chainId, height: d.height, blocks: d.totalBlocks,
         blocksList: [...(d.blocks || [])].reverse(), contract: 'aasthi.umi-v1'
       })
+      setOldest(Number(d.from || 0))
       setVerify({ ...d.verification, blocks: d.totalBlocks })
       setLabMsg(null)
     } catch (e) {
@@ -85,6 +91,31 @@ export default function LedgerExplorer() {
     const tx = new URLSearchParams(location.search).get('tx')
     if (tx) setHighlightTx(tx)
   }, [location.search])
+
+
+  // Walk further back through the chain, appending older blocks to the list.
+  const loadOlder = useCallback(async (span = 60) => {
+    if (oldest <= 0) return
+    setMore(true)
+    try {
+      const from = Math.max(0, oldest - span)
+      const d = await api.getUmiChain(oldest - from, from)
+      if (d && !d.error && (d.blocks || []).length) {
+        setChain(c => ({ ...c, blocksList: [...(c?.blocksList || []), ...[...d.blocks].reverse()] }))
+        setOldest(from)
+      }
+    } finally { setMore(false) }
+  }, [oldest])
+
+  // A "view this transfer on the ledger" link is useless if the block it
+  // points at is older than the window we happened to load. When we arrive
+  // with a highlight and cannot see it yet, pull the rest of the chain in.
+  useEffect(() => {
+    if (!highlightTx || !chain || oldest <= 0 || more) return
+    const found = (chain.blocksList || []).some(b =>
+      (b.txns || []).some(t => Object.values(t).includes(highlightTx)))
+    if (!found) loadOlder(oldest)
+  }, [highlightTx, chain, oldest, more, loadOlder])
 
   const runVerify = async () => {
     setBusy(true)
@@ -210,7 +241,13 @@ export default function LedgerExplorer() {
 
       {/* Blocks */}
       <div style={{ marginTop: 18 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 10 }}>Committed blocks <span style={{ color: '#9CA3AF', fontWeight: 500 }}>(latest first)</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Committed blocks <span style={{ color: '#9CA3AF', fontWeight: 500 }}>(latest first)</span></div>
+          <div style={{ fontSize: 12, color: '#6B7280' }}>
+            showing {(chain?.blocksList || []).length} of {chain?.blocks ?? 0}
+            {oldest > 0 ? ` · ${oldest} older block${oldest === 1 ? '' : 's'} not loaded` : ' · whole chain'}
+          </div>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(chain?.blocksList || []).map(b => {
             const st = TYPE_STYLES[b.type] || TYPE_STYLES.GENESIS
@@ -237,6 +274,18 @@ export default function LedgerExplorer() {
             )
           })}
         </div>
+        {oldest > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button onClick={() => loadOlder(60)} disabled={more}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid #D1D5DB', background: 'white', fontSize: 13, fontWeight: 600, cursor: more ? 'wait' : 'pointer', color: '#111827' }}>
+              {more ? 'Loading…' : `Load 60 older blocks`}
+            </button>
+            <button onClick={() => loadOlder(oldest)} disabled={more}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid #D1D5DB', background: 'white', fontSize: 13, fontWeight: 600, cursor: more ? 'wait' : 'pointer', color: '#374151' }}>
+              Load all {oldest} remaining
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
