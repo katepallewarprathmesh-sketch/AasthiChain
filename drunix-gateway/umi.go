@@ -1066,38 +1066,83 @@ type ServicingResult struct {
 	DistributedINR float64           `json:"distributedINR"`
 	RemainderINR   float64           `json:"remainderINR"`
 	Payouts        []ServicingPayout `json:"payouts"`
-	BlockHeight    int64             `json:"blockHeight"`
-	BlockHash      string            `json:"blockHash,omitempty"`
-	SettledAt      time.Time         `json:"settledAt"`
-	Contract       string            `json:"contract"`
-	Mode           string            `json:"mode"`
-	Disclaimer     string            `json:"disclaimer"`
+	// Basis records how the split was decided, so a payout can be explained
+	// months later without guessing.
+	Basis       string    `json:"basis"`
+	BlockHeight int64     `json:"blockHeight"`
+	BlockHash   string    `json:"blockHash,omitempty"`
+	SettledAt   time.Time `json:"settledAt"`
+	Contract    string    `json:"contract"`
+	Mode        string    `json:"mode"`
+	Disclaimer  string    `json:"disclaimer"`
 }
 
 // Servicing distributes rent/coupon pro-rata straight into holders' CBDC
 // wallets — the Demat 2.0 "payment reaches the holder's wallet on the due date,
 // no registrar file-shuffling" behaviour. Excluded holders: the payer itself.
 // Rounding remainder (sub-paise dust) is reported, never silently created.
+// Servicing distributes income on the current register. Unchanged behaviour:
+// whoever holds tokens at this instant is paid pro rata.
 func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*ServicingResult, error) {
+	return r.ServicingByBasis(assetID, payer, grossINR, ServicingBasisSnapshot, time.Time{}, time.Time{})
+}
+
+// ServicingByBasis distributes income on a chosen basis.
+//
+// A snapshot pays someone who bought yesterday exactly as much as someone who
+// held all year, which is wrong for rent that accrued over the whole period.
+// The time-weighted basis splits by token-days actually held.
+func (r *UMIRail) ServicingByBasis(assetID, payer string, grossINR float64, basis string, from, to time.Time) (*ServicingResult, error) {
 	gross := INRToPaise(grossINR)
 	if gross <= 0 {
 		return nil, ErrUMIInvalidAmount
 	}
-	holders := r.securities.Holders(assetID)
-	delete(holders, payer)
-	if len(holders) == 0 {
+	tokens := r.securities.Holders(assetID)
+	delete(tokens, payer)
+	if len(tokens) == 0 {
 		return nil, ErrUMINoHolders
 	}
+
+	// weights decide the split; tokens stay on the payout for the record.
+	weights := make(map[string]int64, len(tokens))
+	switch basis {
+	case ServicingBasisTimeWeighted:
+		for _, sl := range r.CapTable(assetID, from, to) {
+			if sl.Holder == payer {
+				continue
+			}
+			if _, holds := tokens[sl.Holder]; !holds {
+				// Sold out before the payout: no current position, no payout.
+				continue
+			}
+			// Token-days are fractional; scale to integer paise-grade weight
+			// so the split stays exact integer arithmetic.
+			weights[sl.Holder] = int64(sl.TokenDays * 1000)
+		}
+	default:
+		basis = ServicingBasisSnapshot
+		for h, t := range tokens {
+			weights[h] = t
+		}
+	}
+
 	var totalTokens int64
-	names := make([]string, 0, len(holders))
-	for h, t := range holders {
-		totalTokens += t
+	names := make([]string, 0, len(weights))
+	for h, w := range weights {
+		totalTokens += w
 		names = append(names, h)
 	}
 	sort.Strings(names)
 	if totalTokens <= 0 {
+		// Time-weighting can legitimately produce no history at all (every
+		// position opened after the window). Fall back rather than refuse to
+		// pay anyone.
+		if basis == ServicingBasisTimeWeighted {
+			return r.ServicingByBasis(assetID, payer, grossINR, ServicingBasisSnapshot, time.Time{}, time.Time{})
+		}
 		return nil, ErrUMINoHolders
 	}
+	holders := weights
 
 	r.mu.Lock()
 	payerWallet := r.walletLocked(payer)
@@ -1113,6 +1158,7 @@ func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*Servicing
 		Payer:       payer,
 		GrossINR:    paiseToINR(gross),
 		SettledAt:   time.Now().UTC(),
+		Basis:       basis,
 		Contract:    "aasthi.servicing-umi-v1",
 		Mode:        UMIMode,
 		Disclaimer:  UMIDisclaimer,
@@ -1132,7 +1178,7 @@ func (r *UMIRail) Servicing(assetID, payer string, grossINR float64) (*Servicing
 		w.refresh()
 		distributed += share
 		res.Payouts = append(res.Payouts, ServicingPayout{
-			Holder: h, WalletID: w.WalletID, Tokens: holders[h],
+			Holder: h, WalletID: w.WalletID, Tokens: tokens[h],
 			AmountINR: paiseToINR(share), BalanceINR: w.BalanceINR,
 		})
 	}
@@ -1242,9 +1288,9 @@ type Reconciliation struct {
 	Disclaimer       string            `json:"disclaimer"`
 	// Securities-leg conservation. The cash leg has always been checked; the
 	// token book was not, which is how an asset came to report 101% allocated.
-	SupplyConserved  bool                     `json:"supplyConserved"`
-	SupplyNote       string                   `json:"supplyNote"`
-	SupplyBreaches   []map[string]interface{} `json:"supplyBreaches,omitempty"`
+	SupplyConserved bool                     `json:"supplyConserved"`
+	SupplyNote      string                   `json:"supplyNote"`
+	SupplyBreaches  []map[string]interface{} `json:"supplyBreaches,omitempty"`
 }
 
 // Reconcile asserts that no paisa was created or destroyed by the rail:

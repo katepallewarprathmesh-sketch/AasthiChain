@@ -272,3 +272,76 @@ func TestBasketHoldingsValueAcrossProperties(t *testing.T) {
 		t.Fatal("a non-holder must hold nothing")
 	}
 }
+
+func TestIncomeSplitCanBeTimeWeighted(t *testing.T) {
+	rail := NewUMIRail(NewMemorySecurities(), NewChain())
+	rail.SeedPosition("PROP-R", "originator1", 200, 1000)
+	rail.FundWallet("originator1", 100000)
+
+	now := time.Now().UTC()
+	// Both hold 100 today, but alice has held for 20 days and bob for 10.
+	mem := rail.securities.(*MemorySecurities)
+	mem.Set("PROP-R", "originator1", 0)
+	mem.Set("PROP-R", "alice", 100)
+	mem.Set("PROP-R", "bob", 100)
+	rail.ownership = &ownershipLog{events: []OwnershipEvent{
+		{AssetID: "PROP-R", Holder: "alice", Tokens: 100, At: now.Add(-20 * 24 * time.Hour)},
+		{AssetID: "PROP-R", Holder: "bob", Tokens: 100, At: now.Add(-10 * 24 * time.Hour)},
+	}}
+
+	snap, err := rail.ServicingByBasis("PROP-R", "originator1", 3000, ServicingBasisSnapshot, time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("snapshot servicing: %v", err)
+	}
+	paid := map[string]float64{}
+	for _, p := range snap.Payouts {
+		paid[p.Holder] = p.AmountINR
+	}
+	if paid["alice"] != paid["bob"] {
+		t.Fatalf("a snapshot must split evenly: %v vs %v", paid["alice"], paid["bob"])
+	}
+	if snap.Basis != ServicingBasisSnapshot {
+		t.Fatalf("basis not recorded: %q", snap.Basis)
+	}
+
+	tw, err := rail.ServicingByBasis("PROP-R", "originator1", 3000,
+		ServicingBasisTimeWeighted, now.Add(-20*24*time.Hour), now)
+	if err != nil {
+		t.Fatalf("time-weighted servicing: %v", err)
+	}
+	twPaid := map[string]float64{}
+	for _, p := range tw.Payouts {
+		twPaid[p.Holder] = p.AmountINR
+	}
+	if twPaid["alice"] <= twPaid["bob"] {
+		t.Fatalf("alice held twice as long and must be paid more: %v vs %v", twPaid["alice"], twPaid["bob"])
+	}
+	// 2:1 on token-days => about 2000 / 1000 of 3000.
+	if twPaid["alice"] < 1900 || twPaid["alice"] > 2100 {
+		t.Fatalf("alice time-weighted payout = %v, want about 2000", twPaid["alice"])
+	}
+	if tw.Basis != ServicingBasisTimeWeighted {
+		t.Fatalf("basis not recorded: %q", tw.Basis)
+	}
+	if tw.DistributedINR > 3000 {
+		t.Fatalf("distributed more than the gross: %v", tw.DistributedINR)
+	}
+}
+
+func TestTimeWeightedFallsBackWhenThereIsNoHistory(t *testing.T) {
+	rail := NewUMIRail(NewMemorySecurities(), NewChain())
+	rail.SeedPosition("PROP-N", "originator1", 100, 1000)
+	rail.FundWallet("originator1", 50000)
+	mem := rail.securities.(*MemorySecurities)
+	mem.Set("PROP-N", "carol", 100)
+	// Window entirely before any position existed.
+	old := time.Now().UTC().Add(-400 * 24 * time.Hour)
+	res, err := rail.ServicingByBasis("PROP-N", "originator1", 1000,
+		ServicingBasisTimeWeighted, old, old.Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("must not refuse to pay: %v", err)
+	}
+	if res.DistributedINR <= 0 {
+		t.Fatal("falling back to snapshot should still pay the holders")
+	}
+}

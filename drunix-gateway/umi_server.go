@@ -5,12 +5,13 @@ package drunix
 // rail is simply absent and every existing endpoint behaves exactly as before.
 
 import (
-	"os"
-	"errors"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var umiEndpointList = []string{
@@ -308,12 +309,23 @@ func (s *Server) handleUMIServicing(w http.ResponseWriter, r *http.Request) {
 		AssetID   string  `json:"assetId"`
 		Payer     string  `json:"payer"`
 		AmountINR float64 `json:"amountINR"`
+		// Optional. Omitted means snapshot, which is the original behaviour.
+		Basis string `json:"basis"`
+		From  string `json:"from"`
+		To    string `json:"to"`
 	}
 	if err := umiDecode(r, &body); err != nil {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
 		return
 	}
-	res, err := s.UMI.Servicing(body.AssetID, body.Payer, body.AmountINR)
+	parseTS := func(v string) time.Time {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			return t.UTC()
+		}
+		return time.Time{}
+	}
+	res, err := s.UMI.ServicingByBasis(body.AssetID, body.Payer, body.AmountINR,
+		body.Basis, parseTS(body.From), parseTS(body.To))
 	if err != nil {
 		reason := err.Error()
 		if i := strings.Index(reason, ":"); i > 0 && strings.HasPrefix(reason, "ERR_") {

@@ -42,6 +42,15 @@ var (
 	ErrBasketInsufficientUnits = errors.New("ERR_UMI_BASKET_INSUFFICIENT_UNITS")
 )
 
+// Bases on which income can be split between holders.
+const (
+	// ServicingBasisSnapshot pays on the register as it stands right now.
+	ServicingBasisSnapshot = "snapshot"
+	// ServicingBasisTimeWeighted pays on token-days held across the period
+	// the income accrued over.
+	ServicingBasisTimeWeighted = "timeWeighted"
+)
+
 // BasketComponent is one property's contribution to a single basket unit.
 type BasketComponent struct {
 	AssetID string `json:"assetId"`
@@ -56,8 +65,8 @@ type BasketComponent struct {
 
 // Basket is a tradeable claim on a fixed recipe of property tokens.
 type Basket struct {
-	BasketID string            `json:"basketId"`
-	Name     string            `json:"name"`
+	BasketID string `json:"basketId"`
+	Name     string `json:"name"`
 	// Custodian holds the component tokens that back every issued unit.
 	Custodian        string            `json:"custodian"`
 	Components       []BasketComponent `json:"components"`
