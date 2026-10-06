@@ -2614,6 +2614,44 @@ app.get('/api/admin/ops', authMiddleware, async (req, res) => {
 // only reverse-proxies; if the Go rail is down, /api/umi/* returns 503 and every
 // other AasthiChain route is unaffected.
 const UMI_GATEWAY_URL = process.env.UMI_GATEWAY_URL || 'http://127.0.0.1:21100';
+// Live ledger stream. This must bypass umiProxy: that helper buffers the whole
+// upstream body and aborts after 8s, which is exactly wrong for a connection
+// meant to stay open. Note this works where the app is a long-running process;
+// on serverless the connection cannot be held, and the client falls back to
+// polling on its own.
+app.get('/api/umi/events', async (req, res) => {
+  let upstream;
+  try {
+    upstream = await fetch(UMI_GATEWAY_URL.replace(/\/$/, '') + '/drunix/events', {
+      headers: { Accept: 'text/event-stream' },
+    });
+  } catch (e) {
+    return res.status(503).json({ error: 'ERR_UMI_RAIL_UNAVAILABLE', message: e.message });
+  }
+  if (!upstream.ok || !upstream.body) {
+    return res.status(502).json({ error: 'ERR_UMI_STREAM_FAILED', upstreamStatus: upstream.status });
+  }
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const reader = upstream.body.getReader();
+  // Stop reading as soon as the browser goes away, or the rail keeps a
+  // subscriber alive for a client that no longer exists.
+  let closed = false;
+  req.on('close', () => { closed = true; reader.cancel().catch(() => {}); });
+  try {
+    while (!closed) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(Buffer.from(value));
+    }
+  } catch { /* client or upstream went away */ }
+  if (!closed) res.end();
+});
+
 app.all('/api/umi', umiProxy);
 app.all('/api/umi/*splat', umiProxy);
 async function umiProxy(req, res) {

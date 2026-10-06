@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import api from '../lib/api.js'
+import useLedgerStream from '../lib/useLedgerStream.js'
 
 const TYPE_STYLES = {
   GENESIS: { label: 'Genesis', color: '#64748B', bg: '#F1F5F9', border: '#E2E8F0' },
@@ -87,6 +88,17 @@ export default function LedgerExplorer() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Reload when the rail says a block landed, rather than on a timer. The
+  // hook falls back to polling by itself where the stream cannot open, so
+  // this page stays current either way — and says which of the two it is.
+  const { mode: liveMode, lastBlock } = useLedgerStream({
+    onBlock: () => { load() },
+    pollFn: async () => {
+      await load()
+      return null
+    },
+  })
   useEffect(() => {
     const tx = new URLSearchParams(location.search).get('tx')
     if (tx) setHighlightTx(tx)
@@ -141,7 +153,30 @@ export default function LedgerExplorer() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>NPCI Drunix · permissioned network</div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Ledger Explorer</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Ledger Explorer</h1>
+            {/* Say which it is. Claiming "live" on a page that is really
+                polling is the kind of small lie that costs trust later. */}
+            <span title={liveMode === 'live'
+              ? 'Connected to the rail — new blocks arrive as they are committed'
+              : liveMode === 'polling'
+                ? 'The live stream could not be opened here, so this page refreshes on a timer'
+                : 'Checking for a live connection'}
+              style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                padding: '3px 9px', borderRadius: 999,
+                color: liveMode === 'live' ? '#047857' : '#6B7280',
+                background: liveMode === 'live' ? '#ECFDF5' : '#F3F4F6',
+                border: `1px solid ${liveMode === 'live' ? '#A7F3D0' : '#E5E7EB'}`,
+              }}>
+              {liveMode === 'live' ? 'Live' : liveMode === 'polling' ? 'Refreshing' : 'Connecting'}
+            </span>
+            {lastBlock && liveMode === 'live' && (
+              <span style={{ fontSize: 12, color: '#6B7280' }}>
+                block #{lastBlock.height} · {lastBlock.type}
+              </span>
+            )}
+          </div>
           <p style={{ fontSize: 13.5, color: '#6B7280', maxWidth: '64ch', lineHeight: 1.6 }}>
             Distributed ledgers and decentralized trust as the open layer for digitization, agents, DPI and programmable finance.
             Every settlement is a block verify it yourself, no account needed.

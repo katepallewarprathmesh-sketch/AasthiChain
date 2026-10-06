@@ -26,15 +26,22 @@ type Server struct {
 	// caller sends an Idempotency-Key. nil means the old behaviour: every
 	// request is executed, including a retry of one that already settled.
 	Idem *IdemStore
+	// events fans committed blocks out to live subscribers (see events.go).
+	events *eventHub
 }
 
 // NewServer wires dependencies (DIP).
 func NewServer(l DrunixClient) *Server {
-	return &Server{Ledger: l, Thresholds: DefaultThresholds()}
+	return &Server{Ledger: l, Thresholds: DefaultThresholds(), events: newEventHub()}
 }
 
 // Router composes middleware + routes (Open/Closed: add routes, no rewrites).
 func (s *Server) Router() http.Handler {
+	// Late-bind the live-event hub: the pipeline (and therefore the chain) is
+	// assigned after NewServer, so this is the first point where both exist.
+	if s.events != nil && s.Pipeline != nil && s.Pipeline.CP != nil && s.Pipeline.CP.Ledger != nil {
+		s.Pipeline.CP.Ledger.Watch(s.events)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/health", s.handleHealth)
@@ -48,6 +55,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
 	mux.HandleFunc("/drunix/chain", s.handleChain)
+	mux.HandleFunc("/drunix/events", s.handleEvents)
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
 	return logCORS(mux)
 }

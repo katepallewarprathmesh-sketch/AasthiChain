@@ -94,6 +94,17 @@ type DrunixChain struct {
 	// history is never extended; the node serves it read-only and says so.
 	sealed     bool
 	persistErr string
+	// hub, when set, receives a notification for every committed block so
+	// live subscribers can be told. Publishing never blocks a commit.
+	hub *eventHub
+}
+
+// Watch attaches the live-event hub. Separate from NewChain so the chain
+// keeps working untouched when nobody is listening.
+func (c *DrunixChain) Watch(h *eventHub) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.hub = h
 }
 
 // NewChain seeds the genesis block (channel config, org MSPs).
@@ -135,6 +146,9 @@ func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *D
 	b.TxnsRoot = TxnsRoot(b.Txns)
 	b.Hash = chainHash(b.Timestamp + "|" + b.Type + "|" + b.TxnsRoot + "|" + b.PrevHash)
 	c.Blocks = append(c.Blocks, b)
+	if c.hub != nil {
+		c.hub.publish(LedgerEvent{Height: b.Height, Type: b.Type, Hash: b.Hash, Timestamp: b.Timestamp})
+	}
 	if c.store != nil {
 		if err := c.store.AppendBlock(b); err != nil {
 			// The block is already committed in memory and returned to the
