@@ -577,7 +577,26 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                 </button>
               </div>
             </div>
-            {si.failureReason && <div style={{ marginTop: 6, fontSize: 12.5, color: C.bad }}>{si.failureReason} — {si.failureDetail} <em>(neither leg moved)</em></div>}
+            {si.failureReason && (
+              <div style={{ marginTop: 6, fontSize: 12.5, color: C.bad }}>
+                {si.failureReason} — {si.failureDetail} <em>(neither leg moved)</em>
+                {si.shortfallINR > 0 && (
+                  // A past failure used to be a dead end: the reason was on
+                  // screen but the fix was three fields away in another card.
+                  // The rail now reports the exact gap, so offer the one action
+                  // that clears it.
+                  <button
+                    style={{ ...btn(false), padding: '4px 9px', marginLeft: 8, fontSize: 12 }}
+                    disabled={!!busy}
+                    onClick={() => run(
+                      () => umi(`/wallets/${encodeURIComponent(si.buyer)}/fund`, { body: { amountINR: si.shortfallINR } }),
+                      (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)} — retry the instruction above`, 'dvp')}
+                  >
+                    Top up {money(si.shortfallINR)} for {si.buyer}
+                  </button>
+                )}
+              </div>
+            )}
             {open === si.instructionId && (
               <ol style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 12.5, color: '#374151' }}>
                 {(si.messages || []).map(m => (

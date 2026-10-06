@@ -250,30 +250,36 @@ var umiMessageNames = map[string]string{
 
 // SettlementInstruction is one atomic DvP across the two legs.
 type SettlementInstruction struct {
-	InstructionID    string       `json:"instructionId"`
-	AssetID          string       `json:"assetId"`
-	ISIN             string       `json:"isin"`
-	Seller           string       `json:"seller"`
-	Buyer            string       `json:"buyer"`
-	Tokens           int64        `json:"tokens"`
-	PricePerTokenINR float64      `json:"pricePerTokenINR"`
-	CashPaise        int64        `json:"cashPaise"`
-	CashINR          float64      `json:"cashINR"`
-	Status           string       `json:"status"`
-	FailureReason    string       `json:"failureReason,omitempty"`
-	FailureDetail    string       `json:"failureDetail,omitempty"`
-	Atomic           string       `json:"atomic"`
-	SecuritiesLeg    string       `json:"securitiesLeg"`
-	CashLeg          string       `json:"cashLeg"`
-	BlockHeight      int64        `json:"blockHeight"`
-	Rev              int64        `json:"-"` // monotonic persistence revision
-	BlockHash        string       `json:"blockHash,omitempty"`
-	Messages         []UMIMessage `json:"messages"`
-	CreatedAt        time.Time    `json:"createdAt"`
-	SettledAt        *time.Time   `json:"settledAt,omitempty"`
-	DryRun           bool         `json:"dryRun"`
-	Mode             string       `json:"mode"`
-	Disclaimer       string       `json:"disclaimer"`
+	InstructionID    string  `json:"instructionId"`
+	AssetID          string  `json:"assetId"`
+	ISIN             string  `json:"isin"`
+	Seller           string  `json:"seller"`
+	Buyer            string  `json:"buyer"`
+	Tokens           int64   `json:"tokens"`
+	PricePerTokenINR float64 `json:"pricePerTokenINR"`
+	CashPaise        int64   `json:"cashPaise"`
+	CashINR          float64 `json:"cashINR"`
+	Status           string  `json:"status"`
+	FailureReason    string  `json:"failureReason,omitempty"`
+	FailureDetail    string  `json:"failureDetail,omitempty"`
+	// A short cash leg is the most common reason a settlement fails, and the
+	// caller's next move is always "top up by exactly this much". Carrying the
+	// figures as numbers saves every client from parsing them back out of the
+	// prose in FailureDetail.
+	ShortfallINR  float64      `json:"shortfallINR,omitempty"`
+	AvailableINR  float64      `json:"availableINR,omitempty"`
+	Atomic        string       `json:"atomic"`
+	SecuritiesLeg string       `json:"securitiesLeg"`
+	CashLeg       string       `json:"cashLeg"`
+	BlockHeight   int64        `json:"blockHeight"`
+	Rev           int64        `json:"-"` // monotonic persistence revision
+	BlockHash     string       `json:"blockHash,omitempty"`
+	Messages      []UMIMessage `json:"messages"`
+	CreatedAt     time.Time    `json:"createdAt"`
+	SettledAt     *time.Time   `json:"settledAt,omitempty"`
+	DryRun        bool         `json:"dryRun"`
+	Mode          string       `json:"mode"`
+	Disclaimer    string       `json:"disclaimer"`
 }
 
 func (si *SettlementInstruction) msg(family, detail string) {
@@ -923,8 +929,11 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 		return fail(ErrUMINoWallet, "buyer "+req.Buyer+" has no wholesale CBDC wallet — fund one via POST /umi/wallets/{id}/fund")
 	}
 	if buyerWallet.available() < cashPaise {
+		si.AvailableINR = paiseToINR(buyerWallet.available())
+		si.ShortfallINR = paiseToINR(cashPaise - buyerWallet.available())
 		return fail(ErrUMIInsufficientCBDC,
-			fmt.Sprintf("buyer e₹-W available ₹%.2f, instruction needs ₹%.2f", paiseToINR(buyerWallet.available()), si.CashINR))
+			fmt.Sprintf("buyer e₹-W available ₹%.2f, instruction needs ₹%.2f — short by ₹%.2f",
+				si.AvailableINR, si.CashINR, si.ShortfallINR))
 	}
 	sellerWallet := r.walletLocked(req.Seller)
 
