@@ -110,6 +110,11 @@ class ApiClient {
     })
   }
 
+  // Operations queue — Registrar/Regulator only, 403 otherwise.
+  async getAdminOps() {
+    return this.request('/api/admin/ops')
+  }
+
   // Balances SRP
   async getBalance(assetId, ownerId) {
     return this.request(`/api/balances/${encodeURIComponent(assetId)}/${encodeURIComponent(ownerId)}`)

@@ -23,6 +23,7 @@ import Insights from '../src/pages/Insights.jsx'
 import UMISettlement from '../src/pages/UMISettlement.jsx'
 import Support from '../src/pages/Support.jsx'
 import Admin from '../src/pages/Admin.jsx'
+import AdminOps from '../src/pages/AdminOps.jsx'
 import Regulator from '../src/pages/Regulator.jsx'
 import PropertyDetail from '../src/pages/PropertyDetail.jsx'
 import ToolsIndex from '../src/pages/tools/ToolsIndex.jsx'
@@ -53,6 +54,7 @@ const ROUTES = [
   ['/umi', <UMISettlement />],
   ['/support', <Support />],
   ['/admin', <Admin user={user} />],
+  ['/admin/ops', <AdminOps user={{ ...user, role: 'Registrar' }} />],
   ['/regulator', <Regulator user={user} />],
   ['/property/PROP-GREEN-VALLEY-PUNE-001', <PropertyDetail user={user} />],
   ['/tools', <ToolsIndex />],

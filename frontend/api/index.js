@@ -3077,6 +3077,13 @@ export default async function handler(req, res) {
         const id = decodeURIComponent(freezeMatch[1]);
         const prop = properties[id];
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+        // Supervisory power — not available to any signed-in investor.
+        if (!['Regulator', 'Registrar'].includes(user.role)) {
+          return res.status(403).json({
+            error: 'ERR_NOT_REGULATOR',
+            message: 'Only a Regulator or Registrar can freeze an asset.',
+          });
+        }
         prop.status = 'FROZEN';
         prop.updatedAt = new Date();
         properties[id] = prop;

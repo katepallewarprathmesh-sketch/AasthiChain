@@ -751,6 +751,15 @@ app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
 app.post('/api/properties/:id/freeze', authMiddleware, (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  // Freezing an asset halts every transfer on it. That is a supervisory power,
+  // not something any signed-in investor should be able to do to someone
+  // else's property.
+  if (!['Regulator', 'Registrar'].includes(req.user.role)) {
+    return res.status(403).json({
+      error: 'ERR_NOT_REGULATOR',
+      message: 'Only a Regulator or Registrar can freeze an asset.',
+    });
+  }
   prop.status = 'FROZEN';
   prop.updatedAt = new Date();
   properties[req.params.id] = prop;
@@ -2480,6 +2489,123 @@ app.get('/api/admin/insights/status', async (req, res) => {
   });
 });
 // ============ END PRIVATE OPERATOR INSIGHTS ============
+
+// ============ ADMIN OPS QUEUE (additive) ============
+// The existing /admin page walks one property through its lifecycle, and
+// /insights is a private analytics read. Neither answers the question an
+// operator actually opens a dashboard to ask: what is stuck right now, and
+// who has to act on it. This aggregates the work queues and nothing else —
+// no UMI logic lives here, the rail is only read over HTTP.
+function ageMins(ts) {
+  const t = new Date(ts).getTime();
+  return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 60000)) : null;
+}
+
+app.get('/api/admin/ops', authMiddleware, async (req, res) => {
+  if (!['Registrar', 'Regulator'].includes(req.user.role)) {
+    return res.status(403).json({
+      error: 'ERR_NOT_REGISTRAR',
+      message: 'The operations queue is for Registrars and Regulators.',
+    });
+  }
+
+  const props = Object.values(properties);
+
+  const awaitingValidation = props
+    .filter(p => p.registrarValidationStatus !== 'VALIDATED' && p.registrarValidationStatus !== 'REJECTED')
+    .map(p => ({ assetId: p.assetId, title: p.title, owner: p.originatorId,
+                 ageMins: ageMins(p.createdAt), status: p.registrarValidationStatus || 'PENDING' }));
+
+  const validatedNotMinted = props
+    .filter(p => p.registrarValidationStatus === 'VALIDATED' && p.status !== 'TOKENIZED' && p.status !== 'FROZEN')
+    .map(p => ({ assetId: p.assetId, title: p.title, owner: p.originatorId,
+                 ageMins: ageMins(p.updatedAt) }));
+
+  const frozen = props.filter(p => p.status === 'FROZEN')
+    .map(p => ({ assetId: p.assetId, title: p.title, ageMins: ageMins(p.updatedAt) }));
+
+  // A payment that is CONFIRMED but never RELEASED means the buyer's money
+  // moved and their tokens did not. That is the one queue worth paging over.
+  const payments = Object.values(npciPayments);
+  const stuckPayments = payments
+    .filter(p => p.status === 'CONFIRMED')
+    .map(p => ({ paymentId: p.paymentId, assetId: p.assetId, payerId: p.payerId,
+                 amountINR: Number(p.amountINR) || 0, tokenAmount: Number(p.tokenAmount) || 0,
+                 ageMins: ageMins(p.createdAt) }))
+    .sort((a, b) => (b.ageMins || 0) - (a.ageMins || 0));
+
+  const expiredPending = payments
+    .filter(p => p.status === 'PENDING' && p.expiresAt && new Date(p.expiresAt).getTime() < Date.now())
+    .map(p => ({ paymentId: p.paymentId, assetId: p.assetId, payerId: p.payerId,
+                 amountINR: Number(p.amountINR) || 0, ageMins: ageMins(p.createdAt) }));
+
+  const pendingKyc = Object.values(kycRecords)
+    .filter(k => k.kycStatus !== 'VERIFIED')
+    .map(k => ({ identityId: k.identityId, status: k.kycStatus }));
+
+  // Rail reads are best-effort: the ops page must still render if the Go
+  // gateway is down, and say so rather than fail opaquely.
+  let rail = { reachable: false };
+  try {
+    const base = UMI_GATEWAY_URL.replace(/\/$/, '');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    let insts = [];
+    try {
+      const r = await fetch(base + '/umi/instructions', { signal: ctrl.signal });
+      if (r.ok) {
+        const j = await r.json();
+        insts = j.instructions || [];
+      }
+    } finally { clearTimeout(timer); }
+    const failed = insts.filter(i => i.status === 'FAILED');
+    const byReason = {};
+    for (const i of failed) byReason[i.failureReason || 'UNKNOWN'] = (byReason[i.failureReason || 'UNKNOWN'] || 0) + 1;
+    rail = {
+      reachable: true,
+      instructions: insts.length,
+      settled: insts.filter(i => i.status === 'SETTLED').length,
+      failed: failed.length,
+      failedByReason: byReason,
+      // Underfunded buyers are recoverable by topping up. These are grouped by
+      // buyer on purpose: one wallet retrying a dozen times produces a dozen
+      // failures, and a queue of identical rows is noise, not work. What an
+      // operator needs is the wallet and the total it is short by.
+      recoverable: Object.values(failed
+        .filter(i => i.failureReason === 'ERR_UMI_INSUFFICIENT_CBDC' && i.shortfallINR > 0)
+        .reduce((acc, i) => {
+          const g = acc[i.buyer] || (acc[i.buyer] = {
+            buyer: i.buyer, instructions: 0, largestShortfallINR: 0, assets: [],
+            latestInstructionId: i.instructionId,
+          });
+          g.instructions += 1;
+          // Topping up the largest single gap clears that instruction; summing
+          // retries of the same trade would overstate what is actually needed.
+          g.largestShortfallINR = Math.max(g.largestShortfallINR, i.shortfallINR);
+          g.latestInstructionId = i.instructionId;
+          if (!g.assets.includes(i.assetId)) g.assets.push(i.assetId);
+          return acc;
+        }, {}))
+        .sort((a, b) => b.largestShortfallINR - a.largestShortfallINR),
+    };
+  } catch { /* leave rail.reachable false */ }
+
+  const chain = drunixVerify();
+  const queues = {
+    awaitingValidation, validatedNotMinted, frozen,
+    stuckPayments, expiredPending, pendingKyc,
+  };
+  res.json({
+    generatedAt: new Date().toISOString(),
+    actor: { identityId: req.user.identityId, role: req.user.role },
+    actionable: awaitingValidation.length + validatedNotMinted.length + stuckPayments.length,
+    queues,
+    counts: Object.fromEntries(Object.entries(queues).map(([k, v]) => [k, v.length])),
+    rail,
+    chain: { blocks: drunixChain.length, valid: !!(chain && (chain.valid ?? chain.ok)) },
+  });
+});
+// ============ END ADMIN OPS QUEUE ============
 
 // ============ UMI RAIL PROXY (additive) ============
 // RBI Unified Market Interface pattern — SEBI Demat 2.0: tokenised asset on the
