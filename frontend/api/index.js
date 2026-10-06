@@ -544,6 +544,48 @@ function verifyWebhookSignature(rawBody, signature, secret, provider) {
 // A CONFIRMED payment must always result in tokens moving, regardless of what the
 // browser does afterwards (closed tab, lost localStorage, buggy client orchestration).
 // Idempotent: RELEASED payments return as-is.
+// A completed purchase has to reach the ledger the Ledger Explorer actually
+// reads. That view is the Go rail's hash chain (/drunix/chain), and only UMI
+// operations append to it — the app-side block written above lives on a
+// separate in-memory chain, which is why paid-for transfers never showed up.
+// So mirror the settlement onto the rail as a real DvP: fund the buyer's e₹-W
+// wallet with the money PayU actually collected, then settle securities
+// against cash atomically. Best effort by design — the tokens have already
+// moved and the buyer has paid, so a rail hiccup must never fail the purchase
+// or throw. Keyed on paymentId so retries do not double-settle.
+async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return { skipped: 'UMI_GATEWAY_URL not set' };
+  const amountINR = Number(pay.amountINR) || 0;
+  const post = async (path, body, idem) => {
+    const r = await fetch(base + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  };
+  try {
+    // Cash leg: the rupees PayU took become the buyer's wholesale CBDC balance.
+    if (amountINR > 0) await post(`/umi/wallets/${encodeURIComponent(buyer)}/fund`, { amountINR }, `${pay.paymentId}-fund`);
+    const dvp = await post('/umi/dvp', {
+      assetId, seller, buyer, tokens,
+      pricePerTokenINR: tokens > 0 ? amountINR / tokens : 0,
+    }, pay.paymentId);
+    if (dvp.status >= 400) {
+      console.error('[RAIL] DvP refused for', pay.paymentId, dvp.body && (dvp.body.error || dvp.body.message));
+      return { ok: false, status: dvp.status, error: dvp.body && dvp.body.error };
+    }
+    const iid = dvp.body && dvp.body.instruction && dvp.body.instruction.instructionId;
+    if (iid) { pay.umiInstructionId = iid; pay.umiIsin = dvp.body.instruction.isin; }
+    console.log(`[RAIL] ${pay.paymentId} settled on the UMI chain as ${iid}`);
+    return { ok: true, instructionId: iid };
+  } catch (e) {
+    console.error('[RAIL] could not reach the settlement rail for', pay.paymentId, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 async function settleConfirmedPayment(pay) {
   if (!pay) return { ok: false, code: 404, error: 'ERR_PAYMENT_NOT_FOUND', message: 'Payment not found' };
   if (pay.status === 'RELEASED' && pay.drunixTransferId) return { ok: true, already: true, payment: pay, message: 'Already settled' };
@@ -578,7 +620,9 @@ async function settleConfirmedPayment(pay) {
   try { await persistNpciState(); } catch {}
   try { saveAllPersisted(); } catch {}
   console.log(`[SETTLE] ${pay.paymentId}: ${amt} tokens ${seller} → ${buyer} (${tid}) — server-side settlement`);
-  return { ok: true, payment: pay, transfer: transfers[tid], moved: amt, seller, buyer };
+  const rail = await commitSettlementToRail(pay, assetId, seller, buyer, amt);
+  try { await persistNpciState(); } catch {}
+  return { ok: true, payment: pay, transfer: transfers[tid], moved: amt, seller, buyer, rail };
 }
 
 
@@ -813,7 +857,8 @@ function buildPayUCheckout(payu, pay, req, cbBase) {
 }
 function payuCallbackHtml(pay, base) {
   const paymentId = pay.paymentId, status = pay.status, assetId = pay.assetId;
-  const ok = status === 'CONFIRMED';
+  // RELEASED means confirmed *and* already settled on the ledger.
+  const ok = status === 'CONFIRMED' || status === 'RELEASED';
   const declined = status === 'DECLINED';
   // Return to the property page (SimpleBuyFlow auto-resumes DvP there); wallet as fallback
   const target = assetId ? `${base}/property/${encodeURIComponent(assetId)}?payu=return&paymentId=${encodeURIComponent(paymentId)}` : `${base}/wallet`;
@@ -1480,6 +1525,19 @@ export default async function handler(req, res) {
         globalThis._aasthi_npcipayments = npciPayments;
         addWebhookAudit({ webhookId, paymentId: pay.paymentId, status: pay.status, rrn: pay.rrn, utr: pay.utr, provider: 'payu', amount: pay.amountINR, timestamp: new Date(), result: 'OK', raw: params });
         await persistNpciState();
+        // Settle here, on the callback, rather than waiting for the browser to
+        // come back and drive it. PayU has taken the money at this point; if
+        // the tab is closed or the return trip fails the tokens would never
+        // move and nothing would reach the ledger. settleConfirmedPayment is
+        // idempotent, so the browser path re-running it later is harmless.
+        if (pay.status === 'CONFIRMED') {
+          try {
+            const s = await settleConfirmedPayment(pay);
+            if (!s.ok) console.error('payu callback settle refused', pay.paymentId, s.error, s.message);
+          } catch (e) {
+            console.error('payu callback settle failed', pay.paymentId, e);
+          }
+        }
         return res.status(200).send(payuCallbackHtml(pay, payuPublicBase(req)));
       } catch (e) {
         console.error('payu callback error', e);
