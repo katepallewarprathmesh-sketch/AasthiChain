@@ -66,6 +66,12 @@ const (
 	BlockUMIDvPSettled    = "UMI_DVP_SETTLED"
 	BlockUMIDvPFailed     = "UMI_DVP_FAILED"
 	BlockUMIServicingPaid = "UMI_SERVICING_PAID"
+	// Basket (cross-property portfolio token) block types.
+	BlockUMIBasketCreated     = "UMI_BASKET_CREATED"
+	BlockUMIBasketSubscribed  = "UMI_BASKET_SUBSCRIBED"
+	BlockUMIBasketRedeemed    = "UMI_BASKET_REDEEMED"
+	BlockUMIBasketDvPSettled  = "UMI_BASKET_DVP_SETTLED"
+	BlockUMIBasketTransferred = "UMI_BASKET_TRANSFERRED"
 )
 
 // Machine-readable failure reasons surfaced to the UI.
@@ -1354,7 +1360,7 @@ func (r *UMIRail) Config() map[string]interface{} {
 		"contract":        UMIContract,
 		"settlementAsset": "e₹-W wholesale CBDC (simulated, integer paise)",
 		"securitiesLeg":   "Drunix permissioned ledger — property fraction tokens",
-		"blockTypes":      []string{BlockUMIWalletFunded, BlockUMIISINAssigned, BlockUMIDvPSettled, BlockUMIDvPFailed, BlockUMIServicingPaid},
+		"blockTypes":      []string{BlockUMIWalletFunded, BlockUMIISINAssigned, BlockUMIDvPSettled, BlockUMIDvPFailed, BlockUMIServicingPaid, BlockUMIBasketCreated, BlockUMIBasketSubscribed, BlockUMIBasketRedeemed, BlockUMIBasketDvPSettled, BlockUMIBasketTransferred},
 		"messageFamilies": umiMessageNames,
 		"states":          []string{UMIStatusReceived, UMIStatusMatched, UMIStatusLocked, UMIStatusSettled, UMIStatusFailed},
 		"failureReasons": []string{

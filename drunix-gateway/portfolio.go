@@ -290,7 +290,7 @@ func (r *UMIRail) CreateBasket(basketID, name, custodian string, components []Ba
 	}
 	r.baskets[basketID] = b
 
-	blk := r.append("UMI_BASKET_CREATED", map[string]interface{}{
+	blk := r.append(BlockUMIBasketCreated, map[string]interface{}{
 		"basketId": b.BasketID, "name": b.Name, "custodian": b.Custodian,
 		"components": b.Components, "navPerUnitINR": b.NAVPerUnitINR(),
 	})
@@ -348,7 +348,7 @@ func (r *UMIRail) Subscribe(basketID, holder string, units int64) (*Basket, *Dru
 		r.RecordOwnership(c.AssetID, b.Custodian, r.securities.Position(c.AssetID, b.Custodian), "BASKET_SUBSCRIBE")
 	}
 
-	blk := r.append("UMI_BASKET_SUBSCRIBED", map[string]interface{}{
+	blk := r.append(BlockUMIBasketSubscribed, map[string]interface{}{
 		"basketId": b.BasketID, "holder": holder, "units": units,
 		"unitsOutstanding": b.UnitsOutstanding, "delivered": delivered,
 		"navPerUnitINR": b.NAVPerUnitINR(), "custodian": b.Custodian,
@@ -395,7 +395,7 @@ func (r *UMIRail) Redeem(basketID, holder string, units int64) (*Basket, *Drunix
 		r.RecordOwnership(c.AssetID, b.Custodian, r.securities.Position(c.AssetID, b.Custodian), "BASKET_REDEEM")
 	}
 
-	blk := r.append("UMI_BASKET_REDEEMED", map[string]interface{}{
+	blk := r.append(BlockUMIBasketRedeemed, map[string]interface{}{
 		"basketId": b.BasketID, "holder": holder, "units": units,
 		"unitsOutstanding": b.UnitsOutstanding, "returned": returned,
 		"navPerUnitINR": b.NAVPerUnitINR(),
@@ -521,7 +521,7 @@ func (r *UMIRail) TransferUnits(basketID, from, to string, units int64) (*Basket
 	}
 	b.Units[to] += units
 
-	blk := r.append("UMI_BASKET_TRANSFERRED", map[string]interface{}{
+	blk := r.append(BlockUMIBasketTransferred, map[string]interface{}{
 		"basketId": b.BasketID, "from": from, "to": to, "units": units,
 		"navPerUnitINR": b.NAVPerUnitINR(),
 	})
@@ -619,7 +619,7 @@ func (r *UMIRail) SettleBasketDvP(basketID, seller, buyer string, units int64, p
 	trade.BuyerCashINR = buyerWallet.BalanceINR
 	trade.SellerCashINR = sellerWallet.BalanceINR
 
-	blk := r.append("UMI_BASKET_DVP_SETTLED", map[string]interface{}{
+	blk := r.append(BlockUMIBasketDvPSettled, map[string]interface{}{
 		"tradeId": trade.TradeID, "basketId": b.BasketID,
 		"seller": seller, "buyer": buyer, "units": units,
 		"pricePerUnitINR": pricePerUnitINR, "considerationINR": trade.ConsiderationINR,

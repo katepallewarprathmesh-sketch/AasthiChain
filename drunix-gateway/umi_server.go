@@ -27,6 +27,17 @@ var umiEndpointList = []string{
 	"POST /umi/servicing                     {\"assetId\":\"...\",\"payer\":\"...\",\"amountINR\":6000}",
 	"GET  /umi/reconciliation",
 	"POST /umi/seed                          {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":15000}  (demo positions only)",
+	// Dynamic ownership — cap table over a window, not just a current balance.
+	"GET  /umi/ownership/{assetId}?from=&to=  holders with pctNow, pctTimeWeighted, tokenDays",
+	// Cross-property portfolio tokens — one wrapped unit over several properties.
+	"GET  /umi/baskets",
+	"GET  /umi/baskets/{basketId}",
+	"POST /umi/baskets                       {\"basketId\":\"...\",\"name\":\"...\",\"components\":[{\"assetId\":\"...\",\"tokensPerUnit\":2}]}  (>=2 distinct assets)",
+	"POST /umi/baskets/{basketId}/subscribe  {\"holder\":\"...\",\"units\":10}   wrap: moves tokens into custody",
+	"POST /umi/baskets/{basketId}/redeem     {\"holder\":\"...\",\"units\":4}    unwrap: back to the underlying",
+	"POST /umi/baskets/{basketId}/dvp        {\"seller\":\"...\",\"buyer\":\"...\",\"units\":3,\"pricePerUnitINR\":2100,\"dryRun\":false}  atomic units <-> e-rupee-W",
+	"POST /umi/baskets/{basketId}/transfer   {\"from\":\"...\",\"to\":\"...\",\"units\":2}  no cash leg",
+	"GET  /umi/holdings/{participant}        units held per basket + totalBasketValueINR",
 }
 
 // registerUMIRoutes mounts the rail on an existing mux (called from Router).
