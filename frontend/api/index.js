@@ -574,8 +574,15 @@ async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
     }, pay.paymentId);
     if (dvp.status >= 400) {
       console.error('[RAIL] DvP refused for', pay.paymentId, dvp.body && (dvp.body.error || dvp.body.message));
-      return { ok: false, status: dvp.status, error: dvp.body && dvp.body.error };
+      // Record the refusal on the payment. The purchase still completed in the
+      // app ledger, but calling that "atomic DvP settled" when the settlement
+      // rail refused it is a claim the chain contradicts.
+      pay.umiError = (dvp.body && dvp.body.error) || 'ERR_UMI_REFUSED';
+      pay.umiErrorMessage = (dvp.body && dvp.body.message) || '';
+      return { ok: false, status: dvp.status, error: pay.umiError };
     }
+    pay.umiError = null;
+    pay.umiErrorMessage = null;
     const iid = dvp.body && dvp.body.instruction && dvp.body.instruction.instructionId;
     if (iid) {
       pay.umiInstructionId = iid;

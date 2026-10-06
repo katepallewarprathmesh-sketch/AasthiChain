@@ -340,7 +340,23 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             🛡 Security check {payment.risk.decision === 'APPROVE' ? 'passed' : 'flagged'} risk {payment.risk.band} ({payment.risk.score}/100)
           </div>
         )}
-        <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>Settled on NPCI Drunix · atomic DvP</div>
+        {/* Only claim an atomic DvP when the settlement rail actually did one.
+            A purchase can complete in the app ledger while the rail refuses
+            the DvP — saying "settled, nothing partial" in that case is
+            contradicted by the UMI_DVP_FAILED block on the chain. */}
+        {payment.umiInstructionId ? (
+          <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+            Settled on NPCI Drunix · atomic DvP ·{' '}
+            <a href={`/ledger?tx=${encodeURIComponent(payment.umiInstructionId)}`} style={{ color: '#059669' }}>see the block</a>
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 10px', marginTop: 8, textAlign: 'left', lineHeight: 1.6 }}>
+            Your tokens are recorded in the ownership ledger, but the UMI settlement rail
+            did not complete the cash-against-tokens leg
+            {payment.umiError ? <> (<code>{payment.umiError}</code>)</> : null}, so there is no
+            atomic DvP block for this purchase yet. Your holding is unaffected.
+          </div>
+        )}
         <div style={{ marginTop: 12 }}>
           <button onClick={() => setAdvanced(!advanced)} style={{ background: 'none', border: 'none', color: '#059669', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>
             {advanced ? 'Hide' : 'Show'} payment details
