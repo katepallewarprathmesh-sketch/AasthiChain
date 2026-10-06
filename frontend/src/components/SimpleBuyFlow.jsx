@@ -118,7 +118,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         // Treating it as "not PENDING" reported a completed purchase as a
         // failure: "Payment RELEASED — no tokens moved, nothing was kept".
         if (pay.status === 'RELEASED') {
-          localStorage.removeItem('aasthi_payu_pending')
+          try { localStorage.removeItem('aasthi_payu_pending') } catch { /* private mode */ }
           setResumeInfo('')
           setPayment(pay)
           try {
@@ -131,7 +131,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           return
         }
         if (pay.status === 'CONFIRMED' && (!pending.assetId || pending.assetId === assetId)) {
-          localStorage.removeItem('aasthi_payu_pending')
+          try { localStorage.removeItem('aasthi_payu_pending') } catch { /* private mode */ }
           setResumeInfo('Completing your purchase moving tokens to you…')
           // Server settles with the payment's OWN data (paid amount, payer, seller)
           // nothing depends on this component's state. Idempotent.
@@ -153,7 +153,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           return
         }
         if (pay.status !== 'PENDING') {
-          localStorage.removeItem('aasthi_payu_pending')
+          try { localStorage.removeItem('aasthi_payu_pending') } catch { /* private mode */ }
           setResumeInfo('')
           setPayment(pay)
           // Never claim nothing moved without checking. A payment that carries
@@ -368,7 +368,14 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           {error}
         </div>
         <button
-          onClick={() => { setStep('form'); setPayment(null); setError('') }}
+          onClick={() => {
+            // Drop the stored PayU hand-off first. Without this the resume
+            // effect re-reads it the moment we return to the form, re-fetches
+            // the same finished payment and lands straight back here — the
+            // buy form becomes unreachable.
+            try { localStorage.removeItem('aasthi_payu_pending') } catch { /* private mode */ }
+            setStep('form'); setPayment(null); setTransfer(null); setError('')
+          }}
           style={{ width: '100%', marginTop: 14, padding: 12, background: '#1E3A5F', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
         >
           Try Again
