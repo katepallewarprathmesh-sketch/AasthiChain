@@ -129,6 +129,11 @@ export default function UMISettlement() {
   const [servAsset, setServAsset] = useState('PROP-GREEN-VALLEY-PUNE-001')
   const [servPayer, setServPayer] = useState('originator1')
   const [properties, setProperties] = useState([])
+  // The page opened straight onto five operator cards — wallets, raw ids,
+  // ISO 20022 traces. That is the right screen for someone running a
+  // settlement rail and the wrong one for everybody else, so the detail is
+  // now opt-in and the default view is the one thing people come here to do.
+  const [mode, setMode] = useState('simple')
 
   const refresh = useCallback(async () => {
     const cfg = await umi('/config')
@@ -193,6 +198,26 @@ export default function UMISettlement() {
   const fundShortfall = () => run(
     () => umi(`/wallets/${encodeURIComponent(buyer)}/fund`, { body: { amountINR: shortfall } }),
     (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)} — the cash leg is now covered`, 'dvp')
+
+  // Fund-then-settle as a single action. Doing this by hand across two cards
+  // is what produced most of the failed settlements on the live rail.
+  const quickSettle = async () => {
+    setBusy('quick'); setFlash(null)
+    try {
+      if (shortfall > 0) {
+        const f = await umi(`/wallets/${encodeURIComponent(buyer)}/fund`, { body: { amountINR: shortfall } })
+        if (!f.ok) { setFlash({ kind: 'err', where: 'quick', text: explain(f.data) }); return }
+      }
+      const d = await umi('/dvp', { body: { assetId, seller, buyer, tokens: Number(tokens), pricePerTokenINR: Number(price) } })
+      if (d.ok) {
+        setFlash({ kind: 'ok', where: 'quick', instructionId: d.data.instruction.instructionId,
+          text: `Settled — ${num(d.data.instruction.tokens)} tokens to ${buyer} against ${money(d.data.instruction.cashINR)} in e₹-W, committed as block #${d.data.instruction.blockHeight}.` })
+      } else setFlash({ kind: 'err', where: 'quick', text: explain(d.data) })
+      await refresh()
+    } catch (e) {
+      setFlash({ kind: 'err', where: 'quick', text: e.message })
+    } finally { setBusy(false) }
+  }
 
   const servicing = () => run(
     () => umi('/servicing', { body: { assetId: servAsset, payer: servPayer, amountINR: Number(servAmt) } }),
@@ -263,8 +288,76 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           {config?.pattern}
         </p>
         <p style={{ color: C.mut, fontSize: 12, maxWidth: 820 }}>{config?.disclaimer}</p>
+        {mode === 'advanced' && (
+          <button onClick={() => setMode('simple')}
+            style={{ marginTop: 10, background: 'none', border: `1px solid ${C.line}`, borderRadius: 8, padding: '6px 12px', fontSize: 12.5, color: C.navy, cursor: 'pointer', fontWeight: 600 }}>
+            ← Back to the simple view
+          </button>
+        )}
       </header>
 
+      {/* ---------- Simple view: the one action, stated plainly ---------- */}
+      {mode === 'simple' && (
+        <section style={{ background: 'white', border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontSize: 18, color: C.navy }}>Buy tokens with central bank money</h2>
+          <p style={{ fontSize: 13, color: C.mut, marginTop: 6, marginBottom: 14, maxWidth: 640 }}>
+            Tokens and cash change hands in the same instant. If either side cannot deliver, nothing moves at all.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+            <Field label="Property">
+              <PropertyPicker value={assetId} onChange={(v) => {
+                setAssetId(v)
+                const pr = properties.find(x => x.assetId === v)
+                if (pr && pr.originatorId) setSeller(pr.originatorId)
+              }} />
+            </Field>
+            <Field label="Buyer"><PartyPicker value={buyer} onChange={setBuyer} /></Field>
+            <Field label="How many tokens"><input style={input} type="number" value={tokens} onChange={e => setTokens(e.target.value)} /></Field>
+            <Field label="Price per token"><input style={input} type="number" value={price} onChange={e => setPrice(e.target.value)} /></Field>
+          </div>
+
+          <div style={{ background: '#F8FAFC', border: `1px solid ${C.line}`, borderRadius: 10, padding: '12px 14px', fontSize: 13.5, color: '#334155', margin: '14px 0' }}>
+            <strong>{buyer}</strong> buys <strong>{num(tokens)} tokens</strong> of {propLabel(assetId)} from <strong>{seller}</strong> for <strong>{money(cashINR)}</strong>.
+            {shortfall > 0 && (
+              <div style={{ marginTop: 6, color: '#7C4A03' }}>
+                {buyer} is short {money(shortfall)} — that will be topped up automatically before settling.
+              </div>
+            )}
+          </div>
+
+          <button style={{ ...btn(true), padding: '11px 20px', fontSize: 14 }} onClick={quickSettle} disabled={!!busy || !Number(tokens) || !Number(price)}>
+            {busy === 'quick' ? 'Settling…' : (shortfall > 0 ? `Top up and settle ${money(cashINR)}` : `Settle ${money(cashINR)}`)}
+          </button>
+
+          {flash && flash.where === 'quick' && (
+            <div style={{
+              marginTop: 12, borderRadius: 10, padding: '11px 13px', fontSize: 13,
+              background: flash.kind === 'ok' ? '#ECFDF5' : C.warnBg,
+              border: `1px solid ${flash.kind === 'ok' ? '#A7F3D0' : C.warnLine}`,
+              color: flash.kind === 'ok' ? '#065F46' : '#7C4A03',
+            }}>
+              {flash.text}
+              {flash.instructionId && (
+                <div style={{ marginTop: 6 }}>
+                  <a href={`/ledger?tx=${encodeURIComponent(flash.instructionId)}`} style={{ color: C.navy, fontWeight: 600 }}>
+                    See it on the ledger →
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, fontSize: 12.5, color: C.mut }}>
+            Want the rail's own controls — wallets, dry runs, servicing, ISO 20022 traces, reconciliation?{' '}
+            <button onClick={() => setMode('advanced')} style={{ background: 'none', border: 'none', color: C.navy, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 12.5 }}>
+              Open the full rail
+            </button>
+          </div>
+        </section>
+      )}
+
+      {mode === 'advanced' && (<>
       <Card
         title="1 · Cash leg — wholesale CBDC (e₹-W) wallets"
         sub="Institutional central-bank-money wallets. Balances are held as integer paise, so the rail can prove it never creates or destroys money."
@@ -453,6 +546,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           </p>
         )}
       </Card>
+      </>)}
     </div>
   )
 }
