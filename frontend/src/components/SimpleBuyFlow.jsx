@@ -53,6 +53,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
   const [transfer, setTransfer] = useState(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
   const [resumeInfo, setResumeInfo] = useState('')
+  const [resumeNote, setResumeNote] = useState('')
 
   const safePrice = tokenPrice || 0
   const cap = Number.isFinite(availableTokens) && availableTokens > 0 ? Math.floor(availableTokens) : null
@@ -170,12 +171,22 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             setStep('success')
             return
           }
-          setError(pay.failureReason || `Payment ${pay.status} — the purchase did not complete. No tokens were transferred, and any amount debited is reversed.`)
-          setStep('error')
+          // A RESUMED payment must never take over the screen. This path runs
+          // on page load from a leftover hand-off in localStorage, so sending
+          // it to the blocking error step meant an old finished payment could
+          // make the buy form unreachable: the form re-triggers this check,
+          // which lands here again. Report it next to the form instead.
+          setResumeNote(pay.failureReason || `Your earlier payment ended as ${pay.status}. No tokens were transferred and any amount debited is reversed.`)
+          setStep('form')
           return
         }
         if (attempts < 60) setTimeout(poll, 3000) // keep waiting for the PayU callback (~3 min)
-        else { setResumeInfo(''); localStorage.removeItem('aasthi_payu_pending'); setError('Could not confirm this payment with PayU within 3 minutes. If your PayU dashboard shows success, re-open this page the purchase completes automatically. No money moves without tokens.'); setStep('error') }
+        else {
+          setResumeInfo('')
+          try { localStorage.removeItem('aasthi_payu_pending') } catch { /* private mode */ }
+          setResumeNote('We could not confirm that payment with PayU within 3 minutes. If your PayU dashboard shows success, re-open this page and it completes automatically. No money moves without tokens.')
+          setStep('form')
+        }
       } catch { if (attempts < 10) setTimeout(poll, 3000) }
     }
     poll()
@@ -452,6 +463,15 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         <div style={{ marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 10, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 12, height: 12, border: '2px solid #FDE68A', borderTopColor: '#D97706', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span>
           {resumeInfo}
+        </div>
+      )}
+      {resumeNote && (
+        <div style={{ marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#92400E', lineHeight: 1.5 }}>
+          {resumeNote}
+          <button onClick={() => setResumeNote('')}
+            style={{ display: 'block', marginTop: 6, background: 'none', border: 'none', padding: 0, color: '#92400E', textDecoration: 'underline', fontSize: 12, cursor: 'pointer' }}>
+            Dismiss
+          </button>
         </div>
       )}
       <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Own a part of this property pay by UPI</p>
