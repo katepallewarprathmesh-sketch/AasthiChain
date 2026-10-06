@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
+import BasketPanel from '../components/BasketPanel.jsx'
 
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
 const card = { background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 18, minWidth: 0 }
@@ -43,6 +44,9 @@ export default function InvestorDashboard({ user }) {
   const [railDown, setRailDown] = useState(false)
   const [incomeUnavailable, setIncomeUnavailable] = useState(false)
   const [railIssues, setRailIssues] = useState([])
+  const [basketHoldings, setBasketHoldings] = useState([])
+  const [basketCatalogue, setBasketCatalogue] = useState([])
+  const [basketsUnavailable, setBasketsUnavailable] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -60,8 +64,9 @@ export default function InvestorDashboard({ user }) {
     // instructions answer perfectly well. Promise.all used to reject the whole
     // batch and declare the rail unreachable, blanking two working panels
     // because of one missing route.
-    const [wRes, insRes, incRes] = await Promise.allSettled([
-      api.umiWallets(), api.umiInstructions(), api.umiIncome(identityId)
+    const [wRes, insRes, incRes, bhRes, bcRes] = await Promise.allSettled([
+      api.umiWallets(), api.umiInstructions(), api.umiIncome(identityId),
+      api.umiBasketHoldings(identityId), api.umiBaskets()
     ])
 
     const ok = (r) => r.status === 'fulfilled' && r.value && !r.value.error
@@ -74,6 +79,12 @@ export default function InvestorDashboard({ user }) {
     else setSettlements([])
 
     setIncome(ok(incRes) ? incRes.value : null)
+
+    // Baskets are their own panel: a gateway too old to serve them must not
+    // disturb anything else on the page.
+    setBasketHoldings(ok(bhRes) ? (bhRes.value.baskets || []) : [])
+    setBasketCatalogue(ok(bcRes) ? (bcRes.value.baskets || []) : [])
+    setBasketsUnavailable(!ok(bhRes) && !ok(bcRes))
 
     // Only a total loss of the rail counts as "not reachable". If any call
     // succeeded the rail is up and the specific gap is reported in place.
@@ -103,7 +114,10 @@ export default function InvestorDashboard({ user }) {
   const settled = settlements.filter(s => s.status === 'SETTLED')
   const cash = wallet?.balanceINR ?? 0
   const totalIncome = income?.totalIncomeINR ?? 0
-  const portfolio = assetsValue + cash
+  // Backing tokens left the holder's own balances for custody, so basket
+  // value is missing from assetsValue rather than duplicated in it.
+  const basketValue = basketHoldings.reduce((s2, b) => s2 + Number(b.valueINR || 0), 0)
+  const portfolio = assetsValue + cash + basketValue
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -127,7 +141,8 @@ export default function InvestorDashboard({ user }) {
 
       {/* Headline numbers */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginTop: 18 }}>
-        <Metric label="Portfolio value" value={money(portfolio)} sub="property + e₹-W cash" color="#1E3A5F" />
+        <Metric label="Portfolio value" value={money(portfolio)}
+          sub={basketValue > 0 ? 'property + baskets + e₹-W cash' : 'property + e₹-W cash'} color="#1E3A5F" />
         <Metric label="Property value" value={money(assetsValue)} sub={`${tokenCount.toLocaleString('en-IN')} tokens · ${holdings.length} ${holdings.length === 1 ? 'property' : 'properties'}`} />
         <Metric label="e₹-W cash" value={railDown ? '—' : money(cash)} sub={wallet?.walletId || 'wholesale CBDC wallet'} color="#6D28D9" />
         <Metric
@@ -155,6 +170,12 @@ export default function InvestorDashboard({ user }) {
           </ul>
         </div>
       ) : null}
+
+      <BasketPanel
+        holdings={basketHoldings}
+        catalogue={basketCatalogue}
+        unavailable={basketsUnavailable}
+      />
 
       {/* Holdings */}
       <div style={{ ...card, marginTop: 16 }}>

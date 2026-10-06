@@ -122,6 +122,19 @@ class ApiClient {
   async umiWallets() { return this.request('/api/umi/wallets') }
   async umiInstructions() { return this.request('/api/umi/instructions') }
   async umiIncome(participant) { return this.request(`/api/umi/income/${encodeURIComponent(participant)}`) }
+  // Cross-property portfolio tokens. A basket unit is a claim on a fixed
+  // recipe of property tokens held in custody, so one number can stand for
+  // several properties at once.
+  async umiBaskets() { return this.request('/api/umi/baskets') }
+  async umiBasket(basketId) { return this.request(`/api/umi/baskets/${encodeURIComponent(basketId)}`) }
+  async umiBasketHoldings(participant) { return this.request(`/api/umi/holdings/${encodeURIComponent(participant)}`) }
+  async umiOwnership(assetId, from, to) {
+    const q = new URLSearchParams()
+    if (from) q.set('from', from)
+    if (to) q.set('to', to)
+    const qs = q.toString()
+    return this.request(`/api/umi/ownership/${encodeURIComponent(assetId)}${qs ? '?' + qs : ''}`)
+  }
   async chainHead() { return this.request('/api/chain/head') }
   async tamperChain(height) {
     return this.request('/api/chain/tamper', { method: 'POST', body: JSON.stringify({ height }) })
