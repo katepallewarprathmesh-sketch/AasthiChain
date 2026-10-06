@@ -84,6 +84,13 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
     let pending = null
     try { pending = JSON.parse(raw) } catch { localStorage.removeItem('aasthi_payu_pending'); return }
     if (!pending?.paymentId) return
+    // A pending PayU payment from before the gateway was switched off would
+    // otherwise keep this page polling a checkout that can never complete.
+    // Anything older than the 3 minute confirmation window is dead; drop it.
+    if (!pending.ts || Date.now() - pending.ts > 3 * 60 * 1000) {
+      try { localStorage.removeItem('aasthi_payu_pending') } catch { /* private mode */ }
+      return
+    }
     let cancelled = false
     let attempts = 0
     let reconciledAt = 0
