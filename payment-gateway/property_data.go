@@ -159,6 +159,17 @@ func (p *PropertyDataProvider) Verify(assetID string, ourValuation int64, origin
 				Status: "Pending",
 			},
 		}
+		// A pending case clouds the title just like a charge does, so it has to
+		// show up in the encumbrance list too — otherwise the registrar is told
+		// "encumbrance found" with nothing to look at.
+		for _, l := range litigations {
+			encumbrances = append(encumbrances, Encumbrance{
+				Type:   "Litigation",
+				Bank:   l.Court,
+				Amount: 0,
+				Date:   time.Now(),
+			})
+		}
 		hasEncumbrance = hasEncumbrance || len(litigations) > 0
 	}
 
