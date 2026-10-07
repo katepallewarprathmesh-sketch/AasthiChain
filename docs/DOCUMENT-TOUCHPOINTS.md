@@ -87,3 +87,43 @@ EVM_RPC_URL=... EVM_REGISTRY_ADDRESS=... node tests/evmmirror.test.mjs
 The test is the point: all 16 assertions read the contract over JSON-RPC and
 never ask AasthiChain whether a document is genuine. A counterparty holding
 only the contract address can run it against us.
+
+
+## Is any of this actually IPFS?
+
+A CID we compute ourselves and never check is just a hash with a fancy name.
+Two claims had to be proven rather than asserted:
+
+**1. Our CIDs are real IPFS CIDs.** `tests/cidconformance.test.mjs` anchors
+bytes through the production path and compares the result with
+`ipfs-only-hash`, the reference JS implementation, at the sizes that actually
+break implementations:
+
+| Case | Result |
+|------|--------|
+| 1 byte, short text, non-ASCII (`₹`, em dash) | matches |
+| 262143 B — one under the chunk boundary | matches, raw block |
+| 262144 B — exactly the boundary | matches, raw block |
+| 262145 B — one over | matches, **switches to dag-pb** |
+| 529288 B — three chunks | matches |
+
+The boundary cases are the point: below it a file is one raw block
+(`bafkrei…`), above it the root becomes a dag-pb node (`bafybei…`) whose link
+table must be laid out byte-exactly. Get it wrong and you produce a
+respectable-looking CID that resolves to nothing on every gateway on earth.
+
+**2. The anchor exists somewhere we do not control.** Covered by the EVM
+mirror above.
+
+Together these are what "verifiable without trusting our servers" means in
+practice: the name is computed by a published algorithm anyone can rerun, and
+the claim that we published it at a given time is recorded on a chain we
+cannot edit.
+
+### Still outstanding
+
+Pinning to a live Kubo node is implemented (`IPFS_API_URL`, with the node's
+own hash compared against ours and the pin refused on mismatch) but has not
+been exercised against a real daemon — `dist.ipfs.tech` is unreachable from
+this environment. The CID maths it depends on is now verified independently,
+so the remaining risk is operational rather than cryptographic.
