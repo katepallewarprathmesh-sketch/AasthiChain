@@ -2652,6 +2652,21 @@ app.get('/api/umi/events', async (req, res) => {
   if (!closed) res.end();
 });
 
+// Metrics are Prometheus text, not JSON. umiProxy assumes JSON and rewrites
+// anything else into an error envelope, so this has to bypass it.
+app.get('/api/umi/metrics', async (req, res) => {
+  try {
+    const upstream = await fetch(UMI_GATEWAY_URL.replace(/\/$/, '') + '/umi/metrics');
+    const text = await upstream.text();
+    res
+      .status(upstream.status)
+      .type('text/plain; version=0.0.4; charset=utf-8')
+      .send(text);
+  } catch (e) {
+    res.status(503).type('text/plain').send('# settlement rail unreachable: ' + e.message + '\n');
+  }
+});
+
 app.all('/api/umi', umiProxy);
 app.all('/api/umi/*splat', umiProxy);
 async function umiProxy(req, res) {

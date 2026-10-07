@@ -379,6 +379,28 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 	}
 }
 
+// SettlementCounts reports settled and failed totals plus a breakdown of the
+// failure reasons, for /metrics. Counting reasons here rather than in the
+// metrics layer keeps the rail the single owner of settlement state.
+func (r *UMIRail) SettlementCounts() (settled, failed int64, byReason map[string]int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	byReason = map[string]int64{}
+	for _, si := range r.instructions {
+		if si.Status == UMIStatusFailed && si.FailureReason != "" {
+			byReason[si.FailureReason]++
+		}
+	}
+	return r.settledCount, r.failedCount, byReason
+}
+
+// WalletCount reports how many CBDC wallets exist.
+func (r *UMIRail) WalletCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.wallets)
+}
+
 // PositionOf reports a holder's token position, taking the rail lock. Callers
 // already holding it must use r.securities.Position directly.
 func (r *UMIRail) PositionOf(assetID, holder string) int64 {

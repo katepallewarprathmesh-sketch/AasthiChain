@@ -28,11 +28,13 @@ type Server struct {
 	Idem *IdemStore
 	// events fans committed blocks out to live subscribers (see events.go).
 	events *eventHub
+	// metrics records request counts and latency for /metrics (see metrics.go).
+	metrics *metrics
 }
 
 // NewServer wires dependencies (DIP).
 func NewServer(l DrunixClient) *Server {
-	return &Server{Ledger: l, Thresholds: DefaultThresholds(), events: newEventHub()}
+	return &Server{Ledger: l, Thresholds: DefaultThresholds(), events: newEventHub(), metrics: newMetrics()}
 }
 
 // Router composes middleware + routes (Open/Closed: add routes, no rewrites).
@@ -56,8 +58,12 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
 	mux.HandleFunc("/drunix/chain", s.handleChain)
 	mux.HandleFunc("/drunix/events", s.handleEvents)
+	mux.HandleFunc("/metrics", s.handleMetrics)
+	// Also reachable through the app's /api/umi/* proxy, so an operator can
+	// read it without exposing the rail directly.
+	mux.HandleFunc("/umi/metrics", s.handleMetrics)
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
-	return logCORS(mux)
+	return logCORS(s.withMetrics(mux))
 }
 
 func logCORS(next http.Handler) http.Handler {
