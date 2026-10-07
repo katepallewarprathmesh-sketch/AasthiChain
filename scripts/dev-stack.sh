@@ -59,6 +59,39 @@ wait_for_port() { # port, seconds
   return 1
 }
 
+# Dependencies and build output are the first things a fresh clone — or a
+# recycled sandbox — is missing, and the failure is confusing: the server
+# cheerfully announces it is serving a dist directory that is not there, and
+# the browser quietly runs whatever stale bundle it cached. Check, do not
+# assume.
+if [[ ! -d node_modules ]]; then
+  echo "installing server dependencies…"
+  npm install --silent || exit 1
+fi
+
+if [[ ! -d frontend/node_modules ]]; then
+  echo "installing frontend dependencies…"
+  (cd frontend && npm install --silent) || exit 1
+fi
+
+# Rebuild when dist is missing, or when any source file is newer than the
+# bundle. Serving a stale bundle looks exactly like a backend bug.
+needs_build=0
+if [[ ! -f frontend/dist/index.html ]]; then
+  needs_build=1
+elif [[ -n "$(find frontend/src frontend/index.html -newer frontend/dist/index.html 2>/dev/null | head -1)" ]]; then
+  echo "frontend sources are newer than the last build"
+  needs_build=1
+fi
+if [[ $needs_build -eq 1 ]]; then
+  echo "building the frontend…"
+  (cd frontend && npm run build) >/tmp/aasthi-build.log 2>&1 || {
+    echo "frontend build failed; see /tmp/aasthi-build.log" >&2
+    tail -20 /tmp/aasthi-build.log >&2
+    exit 1
+  }
+fi
+
 echo "building the gateway…"
 (cd drunix-gateway && go build -o /tmp/umigw ./cmd/gateway) || exit 1
 
@@ -121,6 +154,13 @@ if [[ ${#EVM_ENV[@]} -gt 0 ]]; then
   echo "    ${EVM_ENV[0]} ${EVM_ENV[1]} node tests/evmmirror.test.mjs"
 else
   echo "  evm chain  not running (public-chain mirror off)"
+fi
+echo
+BUNDLE=$(grep -o 'index-[A-Za-z0-9_-]*\.js' frontend/dist/index.html 2>/dev/null | head -1)
+if [[ -n "$BUNDLE" ]]; then
+  echo "  bundle     $BUNDLE"
+  echo "             if the page misbehaves, hard-reload (Ctrl/Cmd-Shift-R):"
+  echo "             a cached older bundle looks identical to a backend fault"
 fi
 echo
 echo "  stop with  bash scripts/dev-stack.sh --stop"
