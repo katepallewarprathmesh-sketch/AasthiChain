@@ -238,10 +238,16 @@ func (s *Server) handleDocVerify(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	out := map[string]interface{}{
 		"verification": res,
 		"note":         "Verification by content re-derives the CID from the bytes supplied, so a tampered copy fails even when its metadata looks correct.",
-	})
+	}
+	// Ask the public chain the same question, when one is configured. This is
+	// the answer that does not depend on trusting this server.
+	if chain := s.Docs.ConfirmOnChain(res.SHA256, res.Anchored); chain != nil {
+		out["onChain"] = chain
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDocFetch(w http.ResponseWriter, r *http.Request, cid string) {

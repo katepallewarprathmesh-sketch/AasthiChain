@@ -504,6 +504,59 @@ type VerifyResult struct {
 	Verdict      string     `json:"verdict"`
 }
 
+// OnChainConfirmation is a second opinion from somewhere we do not control.
+// Absent from the response entirely when no mirror is configured — an empty
+// field would read as "we checked and found nothing", which is not the same
+// thing as "we did not check".
+type OnChainConfirmation struct {
+	Checked  bool   `json:"checked"`
+	Anchored bool   `json:"anchored"`
+	Status   string `json:"status,omitempty"`
+	Contract string `json:"contract,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+	Agrees   bool   `json:"agreesWithOurRegister"`
+	Error    string `json:"error,omitempty"`
+}
+
+// ConfirmOnChain re-asks the public mirror whether a digest is anchored.
+// Returns nil when no mirror is configured.
+func (dr *DocumentRegistry) ConfirmOnChain(sha256hex string, weSayAnchored bool) *OnChainConfirmation {
+	if dr == nil || dr.evm == nil || sha256hex == "" {
+		return nil
+	}
+	out := &OnChainConfirmation{
+		Checked:  true,
+		Contract: dr.evm.contract,
+		Endpoint: dr.evm.rpcURL,
+	}
+	anchored, status, err := dr.evm.VerifyDigestOnChain(sha256hex)
+	if err != nil {
+		// A chain we cannot reach is reported as unproven, never as a
+		// negative. An unreachable node must not make a genuine document
+		// look forged.
+		out.Checked = false
+		out.Error = err.Error()
+		return out
+	}
+	out.Anchored = anchored
+	out.Status = evmStatusName(status)
+	out.Agrees = anchored == weSayAnchored
+	return out
+}
+
+func evmStatusName(s uint8) string {
+	switch s {
+	case 1:
+		return "ACTIVE"
+	case 2:
+		return "SUPERSEDED"
+	case 3:
+		return "REVOKED"
+	default:
+		return "NONE"
+	}
+}
+
 // VerifyContent is the strongest check: hand it the file and it re-derives the
 // CID, so it detects a tampered copy even when the metadata looks right.
 func (dr *DocumentRegistry) VerifyContent(content []byte) VerifyResult {

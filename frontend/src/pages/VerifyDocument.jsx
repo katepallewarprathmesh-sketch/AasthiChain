@@ -92,6 +92,46 @@ function Verdict({ v }) {
         </div>
       )}
 
+      {v.onChain && (
+        <div style={{
+          marginTop: 14, background: 'white', border: '1px solid #E5E7EB',
+          borderRadius: 10, padding: '13px 16px',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+            Second opinion from a public blockchain
+          </div>
+          {!v.onChain.checked ? (
+            <p style={{ fontSize: 12.5, color: '#92400E', lineHeight: 1.6, margin: '7px 0 0' }}>
+              The public chain could not be reached just now, so this check is
+              unproven rather than failed. The verdict above still stands on
+              our own ledger.
+            </p>
+          ) : v.onChain.anchored ? (
+            <p style={{ fontSize: 12.5, color: '#166534', lineHeight: 1.6, margin: '7px 0 0' }}>
+              A chain we do not control independently holds this same
+              fingerprint{v.onChain.status ? `, marked ${v.onChain.status.toLowerCase()}` : ''}.
+              {v.onChain.agreesWithOurRegister
+                ? ' It agrees with our register.'
+                : ' It disagrees with our register — treat this document as unproven and tell us.'}
+            </p>
+          ) : (
+            <p style={{ fontSize: 12.5, color: '#92400E', lineHeight: 1.6, margin: '7px 0 0' }}>
+              The public chain has no record of this fingerprint. Documents are
+              mirrored a moment after they are issued, so a very recent one may
+              not have arrived yet.
+            </p>
+          )}
+          {v.onChain.contract && (
+            <div style={{
+              fontSize: 11, color: '#6B7280', marginTop: 8, wordBreak: 'break-all',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            }}>
+              contract {v.onChain.contract}
+            </div>
+          )}
+        </div>
+      )}
+
       {anchored && v.cid && (
         <div style={{ marginTop: 14, fontSize: 12.5, color: tone.fg, lineHeight: 1.6 }}>
           Don't take our word for it — fetch the same document straight from the
@@ -123,7 +163,9 @@ export default function VerifyDocument() {
       const res = await api.umiVerifyDocument(payload)
       const v = res?.verification || res?.data?.verification
       if (!v) throw new Error('The register did not return a verdict.')
-      setResult(v)
+      // The public-chain answer travels alongside the verdict, not inside it:
+      // it is a different source, and the UI should not blur the two.
+      setResult({ ...v, onChain: res?.onChain || res?.data?.onChain || null })
     } catch (e) {
       setError(e?.message || 'Could not reach the document register.')
     } finally {

@@ -113,7 +113,15 @@ table must be laid out byte-exactly. Get it wrong and you produce a
 respectable-looking CID that resolves to nothing on every gateway on earth.
 
 **2. The anchor exists somewhere we do not control.** Covered by the EVM
-mirror above.
+mirror above, and surfaced to the person doing the checking: `POST
+/umi/documents/verify` returns an `onChain` block alongside its own verdict,
+naming the contract so they can repeat the query themselves. `/verify` renders
+it as a "second opinion from a public blockchain".
+
+If the chain is unreachable the block reports `checked: false` — **unproven,
+never a negative**. An outage at our end must not make a genuine document
+look forged. Verified by pulling the chain down mid-session: the verdict stayed
+`anchored and current` and only the second opinion degraded.
 
 Together these are what "verifiable without trusting our servers" means in
 practice: the name is computed by a published algorithm anyone can rerun, and

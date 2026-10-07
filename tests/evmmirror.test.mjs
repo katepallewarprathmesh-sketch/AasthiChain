@@ -152,6 +152,22 @@ if (deed) {
      'a digestOnly document reached the EVM mirror')
 }
 
+// --- the second opinion, as the /verify page shows it --------------------
+// The gateway asks the chain on the user's behalf and reports whether the two
+// sources agree. A user should not have to run ethers to get that.
+const verifyRes = await (await fetch(`${BASE}/api/umi/documents/verify`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ sha256: cert.sha256 }),
+})).json()
+const chainSays = verifyRes.onChain
+ok('verifying through the API also reports a public-chain check', !!chainSays,
+   JSON.stringify(verifyRes).slice(0, 160))
+ok('that check reached the chain', chainSays?.checked === true, chainSays?.error)
+ok('and the two independent sources agree',
+   chainSays?.anchored === true && chainSays?.agreesWithOurRegister === true)
+ok('it names the contract the user can check for themselves',
+   /^0x[0-9a-fA-F]{40}$/.test(chainSays?.contract || ''), chainSays?.contract)
+
 const total = await registry.total()
 ok('the contract counts the documents it holds', Number(total) >= 1, `${total}`)
 
