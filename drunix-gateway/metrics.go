@@ -87,6 +87,27 @@ func routeFor(path string) string {
 		return "/umi/ownership/{id}"
 	case strings.HasPrefix(p, "/umi/holdings/"):
 		return "/umi/holdings/{id}"
+	case p == "/umi/documents":
+		return "/umi/documents"
+	case strings.HasPrefix(p, "/umi/documents/"):
+		// A CID is content-derived and unbounded, so it can never be a label.
+		switch {
+		case strings.HasSuffix(p, "/verify"):
+			return "/umi/documents/verify"
+		case strings.HasSuffix(p, "/revoke"):
+			return "/umi/documents/{cid}/revoke"
+		case strings.HasSuffix(p, "/supersede"):
+			return "/umi/documents/{cid}/supersede"
+		case strings.HasPrefix(p, "/umi/documents/fetch/"):
+			return "/umi/documents/fetch/{cid}"
+		case strings.HasPrefix(p, "/umi/documents/cid/"):
+			return "/umi/documents/cid/{cid}"
+		case strings.HasPrefix(p, "/umi/documents/subject/"):
+			return "/umi/documents/subject/{id}"
+		}
+		return "/umi/documents/{id}"
+	case strings.HasPrefix(p, "/umi/analytics/"):
+		return "/umi/analytics/{id}"
 	case strings.HasPrefix(p, "/umi/income/"):
 		return "/umi/income/{id}"
 	case strings.HasPrefix(p, "/umi/market/"):
@@ -196,6 +217,14 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 
 	if s.metrics != nil {
+		// Build identity. The commit is a label on a constant 1 so a dashboard
+		// can show which revision is live and alert when it goes stale; the
+		// value set is bounded by the number of deploys, not by traffic.
+		bi := currentBuild()
+		b.WriteString("# HELP aasthi_build_info Deployed build, as labels on a constant 1.\n")
+		b.WriteString("# TYPE aasthi_build_info gauge\n")
+		fmt.Fprintf(&b, "aasthi_build_info{commit=\"%s\",go=\"%s\",features=\"%d\"} 1\n",
+			escapeLabel(bi.Commit), escapeLabel(bi.Go), len(bi.Features))
 		b.WriteString("# HELP aasthi_uptime_seconds Time since this process started.\n")
 		b.WriteString("# TYPE aasthi_uptime_seconds gauge\n")
 		fmt.Fprintf(&b, "aasthi_uptime_seconds %.0f\n", time.Since(s.metrics.started).Seconds())

@@ -2667,6 +2667,44 @@ app.get('/api/umi/metrics', async (req, res) => {
   }
 });
 
+// A document fetch returns the file itself — a PDF, an image, arbitrary bytes.
+// umiProxy assumes JSON and would rewrite the body into an error envelope, so
+// this streams it through untouched. The caller's identity is forwarded as
+// headers because the rail has no session of its own and enforces visibility
+// on restricted documents itself.
+app.get('/api/umi/documents/fetch/:cid', async (req, res) => {
+  try {
+    const headers = {};
+    // Optional auth: public documents are readable without a login, and the
+    // rail decides. Decoding the token here only adds the identity when one
+    // was actually supplied.
+    const auth = req.headers.authorization;
+    if (auth) {
+      try {
+        const payload = decodeClerkOrMockToken(auth.split(' ')[1]);
+        if (payload && payload.identityId) {
+          headers['X-Identity-Id'] = payload.identityId;
+          headers['X-Identity-Role'] = payload.role || '';
+        }
+      } catch { /* an unreadable token is simply an anonymous request */ }
+    }
+    const upstream = await fetch(
+      UMI_GATEWAY_URL.replace(/\/$/, '') + '/umi/documents/fetch/' + encodeURIComponent(req.params.cid),
+      { headers }
+    );
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    // Pass the integrity headers through: they are what let the browser (or
+    // curl) re-hash the bytes and confirm they match the CID it asked for.
+    for (const h of ['content-type', 'x-document-cid', 'x-document-sha256', 'x-document-status', 'cache-control']) {
+      const v = upstream.headers.get(h);
+      if (v) res.setHeader(h, v);
+    }
+    res.status(upstream.status).send(buf);
+  } catch (e) {
+    res.status(503).json({ error: 'ERR_DRUNIX_UNREACHABLE', message: e.message });
+  }
+});
+
 app.all('/api/umi', umiProxy);
 app.all('/api/umi/*splat', umiProxy);
 async function umiProxy(req, res) {

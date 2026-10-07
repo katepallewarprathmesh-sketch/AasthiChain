@@ -54,6 +54,10 @@ func main() {
 		log.Printf("WARNING: stored chain failed verification at block %d (%s) — serving read-only", chainV.BrokenAt, chainV.Reason)
 	}
 	srv.Pipeline = drunix.NewPipeline(state, transient, chain)
+	// Document register: IPFS content addressing + anchoring to the same
+	// chain. Additive — the existing single documentHash on a property keeps
+	// working untouched.
+	srv.Docs = drunix.NewDocumentRegistry(chain, drunix.NewMemoryPinStore())
 	if blockStore != nil {
 		defer blockStore.Close()
 	}

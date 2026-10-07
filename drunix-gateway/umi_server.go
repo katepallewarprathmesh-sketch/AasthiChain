@@ -38,6 +38,9 @@ var umiEndpointList = []string{
 	"POST /umi/baskets/{basketId}/dvp        {\"seller\":\"...\",\"buyer\":\"...\",\"units\":3,\"pricePerUnitINR\":2100,\"dryRun\":false}  atomic units <-> e-rupee-W",
 	"POST /umi/baskets/{basketId}/transfer   {\"from\":\"...\",\"to\":\"...\",\"units\":2}  no cash leg",
 	"GET  /umi/holdings/{participant}        units held per basket + totalBasketValueINR",
+	// Advanced analytics — derived from settled history, nothing new stored.
+	"GET  /umi/analytics?days=14             rail: success rate, volume, top assets, daily activity",
+	"GET  /umi/analytics/{participant}       investor: cost basis, P&L, income, concentration",
 }
 
 // registerUMIRoutes mounts the rail on an existing mux (called from Router).
@@ -57,6 +60,7 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/income/", s.handleUMIIncome)
 	mux.HandleFunc("/umi/reconciliation", s.handleUMIReconciliation)
 	mux.HandleFunc("/umi/seed", s.handleUMISeed)
+	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)
 	s.registerNotificationRoutes(mux)

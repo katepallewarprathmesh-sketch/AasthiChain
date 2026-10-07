@@ -30,6 +30,9 @@ type Server struct {
 	events *eventHub
 	// metrics records request counts and latency for /metrics (see metrics.go).
 	metrics *metrics
+	// Docs is the content-addressed document register (see documents.go).
+	// Nil disables the routes, exactly like the rest of the optional surface.
+	Docs *DocumentRegistry
 }
 
 // NewServer wires dependencies (DIP).
@@ -62,6 +65,7 @@ func (s *Server) Router() http.Handler {
 	// Also reachable through the app's /api/umi/* proxy, so an operator can
 	// read it without exposing the rail directly.
 	mux.HandleFunc("/umi/metrics", s.handleMetrics)
+	s.registerDocumentRoutes(mux)
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
 	return logCORS(s.withMetrics(mux))
 }
@@ -143,6 +147,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"height":     st.Height,
 		"txCount":    st.TxCount,
 		"fraudModel": "aasthichain-rules-v1 (ML-pluggable)",
+		"build":      currentBuild(),
 	})
 }
 
