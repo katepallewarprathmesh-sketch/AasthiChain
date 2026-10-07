@@ -232,3 +232,15 @@ POST /umi/documents/{cid}/revoke    {reason}
 - A KYC anchor has no retrievable bytes, under any route.
 - Our CID matches what IPFS itself would produce — checked against published
   test vectors, not against our own implementation.
+
+
+## Compiler trap: MCOPY and the "invalid opcode" that is not your fault
+
+`solc` 0.8.26 defaults to the **cancun** EVM, which emits `MCOPY` when copying
+a struct into memory. Chains that have not adopted cancun — including Ganache
+7.9.2 and several testnets — treat it as an invalid opcode. The symptom is
+specific and misleading: `total()` works, every function that *returns a
+struct* dies with `invalid opcode` and no revert reason.
+
+`contracts/deploy-local.mjs` therefore pins `evmVersion: 'paris'`. Change that
+only after confirming the target chain supports the newer opcodes.

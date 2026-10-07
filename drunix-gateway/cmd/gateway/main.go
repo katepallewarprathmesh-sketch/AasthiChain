@@ -57,7 +57,19 @@ func main() {
 	// Document register: IPFS content addressing + anchoring to the same
 	// chain. Additive — the existing single documentHash on a property keeps
 	// working untouched.
-	srv.Docs = drunix.NewDocumentRegistry(chain, drunix.OpenPinStoreFromEnv())
+	evmMirror := drunix.OpenEVMMirrorFromEnv()
+	srv.Docs = drunix.NewDocumentRegistry(chain, drunix.OpenPinStoreFromEnv()).
+		WithEVMMirror(evmMirror)
+	log.Println(evmMirror.Describe())
+	if evmMirror != nil {
+		// Prove the address really holds the contract, rather than finding
+		// out one document at a time once traffic starts.
+		if n, err := evmMirror.Total(); err != nil {
+			log.Printf("public-chain mirror: reachable but not answering as a DocumentRegistry (%v) — anchors will still commit locally", err)
+		} else {
+			log.Printf("public-chain mirror: contract live, %d documents already anchored there", n)
+		}
+	}
 	if blockStore != nil {
 		defer blockStore.Close()
 	}

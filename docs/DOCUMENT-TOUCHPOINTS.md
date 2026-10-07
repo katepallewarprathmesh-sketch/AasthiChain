@@ -23,7 +23,7 @@ stored only when storing them is safe.**
 | 12 | Ad-hoc uploads (EC, plan, NOC, IM, trust deed) | Any supporting document | `POST /umi/documents` | **Stored and anchored**, with visibility and a validity window |
 | 13 | Property page | Buyer checking their copy | `PropertyDocuments.jsx` | **Hashed in the browser.** Only the digest is sent |
 | 14 | Chaincode `RegisterProperty` | Title deed | `chaincode/property.go` | Unchanged. Its `hash~` uniqueness index still applies and is now mirrored by the register's duplicate rule |
-| 15 | Public-chain mirror | Any anchored document | `contracts/DocumentRegistry.sol` | Compiles (`tests/contracts.test.mjs`). Stores CID + digest, never content |
+| 15 | Public-chain mirror | Any anchored document | `contracts/DocumentRegistry.sol` + `drunix-gateway/evm_mirror.go` | **Deployed and live.** Every public/restricted anchor is written to an EVM chain in the background. `tests/evmmirror.test.mjs` audits it by reading the contract directly, never through our API |
 
 ## Deliberately not anchored
 
@@ -47,3 +47,43 @@ stored only when storing them is safe.**
 
 Default when unspecified is `restricted`. A document nobody classified should
 not be world-readable.
+
+
+## The public-chain mirror
+
+Until now the Solidity contract compiled but nothing ever called it. It does now.
+
+`drunix-gateway/evm_mirror.go` writes each anchor to a deployed
+`DocumentRegistry.sol`, over plain JSON-RPC with hand-rolled ABI encoding — no
+EVM client library in the Go build. It is opt-in and fails safe:
+
+| Setting | Meaning |
+|---------|---------|
+| `EVM_RPC_URL` | JSON-RPC endpoint. **Unset ⇒ the mirror is nil and nothing changes.** |
+| `EVM_REGISTRY_ADDRESS` | Deployed contract |
+| `EVM_SENDER_ADDRESS` | Account holding the registrar role (defaults to `eth_accounts[0]`) |
+
+Rules it follows:
+
+- **The Drunix block is the system of record.** Mirroring happens in a
+  goroutine after the lock is released. A dead EVM node can never stop a
+  property being registered — it logs the first failure and then every tenth.
+- **Digest-only records are never mirrored.** KYC evidence must not gain a
+  permanent public footprint that outlives our own retention rules. Asserted
+  by test.
+- **The asset id is hashed, not sent.** The chain is queryable by anyone who
+  knows the id and readable by nobody who does not.
+- **Only the CID, the digest, the type and the timestamps go on chain.** Never
+  file contents.
+
+Run it locally:
+
+```bash
+npx ganache --wallet.deterministic --chain.chainId 1337    # any EVM chain
+node contracts/deploy-local.mjs                            # prints the env vars
+EVM_RPC_URL=... EVM_REGISTRY_ADDRESS=... node tests/evmmirror.test.mjs
+```
+
+The test is the point: all 16 assertions read the contract over JSON-RPC and
+never ask AasthiChain whether a document is genuine. A counterparty holding
+only the contract address can run it against us.

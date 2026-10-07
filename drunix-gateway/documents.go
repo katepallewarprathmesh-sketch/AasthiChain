@@ -195,6 +195,9 @@ type DocumentRegistry struct {
 	order   []string             // every cid, anchoring order
 	pins    PinStore
 	chain   *DrunixChain
+	// evm, when configured, mirrors each anchor onto a public chain. Nil in
+	// the default build; never consulted on the read path.
+	evm *EVMMirror
 }
 
 // NewDocumentRegistry wires the register to the ledger and a pin store.
@@ -211,6 +214,13 @@ func NewDocumentRegistry(chain *DrunixChain, pins PinStore) *DocumentRegistry {
 		pins:    pins,
 		chain:   chain,
 	}
+}
+
+// WithEVMMirror attaches a public-chain mirror. Separate from the constructor
+// so every existing caller — and every test — keeps working unchanged.
+func (dr *DocumentRegistry) WithEVMMirror(m *EVMMirror) *DocumentRegistry {
+	dr.evm = m
+	return dr
 }
 
 // AnchorRequest describes a document being placed on the register.
@@ -352,6 +362,9 @@ func (dr *DocumentRegistry) Anchor(req AnchorRequest) (*Document, *DrunixBlock, 
 	}
 	out := *doc
 	dr.mu.Unlock()
+	// Raised after the lock: the mirror does network I/O and must never be
+	// holding the register while it does.
+	dr.evm.MirrorInBackground(&out)
 	return &out, block, nil
 }
 
