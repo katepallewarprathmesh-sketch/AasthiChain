@@ -124,6 +124,22 @@ class ApiClient {
       { method: 'POST', body: JSON.stringify({}) })
   }
 
+  // Document register — content-addressed evidence (IPFS CID + ledger anchor).
+  async umiDocuments(assetId) {
+    return this.request(`/api/umi/documents/${encodeURIComponent(assetId)}`)
+  }
+  // Verification accepts a CID, a SHA-256, or the content itself. The UI sends
+  // a digest it computed locally, so the document never leaves the browser.
+  async umiVerifyDocument(payload) {
+    return this.request('/api/umi/documents/verify', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+  async umiDocumentStats() {
+    return this.request('/api/umi/documents')
+  }
+
   // Secondary marketplace — holders selling to each other. All of it settles
   // through the same atomic DvP as a primary purchase.
   async umiOffers(assetId, all = false) {

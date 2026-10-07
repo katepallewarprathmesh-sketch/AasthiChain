@@ -175,6 +175,45 @@ async function main() {
   const text = await metrics.text();
   ok('no CID leaked into a metric label', !text.includes(cid));
 
+  // --- integration with the places documents actually enter the system ---
+  // Registering a property must put its deed fingerprint on the register
+  // without anyone doing anything extra.
+  const token = Buffer.from(JSON.stringify({
+    identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator', exp: Date.now() + 9e6,
+  })).toString('base64');
+  const deedHash = createHash('sha256').update('deed file ' + stamp).digest('hex');
+  const created = await j('/api/properties', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      title: 'Document integration ' + stamp, state: 'MH', city: 'Pune', pincode: '411001',
+      valuationINR: 5000000, documentHash: deedHash,
+    }),
+  });
+  ok('a property can still be registered', created.status === 201, `status ${created.status}`);
+  const newAsset = created.body?.assetId;
+
+  await new Promise(r => setTimeout(r, 400)); // anchoring is fire-and-forget
+  const auto = await j('/api/umi/documents/' + newAsset);
+  ok('registering a property anchors its deed automatically',
+     auto.body?.documents?.length >= 1,
+     JSON.stringify(auto.body).slice(0, 160));
+  ok('and the anchored CID is derived from the deed hash already on the chain',
+     auto.body?.documents?.[0]?.sha256 === deedHash,
+     auto.body?.documents?.[0]?.sha256);
+  ok('the deed is anchored by digest, so the file itself was never uploaded',
+     auto.body?.documents?.[0]?.visibility === 'digestOnly' &&
+     auto.body?.documents?.[0]?.pinned === false);
+
+  const report = await j('/api/properties/' + newAsset + '/verify');
+  const regCheck = (report.body?.checks || []).find(c => c.id === 'documentRegister');
+  ok('the verification report cites the register', !!regCheck, JSON.stringify(report.body?.checks?.map(c => c.id)));
+  ok('and the register check passes for a freshly registered property',
+     regCheck?.ok === true, regCheck?.detail);
+  ok('adding the check did not change which properties verify — only the registrar check fails here',
+     (report.body?.checks || []).filter(c => !c.ok).every(c => c.id === 'registrar'),
+     JSON.stringify((report.body?.checks || []).filter(c => !c.ok).map(c => c.id)));
+
   console.log(`\n  documents: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 }

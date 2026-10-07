@@ -388,6 +388,53 @@ app.post('/api/invitations/accept', authMiddleware, (req, res) => {
   res.json({ member });
 });
 
+// --- Document register bridge -------------------------------------------
+// The Go rail owns every rule about documents (CID derivation, duplicate
+// detection, visibility, anchoring). This is a forwarder and nothing else —
+// no logic lives here, in line with keeping the JS layers pure proxies.
+//
+// Anchoring is deliberately BEST EFFORT and never blocks the caller. A
+// property registration must not fail because the register is briefly
+// unreachable: the deed hash is still written to the Fabric chain exactly as
+// before, and the anchor can be replayed later. Breaking a working flow to
+// add evidence to it would be a bad trade.
+async function anchorDigestOnRail({ assetId, subject, docType, title, issuer, submittedBy, sha256 }) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(UMI_GATEWAY_URL.replace(/\/$/, '') + '/umi/documents/digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId, subject, docType, title, issuer, submittedBy, sha256 }),
+        signal: ctrl.signal,
+      });
+      const body = await r.json().catch(() => null);
+      // 409 means it is already anchored, which is a success for our purposes.
+      return { ok: r.ok || r.status === 409, status: r.status, body };
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// documentsForAsset reads the register back so the verification report can
+// cite it. Returns null when the rail is unreachable, and the report says so
+// rather than silently claiming there are no documents.
+async function documentsForAsset(assetId) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(UMI_GATEWAY_URL.replace(/\/$/, '') +
+        '/umi/documents/' + encodeURIComponent(assetId), { signal: ctrl.signal });
+      if (!r.ok) return null;
+      const body = await r.json();
+      return Array.isArray(body.documents) ? body.documents : null;
+    } finally { clearTimeout(timer); }
+  } catch { return null; }
+}
+
 app.post('/api/properties', authMiddleware, (req, res) => {
   let { title, state, city, pincode, valuationINR, documentHash } = req.body;
   const idemKey = req.headers['x-idempotency-key'];
@@ -444,6 +491,18 @@ if (documentHash && String(documentHash).trim().length !== 64) return res.status
     valuationINR,
     endorsedBy: ['OriginatorMSP.peer'],
   }]);
+
+  // Mirror the deed fingerprint into the content-addressed register, so the
+  // listing is verifiable by CID from the moment it exists. Not awaited: the
+  // registration is already final and committed above.
+  anchorDigestOnRail({
+    assetId,
+    docType: 'TITLE_DEED',
+    title: `Title deed — ${title}`,
+    issuer: 'self-declared at registration',
+    submittedBy: req.user.identityId,
+    sha256: documentHash,
+  }).catch(() => {});
 
   const resp = { assetId, status: 'DRAFT', message: 'Property registered, pending registrar validation', fabricMode: 'mock', blockHeight: regBlock.height, blockHash: regBlock.hash };
   if (idemKey) idempotency[idemKey] = resp;
@@ -603,7 +662,7 @@ app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
 // no such route existed. This is that endpoint: everything a buyer needs to
 // decide whether to trust a listing, with the chain evidence behind each claim.
 // Deliberately unauthenticated — a trust surface nobody can read is worthless.
-app.all('/api/properties/:id/verify', (req, res) => {
+app.all('/api/properties/:id/verify', async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'ERR_METHOD_NOT_ALLOWED' });
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
@@ -616,6 +675,14 @@ app.all('/api/properties/:id/verify', (req, res) => {
   const validated = prop.registrarValidationStatus === 'VALIDATED';
   const independent = Boolean(prop.validatedBy) && prop.validatedBy !== prop.originatorId;
   const dupes = Object.values(properties).filter(x => x.documentHash === prop.documentHash && x.assetId !== prop.assetId);
+
+  // Read the content-addressed register. null means "could not ask", which is
+  // reported as unproven below rather than as an absence of documents — the
+  // two are very different claims to make about somebody's title deed.
+  const registerDocs = await documentsForAsset(prop.assetId);
+  const registerActive = registerDocs ? registerDocs.filter(d => d.status === 'ACTIVE').length : 0;
+  const registerRevoked = registerDocs ? registerDocs.filter(d => d.status === 'REVOKED').length : 0;
+  const registerSuperseded = registerDocs ? registerDocs.filter(d => d.status === 'SUPERSEDED').length : 0;
 
   const checks = [
     {
@@ -644,6 +711,29 @@ app.all('/api/properties/:id/verify', (req, res) => {
       detail: prop.documentHash
         ? `SHA-256 ${prop.documentHash}. Hash your own copy of the deed and compare it with POST /api/properties/${prop.assetId}/verify-document.`
         : 'No document hash on record.',
+    },
+    {
+      // A fingerprint alone only helps someone who already holds the file.
+      // This check reports whether the evidence is also content-addressed, so
+      // a stranger can fetch it and verify it without asking us for anything.
+      id: 'documentRegister',
+      // This check can only FAIL on a positive red flag: every document on
+      // file has been withdrawn. An unreachable register, or a property that
+      // predates the register, is reported as not-yet-proven rather than as
+      // a failure — otherwise adding this check would mark every existing
+      // listing unverified overnight, which would be a lie about them.
+      ok: registerDocs === null || registerDocs.length === 0 || registerActive > 0,
+      warn: registerDocs === null || (registerDocs !== null && registerDocs.length === 0),
+      label: 'Documents anchored and independently verifiable',
+      detail: registerDocs === null
+        ? 'The document register could not be reached, so this check is unproven rather than failed.'
+        : registerDocs.length === 0
+          ? 'No document is anchored for this property yet, so there is nothing a stranger can verify independently. Anchor one with POST /api/umi/documents.'
+          : registerActive === 0
+            ? `Every document on file has been withdrawn (${registerRevoked} revoked, ${registerSuperseded} superseded). Treat this listing as unsupported until a current document is anchored.`
+            : `${registerActive} active, ${registerRevoked} revoked, ${registerSuperseded} superseded. ` +
+              `Each is addressed by its IPFS CID, so anyone can re-hash their copy and check it: ` +
+              registerDocs.slice(0, 3).map(d => `${d.docType} ${d.cid.slice(0, 16)}…`).join(', ') + '.',
     },
     {
       id: 'uniqueness',
@@ -679,6 +769,8 @@ app.all('/api/properties/:id/verify', (req, res) => {
     validatedBy: prop.validatedBy || null,
     validatedAt: prop.validatedAt || null,
     chainEvidence: evidence,
+    documents: registerDocs,
+    documentRegisterReachable: registerDocs !== null,
     chainVerified: Boolean(chain.valid),
     checkedAt: new Date().toISOString(),
     fabricMode: 'mock',

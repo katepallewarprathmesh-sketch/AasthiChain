@@ -94,6 +94,8 @@ func routeFor(path string) string {
 		switch {
 		case strings.HasSuffix(p, "/verify"):
 			return "/umi/documents/verify"
+		case p == "/umi/documents/digest":
+			return "/umi/documents/digest"
 		case strings.HasSuffix(p, "/revoke"):
 			return "/umi/documents/{cid}/revoke"
 		case strings.HasSuffix(p, "/supersede"):

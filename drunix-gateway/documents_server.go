@@ -161,6 +161,9 @@ func (s *Server) handleDocumentPath(w http.ResponseWriter, r *http.Request) {
 	case parts[0] == "verify":
 		s.handleDocVerify(w, r)
 		return
+	case parts[0] == "digest":
+		s.handleDocAnchorDigest(w, r)
+		return
 	case parts[0] == "cid" && len(parts) == 2:
 		doc, ok := s.Docs.Get(parts[1])
 		if !ok {
@@ -302,4 +305,46 @@ func (s *Server) handleDocStatusChange(w http.ResponseWriter, r *http.Request, c
 		resp["block"] = map[string]interface{}{"height": block.Height, "hash": block.Hash, "type": block.Type}
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleDocAnchorDigest anchors a document the rail never receives — a deed
+// already registered on Fabric, or a government ID check. The caller sends the
+// SHA-256; the CID is derived from it.
+func (s *Server) handleDocAnchorDigest(w http.ResponseWriter, r *http.Request) {
+	if !requirePost(w, r) {
+		return
+	}
+	var body struct {
+		AssetID     string `json:"assetId"`
+		Subject     string `json:"subject"`
+		DocType     string `json:"docType"`
+		Title       string `json:"title"`
+		Issuer      string `json:"issuer"`
+		SubmittedBy string `json:"submittedBy"`
+		SHA256      string `json:"sha256"`
+		ValidFrom   string `json:"validFrom"`
+		ValidTo     string `json:"validTo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "ERR_UMI_DOC_FIELDS", "message": "body must be JSON"})
+		return
+	}
+	doc, block, err := s.Docs.AnchorDigest(AnchorRequest{
+		AssetID: body.AssetID, Subject: body.Subject, DocType: body.DocType,
+		Title: body.Title, Issuer: body.Issuer, SubmittedBy: body.SubmittedBy,
+		ValidFrom: parseDay(body.ValidFrom), ValidTo: parseDay(body.ValidTo),
+	}, body.SHA256)
+	if err != nil {
+		writeDocErr(w, err)
+		return
+	}
+	resp := map[string]interface{}{
+		"document": doc,
+		"note":     "Anchored by digest. The CID was derived from the SHA-256, so an existing registration becomes IPFS-addressable without re-uploading the file.",
+	}
+	if block != nil {
+		resp["block"] = map[string]interface{}{"height": block.Height, "hash": block.Hash, "type": block.Type}
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }

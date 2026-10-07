@@ -371,6 +371,88 @@ func normaliseVisibility(docType, requested string) string {
 	}
 }
 
+// AnchorDigest records a document that the rail never receives the bytes of.
+//
+// Two real cases need this, and neither can supply a file:
+//
+//  1. A deed registered before this register existed. Its SHA-256 is already
+//     on the Fabric chain; the file lives with the originator. The digest is
+//     enough to derive the CID, so the existing registration becomes
+//     IPFS-addressable and verifiable without anyone re-uploading anything.
+//  2. A government ID checked through DigiLocker. We want the proof and must
+//     not have the document.
+//
+// The result is always digest-only: nothing was received, so nothing can be
+// served, and the record says so rather than implying a fetch might work.
+func (dr *DocumentRegistry) AnchorDigest(req AnchorRequest, sha256hex string) (*Document, *DrunixBlock, error) {
+	cid, err := CIDFromSHA256(sha256hex)
+	if err != nil {
+		return nil, nil, err
+	}
+	if strings.TrimSpace(req.DocType) == "" {
+		return nil, nil, fmt.Errorf("%w: docType is required", ErrDocFields)
+	}
+	if strings.TrimSpace(req.AssetID) == "" && strings.TrimSpace(req.Subject) == "" {
+		return nil, nil, fmt.Errorf("%w: one of assetId or subject is required", ErrDocFields)
+	}
+	shaHex := strings.ToLower(strings.TrimSpace(sha256hex))
+
+	dr.mu.Lock()
+	if existing, ok := dr.docs[cid]; ok {
+		dr.mu.Unlock()
+		where := existing.AssetID
+		if where == "" {
+			where = existing.Subject
+		}
+		return nil, nil, fmt.Errorf("%w: this digest is already anchored to %s as %s",
+			ErrDocDuplicate, where, existing.DocType)
+	}
+	now := time.Now().UTC()
+	doc := &Document{
+		CID: cid, SHA256: shaHex,
+		AssetID: req.AssetID, Subject: req.Subject,
+		DocType: req.DocType, Title: req.Title, Issuer: req.Issuer,
+		SubmittedBy: req.SubmittedBy,
+		SizeBytes:   0,
+		Visibility:  DocDigestOnly,
+		Status:      DocStatusActive,
+		ValidFrom:   req.ValidFrom, ValidTo: req.ValidTo,
+		AnchoredAt: now,
+	}
+	dr.docs[cid] = doc
+	dr.order = append(dr.order, cid)
+	dr.bySHA[shaHex] = cid
+	if req.AssetID != "" {
+		dr.byAsset[req.AssetID] = append(dr.byAsset[req.AssetID], cid)
+	}
+	if req.Subject != "" {
+		dr.bySubj[req.Subject] = append(dr.bySubj[req.Subject], cid)
+	}
+	dr.mu.Unlock()
+
+	block := dr.commit(BlockDocAnchored, map[string]interface{}{
+		"kind":        "umi-document-anchor",
+		"cid":         cid,
+		"sha256":      shaHex,
+		"assetId":     req.AssetID,
+		"subject":     req.Subject,
+		"docType":     req.DocType,
+		"issuer":      req.Issuer,
+		"submittedBy": req.SubmittedBy,
+		"visibility":  DocDigestOnly,
+		"retrievable": false,
+		"contract":    "aasthi.umi-documents-v1",
+		"note":        "Anchored by digest. The document itself was never transmitted to or stored by the rail.",
+	})
+	dr.mu.Lock()
+	if block != nil {
+		doc.BlockHeight, doc.BlockHash = block.Height, block.Hash
+	}
+	out := *doc
+	dr.mu.Unlock()
+	return &out, block, nil
+}
+
 // AnchorKYC records that a participant passed a document check, without the
 // document. This is the DigiLocker path: the evidence is a digest and a
 // timestamp, and the Aadhaar never enters the system.

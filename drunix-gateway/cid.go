@@ -39,6 +39,7 @@ package drunix
 import (
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -227,6 +228,36 @@ func unixfsRootCID(content []byte) string {
 	node := dagPBNode(links, unixfsFileData(uint64(len(content)), sizes))
 	sum := sha256.Sum256(node)
 	return encodeCID(codecDagPB, sum[:])
+}
+
+// CIDFromSHA256 derives the IPFS CID of a file from its SHA-256 digest alone,
+// without ever seeing the file.
+//
+// This looks surprising and is not a trick. A raw CIDv1 is a fixed four-byte
+// header followed by exactly that digest, so the digest IS the CID in a
+// different coat. Two things follow, and both matter here:
+//
+//   - Every documentHash already on the Fabric chain can be upgraded to a CID
+//     retroactively. Years of existing deed registrations become
+//     IPFS-addressable with no re-upload and no migration of the files.
+//   - A document can be anchored by digest with no bytes in hand at all —
+//     which is exactly the KYC and legacy-deed case.
+//
+// The caveat, stated rather than hidden: this holds for files up to the
+// 256 KiB chunk size. A larger file's real CID is the root of a UnixFS DAG and
+// cannot be derived from the whole-file digest — nothing can recover the chunk
+// boundaries from one hash. For those, the digest still identifies the
+// document; it just is not the same string IPFS would print.
+func CIDFromSHA256(hexDigest string) (string, error) {
+	h := strings.ToLower(strings.TrimSpace(hexDigest))
+	if len(h) != 64 {
+		return "", fmt.Errorf("%w: a SHA-256 digest is 64 hex characters, got %d", ErrBadCID, len(h))
+	}
+	digest, err := hex.DecodeString(h)
+	if err != nil {
+		return "", fmt.Errorf("%w: not hexadecimal", ErrBadCID)
+	}
+	return encodeCID(codecRaw, digest), nil
 }
 
 // IPFSGatewayURL is where a third party can fetch a CID without touching our

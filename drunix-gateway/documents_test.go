@@ -618,3 +618,88 @@ func TestConcurrentAnchoringIsSafe(t *testing.T) {
 		t.Errorf("anchored %d of %d", st.Total, n)
 	}
 }
+
+// --------------------------------------------------------------------------
+// Anchoring without the file: legacy deeds and KYC
+// --------------------------------------------------------------------------
+
+// The claim that a CID can be derived from a SHA-256 alone has to be exactly
+// true, or every legacy deed upgraded this way would be unverifiable. The CID
+// derived from the digest must equal the CID computed from the bytes.
+func TestCIDDerivedFromDigestMatchesCIDFromBytes(t *testing.T) {
+	content := []byte("a genuine deed file")
+	fromBytes, shaHex := CIDFor(content)
+	fromDigest, err := CIDFromSHA256(shaHex)
+	if err != nil {
+		t.Fatalf("derive: %v", err)
+	}
+	if fromDigest != fromBytes {
+		t.Errorf("derived %s, bytes give %s", fromDigest, fromBytes)
+	}
+	// Uppercase and surrounding whitespace are normal in copied hashes.
+	if spaced, err := CIDFromSHA256("  " + strings.ToUpper(shaHex) + "\n"); err != nil || spaced != fromBytes {
+		t.Errorf("a padded uppercase digest did not normalise: %q %v", spaced, err)
+	}
+	for _, bad := range []string{"", "abc", strings.Repeat("z", 64)} {
+		if _, err := CIDFromSHA256(bad); err == nil {
+			t.Errorf("accepted a bad digest: %q", bad)
+		}
+	}
+}
+
+// A deed registered before the register existed can be anchored from its
+// stored hash, and then verified by someone who has the actual file.
+func TestLegacyDeedHashCanBeUpgradedAndThenVerifiedWithTheFile(t *testing.T) {
+	dr, chain := newDocRegistry()
+	theFile := []byte("TITLE DEED, Survey 112/4, registered 2019")
+	_, legacyHash := CIDFor(theFile) // what the Fabric chain already stores
+
+	doc, block, err := dr.AnchorDigest(AnchorRequest{
+		AssetID: "PROP-LEGACY", DocType: DocTypeTitleDeed, SubmittedBy: "originator1",
+	}, legacyHash)
+	if err != nil {
+		t.Fatalf("anchor by digest: %v", err)
+	}
+	if block == nil {
+		t.Fatal("no block committed for a digest anchor")
+	}
+	if doc.Visibility != DocDigestOnly || doc.Pinned {
+		t.Errorf("a digest anchor must not claim to hold content: %+v", doc)
+	}
+	// The holder of the original file can now prove it is the registered one,
+	// even though the rail has never seen it.
+	if res := dr.VerifyContent(theFile); !res.Anchored || res.CID != doc.CID {
+		t.Errorf("the real file did not verify against the upgraded anchor: %+v", res)
+	}
+	// And a doctored copy still fails.
+	if res := dr.VerifyContent([]byte("TITLE DEED, Survey 999/9, registered 2019")); res.Anchored {
+		t.Error("a different deed verified against the upgraded anchor")
+	}
+	if !chain.Verify().Valid {
+		t.Error("chain broken")
+	}
+}
+
+// Anchoring the same deed twice — once from the hash, once from the file —
+// must not create two records.
+func TestDigestAnchorAndContentAnchorCollide(t *testing.T) {
+	dr, _ := newDocRegistry()
+	content := []byte("one deed, two routes")
+	_, shaHex := CIDFor(content)
+
+	if _, _, err := dr.AnchorDigest(AnchorRequest{
+		AssetID: "PROP-A", DocType: DocTypeTitleDeed, SubmittedBy: "o1",
+	}, shaHex); err != nil {
+		t.Fatalf("digest anchor: %v", err)
+	}
+	_, _, err := dr.Anchor(AnchorRequest{
+		AssetID: "PROP-A", DocType: DocTypeTitleDeed, SubmittedBy: "o1",
+		Visibility: DocPublic, Content: content,
+	})
+	if err == nil {
+		t.Fatal("the same document was anchored twice through two different routes")
+	}
+	if st := dr.Stats(); st.Total != 1 {
+		t.Errorf("register holds %d records for one document", st.Total)
+	}
+}

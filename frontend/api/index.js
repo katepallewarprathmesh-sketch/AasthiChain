@@ -3587,12 +3587,67 @@ export default async function handler(req, res) {
         globalThis._aasthi_kyc = kycRecords;
         saveAllPersisted();
 
+        // Anchor the PROOF of the check, never the documents.
+        //
+        // A DigiLocker pull is the strongest evidence in the system and until
+        // now it lived only in a map that dies with the process. Anchoring a
+        // digest puts it on the ledger: "investor1 passed an Aadhaar and PAN
+        // check through DigiLocker at this time" becomes a fact with a block
+        // height behind it.
+        //
+        // What is hashed is a canonical summary — issuer, doc type, masked id,
+        // timestamp — NOT the Aadhaar XML. The full document is never sent to
+        // the rail, never stored, and the anchor is digest-only so there is no
+        // code path that could serve it. A CID is computable by anyone holding
+        // the source, so anchoring the real document would turn the ledger
+        // into an oracle for confirming somebody's Aadhaar number.
+        let kycAnchors = [];
+        try {
+          const railBase = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+          if (railBase) {
+            const { createHash } = await import('node:crypto');
+            kycAnchors = await Promise.all(mockDocs.map(async (d) => {
+              const summary = JSON.stringify({
+                subject: identityId, docType: d.docType, issuer: 'DigiLocker',
+                status: d.status, maskedId: d.idNumber, verifiedAt: kycRecords[identityId].verifiedAt,
+              });
+              const digest = createHash('sha256').update(summary).digest('hex');
+              const ctrl = new AbortController();
+              const timer = setTimeout(() => ctrl.abort(), 4000);
+              try {
+                const r = await fetch(railBase + '/umi/documents/digest', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    subject: identityId,
+                    docType: 'KYC_EVIDENCE',
+                    title: d.docType + ' verified via DigiLocker',
+                    issuer: 'DigiLocker',
+                    submittedBy: identityId,
+                    sha256: digest,
+                  }),
+                  signal: ctrl.signal,
+                });
+                const body = await r.json().catch(() => null);
+                return { docType: d.docType, anchored: r.ok, cid: body?.document?.cid || null,
+                         blockHeight: body?.block?.height || null };
+              } finally { clearTimeout(timer); }
+            }));
+          }
+        } catch {
+          // KYC succeeded; anchoring is evidence on top of it and must never
+          // be able to fail the verification the user just completed.
+          kycAnchors = [];
+        }
+
         return res.json({
           identityId,
           verified: true,
           kycStatus: 'VERIFIED',
           provider: 'digilocker',
           documents: mockDocs,
+          evidenceAnchors: kycAnchors,
+          evidenceNote: 'Only a digest of the verification result is anchored. The Aadhaar or PAN document itself is never transmitted to or stored by the ledger.',
           accessToken: accessToken.slice(0,10) + '...',
           message: 'KYC verified via DigiLocker — Aadhaar and PAN pulled and verified',
           next: 'Pull specific document via POST /api/kyc/digilocker/pull-document { identityId, docType }'
