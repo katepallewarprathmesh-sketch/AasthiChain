@@ -1,0 +1,222 @@
+name: CI
+
+# This repository is four independent Go modules plus a Vite frontend and a
+# Node demo API. A root-level `go build ./...` cannot work — there is no single
+# module graph — so each module is built from its own directory.
+#
+# Every job here corresponds to something that has actually broken before:
+# modules that had never compiled, a frontend bundle that went stale, and the
+# document/settlement guarantees that the whole product rests on.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go · ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [chaincode, api-gateway, drunix-gateway, payment-gateway]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Verify formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # go.sum must be complete and the pins must resolve. Two modules once
+      # shipped without a go.sum and with a dependency version that does not
+      # exist, which is how they stayed uncompiled for so long.
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  frontend:
+    name: Frontend build and render smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+      # Every route must render real content, not an error boundary.
+      - name: Render smoke
+        working-directory: frontend
+        run: npm run smoke
+
+  api:
+    name: Rail and API suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: drunix-gateway/go.sum
+
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+
+      # The frontend bundle is served by the demo API, and a missing dist is
+      # indistinguishable from a backend fault in the browser.
+      - name: Build the frontend so the API has something to serve
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Build the settlement rail
+        working-directory: drunix-gateway
+        run: go build -o /tmp/umigw ./cmd/gateway
+
+      - name: Boot the stack
+        env:
+          ADMIN_DASHBOARD_KEY: devkey
+        run: |
+          UMI_ENABLED=true UMI_SEED_DEMO=true DRUNIX_MODE=mock PORT=21100 /tmp/umigw &
+          echo $! > /tmp/rail.pid
+          ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=http://localhost:21100 \
+            PORT=8080 node mock-api-server.js &
+          echo $! > /tmp/app.pid
+          for i in $(seq 1 40); do
+            if curl -fsS localhost:8080/api/health >/dev/null 2>&1 \
+               && curl -fsS localhost:21100/ >/dev/null 2>&1; then
+              echo "stack up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "stack did not come up" >&2
+          exit 1
+
+      - name: Document register
+        env:
+          ADMIN_DASHBOARD_KEY: devkey
+        run: node tests/documents.test.mjs
+
+      - name: Secondary market
+        run: node tests/secondarymarket.test.mjs
+
+      - name: Supply conservation
+        run: node tests/supplyconservation.test.mjs
+
+      - name: Metrics, notifications and the ledger stream
+        run: |
+          node tests/metrics.test.mjs
+          node tests/notifications.test.mjs
+          node tests/ledgerstream.test.mjs
+
+      - name: Admin operations
+        env:
+          ADMIN_DASHBOARD_KEY: devkey
+        run: node tests/adminops.test.mjs
+
+      - name: Stop the stack
+        if: always()
+        run: |
+          kill "$(cat /tmp/app.pid)" 2>/dev/null || true
+          kill "$(cat /tmp/rail.pid)" 2>/dev/null || true
+
+  contracts:
+    name: Solidity and IPFS conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: drunix-gateway/go.sum
+
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+
+      # solc, a real EVM chain, and the reference IPFS hasher. Without these
+      # the suites skip silently, which is worse than not running them.
+      - name: Install toolchain
+        run: npm install --no-save --no-audit --no-fund solc@0.8.26 ethers@6 ipfs-only-hash@4.0.0 ganache@7.9.2
+
+      - name: Contracts compile and keep their guarantees
+        run: node tests/contracts.test.mjs
+
+      - name: Build and start the rail
+        run: |
+          (cd drunix-gateway && go build -o /tmp/umigw ./cmd/gateway)
+          npx ganache --wallet.deterministic --chain.chainId 1337 \
+            --server.host 127.0.0.1 --server.port 8545 >/tmp/ganache.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -fsS -X POST localhost:8545 -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' \
+              >/dev/null 2>&1 && break
+            sleep 1
+          done
+          ADDR=$(node contracts/deploy-local.mjs | awk -F= '/EVM_REGISTRY_ADDRESS/{print $2}')
+          echo "EVM_REGISTRY_ADDRESS=$ADDR" >> "$GITHUB_ENV"
+          echo "EVM_RPC_URL=http://127.0.0.1:8545" >> "$GITHUB_ENV"
+          UMI_ENABLED=true UMI_SEED_DEMO=true DRUNIX_MODE=mock PORT=21100 \
+            EVM_RPC_URL=http://127.0.0.1:8545 EVM_REGISTRY_ADDRESS="$ADDR" \
+            EVM_SENDER_ADDRESS=0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1 /tmp/umigw &
+          for i in $(seq 1 40); do
+            curl -fsS localhost:21100/ >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      # Our CIDs must be the CIDs a real IPFS node would produce, or "verify it
+      # on any public gateway" is not true.
+      - name: CIDs match the reference IPFS implementation
+        run: node tests/cidconformance.test.mjs
+
+      - name: Boot the demo API for the mirror audit
+        run: |
+          (cd frontend && npm ci && npm run build)
+          ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=http://localhost:21100 \
+            PORT=8080 node mock-api-server.js &
+          for i in $(seq 1 40); do
+            curl -fsS localhost:8080/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      # Reads the contract directly over JSON-RPC. It never asks our API
+      # whether a document is genuine — that is the entire point.
+      - name: Anchors are verifiable from the chain, not from us
+        run: node tests/evmmirror.test.mjs

@@ -60,8 +60,8 @@ type IdemPersister interface {
 type IdemRecord struct {
 	Key         string    `json:"key"`
 	Fingerprint string    `json:"fingerprint"`
-	Status      int       `json:"status"`   // 0 while in flight
-	Body        []byte    `json:"body"`     // recorded response
+	Status      int       `json:"status"` // 0 while in flight
+	Body        []byte    `json:"body"`   // recorded response
 	Done        bool      `json:"done"`
 	CreatedAt   time.Time `json:"createdAt"`
 	ExpiresAt   time.Time `json:"expiresAt"`

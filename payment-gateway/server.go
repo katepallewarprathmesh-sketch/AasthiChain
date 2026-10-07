@@ -16,11 +16,11 @@ import (
 // Env: DATABASE_URL, NPCI_MODE, DIGILOCKER_CLIENT_ID, PROPERTY_DATA_API_KEY, WEBHOOK_SECRET
 
 type Server struct {
-	Gateway        *GatewayWithWebhook
-	DigiLocker     *DigiLockerProvider
-	PropertyData   *PropertyDataProvider
-	DB             *DB
-	WebhookSecret  string
+	Gateway       *GatewayWithWebhook
+	DigiLocker    *DigiLockerProvider
+	PropertyData  *PropertyDataProvider
+	DB            *DB
+	WebhookSecret string
 }
 
 func NewServer() (*Server, error) {
@@ -78,11 +78,11 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/npci/payments/", s.handlePayments) // handles GET, approve, release, refund, decline, timeout
 	mux.HandleFunc("/api/npci/payments", s.handleListPayments)
 	mux.HandleFunc("/api/npci/callback", s.handleCallback)
-	mux.HandleFunc("/api/npci/webhook", s.handleWebhook) // NEW — production webhook
-	mux.HandleFunc("/api/npci/utr/", s.handleUTRLookup)   // NEW — UTR reconciliation
-	mux.HandleFunc("/api/npci/reconcile", s.handleReconcile) // NEW
+	mux.HandleFunc("/api/npci/webhook", s.handleWebhook)          // NEW — production webhook
+	mux.HandleFunc("/api/npci/utr/", s.handleUTRLookup)           // NEW — UTR reconciliation
+	mux.HandleFunc("/api/npci/reconcile", s.handleReconcile)      // NEW
 	mux.HandleFunc("/api/npci/webhook/test", s.handleWebhookTest) // NEW
-	mux.HandleFunc("/api/npci/webhooks", s.handleWebhooks) // NEW — audit log
+	mux.HandleFunc("/api/npci/webhooks", s.handleWebhooks)        // NEW — audit log
 	mux.HandleFunc("/api/npci/failure-demo", s.handleFailureDemo)
 
 	// DigiLocker KYC — NEW
@@ -140,9 +140,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNPCIConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"rail":        "UPI Collect (P2M) — Go implementation",
-		"currency":    "INR",
-		"vpaFormat":   "handle@aasthichain",
+		"rail":      "UPI Collect (P2M) — Go implementation",
+		"currency":  "INR",
+		"vpaFormat": "handle@aasthichain",
 		"idFormats": map[string]string{
 			"paymentId": "NPCI-XXXXXXXXXXXX",
 			"utr":       "12-digit numeric (real) + IMPS+RRN legacy",
@@ -159,12 +159,12 @@ func (s *Server) handleNPCIConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRealConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"mode": "Go — real NPCI via Setu/ICICI",
+		"mode":      "Go — real NPCI via Setu/ICICI",
 		"providers": []string{"Setu (Pine Labs) — NPCI-certified switch", "ICICI Bank UPI Collect", "Decentro"},
 		"webhook": map[string]string{
-			"endpoint": "/api/npci/webhook",
+			"endpoint":  "/api/npci/webhook",
 			"signature": "HMAC SHA256 — X-Setu-Signature header, WEBHOOK_SECRET env",
-			"flow": "Bank → Setu → POST webhook with UTR → verify signature → check amount → update payment → trigger Drunix transfer",
+			"flow":      "Bank → Setu → POST webhook with UTR → verify signature → check amount → update payment → trigger Drunix transfer",
 		},
 		"utr": map[string]string{
 			"format": "12-digit numeric (real IMPS) — e.g., 418123456789",
@@ -445,9 +445,9 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "mismatch") {
 			w.WriteHeader(400)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":    err.Error(),
+				"error":     err.Error(),
 				"paymentId": payload.GetPaymentID(),
-				"note":     "Amount mismatch — manual review required",
+				"note":      "Amount mismatch — manual review required",
 			})
 			return
 		}
@@ -695,9 +695,9 @@ func (s *Server) handleDBConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDBStats(w http.ResponseWriter, r *http.Request) {
 	stats, _ := s.DB.Stats()
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"mode":  s.DB.Mode,
+		"mode":   s.DB.Mode,
 		"counts": stats,
-		"isGo":  true,
+		"isGo":   true,
 	})
 }
 

@@ -47,13 +47,13 @@ func TestVerifyWebhookSignature(t *testing.T) {
 
 func TestWebhookPayloadParsing(t *testing.T) {
 	payload := WebhookPayload{
-		PaymentID: "NPCI-123",
+		PaymentID:   "NPCI-123",
 		ReferenceID: "REF-123",
-		Status: "SUCCESS",
-		RRN: "418123456789",
-		UTR: "412345678901",
-		Amount: 50000,
-		Provider: "setu",
+		Status:      "SUCCESS",
+		RRN:         "418123456789",
+		UTR:         "412345678901",
+		Amount:      50000,
+		Provider:    "setu",
 	}
 
 	assert.Equal(t, "NPCI-123", payload.GetPaymentID())
@@ -69,14 +69,14 @@ func TestGatewayWithWebhook_ProcessWebhook_Success(t *testing.T) {
 
 	// Create a payment first
 	req := CollectRequest{
-		AssetID: "PROP-001",
-		TokenAmount: 100,
-		AmountINR: 50000,
-		PayerVPA: "investor@aasthichain",
-		PayeeVPA: "originator@aasthichain",
+		AssetID:        "PROP-001",
+		TokenAmount:    100,
+		AmountINR:      50000,
+		PayerVPA:       "investor@aasthichain",
+		PayeeVPA:       "originator@aasthichain",
 		IdempotencyKey: "test-webhook-1",
-		PayerID: "investor1",
-		PayeeID: "originator1",
+		PayerID:        "investor1",
+		PayeeID:        "originator1",
 	}
 	payment, err := gw.InitiateCollect(req)
 	assert.NoError(t, err)
@@ -85,11 +85,11 @@ func TestGatewayWithWebhook_ProcessWebhook_Success(t *testing.T) {
 	// Simulate webhook success
 	payload := WebhookPayload{
 		PaymentID: payment.PaymentID,
-		Status: "SUCCESS",
-		RRN: "418123456789",
-		UTR: "412345678901",
-		Amount: 50000,
-		Provider: "setu",
+		Status:    "SUCCESS",
+		RRN:       "418123456789",
+		UTR:       "412345678901",
+		Amount:    50000,
+		Provider:  "setu",
 	}
 
 	result, err := gw.ProcessWebhook(payload, []byte(`{"paymentId":"`+payment.PaymentID+`","status":"SUCCESS"}`), "", "")
@@ -108,24 +108,24 @@ func TestGatewayWithWebhook_ProcessWebhook_AmountMismatch(t *testing.T) {
 	gw := NewGatewayWithWebhook(nil, nil)
 
 	req := CollectRequest{
-		AssetID: "PROP-001",
-		TokenAmount: 100,
-		AmountINR: 50000,
-		PayerVPA: "investor@aasthichain",
-		PayeeVPA: "originator@aasthichain",
+		AssetID:        "PROP-001",
+		TokenAmount:    100,
+		AmountINR:      50000,
+		PayerVPA:       "investor@aasthichain",
+		PayeeVPA:       "originator@aasthichain",
 		IdempotencyKey: "test-mismatch-1",
-		PayerID: "investor1",
-		PayeeID: "originator1",
+		PayerID:        "investor1",
+		PayeeID:        "originator1",
 	}
 	payment, _ := gw.InitiateCollect(req)
 
 	payload := WebhookPayload{
 		PaymentID: payment.PaymentID,
-		Status: "SUCCESS",
-		RRN: "418123456789",
-		UTR: "412345678901",
-		Amount: 60000, // mismatch
-		Provider: "setu",
+		Status:    "SUCCESS",
+		RRN:       "418123456789",
+		UTR:       "412345678901",
+		Amount:    60000, // mismatch
+		Provider:  "setu",
 	}
 
 	result, err := gw.ProcessWebhook(payload, []byte(`{}`), "", "")
@@ -138,24 +138,24 @@ func TestGatewayWithWebhook_Idempotency(t *testing.T) {
 	gw := NewGatewayWithWebhook(nil, nil)
 
 	req := CollectRequest{
-		AssetID: "PROP-001",
-		TokenAmount: 100,
-		AmountINR: 50000,
-		PayerVPA: "investor@aasthichain",
-		PayeeVPA: "originator@aasthichain",
+		AssetID:        "PROP-001",
+		TokenAmount:    100,
+		AmountINR:      50000,
+		PayerVPA:       "investor@aasthichain",
+		PayeeVPA:       "originator@aasthichain",
 		IdempotencyKey: "test-idem-1",
-		PayerID: "investor1",
-		PayeeID: "originator1",
+		PayerID:        "investor1",
+		PayeeID:        "originator1",
 	}
 	payment, _ := gw.InitiateCollect(req)
 
 	payload := WebhookPayload{
 		PaymentID: payment.PaymentID,
-		Status: "SUCCESS",
-		RRN: "418123456789",
-		UTR: "412345678901",
-		Amount: 50000,
-		Provider: "setu",
+		Status:    "SUCCESS",
+		RRN:       "418123456789",
+		UTR:       "412345678901",
+		Amount:    50000,
+		Provider:  "setu",
 	}
 
 	// First call
@@ -175,14 +175,14 @@ func TestReconciliationReport(t *testing.T) {
 	// Create some payments
 	for i := 0; i < 5; i++ {
 		req := CollectRequest{
-			AssetID: "PROP-001",
-			TokenAmount: int64(100 + i*10),
-			AmountINR: float64(50000 + i*1000),
-			PayerVPA: "investor@aasthichain",
-			PayeeVPA: "originator@aasthichain",
+			AssetID:        "PROP-001",
+			TokenAmount:    int64(100 + i*10),
+			AmountINR:      float64(50000 + i*1000),
+			PayerVPA:       "investor@aasthichain",
+			PayeeVPA:       "originator@aasthichain",
 			IdempotencyKey: "test-reconcile-" + string(rune(i)),
-			PayerID: "investor1",
-			PayeeID: "originator1",
+			PayerID:        "investor1",
+			PayeeID:        "originator1",
 		}
 		p, _ := gw.InitiateCollect(req)
 		// Confirm some
@@ -201,9 +201,9 @@ func TestWebhookPayload_JSON(t *testing.T) {
 	// Test that payload can be marshaled/unmarshaled
 	payload := WebhookPayload{
 		PaymentID: "NPCI-123",
-		Status: "SUCCESS",
-		UTR: "412345678901",
-		Amount: 50000,
+		Status:    "SUCCESS",
+		UTR:       "412345678901",
+		Amount:    50000,
 	}
 
 	data, err := json.Marshal(payload)

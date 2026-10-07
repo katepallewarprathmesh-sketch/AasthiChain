@@ -17,14 +17,14 @@ func newTestGateway() *Gateway {
 		"regulator1":  KYCVerified,
 	}}
 	bal := &MockBalanceProvider{Balances: map[string]int64{
-		"investor1@aasthichain":  100000000, // ₹10,00,000 (10L)
-		"investor2@aasthichain":  50000000,  // ₹5,00,000
-		"investor@aasthichain":   100000000, // ₹10L
-		"poor@aasthichain":       100,       // ₹1
-		"originator@aasthichain": 100000000, // high
-		"demo.investor@aasthichain":        100000000, // testing VPA per user request
-		"demo.investor@fakebank":     100000000,
-		"demo.owner@fakebank": 100000000,
+		"investor1@aasthichain":     100000000, // ₹10,00,000 (10L)
+		"investor2@aasthichain":     50000000,  // ₹5,00,000
+		"investor@aasthichain":      100000000, // ₹10L
+		"poor@aasthichain":          100,       // ₹1
+		"originator@aasthichain":    100000000, // high
+		"demo.investor@aasthichain": 100000000, // testing VPA per user request
+		"demo.investor@fakebank":    100000000,
+		"demo.owner@fakebank":       100000000,
 	}}
 	return NewGateway(kyc, bal)
 }

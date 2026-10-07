@@ -146,15 +146,15 @@ type DB struct {
 	Mode       DBMode
 	PostgresDB *sql.DB // nil if file-backed
 
-	Properties Store
-	Balances   Store
-	Transfers  Store
-	KYC        Store
-	Idempotency Store
+	Properties   Store
+	Balances     Store
+	Transfers    Store
+	KYC          Store
+	Idempotency  Store
 	NPCIPayments Store
 	NPCIBalances Store
-	UTRIndex   Store
-	Webhooks   Store
+	UTRIndex     Store
+	Webhooks     Store
 }
 
 var (
@@ -262,13 +262,13 @@ func (db *DB) Stats() (map[string]int, error) {
 	stats := make(map[string]int)
 
 	stores := map[string]Store{
-		"properties":    db.Properties,
-		"balances":      db.Balances,
-		"transfers":     db.Transfers,
-		"kyc":           db.KYC,
-		"npciPayments":  db.NPCIPayments,
-		"utrIndex":      db.UTRIndex,
-		"webhooks":      db.Webhooks,
+		"properties":   db.Properties,
+		"balances":     db.Balances,
+		"transfers":    db.Transfers,
+		"kyc":          db.KYC,
+		"npciPayments": db.NPCIPayments,
+		"utrIndex":     db.UTRIndex,
+		"webhooks":     db.Webhooks,
 	}
 
 	for name, store := range stores {
