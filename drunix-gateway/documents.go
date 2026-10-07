@@ -115,6 +115,9 @@ type Document struct {
 	MediaType  string `json:"mediaType,omitempty"`
 	Visibility string `json:"visibility"`
 	Status     string `json:"status"`
+	// Parties may read a restricted document besides the submitter. A trade
+	// confirmation has two sides and both are entitled to their own copy.
+	Parties []string `json:"parties,omitempty"`
 
 	ValidFrom *time.Time `json:"validFrom,omitempty"`
 	ValidTo   *time.Time `json:"validTo,omitempty"`
@@ -220,6 +223,7 @@ type AnchorRequest struct {
 	SubmittedBy string
 	MediaType   string
 	Visibility  string
+	Parties     []string
 	Content     []byte
 	ValidFrom   *time.Time
 	ValidTo     *time.Time
@@ -287,6 +291,7 @@ func (dr *DocumentRegistry) Anchor(req AnchorRequest) (*Document, *DrunixBlock, 
 		SizeBytes:   len(req.Content),
 		MediaType:   req.MediaType,
 		Visibility:  visibility,
+		Parties:     req.Parties,
 		Status:      DocStatusActive,
 		ValidFrom:   req.ValidFrom, ValidTo: req.ValidTo,
 		AnchoredAt: now,
@@ -640,7 +645,19 @@ func maySeeRestricted(doc *Document, requester, role string) bool {
 	case "registrar", "regulator":
 		return true
 	}
-	return requester != "" && (requester == doc.SubmittedBy || requester == doc.Subject)
+	if requester == "" {
+		return false
+	}
+	if requester == doc.SubmittedBy || requester == doc.Subject {
+		return true
+	}
+	// Both sides of a trade are entitled to the confirmation of that trade.
+	for _, p := range doc.Parties {
+		if p == requester {
+			return true
+		}
+	}
+	return false
 }
 
 // ForAsset lists every document attached to an asset, newest first.

@@ -17,6 +17,13 @@ I went through the repo rather than guessing. Documents appear in five places.
 | 3 | `/api/properties/:id/verify` | The five-check verification report | Reports whether a hash is present and well-formed |
 | 4 | DigiLocker KYC (`payment-gateway/digilocker.go`) | Aadhaar / PAN / Voter ID pulled from the government wallet | Issuer response is held in memory; nothing is anchored |
 | 5 | Property data verification (Bhoomi / Dharani / e-Property) | State land record | Compared in-flight; the comparison itself leaves no evidence |
+| 6 | Settlement (`POST /umi/dvp`) | **Contract note** — the trade confirmation a broker must issue | Did not exist; a trade left no document at all |
+| 7 | Asset servicing (`POST /umi/servicing`) | **Coupon / rent advice** — what a bondholder files with their tax return | Did not exist; a holder was told an amount and given nothing |
+
+Touchpoints 6 and 7 are the ones nobody notices are missing, because there is
+nothing there to inspect. They are also the ones that matter most for a BOND:
+a coupon payment with no advice behind it is not an instrument anybody can
+account for.
 
 ### What is genuinely good already
 
@@ -182,7 +189,28 @@ first entry in the new registry when an asset is migrated.
 | 2 | `drunix-gateway/documents.go` | Registry: anchor, supersede, revoke, verify, per-asset listing, duplicate detection, pluggable pin store |
 | 3 | `drunix-gateway/documents_server.go` | `/umi/documents*` routes |
 | 4 | `contracts/DocumentRegistry.sol` | EVM mirror of the same semantics |
-| 5 | tests | CID correctness against published vectors, tamper detection, duplicate rejection, privacy rules, lifecycle |
+| 5 | `drunix-gateway/certificates.go` | Documents the rail GENERATES: contract notes and coupon advices, deterministic so they can be rebuilt and re-verified |
+| 6 | `drunix-gateway/ipfs_store.go` | Real pinning to a Kubo node via `IPFS_API_URL`, with the node's CID cross-checked against ours |
+| 7 | tests | CID correctness against published vectors, tamper detection, duplicate rejection, privacy rules, lifecycle, contract compilation |
+
+### Generated certificates: why determinism is the whole trick
+
+A contract note is a pure function of facts already on the ledger — instruction
+id, parties, quantity, consideration in paise, block height. It carries no
+"generated at" stamp and no sequence number, so rendering it today and
+rendering it in five years produce identical bytes and therefore an identical
+CID.
+
+That is what makes the certificate verifiable rather than merely stored:
+a counterparty does not have to trust the copy they were handed. They rebuild
+it from the ledger facts, hash it, and see whether it matches what was
+anchored at settlement time. A forged contract note cannot survive that, and
+no signing key is involved.
+
+Both certificate types are `restricted` and carry a `parties` list, because a
+contract note names both sides and a consideration, and an income advice shows
+one holder's earnings. Both counterparties can read their own; another investor
+cannot read theirs.
 
 ### Routes
 

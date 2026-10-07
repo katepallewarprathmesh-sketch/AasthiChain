@@ -327,6 +327,10 @@ type UMIRail struct {
 	// keeps its own lock so raising one can never delay a settlement.
 	notifications *notifyStore
 
+	// docs is the content-addressed register the rail files its own
+	// generated certificates into (see certificates.go). Optional.
+	docs *DocumentRegistry
+
 	// book is the secondary marketplace order book (see marketplace.go). It
 	// keeps its own lock and owns no value — offers settle through SettleDvP
 	// like any other trade.
@@ -1062,6 +1066,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	// Raised after the commit, never before: a notification reports what the
 	// ledger already records, so it cannot promise a trade that did not happen.
 	r.notifySettled(si)
+	// Contract note: the confirmation a counterparty keeps. Filed after the
+	// lock is released and never able to affect the settlement above.
+	r.fileContractNote(si)
 	return si, nil
 }
 
@@ -1301,6 +1308,9 @@ func (r *UMIRail) ServicingByBasis(assetID, payer string, grossINR float64, basi
 	// point each payout at the block that proves it
 	r.pServicing(records)
 	r.notifyIncome(assetID, res.Payouts, res.BlockHeight)
+	// One coupon/rent advice per holder paid — the document a bondholder
+	// files with their tax return.
+	r.fileIncomeAdvices(records, basis)
 	return res, nil
 }
 

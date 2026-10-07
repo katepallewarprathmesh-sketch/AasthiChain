@@ -57,7 +57,7 @@ contract PaymentEscrow {
      */
     function initiatePayment(bytes32 assetId, address to, uint256 tokenAmount) external payable {
         require(msg.value > 0, "Amount must be > 0");
-        require(msg.value >= 0.001 ether, "Min 0.001 ETH for Sepolia gas/dust — faucet gives 0.5 free, ensures valid tx, fixes min balance 0.001 error. For tiny amounts, frontend enforces min 0.001 via Math.max().");
+        require(msg.value >= 0.001 ether, "Min 0.001 ETH for Sepolia gas/dust - faucet gives 0.5 free, ensures valid tx, fixes min balance 0.001 error. For tiny amounts, frontend enforces min 0.001 via Math.max().");
         require(to != address(0), "Invalid to");
         require(tokenAmount > 0, "Token amount must be > 0");
         require(to != msg.sender, "Self payment not allowed");
@@ -104,7 +104,7 @@ contract PaymentEscrow {
     function releasePayment(bytes32 paymentId) external onlyRegistrar {
         Payment storage p = payments[paymentId];
         require(p.amount > 0, "Payment not found");
-        require(p.status == Status.CONFIRMED, "Not confirmed — need Drunix TXN first");
+        require(p.status == Status.CONFIRMED, "Not confirmed - need Drunix TXN first");
         require(bytes(p.drunixTransferId).length > 0, "No Drunix transfer linked");
 
         p.status = Status.RELEASED;

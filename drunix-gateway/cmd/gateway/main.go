@@ -57,7 +57,7 @@ func main() {
 	// Document register: IPFS content addressing + anchoring to the same
 	// chain. Additive — the existing single documentHash on a property keeps
 	// working untouched.
-	srv.Docs = drunix.NewDocumentRegistry(chain, drunix.NewMemoryPinStore())
+	srv.Docs = drunix.NewDocumentRegistry(chain, drunix.OpenPinStoreFromEnv())
 	if blockStore != nil {
 		defer blockStore.Close()
 	}
@@ -72,6 +72,9 @@ func main() {
 		if blockStore != nil {
 			srv.UMI = srv.UMI.WithStore(blockStore)
 		}
+		// File the rail's own generated certificates — contract notes and
+		// coupon advices — into the content-addressed register.
+		srv.UMI = srv.UMI.WithDocuments(srv.Docs)
 		// Request-level idempotency for the money-moving POSTs. Durable when
 		// a database is present, so a retry after a restart still replays the
 		// original response instead of settling twice. Callers that send no
