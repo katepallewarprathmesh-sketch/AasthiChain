@@ -76,13 +76,17 @@ Rules it follows:
 - **Only the CID, the digest, the type and the timestamps go on chain.** Never
   file contents.
 
-Run it locally:
+Run it locally — one command brings up the rail, the app, a chain, and the
+deployed contract:
 
 ```bash
-npx ganache --wallet.deterministic --chain.chainId 1337    # any EVM chain
-node contracts/deploy-local.mjs                            # prints the env vars
-EVM_RPC_URL=... EVM_REGISTRY_ADDRESS=... node tests/evmmirror.test.mjs
+bash scripts/dev-stack.sh           # prints the exact audit command to run
+bash scripts/dev-stack.sh --no-evm  # default build, mirror off
+bash scripts/dev-stack.sh --stop
 ```
+
+It degrades rather than failing: no `npx`, no `solc`, or a chain that will not
+start just means the mirror stays off and everything else still comes up.
 
 The test is the point: all 16 assertions read the contract over JSON-RPC and
 never ask AasthiChain whether a document is genuine. A counterparty holding
