@@ -37,10 +37,16 @@ function ok(label, cond, detail = '') {
 
 const CHUNK = 262144
 
+// The register refuses to anchor the same bytes twice — correctly, that is
+// what stops one encumbrance certificate being reused across listings. So
+// every run must generate fresh bytes while keeping the exact lengths that
+// make these cases interesting. A per-run seed does both.
+const RUN = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0
+
 // Deterministic pseudo-random bytes, so a failure is reproducible.
 function bytes(n, seed = 1) {
   const out = Buffer.alloc(n)
-  let x = seed >>> 0
+  let x = (seed ^ RUN) >>> 0
   for (let i = 0; i < n; i++) {
     x = (x * 1664525 + 1013904223) >>> 0
     out[i] = x >>> 24
@@ -50,8 +56,8 @@ function bytes(n, seed = 1) {
 
 const CASES = [
   ['a single byte', bytes(1)],
-  ['a short certificate', Buffer.from('Title validation certificate\nasset: PROP-1\n')],
-  ['text with non-ASCII (₹ and an em dash)', Buffer.from('Consideration ₹45,00,000 — paid in full')],
+  ['a short certificate', Buffer.from(`Title validation certificate\nasset: PROP-${RUN}\n`)],
+  ['text with non-ASCII (₹ and an em dash)', Buffer.from(`Consideration ₹45,00,000 — paid in full, ref ${RUN}`)],
   ['one byte under the chunk boundary', bytes(CHUNK - 1, 7)],
   ['exactly the chunk boundary', bytes(CHUNK, 11)],
   ['one byte over the chunk boundary', bytes(CHUNK + 1, 13)],
@@ -79,7 +85,7 @@ for (const [label, content] of CASES) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Identity-Id': 'registrar1', 'X-Identity-Role': 'Registrar' },
     body: JSON.stringify({
-      assetId: `PROP-CID-CONFORMANCE-${content.length}`,
+      assetId: `PROP-CID-CONFORMANCE-${RUN}-${content.length}`,
       docType: 'TEST_FIXTURE',
       title: label,
       visibility: 'public',
