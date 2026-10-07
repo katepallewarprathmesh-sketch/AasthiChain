@@ -5,10 +5,11 @@
 # Then set UMI_GATEWAY_URL on Vercel to the service URL Render gives you
 # (e.g. https://aasthichain-umi-gateway.onrender.com) and redeploy the frontend.
 #
-# Free tier note: the instance sleeps after inactivity and state is in-memory,
-# so the first request after a sleep is slow and resets the demo ledger. That is
-# acceptable for a sandbox-labelled simulation rail; use a paid instance or add a
-# persistent StateDB if you need continuity.
+# Free tier note: the instance sleeps after inactivity, so the first request
+# after a sleep is slow. Set DATABASE_URL (below) or the ledger is in-memory and
+# a sleep erases committed blocks.
+#
+# Check what is actually deployed:  curl -s <service-url>/health | jq .build
 
 services:
   - type: web
@@ -29,3 +30,9 @@ services:
         value: "true"
       - key: DRUNIX_MODE
         value: mock
+      # Durable, append-only block storage. Without this the ledger lives in
+      # memory and a free-instance sleep erases committed blocks, which the
+      # append-only guarantee does not survive. Set it to the Neon/Postgres
+      # connection string in the Render dashboard (sync:false = not in git).
+      - key: DATABASE_URL
+        sync: false

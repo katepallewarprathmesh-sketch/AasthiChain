@@ -15,7 +15,13 @@ WORKDIR /src
 COPY go.mod go.su[m] ./
 RUN go mod download || true
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/gateway ./cmd/gateway
+# Stamp the build with its commit so the running service can report which
+# revision is live (GET /health -> build.commit). Hosts that expose the commit
+# at runtime (Render sets RENDER_GIT_COMMIT) are picked up without this.
+ARG GIT_COMMIT=""
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags="-s -w -X github.com/katepallewarprathmesh-sketch/AasthiChain/drunix-gateway.BuildCommit=${GIT_COMMIT}" \
+    -o /out/gateway ./cmd/gateway
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /
