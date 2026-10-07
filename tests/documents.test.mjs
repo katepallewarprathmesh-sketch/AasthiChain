@@ -214,6 +214,45 @@ async function main() {
      (report.body?.checks || []).filter(c => !c.ok).every(c => c.id === 'registrar'),
      JSON.stringify((report.body?.checks || []).filter(c => !c.ok).map(c => c.id)));
 
+  // --- lifecycle certificates -------------------------------------------
+  // Validating and tokenising a property must each leave a document behind,
+  // readable by a buyer who is not logged in.
+  const reg = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
+  const regToken = Buffer.from(JSON.stringify({
+    identityId: 'registrar1', mspId: 'RegistrarMSP', role: 'Registrar', exp: Date.now() + 9e6,
+  })).toString('base64');
+
+  await j('/api/properties/' + newAsset + '/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + regToken },
+    body: JSON.stringify({ decision: 'VALIDATED', note: 'Title clear' }),
+  });
+  await j('/api/properties/' + newAsset + '/mint', {
+    method: 'POST', headers: reg, body: JSON.stringify({ totalTokens: 1000 }),
+  });
+  await new Promise(r => setTimeout(r, 500));
+
+  const lifecycle = await j('/api/umi/documents/' + newAsset);
+  const types = (lifecycle.body?.documents || []).map(d => d.docType);
+  ok('validating a property issues a validation certificate',
+     types.includes('VALIDATION_CERTIFICATE'), types.join(', '));
+  ok('tokenising it issues a tokenisation certificate',
+     types.includes('TOKENISATION_CERTIFICATE'), types.join(', '));
+
+  const cert = (lifecycle.body?.documents || []).find(d => d.docType === 'VALIDATION_CERTIFICATE');
+  ok('the validation certificate is anchored to its own ledger block',
+     cert?.blockHeight > 0, String(cert?.blockHeight));
+  const certFetch = await fetch(BASE + '/api/umi/documents/fetch/' + cert.cid);
+  const certBody = await certFetch.text();
+  ok('a buyer with no login can read it', certFetch.status === 200, `status ${certFetch.status}`);
+  ok('and it names the registrar who signed off, not just a status',
+     certBody.includes('registrar1') && certBody.includes('VALIDATED'),
+     certBody.slice(0, 120));
+  ok('it records whether the validator was independent of the owner',
+     certBody.includes('independence'));
+  ok('the certificate the buyer read really does hash to its CID',
+     createHash('sha256').update(certBody).digest('hex') === cert.sha256);
+
   console.log(`\n  documents: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 }

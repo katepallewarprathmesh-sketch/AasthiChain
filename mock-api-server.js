@@ -418,6 +418,43 @@ async function anchorDigestOnRail({ assetId, subject, docType, title, issuer, su
   }
 }
 
+// certifyOnRail files a document AasthiChain itself generated — a validation
+// certificate, a tokenisation certificate, a payment receipt.
+//
+// The body is deterministic: it contains only facts already committed to the
+// ledger, in a fixed field order, with no "generated at" stamp. Rebuild it
+// from those facts later and you get the same bytes and therefore the same
+// CID, so the certificate can be re-verified rather than merely trusted.
+//
+// Like every other anchor here it is best effort and never awaited by the
+// caller: the lifecycle step it certifies has already been committed.
+async function certifyOnRail({ assetId, subject, docType, title, parties, visibility, body }) {
+  try {
+    const content = JSON.stringify(body, null, 2) + '\n';
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(UMI_GATEWAY_URL.replace(/\/$/, '') + '/umi/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId, subject, docType, title,
+          issuer: 'AasthiChain registry',
+          submittedBy: (parties && parties[0]) || 'system',
+          mediaType: 'application/json',
+          visibility: visibility || 'public',
+          parties,
+          content,
+        }),
+        signal: ctrl.signal,
+      });
+      return { ok: r.ok, status: r.status };
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // documentsForAsset reads the register back so the verification report can
 // cite it. Returns null when the rail is unreachable, and the report says so
 // rather than silently claiming there are no documents.
@@ -647,6 +684,33 @@ app.post('/api/properties/:id/validate', authMiddleware, (req, res) => {
     endorsedBy: ['RegistrarMSP.peer'],
   }]);
 
+  // The registrar's decision is the single most load-bearing claim on a
+  // listing, and until now it existed only as a status field. This turns it
+  // into a document a buyer can hold, hash and check.
+  certifyOnRail({
+    assetId: req.params.id,
+    docType: 'VALIDATION_CERTIFICATE',
+    title: `Title validation — ${req.params.id}`,
+    parties: [prop.validatedBy, prop.originatorId],
+    visibility: 'public', // a buyer must be able to read this without asking
+    body: {
+      document: 'Title validation certificate',
+      assetId: req.params.id,
+      decision,
+      deedSha256: prop.documentHash,
+      owner: prop.originatorId,
+      validatedBy: prop.validatedBy,
+      validatorMsp: prop.validatedByMsp,
+      validatedAt: prop.validatedAt,
+      note: prop.validationNote || '',
+      ledgerBlockHeight: block.height,
+      ledgerBlockHash: block.hash,
+      independence: req.user.identityId !== prop.originatorId
+        ? 'Validator is not the owner.'
+        : 'SELF-VALIDATED — not independent.',
+    },
+  }).catch(() => {});
+
   res.json({
     assetId: req.params.id,
     validationStatus: decision,
@@ -835,6 +899,33 @@ app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
   balances[key] = { docType: 'balance', assetId: req.params.id, ownerId: prop.originatorId, balance: totalTokens, updatedAt: new Date() };
   drunixAppend('TOKEN_MINTED', [{ kind: 'mint', assetId: req.params.id, to: prop.originatorId, msp: 'OriginatorMSP', totalTokens, endorsedBy: ['OriginatorMSP.peer', 'RegistrarMSP.peer'] }]);
   const rail = await seedRailPosition(req.params.id, prop.originatorId, totalTokens);
+  // Tokenisation is the moment a building becomes a security. That deserves
+  // an instrument document stating exactly what was issued, against which
+  // deed, on whose validation — the prospectus-shaped fact an investor is
+  // entitled to before they buy a fraction of it.
+  certifyOnRail({
+    assetId: req.params.id,
+    docType: 'TOKENISATION_CERTIFICATE',
+    title: `Tokenisation — ${req.params.id}`,
+    parties: [prop.originatorId],
+    visibility: 'public',
+    body: {
+      document: 'Tokenisation certificate',
+      assetId: req.params.id,
+      propertyTitle: prop.title,
+      issuer: prop.originatorId,
+      totalTokens,
+      valuationINR: prop.valuationINR,
+      deedSha256: prop.documentHash,
+      validatedBy: prop.validatedBy || null,
+      validatedAt: prop.validatedAt || null,
+      location: prop.location,
+      endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer')",
+      ledgerBlockHeight: drunixChain.length - 1,
+      note: 'Issued supply is fixed at this figure. No settlement may push holdings above it.',
+    },
+  }).catch(() => {});
+
   const resp = { assetId: req.params.id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock', blockHeight: drunixChain.length - 1, endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer') enforced", rail };
   if (idemKey) idempotency[idemKey] = resp;
   res.json(resp);
@@ -1403,6 +1494,34 @@ async function settleConfirmedPayment(pay) {
   console.log(`[SETTLE] ${pay.paymentId}: ${amt} tokens ${seller} → ${buyer} (${tid}) — server-side settlement`);
   const rail = await commitSettlementToRail(pay, assetId, seller, buyer, amt);
   try { await persistNpciState(); } catch {}
+  // A purchase receipt: the money leg, the UTR, the tokens, and the block
+  // that proves all three. Restricted to the two parties — it names what
+  // somebody paid — but anchored so neither side can later dispute it.
+  certifyOnRail({
+    assetId,
+    subject: buyer,
+    docType: 'PAYMENT_RECEIPT',
+    title: `Payment receipt ${pay.paymentId}`,
+    parties: [buyer, seller],
+    visibility: 'restricted',
+    body: {
+      document: 'Payment receipt and escrow release',
+      paymentId: pay.paymentId,
+      assetId,
+      buyer,
+      seller,
+      tokens: amt,
+      amountINR: pay.amountINR,
+      utr: pay.utr || null,
+      rrn: pay.rrn || null,
+      provider: pay.provider || 'npci-upi',
+      transferId: tid,
+      status: 'RELEASED',
+      settledAt: pay.releasedAt || pay.updatedAt || null,
+      note: 'Escrow released against confirmed funds. Tokens and cash moved as one settlement.',
+    },
+  }).catch(() => {});
+
   return { ok: true, payment: pay, transfer: transfers[tid], moved: amt, seller, buyer, rail };
 }
 
@@ -2464,6 +2583,27 @@ app.post('/api/credit/repay', authMiddleware, (req, res) => {
   L.repaidAt = new Date().toISOString();
   L.totalPaidINR = Math.round(L.principalINR * 1.01 * 100) / 100;
   const blk = drunixAppend('LOAN_REPAID', [{ kind: 'credit', loanId: L.loanId, identityId: L.identityId, assetId: L.assetId, tokensUnlocked: L.tokens, totalPaidINR: L.totalPaidINR }]);
+  // Discharge of a secured loan releases pledged collateral. That is exactly
+  // the event a lender and a borrower each want evidence of years later.
+  certifyOnRail({
+    assetId: L.assetId,
+    subject: L.identityId,
+    docType: 'LOAN_DISCHARGE_CERTIFICATE',
+    title: `Loan discharge ${L.loanId}`,
+    parties: [L.identityId],
+    visibility: 'restricted',
+    body: {
+      document: 'Loan discharge and collateral release',
+      loanId: L.loanId,
+      borrower: L.identityId,
+      assetId: L.assetId,
+      tokensUnlocked: L.tokens,
+      totalPaidINR: L.totalPaidINR,
+      ledgerBlockHeight: blk.height,
+      note: 'Collateral pledge released. The pledge and its discharge are both on the chain.',
+    },
+  }).catch(() => {});
+
   res.json({ ok: true, loan: L, blockHeight: blk.height, message: 'Loan repaid, collateral unlocked' });
 });
 

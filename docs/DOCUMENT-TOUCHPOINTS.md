@@ -1,0 +1,49 @@
+# Every step in AasthiChain where a document exists
+
+An audit, not a plan. Each row is a point in the system where a real document,
+certificate or instrument is involved — either one that arrives from outside,
+or one AasthiChain produces — with what happens to it now.
+
+Rule applied throughout: **the fingerprint is always anchored; the bytes are
+stored only when storing them is safe.**
+
+| # | Step | Document | Where | Status |
+|---|------|----------|-------|--------|
+| 1 | `POST /api/properties` | Title deed | `mock-api-server.js` → rail | **Anchored automatically** by digest. CID derived from the `documentHash` already on the Fabric chain, so nothing is re-uploaded |
+| 2 | `POST /api/properties/:id/validate` | **Title validation certificate** | Node → rail | **Generated and anchored.** Public: a buyer reads it with no login. States decision, validator, MSP, independence, block |
+| 3 | `POST /api/properties/:id/mint` | **Tokenisation certificate** | Node → rail | **Generated and anchored.** Public. Issued supply, valuation, deed digest, validating registrar |
+| 4 | `POST /umi/dvp` (settlement) | **Contract note** | `drunix-gateway/certificates.go` | **Generated and anchored.** Restricted to both counterparties. Deterministic |
+| 5 | `POST /umi/servicing` (coupon / rent) | **Income advice** — the bondholder's tax document | `certificates.go` | **Generated and anchored**, one per holder. Restricted to holder + payer |
+| 6 | NPCI escrow release / PayU settle | **Payment receipt** | `mock-api-server.js` | **Generated and anchored.** Restricted. UTR, RRN, tokens, transfer id |
+| 7 | `POST /api/credit/repay` | **Loan discharge certificate** | `mock-api-server.js` | **Generated and anchored.** Restricted. Collateral release evidence |
+| 8 | DigiLocker callback (Vercel) | Aadhaar / PAN verification | `frontend/api/index.js` | **Digest anchored, document never transmitted.** Forced `digestOnly` |
+| 9 | DigiLocker provider (Go service) | Aadhaar / PAN verification | `payment-gateway/kyc_anchor.go` | **Digest anchored** in the background. No-op unless `UMI_GATEWAY_URL` is set |
+| 10 | `POST /api/properties/:id/verify-document` | Buyer's copy of the deed | Node | Unchanged, still works. Now also answerable by CID or by file |
+| 11 | `GET /api/properties/:id/verify` | The verification report | Node | **Cites the register**: how many documents are active, revoked, superseded |
+| 12 | Ad-hoc uploads (EC, plan, NOC, IM, trust deed) | Any supporting document | `POST /umi/documents` | **Stored and anchored**, with visibility and a validity window |
+| 13 | Property page | Buyer checking their copy | `PropertyDocuments.jsx` | **Hashed in the browser.** Only the digest is sent |
+| 14 | Chaincode `RegisterProperty` | Title deed | `chaincode/property.go` | Unchanged. Its `hash~` uniqueness index still applies and is now mirrored by the register's duplicate rule |
+| 15 | Public-chain mirror | Any anchored document | `contracts/DocumentRegistry.sol` | Compiles (`tests/contracts.test.mjs`). Stores CID + digest, never content |
+
+## Deliberately not anchored
+
+- **Bhoomi / Dharani land-record comparisons.** The state API response is not
+  ours to republish, and its contents change between calls, so a digest of it
+  would be evidence of nothing. The *outcome* of the check is already a
+  verification check.
+- **Document contents on the public chain.** Permanent, expensive, and an
+  irreversible privacy breach. The EVM contract takes a `bytes32` digest and a
+  CID string; there is a test asserting no function anywhere accepts file bytes.
+- **Anything derived from PII.** KYC anchors hash a canonical summary with a
+  masked id, never the document.
+
+## Visibility rules, in one place
+
+| Visibility | Who can read the bytes | Used for |
+|------------|------------------------|----------|
+| `public` | Anyone | Validation certificate, tokenisation certificate, brochures, approved plans |
+| `restricted` | Submitter, named parties, registrar, regulator | Contract notes, income advices, payment receipts, sale agreements |
+| `digestOnly` | **Nobody — never stored** | KYC evidence, legacy deeds anchored from a hash |
+
+Default when unspecified is `restricted`. A document nobody classified should
+not be world-readable.
