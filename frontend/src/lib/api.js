@@ -110,6 +110,20 @@ class ApiClient {
     })
   }
 
+  // Notifications — a participant's own feed. There is no endpoint to create
+  // one: they are raised by the rail when a block commits.
+  async umiNotifications(participant, limit = 20) {
+    return this.request(`/api/umi/notifications/${encodeURIComponent(participant)}?limit=${limit}`)
+  }
+  async umiReadNotification(participant, id) {
+    return this.request(`/api/umi/notifications/${encodeURIComponent(participant)}/read`,
+      { method: 'POST', body: JSON.stringify({ id }) })
+  }
+  async umiReadAllNotifications(participant) {
+    return this.request(`/api/umi/notifications/${encodeURIComponent(participant)}/read-all`,
+      { method: 'POST', body: JSON.stringify({}) })
+  }
+
   // Secondary marketplace — holders selling to each other. All of it settles
   // through the same atomic DvP as a primary purchase.
   async umiOffers(assetId, all = false) {

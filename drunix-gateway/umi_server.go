@@ -59,6 +59,7 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/seed", s.handleUMISeed)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)
+	s.registerNotificationRoutes(mux)
 }
 
 func umiDecode(r *http.Request, v interface{}) error {

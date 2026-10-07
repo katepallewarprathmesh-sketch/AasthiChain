@@ -323,6 +323,10 @@ type UMIRail struct {
 	// authorisedTokens, whichever comes first.
 	authorised map[string]int64
 
+	// notifications is the per-participant feed (see notifications.go). It
+	// keeps its own lock so raising one can never delay a settlement.
+	notifications *notifyStore
+
 	// book is the secondary marketplace order book (see marketplace.go). It
 	// keeps its own lock and owns no value — offers settle through SettleDvP
 	// like any other trade.
@@ -361,16 +365,17 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		sec = NewMemorySecurities()
 	}
 	return &UMIRail{
-		wallets:      make(map[string]*CBDCWallet),
-		authorised:   make(map[string]int64),
-		derived:      make(map[string]bool),
-		isins:        make(map[string]*PilotISIN),
-		instructions: make(map[string]*SettlementInstruction),
-		baskets:      make(map[string]*Basket),
-		ownership:    &ownershipLog{},
-		securities:   sec,
-		chain:        chain,
-		book:         newOfferBook(),
+		wallets:       make(map[string]*CBDCWallet),
+		authorised:    make(map[string]int64),
+		derived:       make(map[string]bool),
+		isins:         make(map[string]*PilotISIN),
+		instructions:  make(map[string]*SettlementInstruction),
+		baskets:       make(map[string]*Basket),
+		ownership:     &ownershipLog{},
+		securities:    sec,
+		chain:         chain,
+		book:          newOfferBook(),
+		notifications: newNotifyStore(),
 	}
 }
 
@@ -903,6 +908,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 			}
 			// persisted after the block so the anchor survives a restart
 			r.pInstruction(*si)
+			// Only for real attempts: a dry run is a question, not an event,
+			// and nobody should be notified about one.
+			r.notifyFailed(si)
 		}
 		return si, err
 	}
@@ -1029,6 +1037,9 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	// Persisted only now: the instruction is not fully described until it knows
 	// which block anchors it, and a restart must restore that link.
 	r.pInstruction(*si)
+	// Raised after the commit, never before: a notification reports what the
+	// ledger already records, so it cannot promise a trade that did not happen.
+	r.notifySettled(si)
 	return si, nil
 }
 
@@ -1267,6 +1278,7 @@ func (r *UMIRail) ServicingByBasis(assetID, payer string, grossINR float64, basi
 	// persisted only once the block anchor is known, so a restart can still
 	// point each payout at the block that proves it
 	r.pServicing(records)
+	r.notifyIncome(assetID, res.Payouts, res.BlockHeight)
 	return res, nil
 }
 

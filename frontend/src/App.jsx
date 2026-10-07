@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
+import NotificationBell from './components/NotificationBell.jsx'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { trackPageview } from './lib/track'
 import { applySeo } from './lib/seo'
@@ -314,6 +315,7 @@ function Nav({ user, onLogout, onRoleSwitch }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexShrink: 0, flex: twoRow ? '1 1 100%' : undefined, justifyContent: twoRow ? 'space-between' : undefined, borderTop: twoRow ? `1px solid ${border}` : undefined, padding: twoRow ? '7px 0' : undefined }}>
+          {user && <NotificationBell user={user} mut={mut} border={border} />}
           {isLanding && (
             <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} style={{ color: mut }} title="Toggle light / dark">
               {dark ? (
