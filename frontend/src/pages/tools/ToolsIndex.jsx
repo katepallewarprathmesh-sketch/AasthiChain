@@ -8,6 +8,11 @@ import { C, card } from './ToolShell'
 
 const TOOLS = [
   {
+    to: '/verify',
+    name: 'Property Document Verifier',
+    blurb: 'Check whether a title deed, certificate or receipt is the one that was recorded on the ledger, or a copy that has been altered. Your file is fingerprinted in the browser and never uploaded.',
+  },
+  {
     to: '/tools/rental-yield-calculator',
     name: 'Rental Yield Calculator',
     blurb: 'Gross and net rental yield on any property, after maintenance, property tax, insurance and vacancy.',

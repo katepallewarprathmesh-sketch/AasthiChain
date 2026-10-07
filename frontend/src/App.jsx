@@ -59,6 +59,7 @@ const SecondaryMarket = lazy(() => import('./pages/SecondaryMarket.jsx'))
 const Regulator = lazy(() => import('./pages/Regulator.jsx'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail.jsx'))
 const Support = lazy(() => import('./pages/Support.jsx'))
+const VerifyDocument = lazy(() => import('./pages/VerifyDocument.jsx'))
 const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
 const InvestorDashboard = lazy(() => import('./pages/InvestorDashboard.jsx'))
 const Insights = lazy(() => import('./pages/Insights.jsx'))
@@ -452,7 +453,7 @@ function AppContent({ user, setUser }) {
   // Clerk. Leaving it off this list made it wait on the Clerk SDK, so when
   // Clerk never reported ready the page sat empty forever instead of showing
   // its own unlock card.
-  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support', '/umi', '/insights']
+  const PUBLIC_PATHS = ['/', '/login', '/ledger', '/support', '/umi', '/insights', '/verify']
   const isPublicPath = PUBLIC_PATHS.includes(location.pathname)
 
   if (isClerkConfigured && !isLoaded && !isPublicPath) {
@@ -482,6 +483,7 @@ function AppContent({ user, setUser }) {
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/verify" element={<VerifyDocument />} />
           <Route path="/learn" element={<LearnIndex />} />
           <Route path="/learn/what-is-demat-2" element={<Demat2 />} />
           <Route path="/learn/what-is-atomic-dvp" element={<AtomicDvP />} />

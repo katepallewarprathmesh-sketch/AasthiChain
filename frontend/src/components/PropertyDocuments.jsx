@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
 
 // The document register for one property.
@@ -70,7 +71,8 @@ export default function PropertyDocuments({ assetId }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Documents</h3>
         <span style={{ fontSize: 11.5, color: '#6B7280' }}>
-          Addressed by IPFS CID · anchored to the ledger
+          Addressed by IPFS CID · anchored to the ledger ·{' '}
+          <Link to="/verify" style={{ color: '#1E3A5F', fontWeight: 600 }}>verify any document</Link>
         </span>
       </div>
 
