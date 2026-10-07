@@ -49,9 +49,25 @@ class ApiClient {
     }
 
     if (!res.ok) {
-      const error = new Error(data.message || data.error || `HTTP ${res.status}`)
+      // A 404 shaped like {error:'ERR_NOT_FOUND', path:'/umi/...'} is the
+      // settlement rail saying it has never heard of that route. In practice
+      // that means the gateway this deployment points at is an older build
+      // than the frontend, not that anything is broken. Say so, because
+      // "ERR_NOT_FOUND" sends people looking for a bug that is not there.
+      const railMissingRoute =
+        res.status === 404 &&
+        data.error === 'ERR_NOT_FOUND' &&
+        typeof data.path === 'string' &&
+        data.path.startsWith('/umi/')
+
+      const error = new Error(
+        railMissingRoute
+          ? `the settlement rail behind this deployment does not serve ${data.path} yet — it is running an older build than this page expects`
+          : (data.message || data.error || `HTTP ${res.status}`)
+      )
       error.data = data
       error.status = res.status
+      error.staleGateway = railMissingRoute
       throw error
     }
     
