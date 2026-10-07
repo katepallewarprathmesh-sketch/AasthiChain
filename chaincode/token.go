@@ -263,9 +263,6 @@ func (c *TokenContract) GetTransferHistory(ctx contractapi.TransactionContextInt
 	}
 
 	var results []*TransferRecord
-	var responseMetadata *struct {
-		Bookmark string
-	}
 
 	// Use Fabric's native pagination for regulator full scan
 	if assetId == "" && ownerId == "" {
@@ -274,7 +271,6 @@ func (c *TokenContract) GetTransferHistory(ctx contractapi.TransactionContextInt
 			return nil, err
 		}
 		defer iterator.Close()
-		responseMetadata = &struct{ Bookmark string }{Bookmark: meta.Bookmark}
 		for iterator.HasNext() {
 			kv, _ := iterator.Next()
 			var tr TransferRecord

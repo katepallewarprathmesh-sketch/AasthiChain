@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-chaincode-go/shimtest"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	"github.com/stretchr/testify/assert"
@@ -194,15 +193,15 @@ func TestCompositeKeys(t *testing.T) {
 
 func TestPropertyAssetSerialization(t *testing.T) {
 	asset := PropertyAsset{
-		AssetID:  "PROP-test",
-		DocType:  DocTypeProperty,
-		Title:    "Test Property",
-		Location: Location{State: "MH", City: "Pune", Pincode: "411001"},
-		ValuationINR: 5000000,
-		TotalTokens: 10000,
-		DocumentHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		AssetID:                   "PROP-test",
+		DocType:                   DocTypeProperty,
+		Title:                     "Test Property",
+		Location:                  Location{State: "MH", City: "Pune", Pincode: "411001"},
+		ValuationINR:              5000000,
+		TotalTokens:               10000,
+		DocumentHash:              "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RegistrarValidationStatus: ValidationValidated,
-		Status: PropertyTokenized,
+		Status:                    PropertyTokenized,
 	}
 
 	b, err := json.Marshal(asset)

@@ -36,7 +36,12 @@ func NewLiveFabricClient() (*LiveFabricClient, error) {
 	keyPath := getEnv("FABRIC_KEY_PATH", "../network/crypto-config/peerOrganizations/originator.aasthichain.com/users/Admin@originator.aasthichain.com/msp/keystore/")
 	tlsCertPath := getEnv("FABRIC_TLS_CERT_PATH", "../network/crypto-config/peerOrganizations/originator.aasthichain.com/peers/peer0.originator.aasthichain.com/tls/ca.crt")
 	peerEndpoint := getEnv("FABRIC_PEER_ENDPOINT", "localhost:7051")
+	// Read but not yet applied: gatewayPeer is the TLS server-name override,
+	// and this client still dials with insecure credentials (see below, where
+	// tlsCert is loaded and likewise discarded). Keep the knob so the env
+	// contract does not change when TLS is wired up.
 	gatewayPeer := getEnv("FABRIC_GATEWAY_PEER", "peer0.originator.aasthichain")
+	_ = gatewayPeer
 	channelName := getEnv("FABRIC_CHANNEL", "property-channel")
 	chaincodeName := getEnv("FABRIC_CHAINCODE", "aasthichain")
 
