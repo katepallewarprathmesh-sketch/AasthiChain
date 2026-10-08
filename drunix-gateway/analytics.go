@@ -499,6 +499,18 @@ type DayVolume struct {
 	Failed    int     `json:"failed"`
 }
 
+// WindowStats is the same settled/failed count restricted to the reporting
+// window. Settled and Failed on RailAnalytics are lifetime totals, so a single
+// bad afternoon anchors the headline rate forever: 105 of 114 failures on this
+// rail came from one test session, all of them the rail correctly refusing
+// unfunded instructions. A reader deserves to see both numbers.
+type WindowStats struct {
+	Days           int     `json:"days"`
+	Settled        int64   `json:"settled"`
+	Failed         int64   `json:"failed"`
+	SuccessRatePct float64 `json:"successRatePct"`
+}
+
 // RailAnalytics is the market-wide view.
 type RailAnalytics struct {
 	Settled          int64            `json:"settled"`
@@ -512,6 +524,7 @@ type RailAnalytics struct {
 	AssetsTraded     int              `json:"assetsTraded"`
 	TopAssets        []AssetActivity  `json:"topAssets"`
 	Daily            []DayVolume      `json:"daily"`
+	Recent           WindowStats      `json:"recent"`
 	Note             string           `json:"note"`
 }
 
@@ -528,7 +541,7 @@ func (r *UMIRail) RailAnalytics(days int) RailAnalytics {
 		FailuresByReason: map[string]int64{},
 		TopAssets:        []AssetActivity{},
 		Daily:            []DayVolume{},
-		Note:             "Settled, non-dry-run instructions only. Volume is the cash leg actually moved.",
+		Note:             "Settled, non-dry-run instructions only. Volume is the cash leg actually moved. settled/failed are lifetime totals; recent covers the reporting window.",
 	}
 
 	type agg struct {
@@ -565,8 +578,12 @@ func (r *UMIRail) RailAnalytics(days int) RailAnalytics {
 				byDay[day] = &DayVolume{Date: day}
 			}
 		}
+		inWindow := when.After(cutoff)
 		if si.Status == UMIStatusFailed {
 			out.Failed++
+			if inWindow {
+				out.Recent.Failed++
+			}
 			if si.FailureReason != "" {
 				out.FailuresByReason[si.FailureReason]++
 			}
@@ -579,6 +596,9 @@ func (r *UMIRail) RailAnalytics(days int) RailAnalytics {
 			continue
 		}
 		out.Settled++
+		if inWindow {
+			out.Recent.Settled++
+		}
 		out.TokensTraded += si.Tokens
 		participants[si.Buyer] = true
 		participants[si.Seller] = true
@@ -639,6 +659,10 @@ func (r *UMIRail) RailAnalytics(days int) RailAnalytics {
 	}
 	if total := out.Settled + out.Failed; total > 0 {
 		out.SuccessRatePct = round2(float64(out.Settled) / float64(total) * 100)
+	}
+	out.Recent.Days = days
+	if total := out.Recent.Settled + out.Recent.Failed; total > 0 {
+		out.Recent.SuccessRatePct = round2(float64(out.Recent.Settled) / float64(total) * 100)
 	}
 
 	dates := make([]string, 0, len(byDay))
