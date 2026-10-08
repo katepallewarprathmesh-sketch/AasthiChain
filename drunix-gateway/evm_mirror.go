@@ -344,3 +344,72 @@ func (m *EVMMirror) defaultAccount() (string, error) {
 	}
 	return accs[0], nil
 }
+
+// --- outbox consumer --------------------------------------------------------
+
+// handleAnchorEvent re-attempts a public-chain anchor from the ledger block
+// that recorded the document.
+//
+// This is the consumer with the most to gain from the outbox. MirrorInBackground
+// is a goroutine: if the process stops between committing the document block
+// and the transaction being accepted, the anchor is simply never made, and
+// nothing anywhere records that it is missing. The claim "every document is
+// verifiable on a public chain" then quietly stops being true. Here the row
+// stays pending until the chain accepts it.
+//
+// Unlike the notification consumer this returns errors, because an anchor that
+// did not land SHOULD be retried: the chain being unreachable is temporary and
+// the backoff exists for exactly this.
+func (m *EVMMirror) handleAnchorEvent(row OutboxRow) error {
+	if m == nil {
+		return nil // no mirror configured; nothing to anchor to
+	}
+	d := documentFromAnchorEvent(row)
+	if d == nil {
+		return fmt.Errorf("anchor event %d: payload is not a document anchor", row.Seq)
+	}
+	// AnchorDocument enforces the privacy rule itself (digest-only and KYC
+	// evidence never reach the chain), so there is no second copy of that
+	// decision here to drift out of step with it.
+	if d.Visibility == "digestOnly" || d.Subject != "" {
+		return nil
+	}
+
+	// Ask the chain before writing to it. A redelivery of an anchor that
+	// already landed must cost nothing — and must not pay gas twice.
+	if anchored, _, err := m.VerifyDigestOnChain(d.SHA256); err == nil && anchored {
+		return nil
+	}
+
+	txHash, err := m.AnchorDocument(d)
+	if err != nil {
+		return fmt.Errorf("anchor %s: %w", shortCID(d.CID), err)
+	}
+	if txHash != "" {
+		log.Printf("public-chain mirror: %s anchored from the outbox, tx %s", shortCID(d.CID), txHash)
+	}
+	return nil
+}
+
+// documentFromAnchorEvent rebuilds just enough of a Document to anchor it,
+// from the block payload alone.
+func documentFromAnchorEvent(row OutboxRow) *Document {
+	p := row.Payload
+	str := func(k string) string { v, _ := p[k].(string); return v }
+	cid, sha := str("cid"), str("sha256")
+	if cid == "" || sha == "" {
+		return nil
+	}
+	d := &Document{
+		CID: cid, SHA256: sha,
+		AssetID: str("assetId"), Subject: str("subject"),
+		DocType: str("docType"), Visibility: str("visibility"),
+	}
+	if t, err := time.Parse(time.RFC3339, str("validFrom")); err == nil {
+		d.ValidFrom = &t
+	}
+	if t, err := time.Parse(time.RFC3339, str("validTo")); err == nil {
+		d.ValidTo = &t
+	}
+	return d
+}

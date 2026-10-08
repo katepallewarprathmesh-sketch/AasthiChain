@@ -79,6 +79,11 @@ func (s *Server) StartOutboxRelay(ctx context.Context) *OutboxRelay {
 			relay.Handle(topic, s.UMI.handleNotificationEvent)
 		}
 	}
+	// Public-chain anchoring: unlike notifications this one genuinely retries,
+	// because an anchor that never landed leaves a verifiability claim unmet.
+	if s.Docs != nil && s.Docs.evm != nil {
+		relay.Handle(TopicDocAnchored, s.Docs.evm.handleAnchorEvent)
+	}
 	relay.Start(ctx)
 	log.Printf("outbox relay: started — block consequences are delivered from durable storage")
 	return relay

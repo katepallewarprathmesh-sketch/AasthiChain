@@ -40,6 +40,7 @@ const (
 	TopicUMISettled   = "umi.settled"
 	TopicUMIFailed    = "umi.failed"
 	TopicUMIServicing = "umi.servicing.paid"
+	TopicDocAnchored  = "umi.document.anchored"
 )
 
 // blockEvents returns the outbox rows a committed block implies.
@@ -68,6 +69,8 @@ func blockEvents(b *DrunixBlock) []OutboxEvent {
 		topic = TopicUMIFailed
 	case BlockUMIServicingPaid:
 		topic = TopicUMIServicing
+	case BlockDocAnchored:
+		topic = TopicDocAnchored
 	default:
 		return evs
 	}

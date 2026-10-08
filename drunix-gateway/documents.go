@@ -350,6 +350,8 @@ func (dr *DocumentRegistry) Anchor(req AnchorRequest) (*Document, *DrunixBlock, 
 		"visibility":  visibility,
 		"retrievable": visibility != DocDigestOnly,
 		"supersedes":  req.Supersedes,
+		"validFrom":   rfc3339OrEmpty(req.ValidFrom),
+		"validTo":     rfc3339OrEmpty(req.ValidTo),
 		"contract":    "aasthi.umi-documents-v1",
 		"note":        "Content-addressed evidence. The CID is derived from the bytes, so the document cannot be altered without changing its name.",
 	})
@@ -808,6 +810,16 @@ func (dr *DocumentRegistry) Stats() DocumentStats {
 		}
 	}
 	return st
+}
+
+// rfc3339OrEmpty renders an optional validity bound for the ledger block.
+// The anchor's validity window has to be ON the block: without it a mirror
+// rebuilt from the ledger would anchor a different window than the original.
+func rfc3339OrEmpty(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // commit appends to the ledger, tolerating a nil chain.

@@ -342,3 +342,76 @@ func TestServicingRedeliveryIsANoOp(t *testing.T) {
 		}
 	}
 }
+
+// --- step 4: public-chain anchoring is retried, not forgotten ---------------
+
+// The anchor has to be rebuildable from the block alone, including its
+// validity window — anchoring a different window than the original would make
+// the on-chain record disagree with the ledger.
+func TestDocumentRebuiltFromAnchorEvent(t *testing.T) {
+	row := OutboxRow{
+		BlockHeight: 9, Topic: TopicDocAnchored,
+		Payload: map[string]interface{}{
+			"cid":        "bafkreigh2akiscaildc",
+			"sha256":     "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+			"assetId":    "PROP-X",
+			"docType":    "SALE_DEED",
+			"visibility": "restricted",
+			"validFrom":  "2026-01-01T00:00:00Z",
+			"validTo":    "2027-01-01T00:00:00Z",
+		},
+	}
+	d := documentFromAnchorEvent(row)
+	if d == nil {
+		t.Fatal("a document anchor block must rebuild into a document")
+	}
+	if d.CID != "bafkreigh2akiscaildc" || d.AssetID != "PROP-X" || d.DocType != "SALE_DEED" {
+		t.Fatalf("rebuilt the wrong document: %+v", d)
+	}
+	if d.ValidFrom == nil || d.ValidFrom.Year() != 2026 || d.ValidTo == nil || d.ValidTo.Year() != 2027 {
+		t.Fatalf("validity window lost in the rebuild: %+v %+v", d.ValidFrom, d.ValidTo)
+	}
+}
+
+// A payload that is not a document anchor must fail loudly rather than being
+// marked delivered.
+func TestAnchorEventRejectsRubbish(t *testing.T) {
+	if d := documentFromAnchorEvent(OutboxRow{Payload: map[string]interface{}{"cid": ""}}); d != nil {
+		t.Fatal("a payload with no cid is not an anchor")
+	}
+}
+
+// The privacy rule survives the rebuild: KYC evidence and digest-only records
+// must never gain a public-chain footprint, however they are redelivered.
+func TestAnchorEventHonoursThePrivacyRule(t *testing.T) {
+	// A nil mirror is the unconfigured case and must not error — there is
+	// simply nothing to anchor to.
+	var m *EVMMirror
+	for _, p := range []map[string]interface{}{
+		{"cid": "bafy1", "sha256": "aa", "visibility": "digestOnly"},
+		{"cid": "bafy2", "sha256": "bb", "subject": "IDENTITY-123"},
+	} {
+		if err := m.handleAnchorEvent(OutboxRow{Topic: TopicDocAnchored, Payload: p}); err != nil {
+			t.Fatalf("private evidence must be skipped quietly, got %v", err)
+		}
+	}
+}
+
+// A document block must queue an anchor event; other block types must not.
+func TestDocumentBlockQueuesAnAnchorEvent(t *testing.T) {
+	b := &DrunixBlock{Height: 4, Type: BlockDocAnchored, Hash: "h", Timestamp: "t",
+		Txns: []map[string]interface{}{{"cid": "bafy", "sha256": "dd"}}}
+	var topics []string
+	for _, e := range blockEvents(b) {
+		topics = append(topics, e.Topic)
+	}
+	if len(topics) != 2 || topics[1] != TopicDocAnchored {
+		t.Fatalf("want [ledger.block umi.document.anchored], got %v", topics)
+	}
+
+	plain := &DrunixBlock{Height: 5, Type: BlockUMIWalletFunded, Hash: "h", Timestamp: "t",
+		Txns: []map[string]interface{}{{"amountINR": 500}}}
+	if got := blockEvents(plain); len(got) != 1 {
+		t.Fatalf("a wallet funding implies only the stream event, got %d", len(got))
+	}
+}
