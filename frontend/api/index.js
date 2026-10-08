@@ -766,6 +766,63 @@ function drunixAppend(type, txns) {
 if (drunixChain.length === 0) {
   drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
+// Anchor a document the registry generates itself (a certificate) in the
+// content-addressed register, so a party can hold it, hash it and check it
+// later without asking us for anything.
+async function certifyOnRail({ assetId, subject, docType, title, parties, visibility, body }) {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return { ok: false, error: 'UMI_GATEWAY_URL not set' };
+  try {
+    const content = JSON.stringify(body, null, 2) + '\n';
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(base + '/umi/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId, subject, docType, title,
+          issuer: 'AasthiChain registry',
+          submittedBy: (parties && parties[0]) || 'system',
+          mediaType: 'application/json',
+          visibility: visibility || 'public',
+          parties,
+          content,
+        }),
+        signal: ctrl.signal,
+      });
+      return { ok: r.ok, status: r.status };
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// Anchor a document we do NOT hold — only its SHA-256. The deed itself never
+// leaves the owner's hands; the register stores the digest and derives a CID
+// from it, which is enough for anyone to check their copy against.
+async function anchorDigestOnRail({ assetId, subject, docType, title, issuer, submittedBy, sha256 }) {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return { ok: false, error: 'UMI_GATEWAY_URL not set' };
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(base + '/umi/documents/digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId, subject, docType, title, issuer, submittedBy, sha256 }),
+        signal: ctrl.signal,
+      });
+      const body = await r.json().catch(() => null);
+      // 409 means it is already anchored, which is a success for our purposes.
+      return { ok: r.ok || r.status === 409, status: r.status, body };
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // Read the content-addressed document register off the UMI rail. null means
 // "could not ask", which callers must report as unproven rather than as an
 // absence of documents — very different claims to make about a title deed.
@@ -3025,6 +3082,19 @@ export default async function handler(req, res) {
           documentHash, registrarValidationStatus: 'PENDING', status: 'DRAFT',
           createdAt: now, updatedAt: now, version: 1
         };
+        // Mirror the deed fingerprint into the content-addressed register, so
+        // the listing is verifiable by CID from the moment it exists. The deed
+        // itself is never uploaded — only its digest. Not awaited: the
+        // registration is already final.
+        anchorDigestOnRail({
+          assetId,
+          docType: 'TITLE_DEED',
+          title: `Title deed — ${title}`,
+          issuer: 'self-declared at registration',
+          submittedBy: user.identityId,
+          sha256: documentHash,
+        }).catch(() => {});
+
         const resp = { assetId, status: 'DRAFT', message: 'Property registered', title, valuationINR, location: { state, city, pincode }, originatorId: user.identityId, validationStatus: 'PENDING', tokenPrice: 0 };
         if (idemKey) idempotency[idemKey] = resp;
         globalThis._aasthi_properties = properties;
@@ -3165,6 +3235,32 @@ export default async function handler(req, res) {
           note: prop.validationNote,
           endorsedBy: ['RegistrarMSP.peer'],
         }]);
+
+        // Turn the registrar's decision into a document a buyer can hold,
+        // hash and check, rather than a status field they have to trust.
+        certifyOnRail({
+          assetId: id,
+          docType: 'VALIDATION_CERTIFICATE',
+          title: `Title validation — ${id}`,
+          parties: [prop.validatedBy, prop.originatorId],
+          visibility: 'public', // a buyer must be able to read this without asking
+          body: {
+            document: 'Title validation certificate',
+            assetId: id,
+            decision,
+            deedSha256: prop.documentHash,
+            owner: prop.originatorId,
+            validatedBy: prop.validatedBy,
+            validatorMsp: prop.validatedByMsp,
+            validatedAt: prop.validatedAt,
+            note: prop.validationNote || '',
+            ledgerBlockHeight: validationBlock && validationBlock.height,
+            ledgerBlockHash: validationBlock && validationBlock.hash,
+            independence: user.identityId !== prop.originatorId
+              ? 'Validator is not the owner.'
+              : 'SELF-VALIDATED — not independent.',
+          },
+        }).catch(() => {});
         return res.json({ assetId: id, validationStatus: decision, title: prop.title, validatedBy: prop.validatedBy, validatedByMsp: prop.validatedByMsp, validatedAt: prop.validatedAt, validationNote: prop.validationNote, blockHeight: validationBlock && validationBlock.height, blockHash: validationBlock && validationBlock.hash, fabricMode: 'mock-persisted', message: `Property ${id.slice(0,16)}... is now ${decision} — ${decision==='VALIDATED' ? 'Ready to mint! Switch to Originator role to mint.' : 'REJECTED — reason shown verbatim per §3.2'}` });
       } catch (e) {
         return res.status(500).json({ error: e.message });
@@ -3236,6 +3332,33 @@ export default async function handler(req, res) {
         // Issue the same opening position on the settlement rail, so the
         // property is tradeable the moment it is listed.
         const rail = await seedRailPosition(id, prop.originatorId, totalTokens);
+
+        // Tokenisation is the moment a building becomes a security. That
+        // deserves an instrument document stating exactly what was issued,
+        // against which deed, on whose validation.
+        certifyOnRail({
+          assetId: id,
+          docType: 'TOKENISATION_CERTIFICATE',
+          title: `Tokenisation — ${id}`,
+          parties: [prop.originatorId],
+          visibility: 'public',
+          body: {
+            document: 'Tokenisation certificate',
+            assetId: id,
+            propertyTitle: prop.title,
+            issuer: prop.originatorId,
+            totalTokens,
+            valuationINR: prop.valuationINR,
+            deedSha256: prop.documentHash,
+            validatedBy: prop.validatedBy || null,
+            validatedAt: prop.validatedAt || null,
+            location: prop.location,
+            endorsement: "AND('OriginatorMSP.peer','RegistrarMSP.peer')",
+            ledgerBlockHeight: drunixChain.length - 1,
+            note: 'Issued supply is fixed at this figure. No settlement may push holdings above it.',
+          },
+        }).catch(() => {});
+
         const resp = { assetId: id, totalTokens, status: 'TOKENIZED', fabricMode: 'mock-persisted-fixed', blockHeight: drunixChain.length - 1, validationStatus: prop.registrarValidationStatus, autoCreated: !!prop.autoCreated, tokenPrice: prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0, title: prop.title, rail };
         if (idemKey) idempotency[idemKey] = resp;
         globalThis._aasthi_properties = properties;
@@ -4244,11 +4367,28 @@ export default async function handler(req, res) {
       }
       const suffix = path.replace(/^\/api\/umi/, '') || '/config';
       try {
+        // Tell the rail who is asking. It decides what a given identity may
+        // read — restricted documents are only served to their parties — and
+        // without this every caller arrived anonymous.
+        const fwd = { 'Content-Type': 'application/json' };
+        if (user && user.identityId && req.headers.authorization) {
+          fwd['X-Identity-Id'] = user.identityId;
+          fwd['X-Identity-Role'] = user.role || '';
+        }
         const upstream = await fetch(base.replace(/\/$/, '') + '/umi' + (suffix.startsWith('/') ? suffix : '/' + suffix) + (url.search || ''), {
           method,
-          headers: { 'Content-Type': 'application/json' },
+          headers: fwd,
           body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(req.body || {})
         });
+
+        // Pass the integrity headers through. They are what let a browser or
+        // curl re-hash the bytes and confirm they match the CID it asked for;
+        // dropping them turns a content-addressed fetch into an ordinary one
+        // the caller has to take on trust.
+        for (const h of ['x-document-cid', 'x-document-sha256', 'x-document-status', 'cache-control']) {
+          const v = upstream.headers.get(h);
+          if (v) res.setHeader(h, v);
+        }
         const text = await upstream.text();
         // The Go gateway answers unknown routes with Go's default plain-text
         // "404 page not found". Forwarding that verbatim under a JSON content
