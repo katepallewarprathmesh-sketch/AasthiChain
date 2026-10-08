@@ -28,6 +28,11 @@ export default function SecondaryMarket({ user }) {
   const me = (user && user.identityId) || ''
   const [offers, setOffers] = useState([])
   const [flash, setFlash] = useState(null)
+  // Kept apart from `flash` on purpose. `flash` carries the result of something
+  // the user did ("offer created"), and run() refreshes the book straight after
+  // setting it — so if loading shared that slot, a successful reload would wipe
+  // the confirmation the user just earned.
+  const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState('')
 
@@ -37,8 +42,12 @@ export default function SecondaryMarket({ user }) {
     try {
       const d = await api.umiOffers(filter || undefined)
       setOffers((d && d.offers) || [])
+      // Clear it. A hosted rail that was merely asleep answers fine on the
+      // retry, and leaving the old warning up next to a freshly loaded book
+      // told the user the page was broken when it had already recovered.
+      setLoadError('')
     } catch (e) {
-      setFlash({ kind: 'err', text: 'Could not load the book: ' + e.message })
+      setLoadError('Could not load the book: ' + e.message)
     }
   }, [filter])
 
@@ -89,6 +98,24 @@ export default function SecondaryMarket({ user }) {
         does. An offer here is only an intention — it holds nothing until someone takes it.
       </p>
 
+      {loadError && (
+        <div style={{
+          margin: '12px 0', padding: '10px 12px', borderRadius: 8, fontSize: 13, lineHeight: 1.6,
+          background: '#FEF2F2', border: '1px solid #FECACA', color: C.bad,
+        }}>
+          {loadError}
+          <button
+            type="button"
+            onClick={load}
+            style={{
+              marginLeft: 10, padding: '4px 12px', borderRadius: 6, border: '1px solid #FECACA',
+              background: 'white', color: C.bad, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+            }}>
+            Try again
+          </button>
+        </div>
+      )}
+
       {flash && (
         <div style={{
           margin: '14px 0', padding: '10px 14px', borderRadius: 10, fontSize: 13,
@@ -134,9 +161,14 @@ export default function SecondaryMarket({ user }) {
       </div>
 
       {offers.length === 0 ? (
+        // "Nothing is for sale" is a claim about the book. If the book could
+        // not be read, we are not entitled to make it — the error above says
+        // what is actually known.
+        loadError ? null : (
         <p style={{ fontSize: 13.5, color: C.mut }}>
           Nothing is for sale right now{filter ? ' for that asset' : ''}.
         </p>
+        )
       ) : offers.map(o => (
         <OfferRow key={o.offerId} offer={o} me={me} busy={busy}
           onTake={take} onCheck={check} onCancel={cancel} />
