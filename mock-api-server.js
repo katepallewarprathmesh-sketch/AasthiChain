@@ -2364,20 +2364,46 @@ app.get('/api/npci/utr/:utr', optionalAuth, (req, res) => {
   utrVerifyRespond(req, res, req.params.utr, pay, { utr: req.params.utr, paymentId: pay.paymentId, status: pay.status, amountINR: pay.amountINR, rrn: pay.rrn, upiTxnId: pay.upiTxnId, confirmedAt: pay.confirmedAt, releasedAt: pay.releasedAt, drunixTransferId: pay.drunixTransferId, payment: pay });
 });
 
+// UTRReconciliation.jsx reads summary/issues/recentWebhooks. This route used to
+// answer with a different vocabulary entirely (total/byStatus/reconciliationRate),
+// so the dashboard rendered zeros against the local server and real figures
+// against the deployed one — the opposite way round from the usual drift, and
+// the reason it went unnoticed: nobody checks a dev-only page for being wrong.
 app.get('/api/npci/reconcile', authMiddleware, (req, res) => {
   const all = Object.values(npciPayments);
-  const byStatus = {};
-  all.forEach(p => { byStatus[p.status] = (byStatus[p.status] || 0) + 1; });
-  const confirmed = all.filter(p => ['CONFIRMED', 'RELEASED'].includes(p.status));
-  const withUtr = confirmed.filter(p => p.utr);
+  const now = new Date();
+  const pendingWithoutUTR = all.filter(p => p.status === 'CONFIRMED' && !p.utr);
+  const amountMismatches = all.filter(p => p.status === 'FAILED_AMOUNT_MISMATCH');
+  const pendingTooLong = all.filter(p => p.status === 'PENDING' && (now - new Date(p.createdAt)) > 5 * 60 * 1000);
+  const failedProvider = all.filter(p => p.status === 'FAILED_PROVIDER');
+  const success = all.filter(p => ['CONFIRMED', 'RELEASED'].includes(p.status));
+  const totalVolume = success.reduce((sum, p) => sum + (p.amountINR || 0), 0);
+  const successRate = all.length ? (success.length / all.length * 100).toFixed(1) : 0;
+  const utrCount = Object.keys(utrIndex).length;
+  const paymentsWithUTR = all.filter(p => !!p.utr).length;
+  const ageMin = p => Math.floor((now - new Date(p.createdAt)) / 60000);
+
   res.json({
-    total: all.length,
-    byStatus,
-    confirmedCount: confirmed.length,
-    utrMatchedCount: withUtr.length,
-    unmatched: all.filter(p => ['CONFIRMED'].includes(p.status) && !p.utr).map(p => p.paymentId),
-    reconciliationRate: all.length ? Math.round((withUtr.length / Math.max(confirmed.length, 1)) * 100) : 100,
-    payments: all.slice(0, 20).map(p => ({ paymentId: p.paymentId, status: p.status, utr: p.utr, rrn: p.rrn, amountINR: p.amountINR, drunixTransferId: p.drunixTransferId }))
+    summary: {
+      totalPayments: all.length,
+      successCount: success.length,
+      pendingCount: all.filter(p => p.status === 'PENDING').length,
+      failedCount: all.filter(p => String(p.status).startsWith('FAILED')).length,
+      totalVolumeINR: totalVolume,
+      successRate: `${successRate}%`,
+      utrCoverage: `${paymentsWithUTR}/${all.length} payments have UTR (${utrCount} in index)`,
+      webhookCount: npciWebhooks.length,
+    },
+    issues: {
+      pendingWithoutUTR: pendingWithoutUTR.map(p => ({ paymentId: p.paymentId, assetId: p.assetId, amountINR: p.amountINR, createdAt: p.createdAt, ageMin: ageMin(p) })),
+      amountMismatches: amountMismatches.map(p => ({ paymentId: p.paymentId, expected: p.amountINR, failureReason: p.failureReason, createdAt: p.createdAt })),
+      pendingTooLong: pendingTooLong.map(p => ({ paymentId: p.paymentId, assetId: p.assetId, amountINR: p.amountINR, createdAt: p.createdAt, ageMin: ageMin(p) })),
+      failedProvider: failedProvider.map(p => ({ paymentId: p.paymentId, failureReason: p.failureReason, provider: p.provider })),
+    },
+    // addWebhookAudit() unshifts here, so the newest are already at the front.
+    recentWebhooks: npciWebhooks.slice(0, 20),
+    utrIndexSample: Object.entries(utrIndex).slice(-10).map(([utr, pid]) => ({ utr, paymentId: pid })),
+    note: 'For Regulator — per §3.5 monitoring, freeze if needed. UTR reconciliation ensures bank statement matches our ledger — no partial, atomic DvP.',
   });
 });
 
