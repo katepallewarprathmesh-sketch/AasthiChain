@@ -14,10 +14,13 @@ type fakeBlockStore struct {
 	rows     map[int64]DrunixBlock // height -> block, write-once
 	order    []int64
 	failNext bool
+	// outbox mirrors umi_outbox: keyed by (topic, dedupe_key) for the UNIQUE
+	// constraint, and only ever written in the same call as the block.
+	outbox map[string]OutboxEvent
 }
 
 func newFakeBlockStore() *fakeBlockStore {
-	return &fakeBlockStore{rows: map[int64]DrunixBlock{}}
+	return &fakeBlockStore{rows: map[int64]DrunixBlock{}, outbox: map[string]OutboxEvent{}}
 }
 
 func (f *fakeBlockStore) InitBlocks(ctx context.Context) error { return nil }
@@ -33,9 +36,11 @@ func (f *fakeBlockStore) LoadBlocks(ctx context.Context) ([]*DrunixBlock, error)
 	return out, nil
 }
 
-func (f *fakeBlockStore) AppendBlock(b *DrunixBlock) error {
+func (f *fakeBlockStore) AppendBlockWithEvents(b *DrunixBlock, evs []OutboxEvent) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// A failure must leave neither the block nor its events behind, which is
+	// what the real implementation gets from wrapping both in one transaction.
 	if f.failNext {
 		return errors.New("simulated storage outage")
 	}
@@ -44,7 +49,20 @@ func (f *fakeBlockStore) AppendBlock(b *DrunixBlock) error {
 	}
 	f.rows[b.Height] = *b
 	f.order = append(f.order, b.Height)
+	for _, e := range evs {
+		key := e.Topic + "|" + e.DedupeKey
+		if _, dup := f.outbox[key]; dup {
+			continue // UNIQUE (topic, dedupe_key)
+		}
+		f.outbox[key] = e
+	}
 	return nil
+}
+
+func (f *fakeBlockStore) pending() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.outbox)
 }
 
 func (f *fakeBlockStore) BlockStoreMode() string { return "fake-durable" }
@@ -102,7 +120,7 @@ func TestStoredBlocksAreNeverOverwritten(t *testing.T) {
 	forged := &DrunixBlock{Height: orig.Height, Type: "FORGED", Timestamp: orig.Timestamp,
 		TxnsRoot: orig.TxnsRoot, PrevHash: orig.PrevHash, Hash: "deadbeef",
 		Txns: []map[string]interface{}{{"cashINR": 999999}}}
-	if err := store.AppendBlock(forged); err != nil {
+	if err := store.AppendBlockWithEvents(forged, nil); err != nil {
 		t.Fatalf("append returned error: %v", err)
 	}
 
@@ -169,5 +187,90 @@ func TestChainWithoutStoreIsUnchanged(t *testing.T) {
 	d := c.Durability()
 	if d["durable"] != false {
 		t.Errorf("durability should report in-memory: %+v", d)
+	}
+}
+
+// --- outbox, step 1: the atomic write (docs/EVENT-OUTBOX.md §7 tests 1, 2, 6)
+
+// A block and the events it implies are one fact. If the write fails, the
+// store must be left with neither — not a block whose consequences were lost.
+func TestOutboxBlockAndEventsCommitTogether(t *testing.T) {
+	store := newFakeBlockStore()
+	c, _ := NewChainWithStore(store)
+
+	if store.pending() != 1 {
+		t.Fatalf("genesis should have produced one outbox row, got %d", store.pending())
+	}
+
+	c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI758681"}})
+	if got := store.pending(); got != 2 {
+		t.Fatalf("after one settlement want 2 outbox rows, got %d", got)
+	}
+
+	// Now the storage layer refuses the write.
+	store.failNext = true
+	before := store.pending()
+	c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI999999"}})
+	if got := store.pending(); got != before {
+		t.Fatalf("a failed append must not leave an event behind: %d -> %d", before, got)
+	}
+	blocks, _ := store.LoadBlocks(context.Background())
+	for _, b := range blocks {
+		for _, txn := range b.Txns {
+			if txn["isin"] == "AASTHI999999" {
+				t.Fatal("a failed append must not leave a block behind either")
+			}
+		}
+	}
+}
+
+// The dedupe key is derived from the block height, so replaying the same block
+// cannot produce a second notification. This is what makes an at-least-once
+// relay safe to build on top.
+func TestOutboxDedupeKeyIsStable(t *testing.T) {
+	b := &DrunixBlock{Height: 7, Type: BlockUMIDvPSettled, Hash: "abc", Timestamp: "t"}
+	first := blockEvents(b)
+	second := blockEvents(b)
+	if len(first) != 1 || first[0].DedupeKey != second[0].DedupeKey {
+		t.Fatalf("dedupe key must be derived from the fact, got %q then %q",
+			first[0].DedupeKey, second[0].DedupeKey)
+	}
+	if first[0].DedupeKey != "ledger.block:7" {
+		t.Fatalf("unexpected dedupe key %q", first[0].DedupeKey)
+	}
+
+	store := newFakeBlockStore()
+	if err := store.AppendBlockWithEvents(b, first); err != nil {
+		t.Fatal(err)
+	}
+	// Same height replayed: ON CONFLICT DO NOTHING on both tables.
+	if err := store.AppendBlockWithEvents(b, second); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.pending(); got != 1 {
+		t.Fatalf("replaying a block must not duplicate its events, got %d", got)
+	}
+}
+
+// No store configured is the default everywhere (local runs, every test, the
+// demo instance today). That path must be untouched by any of this.
+func TestOutboxAbsentWithoutStore(t *testing.T) {
+	c := NewChain()
+	hub := newEventHub()
+	c.Watch(hub)
+	id, ch := hub.subscribe()
+	defer hub.unsubscribe(id)
+
+	b := c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI111111"}})
+	if b == nil {
+		t.Fatal("append must still work with no durable store")
+	}
+	select {
+	case ev := <-ch:
+		if ev.Height != b.Height {
+			t.Fatalf("subscriber got height %d, want %d", ev.Height, b.Height)
+		}
+	default:
+		t.Fatal("live subscribers must still be notified with no store configured")
 	}
 }

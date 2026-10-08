@@ -13,11 +13,15 @@ import (
 // A blockchain whose blocks vanish when the process restarts is not a
 // blockchain — it is a log. The in-memory DrunixChain gives us the hash
 // linkage; this interface gives us the permanence. Note what is deliberately
-// absent: there is no Update and no Delete. The only write is AppendBlock.
+// absent: there is no Update and no Delete. The only write is an append.
+//
+// AppendBlockWithEvents takes the block together with the outbox rows it
+// implies so an implementation can commit both atomically (see outbox.go).
+// Passing no events is valid and means "this block has no consequences yet".
 type BlockStore interface {
 	InitBlocks(ctx context.Context) error
 	LoadBlocks(ctx context.Context) ([]*DrunixBlock, error)
-	AppendBlock(b *DrunixBlock) error
+	AppendBlockWithEvents(b *DrunixBlock, evs []OutboxEvent) error
 	BlockStoreMode() string
 }
 
@@ -70,20 +74,10 @@ func (s *PostgresUMIStore) LoadBlocks(ctx context.Context) ([]*DrunixBlock, erro
 	return blocks, rows.Err()
 }
 
-// AppendBlock writes one block. ON CONFLICT DO NOTHING makes it idempotent,
-// never destructive: a height that already exists is left exactly as committed.
+// AppendBlock writes one block with no outbox rows. Kept for callers that have
+// no consequences to record; the atomic path lives in outbox.go.
 func (s *PostgresUMIStore) AppendBlock(b *DrunixBlock) error {
-	raw, err := json.Marshal(b.Txns)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO umi_block (height, block_type, ts, txns_root, prev_hash, hash, contract, txns)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (height) DO NOTHING`,
-		b.Height, b.Type, b.Timestamp, b.TxnsRoot, b.PrevHash, b.Hash, b.Contract, raw)
-	return s.note(err)
+	return s.AppendBlockWithEvents(b, nil)
 }
 
 // BlockStoreMode labels the durable chain backend for /drunix/ledger/status.
@@ -108,6 +102,16 @@ func NewChainWithStore(store BlockStore) (*DrunixChain, ChainVerification) {
 		log.Printf("Drunix chain: durable block store unavailable (%v) — chain is in-memory for this run", err)
 		return NewChain(), ChainVerification{Valid: true, Blocks: 1}
 	}
+	// The outbox is optional: a store that does not implement it still gets a
+	// durable chain, just without the atomic-consequence guarantee.
+	if ob, ok := store.(interface {
+		InitOutbox(ctx context.Context) error
+	}); ok {
+		if err := ob.InitOutbox(ctx); err != nil {
+			log.Printf("Drunix chain: outbox table unavailable (%v) — block consequences are best-effort this run", err)
+		}
+	}
+
 	blocks, err := store.LoadBlocks(ctx)
 	if err != nil {
 		log.Printf("Drunix chain: could not replay stored blocks (%v) — chain is in-memory for this run", err)

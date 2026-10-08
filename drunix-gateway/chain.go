@@ -150,7 +150,7 @@ func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *D
 		c.hub.publish(LedgerEvent{Height: b.Height, Type: b.Type, Hash: b.Hash, Timestamp: b.Timestamp})
 	}
 	if c.store != nil {
-		if err := c.store.AppendBlock(b); err != nil {
+		if err := c.store.AppendBlockWithEvents(b, blockEvents(b)); err != nil {
 			// The block is already committed in memory and returned to the
 			// caller; durability is best-effort and must never fail a
 			// settlement. Loud log + surfaced in /drunix/ledger/status.
