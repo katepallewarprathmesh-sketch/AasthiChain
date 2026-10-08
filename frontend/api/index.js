@@ -280,6 +280,15 @@ async function initState() {
     if (!utrIndex || typeof utrIndex !== 'object') utrIndex = {};
     if (!npciWebhooks || !Array.isArray(npciWebhooks)) npciWebhooks = [];
 
+    // Properties restored from the shared store predate the createdAt field,
+    // and the ops queue reports how long each listing has been waiting. With
+    // no timestamp that age is null, so a registrar cannot tell a listing
+    // filed an hour ago from one filed last month. Fall back to the last
+    // update rather than inventing "now".
+    for (const prop of Object.values(properties)) {
+      if (prop && !prop.createdAt) prop.createdAt = prop.updatedAt || new Date();
+    }
+
     // If already initialized with properties, just ensure deterministic property + npciBalances exists and return
     if (Object.keys(properties).length > 0) {
       // Ensure deterministic property exists to prevent ERR_ASSET_NOT_FOUND across lambdas
@@ -757,6 +766,24 @@ function drunixAppend(type, txns) {
 if (drunixChain.length === 0) {
   drunixAppend('GENESIS', [{ config: 'aasthi-channel-init', channel: DRUNIX_CHAIN_ID, orgs: DRUNIX_ORGS, consensus: 'RAFT (simulated)', hashAlgo: 'SHA-512', network: 'NPCI Drunix fork · permissioned' }]);
 }
+// Read the content-addressed document register off the UMI rail. null means
+// "could not ask", which callers must report as unproven rather than as an
+// absence of documents — very different claims to make about a title deed.
+async function documentsForAsset(assetId) {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(base + '/umi/documents/' + encodeURIComponent(assetId), { signal: ctrl.signal });
+      if (!r.ok) return null;
+      const body = await r.json();
+      return Array.isArray(body.documents) ? body.documents : null;
+    } finally { clearTimeout(timer); }
+  } catch { return null; }
+}
+
 function drunixVerify() {
   for (let i = 0; i < drunixChain.length; i++) {
     const b = drunixChain[i];
@@ -3124,7 +3151,21 @@ export default async function handler(req, res) {
         properties[id] = prop;
         globalThis._aasthi_properties = properties;
         saveAllPersisted();
-        return res.json({ assetId: id, validationStatus: decision, title: prop.title, validatedBy: prop.validatedBy, validatedByMsp: prop.validatedByMsp, validatedAt: prop.validatedAt, validationNote: prop.validationNote, fabricMode: 'mock-persisted', message: `Property ${id.slice(0,16)}... is now ${decision} — ${decision==='VALIDATED' ? 'Ready to mint! Switch to Originator role to mint.' : 'REJECTED — reason shown verbatim per §3.2'}` });
+
+        // A registrar's decision is the most load-bearing claim on a listing.
+        // Until now it was only a field in memory, so /verify had nothing to
+        // cite as evidence.
+        const validationBlock = drunixAppend('PROPERTY_VALIDATED', [{
+          kind: 'validation',
+          assetId: id,
+          decision,
+          documentHash: prop.documentHash,
+          validatedBy: prop.validatedBy,
+          msp: prop.validatedByMsp,
+          note: prop.validationNote,
+          endorsedBy: ['RegistrarMSP.peer'],
+        }]);
+        return res.json({ assetId: id, validationStatus: decision, title: prop.title, validatedBy: prop.validatedBy, validatedByMsp: prop.validatedByMsp, validatedAt: prop.validatedAt, validationNote: prop.validationNote, blockHeight: validationBlock && validationBlock.height, blockHash: validationBlock && validationBlock.hash, fabricMode: 'mock-persisted', message: `Property ${id.slice(0,16)}... is now ${decision} — ${decision==='VALIDATED' ? 'Ready to mint! Switch to Originator role to mint.' : 'REJECTED — reason shown verbatim per §3.2'}` });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
@@ -3843,6 +3884,119 @@ export default async function handler(req, res) {
     }
 
     const verifyPropMatch = path.match(/^\/api\/properties\/([^\/]+)\/verify$/);
+
+    // GET is the public verification report — the page a buyer reads before
+    // sending money, deliberately open with no auth. POST on the same path is
+    // a different feature (the land-records lookup below), which is why this
+    // report was missing here: the URL was taken and nobody noticed.
+    if (verifyPropMatch && method === 'GET') {
+      const assetId = decodeURIComponent(verifyPropMatch[1]);
+      const prop = properties[assetId];
+      if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+
+      const evidence = drunixChain
+        .filter(b => (b.txns || []).some(t => t && t.assetId === prop.assetId))
+        .map(b => ({ height: b.height, type: b.type, timestamp: b.timestamp, hash: b.hash }));
+
+      const chain = drunixVerify();
+      const validated = prop.registrarValidationStatus === 'VALIDATED';
+      const independent = Boolean(prop.validatedBy) && prop.validatedBy !== prop.originatorId;
+      const dupes = Object.values(properties).filter(x => x.documentHash === prop.documentHash && x.assetId !== prop.assetId);
+
+      const registerDocs = await documentsForAsset(prop.assetId);
+      const registerActive = registerDocs ? registerDocs.filter(d => d.status === 'ACTIVE').length : 0;
+      const registerRevoked = registerDocs ? registerDocs.filter(d => d.status === 'REVOKED').length : 0;
+      const registerSuperseded = registerDocs ? registerDocs.filter(d => d.status === 'SUPERSEDED').length : 0;
+
+      const checks = [
+        {
+          id: 'registrar',
+          ok: validated,
+          label: 'Title validated by a registrar',
+          detail: validated
+            ? `${prop.validatedBy || 'registrar'} (${prop.validatedByMsp || 'RegistrarMSP'}) validated this on ${prop.validatedAt || 'an earlier build, before validations were recorded'}`
+            : `Current status is ${prop.registrarValidationStatus || 'PENDING'}. Tokens cannot be minted until a registrar validates the title.`,
+        },
+        {
+          id: 'independence',
+          ok: independent || !prop.validatedBy,
+          warn: !prop.validatedBy && validated,
+          label: 'Validator is not the owner',
+          detail: prop.validatedBy
+            ? (independent
+              ? `Registered by ${prop.originatorId}, validated by ${prop.validatedBy} — different parties.`
+              : 'The owner validated their own property. This listing should be re-checked.')
+            : 'This property was validated before the validator identity was recorded, so independence cannot be proven from the chain.',
+        },
+        {
+          id: 'document',
+          ok: Boolean(prop.documentHash) && String(prop.documentHash).length === 64,
+          label: 'Title document fingerprinted',
+          detail: prop.documentHash
+            ? `SHA-256 ${prop.documentHash}. Hash your own copy of the deed and compare it with POST /api/properties/${prop.assetId}/verify-document.`
+            : 'No document hash on record.',
+        },
+        {
+          // Can only FAIL on a positive red flag: every document on file has
+          // been withdrawn. An unreachable register, or a property older than
+          // the register, is unproven rather than failed — otherwise this
+          // check would mark every existing listing unverified overnight.
+          id: 'documentRegister',
+          ok: registerDocs === null || registerDocs.length === 0 || registerActive > 0,
+          warn: registerDocs === null || (registerDocs !== null && registerDocs.length === 0),
+          label: 'Documents anchored and independently verifiable',
+          detail: registerDocs === null
+            ? 'The document register could not be reached, so this check is unproven rather than failed.'
+            : registerDocs.length === 0
+              ? 'No document is anchored for this property yet, so there is nothing a stranger can verify independently. Anchor one with POST /api/umi/documents.'
+              : registerActive === 0
+                ? `Every document on file has been withdrawn (${registerRevoked} revoked, ${registerSuperseded} superseded). Treat this listing as unsupported until a current document is anchored.`
+                : `${registerActive} active, ${registerRevoked} revoked, ${registerSuperseded} superseded. ` +
+                  `Each is addressed by its IPFS CID, so anyone can re-hash their copy and check it: ` +
+                  registerDocs.slice(0, 3).map(d => `${d.docType} ${d.cid.slice(0, 16)}…`).join(', ') + '.',
+        },
+        {
+          id: 'uniqueness',
+          ok: dupes.length === 0,
+          label: 'No duplicate deed',
+          detail: dupes.length === 0
+            ? 'No other listing shares this document hash.'
+            : `Shares a document hash with ${dupes.map(d => d.assetId).join(', ')} — possible double listing.`,
+        },
+        {
+          id: 'chain',
+          ok: Boolean(chain.valid),
+          label: 'Ledger intact from genesis',
+          detail: chain.valid
+            ? `All ${chain.blocks ?? drunixChain.length} blocks replay cleanly.`
+            : 'Hash chain verification FAILED — treat every claim above as unproven.',
+        },
+      ];
+
+      const failed = checks.filter(c => !c.ok);
+      return res.json({
+        assetId: prop.assetId,
+        title: prop.title,
+        status: prop.status,
+        registrarValidationStatus: prop.registrarValidationStatus,
+        verified: failed.length === 0,
+        summary: failed.length === 0
+          ? 'Every verification check passed.'
+          : `${failed.length} check(s) did not pass: ${failed.map(c => c.label).join('; ')}.`,
+        checks,
+        documentHash: prop.documentHash,
+        owner: prop.originatorId,
+        validatedBy: prop.validatedBy || null,
+        validatedAt: prop.validatedAt || null,
+        chainEvidence: evidence,
+        documents: registerDocs,
+        documentRegisterReachable: registerDocs !== null,
+        chainVerified: Boolean(chain.valid),
+        checkedAt: new Date().toISOString(),
+        fabricMode: 'mock',
+      });
+    }
+
     if (verifyPropMatch && method === 'POST') {
       try {
         const assetId = decodeURIComponent(verifyPropMatch[1]);
