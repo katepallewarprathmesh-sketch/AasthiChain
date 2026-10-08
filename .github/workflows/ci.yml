@@ -95,6 +95,13 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: drunix-gateway/go.sum
 
+      # scripts/ drives every local setup. devup.sh broke once after a go.mod
+      # bump and nothing caught it, because it used to live outside the repo.
+      - name: Shell scripts parse and pass shellcheck
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          shellcheck -S warning scripts/*.sh
+
       - name: Install root dependencies
         run: npm install --no-audit --no-fund
 

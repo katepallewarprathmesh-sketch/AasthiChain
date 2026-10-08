@@ -12,7 +12,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO"
+cd "$REPO" || exit 1
 
 RAIL_PORT=${RAIL_PORT:-21100}
 APP_PORT=${APP_PORT:-8080}
