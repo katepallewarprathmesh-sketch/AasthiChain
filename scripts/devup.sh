@@ -58,4 +58,4 @@ echo "[devup] ready: /tmp/umigw + node_modules + frontend/dist"
 echo
 echo "  Start the rail:  UMI_ENABLED=true UMI_SEED_DEMO=true DRUNIX_MODE=mock PORT=21100 /tmp/umigw"
 echo "  Start the app :  ADMIN_DASHBOARD_KEY=<key> UMI_GATEWAY_URL=http://localhost:21100 node mock-api-server.js"
-echo "  Verify        :  bash $REPO/regression.sh   (expects 71 passed)"
+echo "  Verify        :  bash $REPO/regression.sh   (expects 73 passed)"
