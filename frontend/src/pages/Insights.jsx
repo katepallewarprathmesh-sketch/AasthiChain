@@ -304,7 +304,10 @@ export default function Insights() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))', gap: 12, marginTop: 18 }}>
         <Metric label="Settled value" value={s.available ? money(s.settledValueINR) : '—'} sub={s.available ? `${s.settled} settlements` : 'rail unreachable'} color="#065F46" />
-        <Metric label="Success rate" value={s.available ? pct(s.successRatePct) : '—'} sub={s.available ? `${s.failed} failed` : ''} color={s.successRatePct >= 90 ? '#065F46' : '#92400E'} />
+        <Metric label="Success rate (lifetime)" value={s.available ? pct(s.successRatePct) : '—'} sub={s.available ? `${s.failed} failed, all time` : ''} color={s.available && s.successRatePct >= 90 ? '#065F46' : '#92400E'} />
+        <Metric label={`Success rate (${s.recent ? s.recent.days : 14}d)`} value={s.recent ? pct(s.recent.successRatePct) : '—'}
+          sub={s.recent ? `${s.recent.settled} settled, ${s.recent.failed} failed` : 'rail window unavailable'}
+          color={s.recent && s.recent.successRatePct >= 90 ? '#065F46' : '#92400E'} />
         <Metric label="Average ticket" value={s.available ? money(s.averageTicketINR) : '—'} sub="per settled instruction" />
         <Metric label="Cash in wallets" value={s.available ? money(s.cashInWalletsINR) : '—'} sub={s.available ? (s.conserved ? '✓ conserved' : '✗ NOT conserved') : ''} color={s.available && !s.conserved ? '#991B1B' : '#6D28D9'} />
         <Metric label="Properties" value={p.properties} sub={`${Number(p.tokensOutstanding || 0).toLocaleString('en-IN')} tokens outstanding`} />

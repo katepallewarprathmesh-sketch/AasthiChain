@@ -4583,14 +4583,24 @@ export default async function handler(req, res) {
       const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
       if (base) {
         try {
-          const get = async (p) => { const r = await fetch(base + p); return r.ok ? await r.json() : null; };
-          const [config, reconciliation, instructions, wallets, chain] = await Promise.all([
+          // Without a timeout a wedged rail hangs the whole dashboard until the
+          // platform kills the request. Express already guarded this.
+          const get = async (p) => {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 6000);
+            try {
+              const r = await fetch(base + p, { signal: ctrl.signal });
+              return r.ok ? await r.json() : null;
+            } finally { clearTimeout(timer); }
+          };
+          const [config, reconciliation, instructions, wallets, chain, analytics] = await Promise.all([
             get('/umi/config'), get('/umi/reconciliation'), get('/umi/instructions'),
-            get('/umi/wallets'), get('/drunix/chain?limit=500')
+            get('/umi/wallets'), get('/drunix/chain?limit=500'), get('/umi/analytics')
           ]);
           if (reconciliation) {
             rail = { config, reconciliation, instructions: (instructions && instructions.instructions) || [],
-                     wallets: (wallets && wallets.wallets) || [], chain };
+                     wallets: (wallets && wallets.wallets) || [], chain,
+                     analytics: (analytics && analytics.analytics) || null };
           }
         } catch { /* rail optional */ }
       }

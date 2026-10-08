@@ -2713,13 +2713,14 @@ app.get('/api/admin/insights', async (req, res) => {
         return r.ok ? await r.json() : null;
       } finally { clearTimeout(timer); }
     };
-    const [config, reconciliation, instructions, wallets, chain] = await Promise.all([
+    const [config, reconciliation, instructions, wallets, chain, analytics] = await Promise.all([
       get('/umi/config'), get('/umi/reconciliation'), get('/umi/instructions'),
-      get('/umi/wallets'), get('/drunix/chain?limit=500')
+      get('/umi/wallets'), get('/drunix/chain?limit=500'), get('/umi/analytics')
     ]);
     if (reconciliation) {
       rail = { config, reconciliation, instructions: (instructions && instructions.instructions) || [],
-               wallets: (wallets && wallets.wallets) || [], chain };
+               wallets: (wallets && wallets.wallets) || [], chain,
+               analytics: (analytics && analytics.analytics) || null };
     }
   } catch { /* rail optional — the report says so */ }
 

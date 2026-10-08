@@ -245,6 +245,15 @@ function buildInsights(app, rail) {
       settled: settled.length,
       failed: failed.length,
       successRatePct: ins.length ? Math.round((settled.length / ins.length) * 1000) / 10 : 0,
+      // Lifetime rate only. The rail also reports the same ratio over its
+      // reporting window, which is what the activity chart below covers;
+      // passed straight through so the two definitions cannot drift apart.
+      recent: rail.analytics && rail.analytics.recent ? {
+        days: rail.analytics.recent.days,
+        settled: rail.analytics.recent.settled,
+        failed: rail.analytics.recent.failed,
+        successRatePct: rail.analytics.recent.successRatePct
+      } : null,
       settledValueINR: inr(settledValue),
       averageTicketINR: settled.length ? inr(settledValue / settled.length) : 0,
       cashInWalletsINR: rail.reconciliation.totalBalanceINR,
