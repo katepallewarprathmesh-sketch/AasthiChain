@@ -3384,6 +3384,17 @@ export default async function handler(req, res) {
           }
         }
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND', message: `Property ${id} not found even after fallback. Try with seeded PROP-GREEN-VALLEY-PUNE-001 or re-register. If you switched role, page now auto-updates without refresh.` });
+        // The error message below has always told people to "switch to
+        // Originator to mint" — but nothing checked. Any signed-in user could
+        // tokenise another originator's listing and pick the supply, which
+        // sets the token price.
+        if (prop.originatorId && prop.originatorId !== user.identityId
+            && String(user.role || '').toLowerCase() !== 'regulator') {
+          return res.status(403).json({
+            error: 'ERR_NOT_ALLOWED',
+            message: `Only the listing owner (${prop.originatorId}) or a Regulator can mint this listing.`,
+          });
+        }
         if (prop.registrarValidationStatus !== 'VALIDATED') {
           // For auto-created demo properties, allow mint anyway if user is Originator (demo convenience)
           if (!prop.autoCreated) {

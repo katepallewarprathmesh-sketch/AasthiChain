@@ -965,6 +965,16 @@ function supplyHeadroom(balanceMap, assetId, exceptOwner, totalTokens) {
 app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  // Minting sets the entire supply, and supply divided into the valuation is
+  // the token price. Validate, freeze, delete, yield and governance were all
+  // owner-checked; this one, the most consequential write of the lot, was
+  // not — any signed-in user could tokenise someone else's listing.
+  if (prop.originatorId !== req.user.identityId && String(req.user.role || '').toLowerCase() !== 'regulator') {
+    return res.status(403).json({
+      error: 'ERR_NOT_ALLOWED',
+      message: `Only the listing owner (${prop.originatorId}) or a Regulator can mint this listing.`,
+    });
+  }
   if (prop.registrarValidationStatus !== 'VALIDATED') return res.status(400).json({ error: 'ERR_NOT_VALIDATED' });
   if (prop.status === 'TOKENIZED') return res.status(409).json({ error: 'ERR_ALREADY_TOKENIZED' });
   const totalTokens = parseInt(req.body.totalTokens);
