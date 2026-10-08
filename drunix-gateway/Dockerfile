@@ -9,7 +9,7 @@
 #
 # PaaS hosts inject $PORT; the binary honours it (then DRUNIX_PORT, then 21100).
 
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 # go.mod/go.sum first so dependency layers cache
 COPY go.mod go.su[m] ./

@@ -220,3 +220,24 @@ jobs:
       # whether a document is genuine — that is the entire point.
       - name: Anchors are verifiable from the chain, not from us
         run: node tests/evmmirror.test.mjs
+
+  # The production rail on Render is built from this Dockerfile, not from
+  # `go build`. Nothing else here would notice if it stopped building — which
+  # is exactly what a stale Go base image does after a go.mod bump.
+  image:
+    name: Gateway container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image Render deploys
+        run: docker build -t aasthi-umi ./drunix-gateway
+      - name: The built binary starts and answers /health
+        run: |
+          docker run -d --name rail -p 21100:21100 aasthi-umi
+          for i in $(seq 1 40); do
+            curl -fsS localhost:21100/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS localhost:21100/health | tee /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
+          docker rm -f rail
