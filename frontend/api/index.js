@@ -1248,6 +1248,75 @@ function getUser(req) {
   }
 }
 
+// Routes that require a signed-in caller. This handler's getUser() never
+// fails — with no Authorization header it quietly answers as investor1, so
+// until now an anonymous request to /api/transfers/history was served a full
+// transaction list. The Express server has always rejected these with 401;
+// this table is that same set, so both servers agree on who may read what.
+const AUTH_REQUIRED = [
+  ['GET', /^\/api\/auth\/session$/],
+  ['POST', /^\/api\/auth\/logout$/],
+  ['GET', /^\/api\/auth\/users$/],
+  ['POST', /^\/api\/auth\/verification$/],
+  ['POST', /^\/api\/auth\/verification\/verify$/],
+  ['POST', /^\/api\/orgs$/],
+  ['GET', /^\/api\/orgs$/],
+  ['GET', /^\/api\/orgs\/[^\/]+\/members$/],
+  ['POST', /^\/api\/orgs\/[^\/]+\/invitations$/],
+  ['GET', /^\/api\/orgs\/[^\/]+\/invitations$/],
+  ['POST', /^\/api\/invitations\/accept$/],
+  ['POST', /^\/api\/properties$/],
+  ['POST', /^\/api\/properties\/[^\/]+\/validate$/],
+  ['POST', /^\/api\/properties\/[^\/]+\/mint$/],
+  ['POST', /^\/api\/properties\/[^\/]+\/freeze$/],
+  ['POST', /^\/api\/transfers$/],
+  ['GET', /^\/api\/balances\/wallet\/[^\/]+$/],
+  ['GET', /^\/api\/balances\/[^\/]+\/[^\/]+$/],
+  ['GET', /^\/api\/transfers\/history$/],
+  ['PUT', /^\/api\/kyc\/[^\/]+$/],
+  ['GET', /^\/api\/kyc\/[^\/]+$/],
+  ['POST', /^\/api\/payments\/confirm$/],
+  ['POST', /^\/api\/transfers\/failure-demo$/],
+  ['POST', /^\/api\/testnet\/payments\/initiate$/],
+  ['GET', /^\/api\/testnet\/payments\/[^\/]+$/],
+  ['POST', /^\/api\/testnet\/payments\/[^\/]+\/confirm$/],
+  ['POST', /^\/api\/testnet\/payments\/[^\/]+\/release$/],
+  ['GET', /^\/api\/testnet\/payments$/],
+  ['POST', /^\/api\/npci\/collect$/],
+  ['POST', /^\/api\/npci\/payu\/reconcile$/],
+  ['POST', /^\/api\/npci\/payments\/[^\/]+\/settle$/],
+  ['DELETE', /^\/api\/properties\/[^\/]+$/],
+  ['GET', /^\/api\/drunix\/ledger$/],
+  ['GET', /^\/api\/fraud\/config$/],
+  ['GET', /^\/api\/openfinance\/capabilities$/],
+  ['GET', /^\/api\/npci\/payments$/],
+  ['GET', /^\/api\/npci\/payments\/[^\/]+$/],
+  ['POST', /^\/api\/npci\/payments\/[^\/]+\/reattach$/],
+  ['POST', /^\/api\/npci\/payments\/[^\/]+\/approve$/],
+  ['POST', /^\/api\/npci\/payments\/[^\/]+\/release$/],
+  ['POST', /^\/api\/npci\/payments\/[^\/]+\/refund$/],
+  ['POST', /^\/api\/npci\/payments\/[^\/]+\/decline$/],
+  ['GET', /^\/api\/npci\/reconcile$/],
+  ['POST', /^\/api\/npci\/webhook$/],
+  ['POST', /^\/api\/npci\/webhook\/test$/],
+  ['GET', /^\/api\/npci\/webhooks$/],
+  ['GET', /^\/api\/portfolio\/[^\/]+\/nav$/],
+  ['POST', /^\/api\/properties\/[^\/]+\/yield\/distribute$/],
+  ['POST', /^\/api\/properties\/[^\/]+\/governance$/],
+  ['GET', /^\/api\/properties\/[^\/]+\/governance$/],
+  ['POST', /^\/api\/governance\/[^\/]+\/[^\/]+\/vote$/],
+  ['POST', /^\/api\/credit\/pledge$/],
+  ['POST', /^\/api\/credit\/repay$/],
+  ['GET', /^\/api\/credit\/loans\/[^\/]+$/],
+  ['POST', /^\/api\/swap$/],
+  ['GET', /^\/api\/admin\/ops$/],
+];
+
+function requiresAuth(method, path) {
+  for (const [m, rx] of AUTH_REQUIRED) if (m === method && rx.test(path)) return true;
+  return false;
+}
+
 export default async function handler(req, res) {
   try {
     await initState();
@@ -1282,6 +1351,14 @@ export default async function handler(req, res) {
     const path = url.pathname;
     const method = req.method;
     const user = getUser(req);
+
+    // A caller is anonymous only with no bearer and no identity header. The
+    // header alone is enough here, unlike Express, because the serverless
+    // clients (and tests/adminopsserverless) have always identified that way.
+    const hasCredentials = Boolean(req.headers.authorization || req.headers['x-fabric-identity'] || req.headers['x-identity-id']);
+    if (!hasCredentials && requiresAuth(method, path)) {
+      return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+    }
 
     if (path === '/health' || path === '/api/health') {
       let dbMode = 'unknown';
@@ -3012,12 +3089,42 @@ export default async function handler(req, res) {
         const id = decodeURIComponent(validateMatch[1]);
         const prop = properties[id];
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
-        prop.registrarValidationStatus = req.body.decision;
+
+        // Title validation is the one claim a buyer cannot check for himself,
+        // so it has to come from someone other than the seller. This handler
+        // used to write req.body.decision straight onto the property with no
+        // checks at all, which let an owner certify his own deed.
+        const role = user.role;
+        if (!['Registrar', 'Regulator'].includes(role)) {
+          return res.status(403).json({
+            error: 'ERR_NOT_REGISTRAR',
+            message: `Only a Registrar can validate title. You are signed in as ${role || 'unknown'}. An owner validating their own property would make the check meaningless.`,
+          });
+        }
+        if (user.identityId === prop.originatorId) {
+          return res.status(403).json({
+            error: 'ERR_SELF_VALIDATION',
+            message: 'The same identity registered this property, so it cannot also validate it.',
+          });
+        }
+        const decision = String(req.body.decision || '').toUpperCase();
+        if (decision !== 'VALIDATED' && decision !== 'REJECTED') {
+          return res.status(400).json({
+            error: 'ERR_INVALID_INPUT',
+            message: "decision must be 'VALIDATED' or 'REJECTED'",
+          });
+        }
+
+        prop.registrarValidationStatus = decision;
+        prop.validatedBy = user.identityId;
+        prop.validatedByMsp = user.mspId || 'RegistrarMSP';
+        prop.validatedAt = new Date().toISOString();
+        prop.validationNote = String(req.body.note || '').slice(0, 300) || undefined;
         prop.updatedAt = new Date();
         properties[id] = prop;
         globalThis._aasthi_properties = properties;
         saveAllPersisted();
-        return res.json({ assetId: id, validationStatus: req.body.decision, title: prop.title, fabricMode: 'mock-persisted', message: `Property ${id.slice(0,16)}... is now ${req.body.decision} — ${req.body.decision==='VALIDATED' ? 'Ready to mint! Switch to Originator role to mint.' : 'REJECTED — reason shown verbatim per §3.2'}` });
+        return res.json({ assetId: id, validationStatus: decision, title: prop.title, validatedBy: prop.validatedBy, validatedByMsp: prop.validatedByMsp, validatedAt: prop.validatedAt, validationNote: prop.validationNote, fabricMode: 'mock-persisted', message: `Property ${id.slice(0,16)}... is now ${decision} — ${decision==='VALIDATED' ? 'Ready to mint! Switch to Originator role to mint.' : 'REJECTED — reason shown verbatim per §3.2'}` });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
