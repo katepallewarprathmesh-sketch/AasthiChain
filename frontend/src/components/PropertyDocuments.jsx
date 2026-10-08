@@ -192,32 +192,49 @@ export default function PropertyDocuments({ assetId }) {
         />
         {checking && <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8 }}>Hashing {fileName}…</p>}
 
-        {result && !checking && (
+        {result && !checking && (() => {
+          // The register is rail-wide, so a file can be genuinely anchored and
+          // still have nothing to do with the property being looked at. On a
+          // property page a bare "anchored" would be read as "anchored for
+          // THIS property", which is the one misreading that actually costs a
+          // buyer money. Call it out as its own outcome, neither pass nor fail.
+          const wrongProperty = result.anchored && result.assetId && result.assetId !== assetId
+          const good = result.anchored && result.status === 'ACTIVE' && !wrongProperty
+          const warn = (result.anchored && !good) || wrongProperty
+          return (
           <div style={{
             marginTop: 10, padding: 12, borderRadius: 8, fontSize: 12.5, lineHeight: 1.6,
-            background: result.anchored && result.status === 'ACTIVE' ? '#F0FDF4'
-              : result.anchored ? '#FFFBEB' : '#FEF2F2',
-            border: `1px solid ${result.anchored && result.status === 'ACTIVE' ? '#BBF7D0'
-              : result.anchored ? '#FDE68A' : '#FECACA'}`,
-            color: result.anchored && result.status === 'ACTIVE' ? '#047857'
-              : result.anchored ? '#B45309' : '#B91C1C',
+            background: good ? '#F0FDF4' : warn ? '#FFFBEB' : '#FEF2F2',
+            border: `1px solid ${good ? '#BBF7D0' : warn ? '#FDE68A' : '#FECACA'}`,
+            color: good ? '#047857' : warn ? '#B45309' : '#B91C1C',
           }}>
             {result.error
               ? result.error
-              : result.anchored
+              : wrongProperty
                 ? <>
-                    <strong>{result.verdict}</strong>
-                    {result.blockHeight ? <> — anchored in ledger block #{result.blockHeight}.</> : null}
+                    <strong>This document belongs to a different property.</strong>
+                    {' '}It is genuinely on the register, but against{' '}
+                    <Link to={`/property/${encodeURIComponent(result.assetId)}`} style={{ color: '#B45309', fontWeight: 700 }}>
+                      {result.assetId}
+                    </Link>
+                    , not this one.
                   </>
-                : <>
-                    <strong>This file does not match anything on the register.</strong>
-                    {' '}Either it was never anchored, or it is not the document that was.
-                  </>}
+                : result.anchored
+                  ? <>
+                      <strong>{result.verdict}</strong>
+                      {result.docType ? <> — {prettyType(result.docType)}.</> : null}
+                      {result.blockHeight ? <> Anchored in ledger block #{result.blockHeight}.</> : null}
+                    </>
+                  : <>
+                      <strong>This file does not match anything on the register.</strong>
+                      {' '}Either it was never anchored, or it is not the document that was.
+                    </>}
             <code style={{ display: 'block', fontSize: 10.5, marginTop: 6, wordBreak: 'break-all', opacity: 0.8 }}>
               sha256 {result.sha256}
             </code>
           </div>
-        )}
+          )
+        })()}
       </div>
     </section>
   )
