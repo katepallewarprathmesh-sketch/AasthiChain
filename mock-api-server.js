@@ -14,7 +14,10 @@ app.use(express.urlencoded({ extended: false }));
 const distPath = path.join(__dirname, 'frontend', 'dist');
 if (fs.existsSync(distPath)) {
   console.log(`Serving frontend dist from ${distPath}`);
-  app.use(express.static(distPath));
+  // redirect:false — the build now emits dist/<route>/index.html per route,
+  // and the default would answer /marketplace with a 301 to /marketplace/.
+  // index:'index.html' is what then serves the prerendered head directly.
+  app.use(express.static(distPath, { redirect: false, index: 'index.html', extensions: [] }));
 }
 
 // Mock state - same as Go mock client
@@ -196,6 +199,12 @@ function decodeClerkOrMockToken(token) {
 }
 
 function authMiddleware(req, res, next) {
+  // Authenticate, then check entitlement. Chained here rather than added to
+  // each route so a new owner-scoped route cannot forget it.
+  return authenticate(req, res, () => ownershipGate(req, res, next));
+}
+
+function authenticate(req, res, next) {
   const auth = req.headers.authorization;
   const fabricIdentityHeader = req.headers['x-fabric-identity'] || req.headers['x-fabric-role'];
   if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
@@ -238,6 +247,39 @@ function authMiddleware(req, res, next) {
     req.user = roleMap[headerIdentity.toLowerCase()] || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
     next();
   }
+}
+
+// Being logged in is not the same as being entitled. These routes name
+// someone in the URL; without this any signed-in user could read any other
+// user's KYC record, wallet, loans or net worth, and write anyone's KYC
+// status. Mirrors OWNER_SCOPED in frontend/api/index.js.
+//
+// /api/balances/:assetId/:ownerId is deliberately not here: that is the cap
+// table, already on the public listing page.
+const OWNER_SCOPED = [
+  ['GET', /^\/api\/kyc\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
+  ['PUT', /^\/api\/kyc\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
+  ['GET', /^\/api\/balances\/wallet\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
+  ['GET', /^\/api\/credit\/loans\/([^\/]+)$/, ['regulator', 'admin']],
+  ['GET', /^\/api\/portfolio\/([^\/]+)\/nav$/, ['regulator', 'admin']],
+];
+
+function ownershipGate(req, res, next) {
+  if (!req.user) return next();
+  const role = String(req.user.role || '').toLowerCase();
+  for (const [m, rx, allowed] of OWNER_SCOPED) {
+    if (m !== req.method) continue;
+    const match = rx.exec(req.path);
+    if (!match) continue;
+    const subject = decodeURIComponent(match[1]);
+    if (subject === req.user.identityId) return next();
+    if (allowed.includes(role)) return next();
+    return res.status(403).json({
+      error: 'ERR_NOT_YOURS',
+      message: `This belongs to ${subject}. You can only read your own record.`,
+    });
+  }
+  return next();
 }
 
 app.get('/health', (req, res) => {
@@ -1287,8 +1329,14 @@ app.use((req, res, next) => {
   }
   if (req.method !== 'GET') return next();
   const distPath = path.join(__dirname, 'frontend', 'dist');
+  // Prefer the prerendered head for this route; fall back to the SPA shell
+  // for anything dynamic. Matches what Vercel serves.
+  const rel = path.normalize(req.path).replace(/^(\.\.[/\\])+/, '').replace(/^\//, '');
+  const routeIndex = path.join(distPath, rel, 'index.html');
   const indexPath = path.join(distPath, 'index.html');
-  if (fs.existsSync(indexPath)) {
+  if (rel && routeIndex.startsWith(distPath) && fs.existsSync(routeIndex)) {
+    res.sendFile(routeIndex);
+  } else if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
     res.send(`

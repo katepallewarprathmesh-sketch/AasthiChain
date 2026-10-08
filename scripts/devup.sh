@@ -51,8 +51,11 @@ git -C "$REPO" remote get-url origin >/dev/null 2>&1 || \
 echo "[devup] building drunix-gateway ..."
 (cd "$REPO/drunix-gateway" && go build -o /tmp/umigw ./cmd/gateway) || { echo "[devup] GO BUILD FAILED"; exit 1; }
 
-echo "[devup] vite build ..."
-(cd "$REPO/frontend" && npx vite build >/dev/null 2>&1) || { echo "[devup] VITE BUILD FAILED"; exit 1; }
+echo "[devup] frontend build ..."
+# npm run build, not npx vite build: the real build also generates the
+# sitemap and prerenders a head per route. Calling vite directly left dist
+# in a state the prerender suite correctly failed.
+(cd "$REPO/frontend" && npm run build >/dev/null 2>&1) || { echo "[devup] FRONTEND BUILD FAILED"; exit 1; }
 
 echo "[devup] ready: /tmp/umigw + node_modules + frontend/dist"
 echo

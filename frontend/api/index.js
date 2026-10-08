@@ -1396,6 +1396,39 @@ const AUTH_REQUIRED = [
   ['GET', /^\/api\/admin\/ops$/],
 ];
 
+// Being logged in is not the same as being entitled. These routes carry
+// someone's identity in the URL, and until now any signed-in demo user could
+// read any other user's KYC record, wallet, loans or net worth — and write
+// anyone's KYC status. The capture group is whose data it is.
+//
+// Supervisory roles still see everything: that is the regulator's job, and
+// the registrar's for KYC.
+const SUPERVISORY = new Set(['regulator', 'admin']);
+const OWNER_SCOPED = [
+  ['GET', /^\/api\/kyc\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
+  ['PUT', /^\/api\/kyc\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
+  ['GET', /^\/api\/balances\/wallet\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
+  ['GET', /^\/api\/credit\/loans\/([^\/]+)$/, ['regulator', 'admin']],
+  ['GET', /^\/api\/portfolio\/([^\/]+)\/nav$/, ['regulator', 'admin']],
+];
+
+// Returns the subject when the caller may not have it, otherwise null.
+// Note /api/balances/:assetId/:ownerId is deliberately absent: that is the
+// cap table, already shown on the public listing page.
+function ownershipViolation(method, path, user) {
+  const role = String((user && user.role) || '').toLowerCase();
+  for (const [m, rx, allowed] of OWNER_SCOPED) {
+    if (m !== method) continue;
+    const match = rx.exec(path);
+    if (!match) continue;
+    const subject = decodeURIComponent(match[1]);
+    if (user && subject === user.identityId) return null;
+    if (allowed.includes(role) || SUPERVISORY.has(role)) return null;
+    return subject;
+  }
+  return null;
+}
+
 function requiresAuth(method, path) {
   for (const [m, rx] of AUTH_REQUIRED) if (m === method && rx.test(path)) return true;
   return false;
@@ -1442,6 +1475,14 @@ export default async function handler(req, res) {
     const hasCredentials = Boolean(req.headers.authorization || req.headers['x-fabric-identity'] || req.headers['x-identity-id']);
     if (!hasCredentials && requiresAuth(method, path)) {
       return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+    }
+
+    const trespass = ownershipViolation(method, path, user);
+    if (trespass) {
+      return res.status(403).json({
+        error: 'ERR_NOT_YOURS',
+        message: `This belongs to ${trespass}. You can only read your own record.`,
+      });
     }
 
     if (path === '/health' || path === '/api/health') {
