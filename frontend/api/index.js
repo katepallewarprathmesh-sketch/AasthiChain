@@ -4005,6 +4005,119 @@ export default async function handler(req, res) {
       } catch { /* never surface */ }
       return res.status(204).end();
     }
+    // The operations queue. This existed only in mock-api-server.js, so the
+    // page rendered "Loading the queues..." and then 404'd on every deployment
+    // that runs this serverless handler instead. Same shape as the Express
+    // route, reading the same in-memory state this module already keeps.
+    if (path === '/api/admin/ops') {
+      if (!['Registrar', 'Regulator'].includes(user.role)) {
+        return res.status(403).json({
+          error: 'ERR_NOT_REGISTRAR',
+          message: 'The operations queue is for Registrars and Regulators.',
+        });
+      }
+
+      const ageMins = (iso) => {
+        const t = iso ? new Date(iso).getTime() : NaN;
+        return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 60000)) : null;
+      };
+
+      const props = Object.values(properties || {});
+
+      const awaitingValidation = props
+        .filter(p => p.registrarValidationStatus !== 'VALIDATED' && p.registrarValidationStatus !== 'REJECTED')
+        .map(p => ({ assetId: p.assetId, title: p.title, owner: p.originatorId,
+                     ageMins: ageMins(p.createdAt), status: p.registrarValidationStatus || 'PENDING' }));
+
+      const validatedNotMinted = props
+        .filter(p => p.registrarValidationStatus === 'VALIDATED' && p.status !== 'TOKENIZED' && p.status !== 'FROZEN')
+        .map(p => ({ assetId: p.assetId, title: p.title, owner: p.originatorId,
+                     ageMins: ageMins(p.updatedAt) }));
+
+      const frozen = props.filter(p => p.status === 'FROZEN')
+        .map(p => ({ assetId: p.assetId, title: p.title, ageMins: ageMins(p.updatedAt) }));
+
+      // A payment that is CONFIRMED but never RELEASED means the buyer's money
+      // moved and their tokens did not. That is the one queue worth paging over.
+      const payments = Object.values(npciPayments || {});
+      const stuckPayments = payments
+        .filter(p => p.status === 'CONFIRMED')
+        .map(p => ({ paymentId: p.paymentId, assetId: p.assetId, payerId: p.payerId,
+                     amountINR: Number(p.amountINR) || 0, tokenAmount: Number(p.tokenAmount) || 0,
+                     ageMins: ageMins(p.createdAt) }))
+        .sort((a, b) => (b.ageMins || 0) - (a.ageMins || 0));
+
+      const expiredPending = payments
+        .filter(p => p.status === 'PENDING' && p.expiresAt && new Date(p.expiresAt).getTime() < Date.now())
+        .map(p => ({ paymentId: p.paymentId, assetId: p.assetId, payerId: p.payerId,
+                     amountINR: Number(p.amountINR) || 0, ageMins: ageMins(p.createdAt) }));
+
+      const pendingKyc = Object.values(kycRecords || {})
+        .filter(k => k.kycStatus !== 'VERIFIED')
+        .map(k => ({ identityId: k.identityId, status: k.kycStatus }));
+
+      // Rail reads are best-effort: the ops page must still render if the Go
+      // gateway is down or unset, and say so rather than fail opaquely.
+      let rail = { reachable: false };
+      const railBase = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+      if (railBase) {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 6000);
+          let insts = [];
+          try {
+            const r = await fetch(railBase + '/umi/instructions', { signal: ctrl.signal });
+            if (r.ok) {
+              const j = await r.json();
+              insts = j.instructions || [];
+            }
+          } finally { clearTimeout(timer); }
+          const failed = insts.filter(i => i.status === 'FAILED');
+          const byReason = {};
+          for (const i of failed) byReason[i.failureReason || 'UNKNOWN'] = (byReason[i.failureReason || 'UNKNOWN'] || 0) + 1;
+          rail = {
+            reachable: true,
+            instructions: insts.length,
+            settled: insts.filter(i => i.status === 'SETTLED').length,
+            failed: failed.length,
+            failedByReason: byReason,
+            // Grouped by buyer on purpose: one wallet retrying a dozen times
+            // produces a dozen failures, and a queue of identical rows is
+            // noise, not work.
+            recoverable: Object.values(failed
+              .filter(i => i.failureReason === 'ERR_UMI_INSUFFICIENT_CBDC' && i.shortfallINR > 0)
+              .reduce((acc, i) => {
+                const g = acc[i.buyer] || (acc[i.buyer] = {
+                  buyer: i.buyer, instructions: 0, largestShortfallINR: 0, assets: [],
+                  latestInstructionId: i.instructionId,
+                });
+                g.instructions += 1;
+                g.largestShortfallINR = Math.max(g.largestShortfallINR, i.shortfallINR);
+                g.latestInstructionId = i.instructionId;
+                if (!g.assets.includes(i.assetId)) g.assets.push(i.assetId);
+                return acc;
+              }, {}))
+              .sort((a, b) => b.largestShortfallINR - a.largestShortfallINR),
+          };
+        } catch { /* leave rail.reachable false */ }
+      }
+
+      const chain = drunixVerify();
+      const queues = {
+        awaitingValidation, validatedNotMinted, frozen,
+        stuckPayments, expiredPending, pendingKyc,
+      };
+      return res.status(200).json({
+        generatedAt: new Date().toISOString(),
+        actor: { identityId: user.identityId, role: user.role },
+        actionable: awaitingValidation.length + validatedNotMinted.length + stuckPayments.length,
+        queues,
+        counts: Object.fromEntries(Object.entries(queues).map(([k, v]) => [k, v.length])),
+        rail,
+        chain: { blocks: drunixChain.length, valid: !!(chain && (chain.valid ?? chain.ok)) },
+      });
+    }
+
     if (path === '/api/admin/insights/status') {
       return res.status(200).json({
         enabled: !!(process.env.ADMIN_DASHBOARD_KEY || '').trim(),
