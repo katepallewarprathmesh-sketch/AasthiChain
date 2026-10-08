@@ -66,5 +66,42 @@ const t0 = Date.now();
 await metrics();
 t('a scrape returns promptly', Date.now() - t0 < 2000);
 
+
+// --- the same endpoint, on the server Vercel actually runs -------------------
+//
+// Express has a dedicated /api/umi/metrics route, so everything above passed
+// while production was broken: the serverless handler has no such route, the
+// request fell into the generic /api/umi/* proxy, and that proxy assumed every
+// rail response is JSON. Prometheus text failed to parse and was replaced with
+// an error envelope -- returned under HTTP 200, so a scraper could not even
+// tell. Checking the Express route alone cannot catch that.
+
+process.env.UMI_GATEWAY_URL = process.env.UMI_GATEWAY_URL || 'http://localhost:21100';
+const { default: serverless } = await import('../frontend/api/index.js');
+
+function captureRes() {
+  const r = { _status: 200, _body: null, _headers: {} };
+  r.status = c => { r._status = c; return r; };
+  r.json = b => { r._body = b; return r; };
+  r.send = b => { r._body = b; return r; };
+  r.setHeader = (k, v) => { r._headers[k.toLowerCase()] = v; return r; };
+  r.writeHead = () => r;
+  r.end = () => r;
+  return r;
+}
+
+const sres = captureRes();
+await serverless({ url: '/api/umi/metrics', method: 'GET', headers: {} }, sres);
+const sbody = typeof sres._body === 'string' ? sres._body : JSON.stringify(sres._body || {});
+
+t('the deployed handler serves metrics too', sres._status === 200);
+t('as prometheus text, not an error envelope',
+  sbody.includes('# HELP') && !sbody.trimStart().startsWith('{'));
+t('and labels it text/plain',
+  /text\/plain/.test(sres._headers['content-type'] || ''));
+// The bug that hid for so long: an error body under a success status.
+t('never reports a failure as a 200',
+  !(sres._status === 200 && /"error"\s*:/.test(sbody)));
+
 console.log(`\n  metrics: ${p} passed, ${f} failed`);
-process.exit(f === 0 ? 0 : 1);
+process.exit(f ? 1 : 0);

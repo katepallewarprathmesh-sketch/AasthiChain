@@ -2956,6 +2956,17 @@ async function umiProxy(req, res) {
     // in the browser, so wrap any non-JSON body in a real JSON error.
     let isJson = true;
     try { JSON.parse(text); } catch { isJson = false; }
+    // Not everything the rail serves is JSON. /umi/metrics is Prometheus text
+    // exposition by design, and treating "not JSON" as "broken" replaced a
+    // perfectly good 200 with an error envelope -- under a 200 status, so a
+    // caller could not even tell it had failed. Only a FAILED upstream gets
+    // wrapped; a successful non-JSON body is passed through as it came.
+    if (!isJson && upstream.ok) {
+      return res
+        .status(upstream.status)
+        .type(upstream.headers.get('content-type') || 'text/plain; charset=utf-8')
+        .send(text);
+    }
     if (!isJson) {
       return res.status(upstream.status === 404 ? 502 : upstream.status).json({
         error: upstream.status === 404 ? 'ERR_DRUNIX_ROUTE_UNKNOWN' : 'ERR_DRUNIX_BAD_RESPONSE',
@@ -2997,6 +3008,17 @@ async function drunixProxy(req, res) {
     // in the browser, so wrap any non-JSON body in a real JSON error.
     let isJson = true;
     try { JSON.parse(text); } catch { isJson = false; }
+    // Not everything the rail serves is JSON. /umi/metrics is Prometheus text
+    // exposition by design, and treating "not JSON" as "broken" replaced a
+    // perfectly good 200 with an error envelope -- under a 200 status, so a
+    // caller could not even tell it had failed. Only a FAILED upstream gets
+    // wrapped; a successful non-JSON body is passed through as it came.
+    if (!isJson && upstream.ok) {
+      return res
+        .status(upstream.status)
+        .type(upstream.headers.get('content-type') || 'text/plain; charset=utf-8')
+        .send(text);
+    }
     if (!isJson) {
       return res.status(upstream.status === 404 ? 502 : upstream.status).json({
         error: upstream.status === 404 ? 'ERR_DRUNIX_ROUTE_UNKNOWN' : 'ERR_DRUNIX_BAD_RESPONSE',

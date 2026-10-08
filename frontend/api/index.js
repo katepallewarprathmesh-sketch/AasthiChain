@@ -3996,6 +3996,16 @@ export default async function handler(req, res) {
         // error that names the likely cause.
         let isJson = true;
         try { JSON.parse(text); } catch { isJson = false; }
+        // Not everything the rail serves is JSON. /umi/metrics is Prometheus
+        // text exposition by design, and treating "not JSON" as "broken"
+        // replaced a good 200 with an error envelope -- under a 200 status, so
+        // a caller could not tell it had failed. Pass a successful non-JSON
+        // body through untouched; only wrap a failed one.
+        if (!isJson && upstream.ok) {
+          res.setHeader('Content-Type',
+            upstream.headers.get('content-type') || 'text/plain; charset=utf-8');
+          return res.status(upstream.status).send(text);
+        }
         res.setHeader('Content-Type', 'application/json');
         if (!isJson) {
           return res.status(upstream.status === 404 ? 502 : upstream.status).json({
