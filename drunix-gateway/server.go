@@ -73,6 +73,12 @@ func (s *Server) StartOutboxRelay(ctx context.Context) *OutboxRelay {
 		hub.publish(LedgerEvent{Height: int64(height), Type: typ, Hash: hash, Timestamp: ts})
 		return nil
 	})
+	// Notifications: a repair path. See handleNotificationEvent.
+	if s.UMI != nil {
+		for _, topic := range []string{TopicUMISettled, TopicUMIFailed, TopicUMIServicing} {
+			relay.Handle(topic, s.UMI.handleNotificationEvent)
+		}
+	}
 	relay.Start(ctx)
 	log.Printf("outbox relay: started — block consequences are delivered from durable storage")
 	return relay

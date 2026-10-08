@@ -928,6 +928,7 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 				"cashINR":       si.CashINR,
 				"status":        UMIStatusFailed,
 				"failureReason": si.FailureReason,
+				"shortfallINR":  si.ShortfallINR,
 				"atomic":        "no partial settlement — both legs rolled back",
 			}); blk != nil {
 				si.BlockHeight, si.BlockHash = blk.Height, blk.Hash

@@ -36,16 +36,20 @@ type OutboxEvent struct {
 // Topics. Kept as constants so a typo is a compile error rather than an event
 // that is written and never matched by any consumer.
 const (
-	TopicLedgerBlock = "ledger.block"
+	TopicLedgerBlock  = "ledger.block"
+	TopicUMISettled   = "umi.settled"
+	TopicUMIFailed    = "umi.failed"
+	TopicUMIServicing = "umi.servicing.paid"
 )
 
 // blockEvents returns the outbox rows a committed block implies.
 //
-// Only ledger.block for now — the settlement, servicing and document topics
-// arrive with the consumers that handle them, so that an event never exists in
-// the table with nothing able to deliver it.
+// Everything is derived from the block itself, never from the caller's local
+// variables. That is what lets the relay rebuild a consequence long after the
+// goroutine that would have performed it is gone: the block is the only input,
+// and the block is durable.
 func blockEvents(b *DrunixBlock) []OutboxEvent {
-	return []OutboxEvent{{
+	evs := []OutboxEvent{{
 		Topic:     TopicLedgerBlock,
 		DedupeKey: fmt.Sprintf("%s:%d", TopicLedgerBlock, b.Height),
 		Payload: map[string]interface{}{
@@ -55,6 +59,33 @@ func blockEvents(b *DrunixBlock) []OutboxEvent {
 			"timestamp": b.Timestamp,
 		},
 	}}
+
+	var topic string
+	switch b.Type {
+	case BlockUMIDvPSettled:
+		topic = TopicUMISettled
+	case BlockUMIDvPFailed:
+		topic = TopicUMIFailed
+	case BlockUMIServicingPaid:
+		topic = TopicUMIServicing
+	default:
+		return evs
+	}
+	for i, txn := range b.Txns {
+		payload := map[string]interface{}{}
+		for k, v := range txn {
+			payload[k] = v
+		}
+		payload["height"] = b.Height
+		evs = append(evs, OutboxEvent{
+			Topic: topic,
+			// The index keeps a block carrying several txns from collapsing
+			// into one event under the UNIQUE (topic, dedupe_key) constraint.
+			DedupeKey: fmt.Sprintf("%s:%d:%d", topic, b.Height, i),
+			Payload:   payload,
+		})
+	}
+	return evs
 }
 
 const outboxSchema = `

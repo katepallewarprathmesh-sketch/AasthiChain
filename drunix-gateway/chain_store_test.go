@@ -59,6 +59,17 @@ func (f *fakeBlockStore) AppendBlockWithEvents(b *DrunixBlock, evs []OutboxEvent
 	return nil
 }
 
+func (f *fakeBlockStore) hasTopic(topic string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, e := range f.outbox {
+		if e.Topic == topic {
+			return true
+		}
+	}
+	return false
+}
+
 func (f *fakeBlockStore) pending() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -202,9 +213,14 @@ func TestOutboxBlockAndEventsCommitTogether(t *testing.T) {
 		t.Fatalf("genesis should have produced one outbox row, got %d", store.pending())
 	}
 
+	// A settled block implies two consequences: the live-stream event and the
+	// pair of notifications rebuilt from the settlement itself.
 	c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI758681"}})
-	if got := store.pending(); got != 2 {
-		t.Fatalf("after one settlement want 2 outbox rows, got %d", got)
+	if got := store.pending(); got != 3 {
+		t.Fatalf("after one settlement want 3 outbox rows, got %d", got)
+	}
+	if !store.hasTopic(TopicUMISettled) {
+		t.Fatal("a settled block must queue its notification event")
 	}
 
 	// Now the storage layer refuses the write.

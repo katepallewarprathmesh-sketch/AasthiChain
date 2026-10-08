@@ -231,3 +231,114 @@ func TestNilRelayIsSafe(t *testing.T) {
 	r.Start(context.Background())
 	r.Stop()
 }
+
+// --- step 3: notifications are rebuilt from the ledger, idempotently --------
+
+// Test 4: redelivery is a no-op at the consumer.
+//
+// The relay is at-least-once, so the same settlement WILL be handed to the
+// notification consumer more than once. A participant must not see the trade
+// twice in their feed.
+func TestNotificationRedeliveryIsANoOp(t *testing.T) {
+	rail := &UMIRail{notifications: newNotifyStore()}
+	row := OutboxRow{
+		Seq: 1, BlockHeight: 12, Topic: TopicUMISettled,
+		Payload: map[string]interface{}{
+			"height":        float64(12),
+			"instructionId": "UMI-2534E518F4",
+			"assetId":       "PROP-GREEN-VALLEY-PUNE-001",
+			"securitiesLeg": map[string]interface{}{
+				"from": "originator1", "to": "investor1", "tokens": float64(50)},
+			"cashLeg": map[string]interface{}{"amountINR": float64(31000)},
+		},
+	}
+
+	for i := 0; i < 5; i++ {
+		if err := rail.handleNotificationEvent(row); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	buyer, _ := rail.Notifications("investor1", false, 50)
+	seller, _ := rail.Notifications("originator1", false, 50)
+	if len(buyer) != 1 || len(seller) != 1 {
+		t.Fatalf("five deliveries produced %d buyer and %d seller notifications, want 1 each",
+			len(buyer), len(seller))
+	}
+	if buyer[0].Kind != NotifyBought || buyer[0].AmountINR != 31000 {
+		t.Fatalf("unexpected buyer notification: %+v", buyer[0])
+	}
+	if seller[0].Kind != NotifySold {
+		t.Fatalf("unexpected seller notification: %+v", seller[0])
+	}
+}
+
+// The inline path and the relay must produce the SAME notification, not two
+// that merely look alike — otherwise a repair would double up a feed.
+func TestInlineAndRelayAgreeOnTheNotification(t *testing.T) {
+	si := &SettlementInstruction{
+		InstructionID: "UMI-2534E518F4", AssetID: "PROP-X",
+		Seller: "originator1", Buyer: "investor1",
+		Tokens: 50, CashINR: 31000, BlockHeight: 12,
+	}
+	inline := &UMIRail{notifications: newNotifyStore()}
+	inline.notifySettled(si)
+
+	viaRelay := &UMIRail{notifications: newNotifyStore()}
+	if err := viaRelay.handleNotificationEvent(OutboxRow{
+		BlockHeight: 12, Topic: TopicUMISettled,
+		Payload: map[string]interface{}{
+			"height":        float64(12),
+			"instructionId": si.InstructionID,
+			"assetId":       si.AssetID,
+			"securitiesLeg": map[string]interface{}{
+				"from": si.Seller, "to": si.Buyer, "tokens": float64(si.Tokens)},
+			"cashLeg": map[string]interface{}{"amountINR": si.CashINR},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	a, _ := inline.Notifications("investor1", false, 10)
+	b, _ := viaRelay.Notifications("investor1", false, 10)
+	if len(a) != 1 || len(b) != 1 {
+		t.Fatalf("want one notification each, got %d and %d", len(a), len(b))
+	}
+	if a[0].ID != b[0].ID {
+		t.Fatalf("ids differ: inline %s, relay %s — a repair would duplicate the feed", a[0].ID, b[0].ID)
+	}
+	if a[0].Title != b[0].Title || a[0].Detail != b[0].Detail || a[0].AmountINR != b[0].AmountINR {
+		t.Fatalf("content differs:\n inline %+v\n relay  %+v", a[0], b[0])
+	}
+}
+
+// A servicing block pays several holders at once; each must get exactly one
+// income notification no matter how often the row is redelivered.
+func TestServicingRedeliveryIsANoOp(t *testing.T) {
+	rail := &UMIRail{notifications: newNotifyStore()}
+	row := OutboxRow{
+		BlockHeight: 20, Topic: TopicUMIServicing,
+		Payload: map[string]interface{}{
+			"height":  float64(20),
+			"assetId": "PROP-X",
+			"payouts": []interface{}{
+				map[string]interface{}{"holder": "investor1", "tokens": float64(100), "amountINR": float64(1500)},
+				map[string]interface{}{"holder": "investor2", "tokens": float64(100), "amountINR": float64(1500)},
+			},
+		},
+	}
+	for i := 0; i < 3; i++ {
+		if err := rail.handleNotificationEvent(row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, who := range []string{"investor1", "investor2"} {
+		got, _ := rail.Notifications(who, false, 10)
+		if len(got) != 1 {
+			t.Fatalf("%s got %d income notifications, want 1", who, len(got))
+		}
+		if got[0].AmountINR != 1500 {
+			t.Fatalf("%s got %v, want 1500", who, got[0].AmountINR)
+		}
+	}
+}
