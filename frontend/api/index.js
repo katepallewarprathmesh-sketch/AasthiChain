@@ -2977,6 +2977,35 @@ export default async function handler(req, res) {
       }
     }
 
+    // "Check your copy of the title deed" on the property page posts here.
+    // It lived only in the Express server, so on a deployment served by this
+    // handler the checker answered 404 — a verification tool that cannot be
+    // reached is worse than none, because it looks available.
+    const verifyDocMatch = path.match(/^\/api\/properties\/([^\/]+)\/verify-document$/);
+    if (verifyDocMatch && method === 'POST') {
+      const id = decodeURIComponent(verifyDocMatch[1]);
+      const prop = properties[id];
+      if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+      const supplied = String((req.body && req.body.documentHash) || '').trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(supplied)) {
+        return res.status(400).json({
+          error: 'ERR_INVALID_INPUT',
+          message: 'documentHash must be 64 hex characters (SHA-256 of the file). Compute it with: sha256sum deed.pdf',
+        });
+      }
+      const match = supplied === String(prop.documentHash || '').toLowerCase();
+      return res.status(200).json({
+        assetId: prop.assetId,
+        match,
+        message: match
+          ? 'This document matches the one registered on the ledger for this property.'
+          : 'This document does NOT match the registered title document. Do not rely on it.',
+        registeredHash: prop.documentHash,
+        suppliedHash: supplied,
+        checkedAt: new Date().toISOString(),
+      });
+    }
+
     const validateMatch = path.match(/^\/api\/properties\/([^\/]+)\/validate$/);
     if (validateMatch && method === 'POST') {
       try {
