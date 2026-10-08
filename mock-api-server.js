@@ -201,7 +201,7 @@ function decodeClerkOrMockToken(token) {
 function authMiddleware(req, res, next) {
   // Authenticate, then check entitlement. Chained here rather than added to
   // each route so a new owner-scoped route cannot forget it.
-  return authenticate(req, res, () => ownershipGate(req, res, next));
+  return authenticate(req, res, () => ownershipGate(req, res, () => paymentGate(req, res, next)));
 }
 
 function authenticate(req, res, next) {
@@ -263,6 +263,36 @@ const OWNER_SCOPED = [
   ['GET', /^\/api\/credit\/loans\/([^\/]+)$/, ['regulator', 'admin']],
   ['GET', /^\/api\/portfolio\/([^\/]+)\/nav$/, ['regulator', 'admin']],
 ];
+
+const SUPERVISORY = new Set(['regulator', 'admin']);
+
+function paymentOwner(user, requested) {
+  const self = (user && user.identityId) || 'investor1';
+  if (!requested || requested === self) return self;
+  const role = String((user && user.role) || '').toLowerCase();
+  return SUPERVISORY.has(role) ? requested : self;
+}
+
+const PAYMENT_SCOPED = /^\/api\/npci\/payments\/([^\/]+)(?:\/(approve|decline|refund|reattach|release|settle))?$/;
+
+// Any signed-in user could read, approve, decline or refund anyone's
+// payment. Declining was the damaging one: cancelling a stranger's purchase.
+function paymentGate(req, res, next) {
+  if (!req.user) return next();
+  const match = PAYMENT_SCOPED.exec(req.path);
+  if (!match) return next();
+  if (req.method !== 'GET' && req.method !== 'POST') return next();
+  const pay = npciPayments[decodeURIComponent(match[1])];
+  if (!pay) return next(); // the handler answers 404
+  const self = req.user.identityId;
+  const role = String(req.user.role || '').toLowerCase();
+  if (pay.payerId === self || pay.payeeId === self) return next();
+  if (SUPERVISORY.has(role) || role === 'originator') return next();
+  return res.status(403).json({
+    error: 'ERR_NOT_YOUR_PAYMENT',
+    message: `Payment ${pay.paymentId} belongs to someone else.`,
+  });
+}
 
 function ownershipGate(req, res, next) {
   if (!req.user) return next();
@@ -1984,7 +2014,9 @@ app.post('/api/npci/collect', authMiddleware, (req, res) => {
     status: 'PENDING', createdAt: now, expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
     confirmedAt: null, releasedAt: null, drunixTransferId: null,
     idempotencyKey: idemKey, isSimulation: true,
-    payerId: payerId || 'investor1', payeeId: payeeId || 'originator1',
+    // Owner comes from the caller, not the body: it used to default to
+    // investor1, so someone else's purchase credited the wrong wallet.
+    payerId: paymentOwner(req.user, payerId), payeeId: payeeId || 'originator1',
     callbackReceived: false, provider: 'mock', webhookReceivedAt: null
   };
   // AI & Fraud Detection screen (parity with drunix-gateway/fraud.go, Golang)

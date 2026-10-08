@@ -1429,6 +1429,33 @@ function ownershipViolation(method, path, user) {
   return null;
 }
 
+// A payment belongs to the signed-in caller who created it. A supervisor may
+// act for someone else; nobody else may.
+function paymentOwner(user, requested) {
+  const self = (user && user.identityId) || 'investor1';
+  if (!requested || requested === self) return self;
+  const role = String((user && user.role) || '').toLowerCase();
+  return SUPERVISORY.has(role) ? requested : self;
+}
+
+const PAYMENT_SCOPED = /^\/api\/npci\/payments\/([^\/]+)(?:\/(approve|decline|refund|reattach|release|settle))?$/;
+
+// Reading, approving, declining, refunding or settling someone else's
+// payment was open to any signed-in user. Declining was the damaging one: a
+// stranger could cancel a purchase mid-flight.
+function paymentViolation(method, path, user, store) {
+  const match = PAYMENT_SCOPED.exec(path);
+  if (!match) return null;
+  if (method !== 'GET' && method !== 'POST') return null;
+  const pay = store[decodeURIComponent(match[1])];
+  if (!pay) return null; // let the handler answer 404
+  const self = user && user.identityId;
+  if (self && (pay.payerId === self || pay.payeeId === self)) return null;
+  const role = String((user && user.role) || '').toLowerCase();
+  if (SUPERVISORY.has(role) || role === 'originator') return null;
+  return pay.paymentId || decodeURIComponent(match[1]);
+}
+
 function requiresAuth(method, path) {
   for (const [m, rx] of AUTH_REQUIRED) if (m === method && rx.test(path)) return true;
   return false;
@@ -1475,6 +1502,14 @@ export default async function handler(req, res) {
     const hasCredentials = Boolean(req.headers.authorization || req.headers['x-fabric-identity'] || req.headers['x-identity-id']);
     if (!hasCredentials && requiresAuth(method, path)) {
       return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+    }
+
+    const notYourPayment = paymentViolation(method, path, user, npciPayments);
+    if (notYourPayment) {
+      return res.status(403).json({
+        error: 'ERR_NOT_YOUR_PAYMENT',
+        message: `Payment ${notYourPayment} belongs to someone else.`,
+      });
     }
 
     const trespass = ownershipViolation(method, path, user);
@@ -1724,7 +1759,10 @@ export default async function handler(req, res) {
           drunixTransferId: null,
           idempotencyKey: idemKey,
           isSimulation: true,
-          payerId: payerId||'investor1',
+          // Whose payment this is comes from the caller, not the body. It used
+          // to default to investor1, so a payment created by anyone else
+          // credited the wrong wallet and could then be driven by a stranger.
+          payerId: paymentOwner(user, payerId),
           payeeId: payeeId||'originator1',
           callbackReceived: false,
           provider: 'mock',
