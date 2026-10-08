@@ -5,7 +5,7 @@ import SimpleBuyFlow from '../components/SimpleBuyFlow.jsx'
 import PropertyDocuments from '../components/PropertyDocuments.jsx'
 import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
-import { applySeo } from '../lib/seo.js'
+import { applySeo, propertySeo } from '../lib/seo.js'
 
 export default function PropertyDetail({ user }) {
   const { id } = useParams()
@@ -17,18 +17,7 @@ export default function PropertyDetail({ user }) {
   // are built from the property rather than left generic.
   useEffect(() => {
     if (!property) return
-    const city = property.location?.city
-    const where = city ? ` in ${city}` : ''
-    const yieldPct = property.expectedYieldPct
-    const price = property.pricePerTokenINR
-    applySeo(location.pathname, {
-      title: `${property.title} — Fractional Investment${where} | AasthiChain`,
-      description:
-        `Invest from ₹${Math.round(price || 0).toLocaleString('en-IN')} per token in ${property.title}` +
-        `${where}. ${yieldPct ? `Expected yield ${yieldPct}%. ` : ''}` +
-        `${property.propertyType || 'Property'} · ${property.areaSqft ? property.areaSqft + ' sq ft · ' : ''}` +
-        'Tokenised ownership recorded on a verifiable ledger.',
-    })
+    applySeo(location.pathname, propertySeo(property))
   }, [property, location.pathname])
   const [balances, setBalances] = useState([])
   const [refreshKey, setRefreshKey] = useState(0)

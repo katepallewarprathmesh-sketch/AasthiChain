@@ -6,7 +6,7 @@
 // prerender.mjs writes a real file per route; this checks it stays that way.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROUTE_SEO, SITE_URL } from '../frontend/src/lib/seo.js';
+import { ROUTE_SEO, SITE_URL, propertySeo } from '../frontend/src/lib/seo.js';
 
 let pass = 0, fail = 0;
 const t = (name, ok, detail) => {
@@ -101,6 +101,44 @@ if (!existsSync(join(dist, 'index.html'))) {
   t('home page keeps its structured data', !!home && home.includes('application/ld+json'));
   t('the app bundle still loads from a nested page',
     (read('/tools/stamp-duty-calculator') || '').includes('src="/assets/'));
+}
+
+// --- listings -----------------------------------------------------------
+// Nine of the twenty-eight sitemap URLs are property pages. They are built
+// from the catalogue, not ROUTE_SEO, and were the last pages still shipping
+// the fallback head.
+const catalogue = JSON.parse(readFileSync(new URL('../frontend/api/lib/catalogue.json', import.meta.url), 'utf8'));
+const listingTitles = new Set();
+let dupListing = 0, cityTwice = 0, tooLong = 0;
+for (const property of catalogue) {
+  const seo = propertySeo(property);
+  if (listingTitles.has(seo.title)) dupListing++;
+  listingTitles.add(seo.title);
+  const city = property.location && property.location.city;
+  if (city && (seo.title.match(new RegExp(city, 'gi')) || []).length > 1) cityTwice++;
+  if (seo.title.length > 65) tooLong++;
+}
+t('every listing gets a distinct title', dupListing === 0);
+t('a listing never names its city twice', cityTwice === 0);
+t('listing titles stay a sensible length', tooLong === 0);
+
+if (existsSync(join(dist, 'index.html'))) {
+  const missingListings = catalogue
+    .filter((p) => !existsSync(join(dist, 'property', p.assetId, 'index.html')))
+    .map((p) => p.assetId);
+  t('every listing was prerendered', missingListings.length === 0, missingListings.join(', '));
+
+  const mismatched = [];
+  for (const property of catalogue) {
+    const f = join(dist, 'property', property.assetId, 'index.html');
+    if (!existsSync(f)) continue;
+    const html = readFileSync(f, 'utf8');
+    const title = (html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1];
+    if (title !== propertySeo(property).title.replace(/&/g, '&amp;')) mismatched.push(property.assetId);
+    const href = (html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/i) || [])[1];
+    if (href !== `${SITE_URL}/property/${property.assetId}`) mismatched.push(`${property.assetId} (canonical)`);
+  }
+  t('listing files match what the runtime would render', mismatched.length === 0, mismatched.join(', '));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

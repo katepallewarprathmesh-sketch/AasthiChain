@@ -122,6 +122,35 @@ export const ROUTE_SEO = {
   '/insights': { title: `Insights | ${SITE_NAME}`, description: 'Private operator analytics.', noindex: true },
 }
 
+// Built from the listing rather than the route table, because each property
+// is its own landing page for a real query ("fractional investment Pune").
+// Lives here, not in PropertyDetail, so the build can prerender exactly what
+// the runtime would have produced — the two must not disagree.
+export function propertySeo(property) {
+  const city = property.location && property.location.city
+  // Most listing titles already end in the city ("Green Valley Villas -
+  // Pune"), so appending it again read "… Villas - Pune in Pune" and pushed
+  // the title past the length Google displays. Only add it when it is new
+  // information.
+  const named = city && new RegExp(`\\b${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(property.title || '')
+  const where = city && !named ? ` in ${city}` : ''
+  const yieldPct = property.expectedYieldPct
+  const price = property.pricePerTokenINR
+  // Brand last is only worth the characters if the title still fits in what
+  // Google displays. Listing names are long, so the brand is the first thing
+  // dropped — the listing name is what carries the search intent anyway.
+  const full = `${property.title} — Fractional Investment${where}`
+  const branded = `${full} | ${SITE_NAME}`
+  return {
+    title: branded.length <= 65 ? branded : full,
+    description:
+      `Invest from ₹${Math.round(price || 0).toLocaleString('en-IN')} per token in ${property.title}` +
+      `${where}. ${yieldPct ? `Expected yield ${yieldPct}%. ` : ''}` +
+      `${property.propertyType || 'Property'} · ${property.areaSqft ? property.areaSqft + ' sq ft · ' : ''}` +
+      'Tokenised ownership recorded on a verifiable ledger.',
+  }
+}
+
 const FALLBACK = ROUTE_SEO['/']
 
 // Property pages are dynamic (/property/:id) and get their metadata from the

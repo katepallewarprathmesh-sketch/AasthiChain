@@ -21,7 +21,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ROUTE_SEO, SITE_NAME, SITE_URL, DEFAULT_IMAGE } from '../src/lib/seo.js';
+import { ROUTE_SEO, SITE_NAME, SITE_URL, DEFAULT_IMAGE, propertySeo } from '../src/lib/seo.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, '..', 'dist');
@@ -84,7 +84,21 @@ async function main() {
     written++;
   }
 
-  console.log(`prerender: ${written} routes written to dist/`);
+  // Nine of the twenty-eight URLs in the sitemap are listings. Leaving them
+  // on the fallback head would mean a third of what we submit looks like the
+  // home page to anything that does not run JavaScript. The catalogue is the
+  // same file the sitemap is generated from.
+  const catalogue = JSON.parse(await readFile(resolve(here, '..', 'api', 'lib', 'catalogue.json'), 'utf8'));
+  for (const property of catalogue) {
+    const path = `/property/${property.assetId}`;
+    const html = headFor(template, path, propertySeo(property));
+    const out = join(dist, 'property', property.assetId, 'index.html');
+    await mkdir(dirname(out), { recursive: true });
+    await writeFile(out, html);
+    written++;
+  }
+
+  console.log(`prerender: ${written} pages written to dist/ (${catalogue.length} listings)`);
 }
 
 main().catch((e) => {
