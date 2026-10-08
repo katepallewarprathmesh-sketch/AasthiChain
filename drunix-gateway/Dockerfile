@@ -10,6 +10,10 @@
 # PaaS hosts inject $PORT; the binary honours it (then DRUNIX_PORT, then 21100).
 
 FROM golang:1.25-alpine AS build
+# Let the toolchain fetch a newer Go if go.mod asks for one. The alpine
+# images pin GOTOOLCHAIN=local, so raising the go directive in go.mod
+# without also bumping this FROM line fails the build outright.
+ENV GOTOOLCHAIN=auto
 WORKDIR /src
 # go.mod/go.sum first so dependency layers cache
 COPY go.mod go.su[m] ./
