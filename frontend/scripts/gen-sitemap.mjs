@@ -50,6 +50,22 @@ const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/supp
 
 const today = new Date().toISOString().slice(0, 10)
 
+// lastmod has to mean "this page changed", not "someone ran a build". Stamping
+// today on all 29 URLs every build taught crawlers the date carries no
+// information. So: keep whatever date a URL already had, and only use today
+// for URLs appearing for the first time.
+const previousLastmod = (() => {
+  const map = new Map()
+  try {
+    const old = readFileSync(join(root, 'public/sitemap.xml'), 'utf8')
+    const re = /<loc>([^<]+)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g
+    for (const m of old.matchAll(re)) map.set(m[1], m[2])
+  } catch {
+    // No sitemap yet - every URL is new, which is correct on a first run.
+  }
+  return map
+})()
+
 // Every property is its own landing page - these are the URLs with real
 // search intent behind them ("fractional investment in Pune"), so they belong
 // in the sitemap. Read from the catalogue so the two can never drift apart.
@@ -72,7 +88,7 @@ const body = urls
     return [
       '  <url>',
       `    <loc>${loc}</loc>`,
-      `    <lastmod>${today}</lastmod>`,
+      `    <lastmod>${previousLastmod.get(loc) || today}</lastmod>`,
       `    <changefreq>${CHANGEFREQ[path] || 'monthly'}</changefreq>`,
       `    <priority>${PRIORITY[path] || '0.5'}</priority>`,
       '  </url>',
