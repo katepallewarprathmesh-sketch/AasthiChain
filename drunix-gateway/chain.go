@@ -182,7 +182,24 @@ func (c *DrunixChain) Durability() map[string]interface{} {
 	if c.persistErr != "" {
 		st["lastError"] = c.persistErr
 	}
+	// Pending outbox work means the ledger is advancing while its consequences
+	// are not landing. Invisible until now; see docs/EVENT-OUTBOX.md §6.
+	if r, ok := c.store.(interface{ OutboxStatus() OutboxStats }); ok {
+		st["outbox"] = r.OutboxStatus()
+	}
 	return st
+}
+
+// outboxProcessor exposes the store's relay side when it has one. Unexported:
+// the outbox is an implementation detail of durability, not part of the
+// chain's public surface.
+func (c *DrunixChain) outboxProcessor() OutboxProcessor {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if p, ok := c.store.(OutboxProcessor); ok {
+		return p
+	}
+	return nil
 }
 
 // ChainVerification is the replay result any node or agent can compute.

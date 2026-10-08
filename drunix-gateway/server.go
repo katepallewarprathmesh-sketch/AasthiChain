@@ -1,7 +1,9 @@
 package drunix
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,6 +40,42 @@ type Server struct {
 // NewServer wires dependencies (DIP).
 func NewServer(l DrunixClient) *Server {
 	return &Server{Ledger: l, Thresholds: DefaultThresholds(), events: newEventHub(), metrics: newMetrics()}
+}
+
+// StartOutboxRelay drains block consequences from durable storage.
+//
+// Only runs when the chain is backed by a store that implements the outbox;
+// with no DATABASE_URL there is nothing to drain and this returns nil, which
+// every OutboxRelay method tolerates. Returned so the caller can Stop it.
+//
+// Note the ledger.block consumer is additive for now: DrunixChain.Append still
+// publishes inline, so a live subscriber may see the same height twice while
+// both paths exist. That is safe by design — the payload is {height, hash} and
+// clients refetch — and the inline publish goes away with the ordering change
+// in docs/EVENT-OUTBOX.md §4.1.
+func (s *Server) StartOutboxRelay(ctx context.Context) *OutboxRelay {
+	if s.Pipeline == nil || s.Pipeline.CP == nil || s.Pipeline.CP.Ledger == nil {
+		return nil
+	}
+	relay := NewOutboxRelay(s.Pipeline.CP.Ledger.outboxProcessor())
+	if relay == nil {
+		return nil
+	}
+	hub := s.events
+	relay.Handle(TopicLedgerBlock, func(r OutboxRow) error {
+		if hub == nil {
+			return nil
+		}
+		height, _ := r.Payload["height"].(float64)
+		hash, _ := r.Payload["hash"].(string)
+		typ, _ := r.Payload["type"].(string)
+		ts, _ := r.Payload["timestamp"].(string)
+		hub.publish(LedgerEvent{Height: int64(height), Type: typ, Hash: hash, Timestamp: ts})
+		return nil
+	})
+	relay.Start(ctx)
+	log.Printf("outbox relay: started — block consequences are delivered from durable storage")
+	return relay
 }
 
 // Router composes middleware + routes (Open/Closed: add routes, no rewrites).

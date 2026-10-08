@@ -12,6 +12,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -115,9 +116,15 @@ func main() {
 	// falling back to DRUNIX_PORT and then the local default.
 	port := envOr("DRUNIX_PORT", os.Getenv("PORT"))
 	addr := ":" + envOr2(port, "21100")
+	// Router() late-binds the event hub to the chain, so the relay is started
+	// after it: the hub must exist before anything is delivered to it.
+	handler := srv.Router()
+	if relay := srv.StartOutboxRelay(context.Background()); relay != nil {
+		defer relay.Stop()
+	}
 	log.Printf("AasthiChain Drunix Gateway (Golang) listening on %s — channel %s, chaincode %s",
 		addr, drunix.Channel, drunix.ChaincodeName)
-	log.Fatal(http.ListenAndServe(addr, srv.Router()))
+	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
 // envOr2 returns v, or def when v is empty.

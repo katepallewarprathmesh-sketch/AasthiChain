@@ -68,10 +68,14 @@ CREATE TABLE IF NOT EXISTS umi_outbox (
 	delivered_at TIMESTAMPTZ,
 	attempts     INT         NOT NULL DEFAULT 0,
 	last_error   TEXT,
+	-- When this row may next be attempted. Backoff lives in a column rather
+	-- than in the relay's head so a restart does not retry everything at once.
+	next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 	UNIQUE (topic, dedupe_key)
 );
+ALTER TABLE umi_outbox ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now();
 CREATE INDEX IF NOT EXISTS umi_outbox_pending_idx
-	ON umi_outbox (seq) WHERE delivered_at IS NULL;
+	ON umi_outbox (next_attempt_at, seq) WHERE delivered_at IS NULL;
 `
 
 // OutboxStats is what /drunix/ledger/status reports. Pending work that is also
@@ -163,4 +167,74 @@ func (s *PostgresUMIStore) OutboxStatus() OutboxStats {
 		st.LastError = err.Error()
 	}
 	return st
+}
+
+// ProcessPending claims a batch, dispatches each row and records the outcome,
+// all inside one transaction.
+//
+// FOR UPDATE SKIP LOCKED is what makes a second gateway instance safe without
+// a leader election: two relays simply take disjoint rows, and neither waits
+// on the other. Rows are read fully before dispatch so the connection is free
+// to issue the follow-up updates.
+func (s *PostgresUMIStore) ProcessPending(ctx context.Context, limit int, dispatch OutboxHandler) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, s.note(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx,
+		`SELECT seq, block_height, topic, dedupe_key, payload, attempts
+		   FROM umi_outbox
+		  WHERE delivered_at IS NULL AND next_attempt_at <= now()
+		  ORDER BY seq
+		  LIMIT $1
+		  FOR UPDATE SKIP LOCKED`, limit)
+	if err != nil {
+		return 0, s.note(err)
+	}
+
+	var batch []OutboxRow
+	for rows.Next() {
+		var r OutboxRow
+		var raw []byte
+		if err := rows.Scan(&r.Seq, &r.BlockHeight, &r.Topic, &r.DedupeKey, &raw, &r.Attempts); err != nil {
+			rows.Close()
+			return 0, s.note(err)
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &r.Payload); err != nil {
+				rows.Close()
+				return 0, s.note(fmt.Errorf("outbox %d: %w", r.Seq, err))
+			}
+		}
+		batch = append(batch, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, s.note(err)
+	}
+
+	delivered := 0
+	for _, r := range batch {
+		if derr := dispatch(r); derr != nil {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE umi_outbox
+				    SET attempts = attempts + 1, last_error = $2,
+				        next_attempt_at = now() + $3::interval
+				  WHERE seq = $1`,
+				r.Seq, derr.Error(), fmt.Sprintf("%d seconds", int(outboxBackoff(r.Attempts).Seconds()))); err != nil {
+				return delivered, s.note(err)
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE umi_outbox SET delivered_at = now(), last_error = NULL WHERE seq = $1`,
+			r.Seq); err != nil {
+			return delivered, s.note(err)
+		}
+		delivered++
+	}
+
+	return delivered, s.note(tx.Commit())
 }
