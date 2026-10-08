@@ -59,7 +59,12 @@ export default function PropertyDetail({ user }) {
     if (!id) return
     api.propertyVerification(id)
       .then(d => { if (alive) setVerif(d) })
-      .catch(() => { if (alive) setVerif(null) })
+      // Keep whatever is already on screen. This effect re-runs on refreshKey
+      // after a purchase or a yield payout, and a failure on that second run
+      // used to wipe a verification panel the reader was already looking at —
+      // including the deed checker inside it. A stale panel is better than a
+      // section that deletes itself.
+      .catch(() => { if (alive) setVerif(v => v) })
     return () => { alive = false }
   }, [id, refreshKey])
 
