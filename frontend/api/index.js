@@ -4097,15 +4097,23 @@ export default async function handler(req, res) {
       ];
 
       const failed = checks.filter(c => !c.ok);
+      // A check can pass without being proven: an unreachable register, or a
+      // listing with nothing anchored yet, is a warning rather than a
+      // failure. Counting only failures let the report announce "every check
+      // passed" over a property whose documents nobody can actually verify.
+      const unproven = checks.filter(c => c.ok && c.warn);
       return res.json({
+        unprovenCount: unproven.length,
         assetId: prop.assetId,
         title: prop.title,
         status: prop.status,
         registrarValidationStatus: prop.registrarValidationStatus,
         verified: failed.length === 0,
-        summary: failed.length === 0
-          ? 'Every verification check passed.'
-          : `${failed.length} check(s) did not pass: ${failed.map(c => c.label).join('; ')}.`,
+        summary: failed.length > 0
+          ? `${failed.length} check(s) did not pass: ${failed.map(c => c.label).join('; ')}.`
+          : unproven.length > 0
+            ? `No check failed, but ${unproven.length} could not be proven: ${unproven.map(c => c.label).join('; ')}.`
+            : 'Every verification check passed.',
         checks,
         documentHash: prop.documentHash,
         owner: prop.originatorId,
