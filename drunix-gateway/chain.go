@@ -94,6 +94,10 @@ type DrunixChain struct {
 	// history is never extended; the node serves it read-only and says so.
 	sealed     bool
 	persistErr string
+	// pending holds blocks that are committed in memory but whose durable
+	// write failed. They are retried in order; until the queue drains the
+	// chain reports itself degraded.
+	pending []*DrunixBlock
 	// hub, when set, receives a notification for every committed block so
 	// live subscribers can be told. Publishing never blocks a commit.
 	hub *eventHub
@@ -145,20 +149,72 @@ func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *D
 	}
 	b.TxnsRoot = TxnsRoot(b.Txns)
 	b.Hash = chainHash(b.Timestamp + "|" + b.Type + "|" + b.TxnsRoot + "|" + b.PrevHash)
-	c.Blocks = append(c.Blocks, b)
-	if c.hub != nil {
-		c.hub.publish(LedgerEvent{Height: b.Height, Type: b.Type, Hash: b.Hash, Timestamp: b.Timestamp})
-	}
+
+	// Durability first, THEN anyone is told. Publishing before the write meant
+	// a subscriber could be shown a block that a restart would erase, which
+	// made "if a client is told something happened, a block exists to prove
+	// it" an aspiration rather than a guarantee.
+	persisted := true
 	if c.store != nil {
+		c.flushPendingLocked()
 		if err := c.store.AppendBlockWithEvents(b, blockEvents(b)); err != nil {
-			// The block is already committed in memory and returned to the
-			// caller; durability is best-effort and must never fail a
-			// settlement. Loud log + surfaced in /drunix/ledger/status.
-			log.Printf("Drunix chain: block %d committed in memory but NOT persisted: %v", b.Height, err)
+			// The settlement that produced this block already happened: the
+			// rail mutates wallets and positions under its own lock and
+			// releases it before appending, so there is nothing here that
+			// could be rolled back. Refusing the block would lose the record
+			// of a transfer that has occurred — strictly worse. Instead the
+			// block is queued for retry and the chain reports itself degraded,
+			// which the write gate uses to stop ACCEPTING further settlements.
+			log.Printf("Drunix chain: block %d committed in memory but NOT persisted: %v — queued for retry", b.Height, err)
 			c.persistErr = err.Error()
+			c.pending = append(c.pending, b)
+			persisted = false
 		}
 	}
+
+	c.Blocks = append(c.Blocks, b)
+
+	// With a store attached the outbox relay publishes from durable rows, so
+	// publishing here as well would show every subscriber the same height
+	// twice. Inline publish is for the in-memory case, which has no relay.
+	if c.hub != nil && (c.store == nil || !persisted) {
+		c.hub.publish(LedgerEvent{Height: b.Height, Type: b.Type, Hash: b.Hash, Timestamp: b.Timestamp})
+	}
 	return b
+}
+
+// flushPendingLocked retries blocks whose durable write failed earlier, oldest
+// first. Caller holds c.mu.
+//
+// Order matters: a later block must never reach storage before an earlier one,
+// so the first failure stops the flush and everything behind it waits.
+func (c *DrunixChain) flushPendingLocked() {
+	for len(c.pending) > 0 {
+		b := c.pending[0]
+		if err := c.store.AppendBlockWithEvents(b, blockEvents(b)); err != nil {
+			return
+		}
+		log.Printf("Drunix chain: block %d persisted on retry", b.Height)
+		c.pending = c.pending[1:]
+	}
+	c.persistErr = ""
+}
+
+// Behind reports how many committed blocks have not reached durable storage.
+func (c *DrunixChain) Behind() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.pending)
+}
+
+// FlushPending retries queued writes from outside the append path, so a
+// recovered database is picked up without waiting for the next settlement.
+func (c *DrunixChain) FlushPending() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.store != nil {
+		c.flushPendingLocked()
+	}
 }
 
 // Snapshot returns a race-safe copy of the block slice for read-only use.
@@ -179,6 +235,10 @@ func (c *DrunixChain) Durability() map[string]interface{} {
 		mode = c.store.BlockStoreMode() + " (append-only, survives restarts)"
 	}
 	st := map[string]interface{}{"mode": mode, "durable": c.store != nil, "sealed": c.sealed}
+	if len(c.pending) > 0 {
+		st["behind"] = len(c.pending)
+		st["degraded"] = true
+	}
 	if c.persistErr != "" {
 		st["lastError"] = c.persistErr
 	}

@@ -11,8 +11,8 @@ import (
 // sentinel codes leaking into prose.
 
 func (s *Server) registerMarketRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/umi/offers", s.handleOffers)
-	mux.HandleFunc("/umi/offers/", s.handleOfferByID)
+	mux.HandleFunc("/umi/offers", s.durabilityGate(s.handleOffers))
+	mux.HandleFunc("/umi/offers/", s.durabilityGate(s.handleOfferByID))
 	mux.HandleFunc("/umi/market/", s.handleMarketDepth)
 }
 

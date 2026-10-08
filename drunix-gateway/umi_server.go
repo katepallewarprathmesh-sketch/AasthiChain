@@ -44,22 +44,52 @@ var umiEndpointList = []string{
 }
 
 // registerUMIRoutes mounts the rail on an existing mux (called from Router).
+// durabilityGate refuses money-moving requests while committed blocks are
+// still waiting to reach durable storage.
+//
+// Reads are always allowed: showing someone their balance during a storage
+// outage is harmless, and going dark would be a worse answer than a slightly
+// stale one. Only the writes are held back, and only before they have changed
+// anything.
+func (s *Server) durabilityGate(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodOptions &&
+			UMIDurabilityStrict() && s.chainDegraded() {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+				"error":   "ERR_UMI_DURABILITY_DEGRADED",
+				"message": ErrDurabilityDegraded.Error(),
+				"hint":    "see GET /drunix/ledger/status for how far behind durable storage is",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// chainDegraded reports whether any committed block is still unpersisted.
+func (s *Server) chainDegraded() bool {
+	if s.Pipeline == nil || s.Pipeline.CP == nil || s.Pipeline.CP.Ledger == nil {
+		return false
+	}
+	return s.Pipeline.CP.Ledger.Behind() > 0
+}
+
 func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	if s.UMI == nil {
 		return
 	}
 	mux.HandleFunc("/umi/config", s.handleUMIConfig)
 	mux.HandleFunc("/umi/wallets", s.handleUMIWallets)
-	mux.HandleFunc("/umi/wallets/", s.handleUMIWallet)
+	mux.HandleFunc("/umi/wallets/", s.durabilityGate(s.handleUMIWallet))
 	mux.HandleFunc("/umi/isin", s.handleUMIISIN)
-	mux.HandleFunc("/umi/dvp", s.handleUMIDvP)
+	mux.HandleFunc("/umi/dvp", s.durabilityGate(s.handleUMIDvP))
 	mux.HandleFunc("/umi/instructions", s.handleUMIInstructions)
 	mux.HandleFunc("/umi/instructions/", s.handleUMIInstruction)
-	mux.HandleFunc("/umi/servicing", s.handleUMIServicing)
+	mux.HandleFunc("/umi/servicing", s.durabilityGate(s.handleUMIServicing))
 	mux.HandleFunc("/umi/servicing/history", s.handleUMIServicingHistory)
 	mux.HandleFunc("/umi/income/", s.handleUMIIncome)
 	mux.HandleFunc("/umi/reconciliation", s.handleUMIReconciliation)
-	mux.HandleFunc("/umi/seed", s.handleUMISeed)
+	mux.HandleFunc("/umi/seed", s.durabilityGate(s.handleUMISeed))
 	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)

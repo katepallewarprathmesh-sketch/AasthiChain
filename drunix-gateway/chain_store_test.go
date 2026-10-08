@@ -290,3 +290,112 @@ func TestOutboxAbsentWithoutStore(t *testing.T) {
 		t.Fatal("live subscribers must still be notified with no store configured")
 	}
 }
+
+// --- step 5: durability before notification --------------------------------
+
+// Nobody is told about a block until it is durable. The old order published
+// first, so a subscriber could be shown a height that a restart would erase.
+func TestNothingIsPublishedBeforeItIsDurable(t *testing.T) {
+	store := newFakeBlockStore()
+	c, _ := NewChainWithStore(store)
+	hub := newEventHub()
+	c.Watch(hub)
+	id, ch := hub.subscribe()
+	defer hub.unsubscribe(id)
+
+	// Storage is down: the block is kept and queued, and because it is NOT
+	// durable the inline publish still fires — a subscriber hearing about a
+	// block the chain is holding in memory is correct; hearing about one that
+	// was never written anywhere is not.
+	store.failNext = true
+	first := c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI1"}})
+	select {
+	case ev := <-ch:
+		if ev.Height != first.Height {
+			t.Fatalf("got height %d, want %d", ev.Height, first.Height)
+		}
+	default:
+		t.Fatal("a block held only in memory must still reach subscribers")
+	}
+	if c.Behind() != 1 {
+		t.Fatalf("a failed write should queue the block, behind=%d", c.Behind())
+	}
+	d := c.Durability()
+	if d["degraded"] != true || d["behind"] != 1 {
+		t.Fatalf("a degraded chain must say so: %+v", d)
+	}
+
+	// Storage recovers: the queued block is retried on the next append, in
+	// order, and the chain stops reporting itself degraded.
+	store.failNext = false
+	c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI2"}})
+	// This one IS durable, so the relay owns the announcement and the inline
+	// path must stay quiet rather than double-publishing.
+	select {
+	case ev := <-ch:
+		t.Fatalf("a durable block must be announced by the relay, not inline (got height %d)", ev.Height)
+	default:
+	}
+	if c.Behind() != 0 {
+		t.Fatalf("recovery should drain the queue, behind=%d", c.Behind())
+	}
+	blocks, _ := store.LoadBlocks(context.Background())
+	if len(blocks) != 3 { // genesis + two settlements
+		t.Fatalf("durable store has %d blocks, want 3", len(blocks))
+	}
+	for i, b := range blocks {
+		if b.Height != int64(i) {
+			t.Fatalf("blocks persisted out of order at %d: height %d", i, b.Height)
+		}
+	}
+	if d := c.Durability(); d["degraded"] != nil {
+		t.Fatalf("a recovered chain must stop reporting degraded: %+v", d)
+	}
+}
+
+// A later block must never overtake an earlier one into storage, or the
+// durable chain would have a hole in it.
+func TestPendingBlocksArePersistedInOrder(t *testing.T) {
+	store := newFakeBlockStore()
+	c, _ := NewChainWithStore(store)
+
+	store.failNext = true
+	for i := 0; i < 3; i++ {
+		c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"n": i}})
+	}
+	if c.Behind() != 3 {
+		t.Fatalf("want 3 queued, got %d", c.Behind())
+	}
+
+	store.failNext = false
+	c.FlushPending()
+	if c.Behind() != 0 {
+		t.Fatalf("flush should drain the queue, got %d", c.Behind())
+	}
+	blocks, _ := store.LoadBlocks(context.Background())
+	for i, b := range blocks {
+		if b.Height != int64(i) {
+			t.Fatalf("out of order at %d: height %d", i, b.Height)
+		}
+	}
+}
+
+// With no store there is no relay, so the inline publish is the only path and
+// must keep working exactly as before.
+func TestInMemoryChainStillPublishesInline(t *testing.T) {
+	c := NewChain()
+	hub := newEventHub()
+	c.Watch(hub)
+	id, ch := hub.subscribe()
+	defer hub.unsubscribe(id)
+
+	b := c.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI3"}})
+	select {
+	case ev := <-ch:
+		if ev.Height != b.Height {
+			t.Fatalf("got height %d, want %d", ev.Height, b.Height)
+		}
+	default:
+		t.Fatal("an in-memory chain must still notify subscribers inline")
+	}
+}

@@ -12,8 +12,8 @@ import (
 
 // registerPortfolioRoutes mounts the basket and ownership endpoints.
 func (s *Server) registerPortfolioRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/umi/baskets", s.handleBaskets)
-	mux.HandleFunc("/umi/baskets/", s.handleBasketByID)
+	mux.HandleFunc("/umi/baskets", s.durabilityGate(s.handleBaskets))
+	mux.HandleFunc("/umi/baskets/", s.durabilityGate(s.handleBasketByID))
 	mux.HandleFunc("/umi/ownership/", s.handleOwnership)
 	mux.HandleFunc("/umi/holdings/", s.handleBasketHoldings)
 }

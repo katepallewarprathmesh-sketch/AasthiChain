@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -272,3 +275,28 @@ func (s *PostgresUMIStore) ProcessPending(ctx context.Context, limit int, dispat
 
 	return delivered, s.note(tx.Commit())
 }
+
+// --- durability gate --------------------------------------------------------
+
+// UMIDurabilityStrict reports whether the rail should stop accepting new
+// money-moving requests while committed blocks are waiting to be persisted.
+//
+// Why a gate and not a rollback: by the time a block is appended the rail has
+// already moved the cash and the securities under its own lock and released
+// it. Failing the append at that point cannot undo the transfer — it would
+// only discard the record of one that happened. What CAN be done safely is
+// refuse the next request, before anything has moved. One settlement may slip
+// through a storage outage unrecorded in Postgres (it is queued for retry and
+// reported); a thousand cannot.
+//
+// Default is strict. UMI_DURABILITY=best-effort restores the old behaviour for
+// a demo instance with no database wired up, where a degraded chain is the
+// normal state rather than an incident.
+func UMIDurabilityStrict() bool {
+	return !strings.EqualFold(strings.TrimSpace(os.Getenv("UMI_DURABILITY")), "best-effort")
+}
+
+// ErrDurabilityDegraded is returned to callers while the durable chain is
+// behind. It is deliberately a 503: the request was not refused because it was
+// wrong, and retrying it later is the right thing to do.
+var ErrDurabilityDegraded = errors.New("the ledger cannot be written to durable storage right now, so no new settlement is being accepted — this is temporary and the request can be retried")
