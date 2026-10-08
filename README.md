@@ -196,7 +196,7 @@ cd frontend && npm install && npm run dev        # :5173
 
 # 2 — with the Go settlement rail
 cd drunix-gateway && go run ./cmd/gateway                       # :21100
-UMI_GATEWAY_URL=http://localhost:21100 node mock-api-server.js  # :8080
+DEMO_AUTH=true UMI_GATEWAY_URL=http://localhost:21100 node server.js  # :8080
 
 # 3 — everything, including the Fabric network
 cd network && docker-compose up -d && ./scripts/create-channel.sh

@@ -2,7 +2,7 @@
   "name": "user",
   "version": "1.0.0",
   "description": "**Drunix Hackathon x Citi \u2014 Problem Statement 2 (Real Asset Tokenization)** Version 1.1 | Track A Improvements Implemented | Production-Ready Release",
-  "main": "mock-api-server.js",
+  "main": "server.js",
   "directories": {
     "doc": "docs"
   },

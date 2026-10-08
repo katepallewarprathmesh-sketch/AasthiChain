@@ -138,8 +138,8 @@ echo $! >/tmp/aasthi-rail.pid
 wait_for_port "$RAIL_PORT" 30 || { echo "rail failed; see /tmp/aasthi-rail.log" >&2; exit 1; }
 
 echo "starting the app on :$APP_PORT…"
-env ADMIN_DASHBOARD_KEY="$ADMIN_KEY" UMI_GATEWAY_URL="http://localhost:$RAIL_PORT" \
-    PORT="$APP_PORT" node mock-api-server.js >/tmp/aasthi-app.log 2>&1 &
+env DEMO_AUTH=true ADMIN_DASHBOARD_KEY="$ADMIN_KEY" UMI_GATEWAY_URL="http://localhost:$RAIL_PORT" \
+    PORT="$APP_PORT" node server.js >/tmp/aasthi-app.log 2>&1 &
 echo $! >/tmp/aasthi-app.pid
 wait_for_port "$APP_PORT" 30 || { echo "app failed; see /tmp/aasthi-app.log" >&2; exit 1; }
 

@@ -100,6 +100,11 @@ echo "  (checked separately)"
 # remembered into this file by hand, and listtotrade/preflight/chainpaging all
 # sat outside the sweep for weeks because nobody remembered. A new file in
 # tests/ is now in the sweep the moment it exists.
+# This rig stays on mock-api-server.js while the main app runs server.js.
+# The serverless handler persists its state to /tmp and reloads it on boot,
+# so token supply carries over between runs and the primary sale eventually
+# reads as fully subscribed; Express reseeds on every start, which is what a
+# repeatable purchase test needs. Not a defect in either server.
 # Three suites (payusettle, releasedresume, releaserail) drive the PayU
 # callback path, which needs a gateway in payu mode with known test
 # credentials. That instance used to be started by hand, which is exactly why
