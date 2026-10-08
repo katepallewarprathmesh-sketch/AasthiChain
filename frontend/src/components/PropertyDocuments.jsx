@@ -37,18 +37,37 @@ async function sha256OfFile(file) {
 }
 
 export default function PropertyDocuments({ assetId }) {
-  const [docs, setDocs] = useState(null)       // null = loading, [] = none, false = unreachable
+  const [docs, setDocs] = useState(null)       // null = still loading, [] = none, false = unreachable
+  const [loadError, setLoadError] = useState('')
+  const [attempt, setAttempt] = useState(0)    // bump to retry
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState(null)
   const [fileName, setFileName] = useState('')
 
   useEffect(() => {
     let alive = true
+    let retryTimer = null
+    setDocs(null); setLoadError('')
+
     api.umiDocuments(assetId)
       .then(r => { if (alive) setDocs(Array.isArray(r.documents) ? r.documents : []) })
-      .catch(() => { if (alive) setDocs(false) })
-    return () => { alive = false }
-  }, [assetId])
+      .catch(e => {
+        if (!alive) return
+        // The rail is commonly asleep rather than broken — a hosted gateway on a
+        // free tier takes a few seconds to wake up, and the first request after
+        // that loses. Retry once on its own before telling anyone anything,
+        // because a self-healing wait beats a scary message the user has to act
+        // on. Only a second failure is reported.
+        if (attempt === 0) {
+          retryTimer = setTimeout(() => { if (alive) setAttempt(1) }, 2500)
+          return
+        }
+        setDocs(false)
+        setLoadError(e && e.message ? e.message : 'The document register could not be reached.')
+      })
+
+    return () => { alive = false; if (retryTimer) clearTimeout(retryTimer) }
+  }, [assetId, attempt])
 
   async function checkFile(file) {
     if (!file) return
@@ -64,7 +83,6 @@ export default function PropertyDocuments({ assetId }) {
     }
   }
 
-  if (docs === false) return null // register unreachable: say nothing rather than imply there are no documents
 
   return (
     <section style={{ marginTop: 24, background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
@@ -81,7 +99,34 @@ export default function PropertyDocuments({ assetId }) {
         name and stops matching. You do not have to trust this page: hash your copy and compare.
       </p>
 
-      {docs === null && <p style={{ fontSize: 12.5, color: '#6B7280' }}>Loading…</p>}
+      {docs === null && (
+        <p style={{ fontSize: 12.5, color: '#6B7280', margin: '8px 0 0' }}>
+          {attempt > 0 ? 'Still waiting for the document register…' : 'Loading…'}
+        </p>
+      )}
+
+      {/* Unreachable is not the same as empty. Saying "no documents" here would
+          be a false statement about the property, and silently removing the
+          section leaves someone who watched it appear wondering what they saw. */}
+      {docs === false && (
+        <div style={{
+          marginTop: 10, padding: 12, borderRadius: 8, fontSize: 12.5, lineHeight: 1.6,
+          background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
+        }}>
+          <strong>The document register could not be reached.</strong>{' '}
+          This does not mean the property has no documents — it means we cannot tell you right now.
+          {loadError ? <span style={{ display: 'block', marginTop: 4, opacity: 0.85 }}>{loadError}</span> : null}
+          <button
+            type="button"
+            onClick={() => setAttempt(a => a + 1)}
+            style={{
+              marginTop: 10, padding: '6px 14px', borderRadius: 8, border: '1px solid #FDE68A',
+              background: 'white', color: '#92400E', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+            }}>
+            Try again
+          </button>
+        </div>
+      )}
 
       {Array.isArray(docs) && docs.length === 0 && (
         <p style={{ fontSize: 12.5, color: '#6B7280', margin: '8px 0 0' }}>
