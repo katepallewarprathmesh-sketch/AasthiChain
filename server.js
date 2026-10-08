@@ -115,7 +115,22 @@ function serveStatic(req, res, pathname) {
   if (!file.startsWith(DIST)) return false;
   let stat;
   try { stat = fs.statSync(file); } catch { return false; }
+  // The build prerenders a head-per-route at dist/<route>/index.html. Vercel
+  // serves those automatically; do the same here so local and production
+  // return the same HTML for the same URL.
+  if (stat.isDirectory()) {
+    const nested = path.join(file, 'index.html');
+    try {
+      const s2 = fs.statSync(nested);
+      if (!s2.isFile()) return false;
+      return sendFile(req, res, nested, s2);
+    } catch { return false; }
+  }
   if (!stat.isFile()) return false;
+  return sendFile(req, res, file, stat);
+}
+
+function sendFile(req, res, file, stat) {
   res.statusCode = 200;
   res.setHeader('Content-Type', MIME[path.extname(file).toLowerCase()] || 'application/octet-stream');
   res.setHeader('Content-Length', stat.size);
