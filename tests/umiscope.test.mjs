@@ -104,6 +104,44 @@ const dry = await call('/api/umi/dvp', INVESTOR2, {
 });
 t('a dry run is still allowed', dry.status !== 403 && dry.status !== 401, `got ${dry.status}`);
 
+// ---- the securities and income side, which the first pass left open
+//
+// Locking the cash leg while the record of what someone bought, from whom,
+// for how much, and what income it paid them stayed world-readable is the
+// same disclosure one leg over.
+const blotterAnon = await call('/api/umi/instructions', null);
+t('the settlement blotter needs an identity', blotterAnon.status === 401, `got ${blotterAnon.status}`);
+
+const blotter = await call('/api/umi/instructions', INVESTOR2);
+const rows = (blotter.body && blotter.body.instructions) || [];
+t('a participant only sees trades they were party to',
+  rows.every((i) => i.seller === 'investor2' || i.buyer === 'investor2'),
+  rows.map((i) => `${i.seller}->${i.buyer}`).join(',').slice(0, 160));
+const fullBlotter = await asSupervisor('/api/umi/instructions');
+t('a supervisor sees the whole book',
+  ((fullBlotter.body && fullBlotter.body.instructions) || []).length >= rows.length);
+
+const someoneElses = ((fullBlotter.body && fullBlotter.body.instructions) || [])
+  .find((i) => i.seller !== 'investor2' && i.buyer !== 'investor2');
+if (someoneElses) {
+  const peek = await call(`/api/umi/instructions/${someoneElses.instructionId}`, INVESTOR2);
+  t('and a stranger cannot open one by id', peek.status === 403, `got ${peek.status}`);
+} else {
+  t('and a stranger cannot open one by id', true, 'no foreign instruction to try');
+}
+
+const income = await call('/api/umi/income/investor1', INVESTOR2);
+t('income statements are not readable by other participants', income.status === 403, `got ${income.status}`);
+t('nor anonymously', (await call('/api/umi/income/investor1', null)).status === 401);
+t('your own income is still yours to read',
+  (await call('/api/umi/income/investor2', INVESTOR2)).status === 200);
+
+const servicing = await call('/api/umi/servicing/history', INVESTOR2);
+const payouts = (servicing.body && servicing.body.payouts) || [];
+t('servicing history is scoped to your own payouts',
+  payouts.every((p) => p.holder === 'investor2' || p.payer === 'investor2'),
+  payouts.map((p) => `${p.payer}->${p.holder}`).join(',').slice(0, 160));
+
 // ---- the public view stays public
 const recon = await call('/api/umi/reconciliation', null);
 t('reconciliation is still readable by anyone', recon.status === 200, `got ${recon.status}`);

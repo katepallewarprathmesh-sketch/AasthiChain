@@ -64,8 +64,8 @@ chk "POST dvp (bad amount → 400)" 400 "$(code -X POST -H 'Content-Type: applic
 chk "POST dvp (malformed json → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{oops' $API/api/umi/dvp)"
 chk "GET  dvp with GET (→405)"    405 "$(code $API/api/umi/dvp)"
 chk "POST servicing"              200 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","payer":"originator1","amountINR":6000}' $API/api/umi/servicing)"
-chk "GET  instructions"           200 "$(code $API/api/umi/instructions)"
-chk "GET  unknown instruction→404" 404 "$(code $API/api/umi/instructions/NOPE)"
+chk "GET  instructions"           200 "$(code "${RAIL_ID[@]}" $API/api/umi/instructions)"
+chk "GET  unknown instruction→404" 404 "$(code "${RAIL_ID[@]}" $API/api/umi/instructions/NOPE)"
 chk "GET  unknown wallet→404"     404 "$(code "${RAIL_ID[@]}" $API/api/umi/wallets/ghost)"
 chk "GET  reconciliation"         200 "$(code $API/api/umi/reconciliation)"
 

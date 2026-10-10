@@ -324,14 +324,33 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUMIInstructions(w http.ResponseWriter, r *http.Request) {
+	// The blotter names both sides of every trade and what it cost. We locked
+	// who may read a participant's cash balance and left the record of what
+	// they bought, from whom and for how much readable by anyone — the same
+	// disclosure, one leg over. You see your own trades; a supervisor sees
+	// the book. The aggregate proof stays public at /umi/reconciliation.
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
 	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = n
 		}
 	}
+	rows := s.UMI.Instructions(limit)
+	if !caller.supervisor() {
+		mine := make([]SettlementInstruction, 0, len(rows))
+		for _, si := range rows {
+			if caller.is(si.Seller) || caller.is(si.Buyer) {
+				mine = append(mine, si)
+			}
+		}
+		rows = mine
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"instructions": s.UMI.Instructions(limit), "mode": UMIMode, "disclaimer": UMIDisclaimer,
+		"instructions": rows, "mode": UMIMode, "disclaimer": UMIDisclaimer,
 	})
 }
 
@@ -341,9 +360,19 @@ func (s *Server) handleUMIInstruction(w http.ResponseWriter, r *http.Request) {
 		s.handleUMIInstructions(w, r)
 		return
 	}
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
 	si, err := s.UMI.Instruction(id)
 	if err != nil {
 		umiErr(w, http.StatusNotFound, err.Error(), "no UMI instruction "+id)
+		return
+	}
+	// Named by id rather than enumerated, but it is still someone's trade.
+	if !caller.supervisor() && !caller.is(si.Seller) && !caller.is(si.Buyer) {
+		umiErr(w, http.StatusForbidden, "ERR_UMI_NOT_YOURS",
+			"This settlement instruction belongs to other participants.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -364,6 +393,11 @@ func (s *Server) handleUMIIncome(w http.ResponseWriter, r *http.Request) {
 			"message": "GET /umi/income/{participant}"})
 		return
 	}
+	// An income statement is as personal as the wallet it is paid into.
+	caller := callerOf(r)
+	if !umiRequireSelfOrSupervisor(w, caller, participant, "A servicing income statement") {
+		return
+	}
 	total, rows := s.UMI.Income(participant)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"participant":    participant,
@@ -381,7 +415,21 @@ func (s *Server) handleUMIServicingHistory(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ERR_UMI_DISABLED"})
 		return
 	}
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
 	rows := s.UMI.ServicingHistory(atoiDefault(r.URL.Query().Get("limit"), 100))
+	if !caller.supervisor() {
+		// Every row names who paid and who was paid how much. Yours only.
+		mine := make([]ServicingRecord, 0, len(rows))
+		for _, rec := range rows {
+			if caller.is(rec.Holder) || caller.is(rec.Payer) {
+				mine = append(mine, rec)
+			}
+		}
+		rows = mine
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"payouts": rows, "count": len(rows)})
 }
 

@@ -337,7 +337,10 @@ func TestUMIRoutesAreAdditiveAndServe(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/umi/instructions/"+resp.Instruction.InstructionID, nil))
+	lookup := httptest.NewRequest(http.MethodGet, "/umi/instructions/"+resp.Instruction.InstructionID, nil)
+	lookup.Header.Set("X-Fabric-Identity", "regulator1")
+	lookup.Header.Set("X-Identity-Role", "Regulator")
+	h.ServeHTTP(rec, lookup)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("instruction lookup = %d", rec.Code)
 	}
