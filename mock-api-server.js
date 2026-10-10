@@ -2416,8 +2416,17 @@ app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
   });
 });
 
+// Reading one payment has been owner-checked for a while, but the list
+// handed every signed-in user everyone else's payments: counterparties,
+// amounts, VPAs and UTRs.
+function paymentsVisibleTo(user) {
+  const all = Object.values(npciPayments);
+  if (SUPERVISORY.has(String(user.role || '').toLowerCase())) return all;
+  return all.filter(p => p.payerId === user.identityId || p.payeeId === user.identityId);
+}
+
 app.get('/api/npci/payments', authMiddleware, (req, res) => {
-  const list = Object.values(npciPayments)
+  const list = paymentsVisibleTo(req.user)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, parseInt(req.query.limit) || 20);
   res.json({ payments: list, count: list.length });
@@ -2732,8 +2741,12 @@ app.post('/api/npci/webhook/test', authMiddleware, (req, res) => {
   res.json({ sent: payload, payment: pay, note: 'Simulated bank webhook. No signature is verified unless NPCI_WEBHOOK_SECRET is set; without it only the payment owner may call this.' });
 });
 
+// The callback audit trail is a record of other people's payments too.
 app.get('/api/npci/webhooks', authMiddleware, (req, res) => {
-  res.json({ webhooks: npciWebhooks.slice(0, 50), count: npciWebhooks.length });
+  const supervising = SUPERVISORY.has(String(req.user.role || '').toLowerCase());
+  const mine = new Set(paymentsVisibleTo(req.user).map(p => p.paymentId));
+  const list = (supervising ? npciWebhooks : npciWebhooks.filter(w => mine.has(w.paymentId))).slice(0, 50);
+  res.json({ webhooks: list, count: list.length });
 });
 
 const PORT = process.env.PORT || 8080;

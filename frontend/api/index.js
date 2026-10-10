@@ -2253,9 +2253,19 @@ export default async function handler(req, res) {
       }
     }
 
+    // Reading one payment has been owner-checked for a while, but the list
+    // handed every signed-in user everyone else's payments: counterparties,
+    // amounts, VPAs and UTRs.
+    const paymentsVisibleTo = (who) => {
+      const all = Object.values(npciPayments);
+      if (SUPERVISORY.has(String((who && who.role) || '').toLowerCase())) return all;
+      const self = who && who.identityId;
+      return all.filter((p) => p.payerId === self || p.payeeId === self);
+    };
+
     if (path === '/api/npci/payments' && method === 'GET') {
       try {
-        const list = Object.values(npciPayments).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+        const list = paymentsVisibleTo(user).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
         return res.json({ payments: list, count: list.length, isSimulation: true });
       } catch (e) {
         return res.status(500).json({ error: e.message, payments: [], count: 0 });
@@ -2744,9 +2754,13 @@ export default async function handler(req, res) {
     // GET /api/npci/webhooks — audit log
     if (path === '/api/npci/webhooks' && method === 'GET') {
       try {
+        // The callback audit trail is a record of other people's payments too.
         const limit = Math.min(parseInt(url.searchParams.get('limit')) || 50, 200);
-        const list = npciWebhooks.slice(-limit).reverse();
-        return res.json({ webhooks: list, count: list.length, total: npciWebhooks.length });
+        const supervising = SUPERVISORY.has(String(user.role || '').toLowerCase());
+        const mine = new Set(paymentsVisibleTo(user).map((p) => p.paymentId));
+        const visible = supervising ? npciWebhooks : npciWebhooks.filter((w) => mine.has(w.paymentId));
+        const list = visible.slice(-limit).reverse();
+        return res.json({ webhooks: list, count: list.length, total: visible.length });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
