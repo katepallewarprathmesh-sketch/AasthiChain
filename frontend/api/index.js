@@ -646,6 +646,27 @@ async function railDeploymentStatus() {
   }
 }
 
+// The settlement rail keeps its own chain. This one can replay perfectly
+// while the rail's is broken, so a verify report that says "ledger intact"
+// without saying which ledger is overclaiming. Unreachable means unknown,
+// never "fine".
+async function railChainVerdict() {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch(base + '/umi/reconciliation', { signal: ctrl.signal });
+    if (!r.ok) return null;
+    const body = await r.json();
+    return (body && body.chain) || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
   if (!base) return { skipped: 'UMI_GATEWAY_URL not set' };
@@ -4421,6 +4442,7 @@ export default async function handler(req, res) {
         .map(b => ({ height: b.height, type: b.type, timestamp: b.timestamp, hash: b.hash }));
 
       const chain = drunixVerify();
+      const railChain = await railChainVerdict();
       const validated = prop.registrarValidationStatus === 'VALIDATED';
       const independent = Boolean(prop.validatedBy) && prop.validatedBy !== prop.originatorId;
       const dupes = Object.values(properties).filter(x => x.documentHash === prop.documentHash && x.assetId !== prop.assetId);
@@ -4487,11 +4509,21 @@ export default async function handler(req, res) {
         },
         {
           id: 'chain',
+          // This check only ever looked at the ownership chain, but it was
+          // labelled "Ledger intact from genesis" — which a reader takes to
+          // mean every ledger behind the listing, settlement rail included.
+          // The rail keeps its own chain and can be broken while this one is
+          // perfect, so name which ledger this is and say so when the other
+          // one disagrees.
           ok: Boolean(chain.valid),
-          label: 'Ledger intact from genesis',
-          detail: chain.valid
+          ...(railChain && railChain.valid === false ? { warn: true } : {}),
+          label: 'Ownership ledger intact from genesis',
+          detail: (chain.valid
             ? `All ${chain.blocks ?? drunixChain.length} blocks replay cleanly.`
-            : 'Hash chain verification FAILED — treat every claim above as unproven.',
+            : 'Hash chain verification FAILED — treat every claim above as unproven.')
+            + (railChain && railChain.valid === false
+              ? ` Separately, the UMI settlement rail's own ledger failed verification${railChain.brokenAt != null ? ` at block ${railChain.brokenAt}` : ''}, so settlement history is not currently provable.`
+              : ''),
         },
       ];
 

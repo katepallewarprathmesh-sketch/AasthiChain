@@ -951,6 +951,7 @@ app.all('/api/properties/:id/verify', async (req, res) => {
     .map(b => ({ height: b.height, type: b.type, timestamp: b.timestamp, hash: b.hash }));
 
   const chain = drunixVerify();
+  const railChain = await railChainVerdict();
   const validated = prop.registrarValidationStatus === 'VALIDATED';
   const independent = Boolean(prop.validatedBy) && prop.validatedBy !== prop.originatorId;
   const dupes = Object.values(properties).filter(x => x.documentHash === prop.documentHash && x.assetId !== prop.assetId);
@@ -1023,12 +1024,21 @@ app.all('/api/properties/:id/verify', async (req, res) => {
         : `Shares a document hash with ${dupes.map(d => d.assetId).join(', ')} — possible double listing.`,
     },
     {
+      // This check only ever looked at the ownership chain, but it was
+      // labelled "Ledger intact from genesis" — which a reader takes to mean
+      // every ledger behind the listing, settlement rail included. The rail
+      // keeps its own chain and can be broken while this one is perfect, so
+      // name which ledger this is and say so when the other one disagrees.
       id: 'chain',
       ok: Boolean(chain.valid),
-      label: 'Ledger intact from genesis',
-      detail: chain.valid
+      ...(railChain && railChain.valid === false ? { warn: true } : {}),
+      label: 'Ownership ledger intact from genesis',
+      detail: (chain.valid
         ? `All ${chain.blocks ?? drunixChain.length} blocks replay cleanly.`
-        : 'Hash chain verification FAILED — treat every claim above as unproven.',
+        : 'Hash chain verification FAILED — treat every claim above as unproven.')
+        + (railChain && railChain.valid === false
+          ? ` Separately, the UMI settlement rail's own ledger failed verification${railChain.brokenAt != null ? ` at block ${railChain.brokenAt}` : ''}, so settlement history is not currently provable.`
+          : ''),
     },
   ];
 
@@ -1640,6 +1650,27 @@ async function seedRailPosition(assetId, holder, tokens) {
   } catch (e) {
     console.error('[RAIL] seed unreachable for', assetId, e.message);
     return { ok: false, error: e.message };
+  }
+}
+
+// The settlement rail keeps its own chain. This one can replay perfectly
+// while the rail's is broken, so a verify report that says "ledger intact"
+// without saying which ledger is overclaiming. Unreachable means unknown,
+// never "fine".
+async function railChainVerdict() {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch(base + '/umi/reconciliation', { signal: ctrl.signal });
+    if (!r.ok) return null;
+    const body = await r.json();
+    return (body && body.chain) || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
