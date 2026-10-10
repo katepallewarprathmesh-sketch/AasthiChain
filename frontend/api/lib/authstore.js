@@ -78,6 +78,7 @@ const TABLES = {
     id TEXT PRIMARY KEY,
     identifier TEXT,
     value TEXT,
+    requested_by TEXT,
     expires_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ DEFAULT NOW()
   )`,
@@ -109,6 +110,29 @@ const TABLES = {
 function uid(prefix) {
   return (prefix ? prefix + '_' : '') + crypto.randomUUID()
 }
+
+// Wrong-guess budget for verification codes. Five misses and that
+// identifier stops answering for fifteen minutes, which turns a million
+// guesses into years instead of seconds.
+export const VERIFICATION_MAX_ATTEMPTS = 5
+export const VERIFICATION_LOCKOUT_MS = 15 * 60 * 1000
+const verificationAttempts = new Map()
+
+export function verificationLockedOut(identifier) {
+  const rec = verificationAttempts.get(identifier)
+  if (!rec) return false
+  if (Date.now() - rec.first > VERIFICATION_LOCKOUT_MS) { verificationAttempts.delete(identifier); return false }
+  return rec.count >= VERIFICATION_MAX_ATTEMPTS
+}
+function noteFailedVerification(identifier) {
+  const rec = verificationAttempts.get(identifier)
+  if (!rec || Date.now() - rec.first > VERIFICATION_LOCKOUT_MS) {
+    verificationAttempts.set(identifier, { count: 1, first: Date.now() })
+    return
+  }
+  rec.count += 1
+}
+function clearFailedVerifications(identifier) { verificationAttempts.delete(identifier) }
 
 // An invitation is addressed to someone. Demo identities are not email
 // addresses, so the local part is what we match on: inviting
@@ -381,35 +405,51 @@ export class AuthStore {
   }
 
   // ===== verification (email/phone OTP-style) =====
-  async createVerification({ identifier, expiresInMinutes = 30 }) {
+  async createVerification({ identifier, expiresInMinutes = 30, requestedBy = null }) {
     await this.init()
     const id = uid('ver')
     const value = String(Math.floor(100000 + Math.random() * 900000)) // 6-digit code
-    const row = { id, identifier: String(identifier).toLowerCase(), value, expires_at: new Date(Date.now() + expiresInMinutes * 60 * 1000), updated_at: new Date() }
+    const row = { id, identifier: String(identifier).toLowerCase(), value, requested_by: requestedBy || null, expires_at: new Date(Date.now() + expiresInMinutes * 60 * 1000), updated_at: new Date() }
     if (this.mode === 'postgres') {
-      await this.pool.query(`INSERT INTO verification (id, identifier, value, expires_at) VALUES ($1,$2,$3,$4)`, [row.id, row.identifier, row.value, row.expires_at])
+      await this.pool.query(`INSERT INTO verification (id, identifier, value, requested_by, expires_at) VALUES ($1,$2,$3,$4,$5)`, [row.id, row.identifier, row.value, row.requested_by, row.expires_at])
     } else {
       this.mem.verification.set(id, row)
     }
     return { id, identifier: row.identifier, expires_at: row.expires_at } // value never returned to client
   }
 
-  async consumeVerification(identifier, value) {
+  // A six-digit code is only a secret while guessing is expensive. Nothing
+  // counted attempts, so the whole space could be walked in seconds — and
+  // the code was matched on identifier alone, so whoever guessed it got the
+  // verification, not the person who asked for it.
+  async consumeVerification(identifier, value, requestedBy = null) {
     await this.init()
     const ident = String(identifier).toLowerCase()
+    if (verificationLockedOut(ident)) return false
+
+    const matches = (row) => {
+      if (!row) return false
+      if (new Date(row.expires_at) < new Date()) return false
+      if (row.requested_by && requestedBy && row.requested_by !== requestedBy) return false
+      return true
+    }
+
     if (this.mode === 'postgres') {
       const r = await this.pool.query(`SELECT * FROM verification WHERE identifier = $1 AND value = $2 AND expires_at > NOW() ORDER BY updated_at DESC LIMIT 1`, [ident, String(value)])
-      if (!r.rows[0]) return false
+      if (!matches(r.rows[0])) { noteFailedVerification(ident); return false }
       await this.pool.query(`DELETE FROM verification WHERE identifier = $1`, [ident])
+      clearFailedVerifications(ident)
       return true
     }
     for (const [k, v] of this.mem.verification.entries()) {
       if (v.identifier === ident && v.value === String(value)) {
-        if (new Date(v.expires_at) < new Date()) return false
+        if (!matches(v)) { noteFailedVerification(ident); return false }
         this.mem.verification.delete(k)
+        clearFailedVerifications(ident)
         return true
       }
     }
+    noteFailedVerification(ident)
     return false
   }
 

@@ -9,7 +9,7 @@ import { realDB } from './lib/db_real.js';
 // INSIDE the Vercel project root (frontend/) and actually gets bundled.
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
 import { recordHit, trafficSummary } from './lib/traffic.mjs';
-import { authStore } from './lib/authstore.js';
+import { authStore, verificationLockedOut } from './lib/authstore.js';
 import { ensureClerkKeys, verifyClerkJWT, clerkVerificationEnabled, hasUnknownKid } from './lib/clerkjwt.mjs';
 
 // File-backed persistence for Vercel — survives warm instances, helps with cold start for demo
@@ -1488,6 +1488,24 @@ function webhookViolation(method, path, user, req, store) {
   return pay.paymentId || id;
 }
 
+// Reconciliation names its payment in the body too, so the path gate below
+// never saw it — and a reconcile that comes back CONFIRMED settles the
+// purchase on the spot. Any signed-in user could force a stranger's payment
+// through.
+const BODY_PAYMENT_PATHS = new Set(['/api/npci/payu/reconcile']);
+
+function bodyPaymentViolation(method, path, user, req, store) {
+  if (method !== 'POST' || !BODY_PAYMENT_PATHS.has(path)) return null;
+  const id = (req.body || {}).paymentId;
+  const pay = id ? store[id] : null;
+  if (!pay) return null; // the handler answers 400/404
+  const self = user && user.identityId;
+  if (self && (pay.payerId === self || pay.payeeId === self)) return null;
+  const role = String((user && user.role) || '').toLowerCase();
+  if (SUPERVISORY.has(role) || role === 'originator') return null;
+  return pay.paymentId || id;
+}
+
 // Reading, approving, declining, refunding or settling someone else's
 // payment was open to any signed-in user. Declining was the damaging one: a
 // stranger could cancel a purchase mid-flight.
@@ -1561,6 +1579,14 @@ export default async function handler(req, res) {
       return res.status(403).json({
         error: 'ERR_NOT_YOUR_PAYMENT',
         message: `Payment ${notYourWebhook} belongs to someone else. A bank callback needs a valid signature.`,
+      });
+    }
+
+    const notYourReconcile = bodyPaymentViolation(method, path, user, req, npciPayments);
+    if (notYourReconcile) {
+      return res.status(403).json({
+        error: 'ERR_NOT_YOUR_PAYMENT',
+        message: `Payment ${notYourReconcile} belongs to someone else.`,
       });
     }
 
@@ -2877,14 +2903,18 @@ export default async function handler(req, res) {
       try {
         const { identifier } = req.body || {};
         if (!identifier) return res.status(400).json({ error: 'identifier required (email/phone)' });
-        return res.status(201).json(await authStore.createVerification({ identifier }));
+        return res.status(201).json(await authStore.createVerification({ identifier, requestedBy: user.identityId }));
       } catch (e) { return res.status(500).json({ error: e.message }); }
     }
 
     if (path === '/api/auth/verification/verify' && method === 'POST') {
       try {
         const { identifier, value } = req.body || {};
-        const ok = await authStore.consumeVerification(identifier, value);
+        const ident = String(identifier || '').toLowerCase();
+        if (verificationLockedOut(ident)) {
+          return res.status(429).json({ verified: false, error: 'ERR_TOO_MANY_ATTEMPTS', message: 'Too many wrong codes for this identifier. Try again later.' });
+        }
+        const ok = await authStore.consumeVerification(identifier, value, user.identityId);
         return res.json({ verified: ok });
       } catch (e) { return res.status(500).json({ error: e.message }); }
     }

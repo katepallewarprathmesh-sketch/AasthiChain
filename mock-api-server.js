@@ -210,7 +210,7 @@ function authMiddleware(req, res, next) {
   // each route so a new owner-scoped route cannot forget it.
   return authenticate(req, res, () =>
     ownershipGate(req, res, () =>
-      paymentGate(req, res, () => webhookGate(req, res, next))));
+      paymentGate(req, res, () => webhookGate(req, res, () => bodyPaymentGate(req, res, next)))));
 }
 
 function authenticate(req, res, next) {
@@ -324,6 +324,27 @@ function webhookGate(req, res, next) {
   });
 }
 
+// Reconciliation names its payment in the body too, so the path gate below
+// never saw it — and a reconcile that comes back CONFIRMED settles the
+// purchase on the spot. Any signed-in user could force a stranger's payment
+// through.
+const BODY_PAYMENT_PATHS = new Set(['/api/npci/payu/reconcile']);
+function bodyPaymentGate(req, res, next) {
+  if (!BODY_PAYMENT_PATHS.has(req.path) || req.method !== 'POST') return next();
+  if (!req.user) return next();
+  const id = (req.body || {}).paymentId;
+  const pay = id ? npciPayments[id] : null;
+  if (!pay) return next(); // the handler answers 404
+  const self = req.user.identityId;
+  const role = String(req.user.role || '').toLowerCase();
+  if (pay.payerId === self || pay.payeeId === self) return next();
+  if (SUPERVISORY.has(role) || role === 'originator') return next();
+  return res.status(403).json({
+    error: 'ERR_NOT_YOUR_PAYMENT',
+    message: `Payment ${pay.paymentId} belongs to someone else.`,
+  });
+}
+
 // Any signed-in user could read, approve, decline or refund anyone's
 // payment. Declining was the damaging one: cancelling a stranger's purchase.
 function paymentGate(req, res, next) {
@@ -431,11 +452,33 @@ app.get('/api/auth/schema', (req, res) => {
   });
 });
 
+// A six-digit code is only a secret while guessing is expensive. Nothing
+// counted attempts, so the whole space could be walked in seconds — and the
+// code was matched on identifier alone, so whoever guessed it got the
+// verification, not the person who asked for it.
+const VERIFICATION_MAX_ATTEMPTS = 5;
+const VERIFICATION_LOCKOUT_MS = 15 * 60 * 1000;
+const verificationAttempts = new Map();
+function verificationLockedOut(identifier) {
+  const rec = verificationAttempts.get(identifier);
+  if (!rec) return false;
+  if (Date.now() - rec.first > VERIFICATION_LOCKOUT_MS) { verificationAttempts.delete(identifier); return false; }
+  return rec.count >= VERIFICATION_MAX_ATTEMPTS;
+}
+function noteFailedVerification(identifier) {
+  const rec = verificationAttempts.get(identifier);
+  if (!rec || Date.now() - rec.first > VERIFICATION_LOCKOUT_MS) {
+    verificationAttempts.set(identifier, { count: 1, first: Date.now() });
+    return;
+  }
+  rec.count += 1;
+}
+
 app.post('/api/auth/verification', authMiddleware, (req, res) => {
   const { identifier } = req.body || {};
   if (!identifier) return res.status(400).json({ error: 'identifier required' });
   const id = uidA('ver');
-  const row = { id, identifier: String(identifier).toLowerCase(), value: String(Math.floor(100000 + Math.random() * 900000)), expires_at: new Date(Date.now() + 30 * 60 * 1000), updated_at: new Date() };
+  const row = { id, identifier: String(identifier).toLowerCase(), value: String(Math.floor(100000 + Math.random() * 900000)), requested_by: req.user.identityId, expires_at: new Date(Date.now() + 30 * 60 * 1000), updated_at: new Date() };
   authMem.verification.set(id, row);
   res.status(201).json({ id, identifier: row.identifier, expires_at: row.expires_at });
 });
@@ -443,13 +486,22 @@ app.post('/api/auth/verification', authMiddleware, (req, res) => {
 app.post('/api/auth/verification/verify', authMiddleware, (req, res) => {
   const { identifier, value } = req.body || {};
   const ident = String(identifier || '').toLowerCase();
+  if (verificationLockedOut(ident)) {
+    return res.status(429).json({ verified: false, error: 'ERR_TOO_MANY_ATTEMPTS', message: 'Too many wrong codes for this identifier. Try again later.' });
+  }
   for (const [k, v] of authMem.verification.entries()) {
     if (v.identifier === ident && v.value === String(value)) {
-      if (new Date(v.expires_at) < new Date()) return res.json({ verified: false });
+      if (new Date(v.expires_at) < new Date()) { noteFailedVerification(ident); return res.json({ verified: false }); }
+      if (v.requested_by && v.requested_by !== req.user.identityId) {
+        noteFailedVerification(ident);
+        return res.status(403).json({ verified: false, error: 'ERR_NOT_YOUR_VERIFICATION', message: 'This code was issued to someone else.' });
+      }
       authMem.verification.delete(k);
+      verificationAttempts.delete(ident);
       return res.json({ verified: true });
     }
   }
+  noteFailedVerification(ident);
   res.json({ verified: false });
 });
 
