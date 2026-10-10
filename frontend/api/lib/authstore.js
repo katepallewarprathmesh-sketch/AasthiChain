@@ -110,6 +110,16 @@ function uid(prefix) {
   return (prefix ? prefix + '_' : '') + crypto.randomUUID()
 }
 
+// An invitation is addressed to someone. Demo identities are not email
+// addresses, so the local part is what we match on: inviting
+// "investor2@anything" invites investor2.
+export function invitationIsFor(inv, userId) {
+  if (!inv || !userId) return false
+  if (inv.identity_id) return inv.identity_id === userId
+  const local = String(inv.email || '').split('@')[0].toLowerCase()
+  return !!local && local === String(userId).toLowerCase()
+}
+
 export class AuthStore {
   constructor() {
     this.mode = 'memory'
@@ -343,6 +353,13 @@ export class AuthStore {
       inv = this.mem.invitation.get(invitationId)
     }
     if (!inv) throw new Error('invitation not found: ' + invitationId)
+    // Knowing an invitation id is not the same as having been invited. This
+    // lives in the store so both backends and both servers get it.
+    if (!invitationIsFor(inv, userId)) {
+      const err = new Error(`invitation ${invitationId} was issued to ${inv.email}`)
+      err.code = 'ERR_NOT_INVITED'
+      throw err
+    }
     if (inv.status !== 'pending') throw new Error('invitation already ' + inv.status)
     if (new Date(inv.expires_at) < new Date()) {
       await this.setInvitationStatus(invitationId, 'expired')

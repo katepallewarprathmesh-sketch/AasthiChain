@@ -2900,16 +2900,42 @@ export default async function handler(req, res) {
       } catch (e) { return res.status(400).json({ error: e.message }); }
     }
 
+    // Organisation membership was never checked: any signed-in user could
+    // read any org's members and issue themselves an 'admin' invitation into
+    // an org they had nothing to do with.
+    const supervising = SUPERVISORY.has(String(user.role || '').toLowerCase());
+    // Refuse known orgs, 404 unknown ones: a 403 on a nonexistent id would
+    // confirm nothing is there.
+    const orgExists = async (orgId) => !!(await authStore.getOrganization(orgId));
+    const myOrgRole = async (orgId) => {
+      const mine = await authStore.listMembershipsForUser(user.identityId);
+      const row = (mine || []).find((m) => m.organization_id === orgId);
+      return row ? row.role : null;
+    };
+
     if (path === '/api/orgs' && method === 'GET') {
       try {
         await authStore.init();
-        return res.json({ organizations: await authStore.listOrganizations() });
+        const all = await authStore.listOrganizations();
+        if (supervising) return res.json({ organizations: all });
+        // The full list of organisations is a customer list.
+        const mine = await authStore.listMembershipsForUser(user.identityId);
+        const ids = new Set((mine || []).map((m) => m.organization_id));
+        return res.json({ organizations: all.filter((o) => ids.has(o.id)) });
       } catch (e) { return res.status(500).json({ error: e.message }); }
     }
 
     const orgMembersMatch = path.match(/^\/api\/orgs\/([^\/]+)\/members$/);
     if (orgMembersMatch && method === 'GET') {
-      try { return res.json({ members: await authStore.listMembers(decodeURIComponent(orgMembersMatch[1])) }); } catch (e) { return res.status(500).json({ error: e.message }); }
+      try {
+        await authStore.init();
+        const orgId = decodeURIComponent(orgMembersMatch[1]);
+        if (!(await orgExists(orgId))) return res.status(404).json({ error: 'organization not found' });
+        if (!supervising && !(await myOrgRole(orgId))) {
+          return res.status(403).json({ error: 'ERR_NOT_A_MEMBER', message: 'You are not a member of this organisation.' });
+        }
+        return res.json({ members: await authStore.listMembers(orgId) });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
     }
 
     const orgInvMatch = path.match(/^\/api\/orgs\/([^\/]+)\/invitations$/);
@@ -2917,11 +2943,26 @@ export default async function handler(req, res) {
       try {
         const { email, role } = req.body || {};
         if (!email) return res.status(400).json({ error: 'email required' });
-        return res.status(201).json(await authStore.createInvitation({ organizationId: decodeURIComponent(orgInvMatch[1]), email, role, invitedBy: user.identityId }));
+        await authStore.init();
+        const orgId = decodeURIComponent(orgInvMatch[1]);
+        if (!(await orgExists(orgId))) return res.status(404).json({ error: 'organization not found' });
+        const mine = await myOrgRole(orgId);
+        if (!supervising && !['owner', 'admin'].includes(mine)) {
+          return res.status(403).json({ error: 'ERR_NOT_ORG_ADMIN', message: 'Only an owner or admin of this organisation can invite.' });
+        }
+        return res.status(201).json(await authStore.createInvitation({ organizationId: orgId, email, role, invitedBy: user.identityId }));
       } catch (e) { return res.status(500).json({ error: e.message }); }
     }
     if (orgInvMatch && method === 'GET') {
-      try { return res.json({ invitations: await authStore.listInvitations(decodeURIComponent(orgInvMatch[1])) }); } catch (e) { return res.status(500).json({ error: e.message }); }
+      try {
+        await authStore.init();
+        const orgId = decodeURIComponent(orgInvMatch[1]);
+        if (!(await orgExists(orgId))) return res.status(404).json({ error: 'organization not found' });
+        if (!supervising && !(await myOrgRole(orgId))) {
+          return res.status(403).json({ error: 'ERR_NOT_A_MEMBER', message: 'You are not a member of this organisation.' });
+        }
+        return res.json({ invitations: await authStore.listInvitations(orgId) });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
     }
 
     if (path === '/api/invitations/accept' && method === 'POST') {
@@ -2930,7 +2971,12 @@ export default async function handler(req, res) {
         if (!invitationId) return res.status(400).json({ error: 'invitationId required' });
         await authStore.init();
         return res.json({ member: await authStore.acceptInvitation(invitationId, user.identityId) });
-      } catch (e) { return res.status(400).json({ error: e.message }); }
+      } catch (e) {
+        // Accepting an invitation addressed to someone else is a refusal,
+        // not a malformed request.
+        if (e && e.code === 'ERR_NOT_INVITED') return res.status(403).json({ error: 'ERR_NOT_INVITED', message: e.message });
+        return res.status(400).json({ error: e.message });
+      }
     }
 
 

@@ -474,24 +474,62 @@ app.post('/api/orgs', authMiddleware, (req, res) => {
   res.status(201).json(org);
 });
 
+// Organisation membership was never checked anywhere: any signed-in user
+// could read any org's member list, and — the serious one — issue themselves
+// an 'admin' invitation into an org they had nothing to do with and accept
+// it. Two calls, no membership, no token.
+function orgRoleOf(identityId, organizationId) {
+  for (const m of authMem.member.values()) {
+    if (m.organization_id === organizationId && m.user_id === identityId) return m.role;
+  }
+  return null;
+}
+const isSupervisor = (user) => SUPERVISORY.has(String((user && user.role) || '').toLowerCase());
+
+// An invitation is addressed to someone. Demo identities are not email
+// addresses, so the local part is what we match on: inviting
+// "investor2@anything" invites investor2.
+function invitationIsFor(inv, identityId) {
+  if (!inv) return false;
+  if (inv.identity_id) return inv.identity_id === identityId;
+  const local = String(inv.email || '').split('@')[0].toLowerCase();
+  return !!local && local === String(identityId).toLowerCase();
+}
+
 app.get('/api/orgs', authMiddleware, (req, res) => {
-  res.json({ organizations: [...authMem.organization.values()] });
+  // Listing every organisation to everyone is a customer list.
+  const all = [...authMem.organization.values()];
+  if (isSupervisor(req.user)) return res.json({ organizations: all });
+  res.json({ organizations: all.filter(o => orgRoleOf(req.user.identityId, o.id)) });
 });
 
 app.get('/api/orgs/:id/members', authMiddleware, (req, res) => {
+  if (!authMem.organization.has(req.params.id)) return res.status(404).json({ error: 'organization not found' });
+  if (!orgRoleOf(req.user.identityId, req.params.id) && !isSupervisor(req.user)) {
+    return res.status(403).json({ error: 'ERR_NOT_A_MEMBER', message: 'You are not a member of this organisation.' });
+  }
   res.json({ members: [...authMem.member.values()].filter(m => m.organization_id === req.params.id) });
 });
 
 app.post('/api/orgs/:id/invitations', authMiddleware, (req, res) => {
-  const { email, role } = req.body || {};
+  const { email, role, identityId } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email required' });
+  if (!authMem.organization.has(req.params.id)) return res.status(404).json({ error: 'organization not found' });
+  const mine = orgRoleOf(req.user.identityId, req.params.id);
+  if (!['owner', 'admin'].includes(mine) && !isSupervisor(req.user)) {
+    return res.status(403).json({ error: 'ERR_NOT_ORG_ADMIN', message: 'Only an owner or admin of this organisation can invite.' });
+  }
   const id = uidA('inv');
-  const row = { id, organization_id: req.params.id, email: String(email).toLowerCase(), role: role || 'member', status: 'pending', expires_at: new Date(Date.now() + 168 * 3600 * 1000), created_at: new Date(), invited_by: req.user.identityId };
+  const row = { id, organization_id: req.params.id, email: String(email).toLowerCase(), identity_id: identityId || null, role: role || 'member', status: 'pending', expires_at: new Date(Date.now() + 168 * 3600 * 1000), created_at: new Date(), invited_by: req.user.identityId };
   authMem.invitation.set(id, row);
   res.status(201).json(row);
 });
 
 app.get('/api/orgs/:id/invitations', authMiddleware, (req, res) => {
+  if (!authMem.organization.has(req.params.id)) return res.status(404).json({ error: 'organization not found' });
+  if (!orgRoleOf(req.user.identityId, req.params.id) && !isSupervisor(req.user)) {
+    return res.status(403).json({ error: 'ERR_NOT_A_MEMBER', message: 'You are not a member of this organisation.' });
+  }
   res.json({ invitations: [...authMem.invitation.values()].filter(i => i.organization_id === req.params.id) });
 });
 
@@ -499,6 +537,10 @@ app.post('/api/invitations/accept', authMiddleware, (req, res) => {
   const { invitationId } = req.body || {};
   const inv = authMem.invitation.get(invitationId);
   if (!inv) return res.status(404).json({ error: 'invitation not found' });
+  // Knowing an invitation id is not the same as having been invited.
+  if (!invitationIsFor(inv, req.user.identityId)) {
+    return res.status(403).json({ error: 'ERR_NOT_INVITED', message: `This invitation was issued to ${inv.email}.` });
+  }
   if (inv.status !== 'pending') return res.status(400).json({ error: 'invitation already ' + inv.status });
   if (new Date(inv.expires_at) < new Date()) { inv.status = 'expired'; return res.status(400).json({ error: 'invitation expired' }); }
   inv.status = 'accepted';
