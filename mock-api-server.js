@@ -2855,6 +2855,26 @@ app.get('/api/credit/loans/:identityId', authMiddleware, (req, res) => {
   res.json({ loans: Object.values(creditLoans).filter(L => L.identityId === req.params.identityId) });
 });
 
+// A swap moves tokens out of two wallets, so it needs two people to agree.
+// It used to settle the moment one of them asked: the caller named a
+// counterparty and simply took the tokens, at whatever ratio they liked.
+// Proposing and accepting are now separate acts.
+const swapProposals = {};
+
+function swapView(sw) {
+  return {
+    swapId: sw.swapId, status: sw.status,
+    proposer: sw.proposer, counterparty: sw.counterparty,
+    offering: { assetId: sw.giveAssetId, tokens: sw.giveTokens },
+    requesting: { assetId: sw.getAssetId, tokens: sw.getTokens },
+    createdAt: sw.createdAt, settledAt: sw.settledAt || null,
+    blockHeight: sw.blockHeight ?? null,
+  };
+}
+
+// Proposing is free; it moves nothing. The balance checks still run here so
+// an obviously impossible offer is refused up front, and again at accept
+// time because holdings move in between.
 app.post('/api/swap', authMiddleware, (req, res) => {
   const { giveAssetId, giveTokens, getAssetId, getTokens, counterparty } = req.body || {};
   const me = req.user.identityId;
@@ -2864,19 +2884,72 @@ app.post('/api/swap', authMiddleware, (req, res) => {
   if (!counterparty || counterparty === me) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'counterparty identity required' });
   const mine = balances[giveAssetId + '~' + me];
   const theirs = balances[getAssetId + '~' + counterparty];
-  const mineLocked = drunixLockedTokens(giveAssetId, me);
-  const theirsLocked = drunixLockedTokens(getAssetId, counterparty);
-  if (!mine || mine.balance < gt + mineLocked) return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', message: 'You lack enough unlocked tokens on ' + giveAssetId });
-  if (!theirs || theirs.balance < rt + theirsLocked) return res.status(400).json({ error: 'ERR_COUNTERPARTY_SHORT', message: counterparty + ' lacks enough unlocked tokens on ' + getAssetId });
-  mine.balance -= gt; mine.updatedAt = new Date();
-  const toMe = balances[getAssetId + '~' + me] || (balances[getAssetId + '~' + me] = { docType: 'balance', assetId: getAssetId, ownerId: me, balance: 0, updatedAt: new Date() });
-  toMe.balance += rt; toMe.updatedAt = new Date();
-  theirs.balance -= rt; theirs.updatedAt = new Date();
-  const toThem = balances[giveAssetId + '~' + counterparty] || (balances[giveAssetId + '~' + counterparty] = { docType: 'balance', assetId: giveAssetId, ownerId: counterparty, balance: 0, updatedAt: new Date() });
-  toThem.balance += gt; toThem.updatedAt = new Date();
+  if (!mine || mine.balance < gt + drunixLockedTokens(giveAssetId, me)) return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', message: 'You lack enough unlocked tokens on ' + giveAssetId });
+  if (!theirs || theirs.balance < rt + drunixLockedTokens(getAssetId, counterparty)) return res.status(400).json({ error: 'ERR_COUNTERPARTY_SHORT', message: counterparty + ' lacks enough unlocked tokens on ' + getAssetId });
   const swapId = 'SWAP-' + crypto.randomUUID().slice(0, 8);
-  const blk = drunixAppend('ATOMIC_SWAP', [{ kind: 'swap', swapId, leg1: { assetId: giveAssetId, from: me, to: counterparty, tokens: gt }, leg2: { assetId: getAssetId, from: counterparty, to: me, tokens: rt }, atomic: 'all-or-nothing' }]);
-  res.json({ ok: true, swapId, blockHeight: blk.height, gave: { assetId: giveAssetId, tokens: gt }, received: { assetId: getAssetId, tokens: rt }, counterparty, message: 'Both legs settled together. Either both moved, or neither.' });
+  swapProposals[swapId] = { swapId, status: 'PROPOSED', proposer: me, counterparty, giveAssetId, giveTokens: gt, getAssetId, getTokens: rt, createdAt: new Date() };
+  res.status(201).json({
+    ...swapView(swapProposals[swapId]),
+    message: counterparty + ' must accept before anything moves.',
+    next: 'POST /api/swap/' + swapId + '/accept (as ' + counterparty + ')',
+  });
+});
+
+app.get('/api/swaps', authMiddleware, (req, res) => {
+  const me = req.user.identityId;
+  const all = Object.values(swapProposals);
+  const mine = SUPERVISORY.has(String(req.user.role || '').toLowerCase())
+    ? all : all.filter(sw => sw.proposer === me || sw.counterparty === me);
+  res.json({ swaps: mine.map(swapView), count: mine.length });
+});
+
+app.get('/api/swap/:id', authMiddleware, (req, res) => {
+  const sw = swapProposals[req.params.id];
+  if (!sw) return res.status(404).json({ error: 'ERR_SWAP_NOT_FOUND', swapId: req.params.id });
+  const me = req.user.identityId;
+  if (sw.proposer !== me && sw.counterparty !== me && !SUPERVISORY.has(String(req.user.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'ERR_NOT_YOUR_SWAP', message: 'This swap is between two other participants.' });
+  }
+  res.json(swapView(sw));
+});
+
+// Only the person being asked can say yes.
+app.post('/api/swap/:id/accept', authMiddleware, (req, res) => {
+  const sw = swapProposals[req.params.id];
+  if (!sw) return res.status(404).json({ error: 'ERR_SWAP_NOT_FOUND', swapId: req.params.id });
+  const me = req.user.identityId;
+  if (sw.counterparty !== me) {
+    return res.status(403).json({ error: 'ERR_NOT_YOUR_SWAP', message: 'Only ' + sw.counterparty + ' can accept this swap.' });
+  }
+  if (sw.status !== 'PROPOSED') return res.status(409).json({ error: 'ERR_SWAP_NOT_PENDING', status: sw.status });
+  const { giveAssetId, getAssetId, giveTokens: gt, getTokens: rt, proposer } = sw;
+  // Holdings move between proposal and acceptance, so check again now.
+  const mine = balances[giveAssetId + '~' + proposer];
+  const theirs = balances[getAssetId + '~' + me];
+  if (!mine || mine.balance < gt + drunixLockedTokens(giveAssetId, proposer)) return res.status(409).json({ error: 'ERR_INSUFFICIENT_BALANCE', message: proposer + ' no longer holds enough unlocked tokens on ' + giveAssetId });
+  if (!theirs || theirs.balance < rt + drunixLockedTokens(getAssetId, me)) return res.status(409).json({ error: 'ERR_COUNTERPARTY_SHORT', message: 'You lack enough unlocked tokens on ' + getAssetId });
+  mine.balance -= gt; mine.updatedAt = new Date();
+  const toProposer = balances[getAssetId + '~' + proposer] || (balances[getAssetId + '~' + proposer] = { docType: 'balance', assetId: getAssetId, ownerId: proposer, balance: 0, updatedAt: new Date() });
+  toProposer.balance += rt; toProposer.updatedAt = new Date();
+  theirs.balance -= rt; theirs.updatedAt = new Date();
+  const toMe = balances[giveAssetId + '~' + me] || (balances[giveAssetId + '~' + me] = { docType: 'balance', assetId: giveAssetId, ownerId: me, balance: 0, updatedAt: new Date() });
+  toMe.balance += gt; toMe.updatedAt = new Date();
+  const blk = drunixAppend('ATOMIC_SWAP', [{ kind: 'swap', swapId: sw.swapId, leg1: { assetId: giveAssetId, from: proposer, to: me, tokens: gt }, leg2: { assetId: getAssetId, from: me, to: proposer, tokens: rt }, acceptedBy: me, atomic: 'all-or-nothing' }]);
+  sw.status = 'SETTLED'; sw.settledAt = new Date(); sw.blockHeight = blk.height;
+  res.json({ ok: true, ...swapView(sw), message: 'Both legs settled together. Either both moved, or neither.' });
+});
+
+// Either side can walk away while it is still only a proposal.
+app.post('/api/swap/:id/cancel', authMiddleware, (req, res) => {
+  const sw = swapProposals[req.params.id];
+  if (!sw) return res.status(404).json({ error: 'ERR_SWAP_NOT_FOUND', swapId: req.params.id });
+  const me = req.user.identityId;
+  if (sw.proposer !== me && sw.counterparty !== me) {
+    return res.status(403).json({ error: 'ERR_NOT_YOUR_SWAP', message: 'This swap is between two other participants.' });
+  }
+  if (sw.status !== 'PROPOSED') return res.status(409).json({ error: 'ERR_SWAP_NOT_PENDING', status: sw.status });
+  sw.status = 'CANCELLED'; sw.cancelledBy = me;
+  res.json({ ok: true, ...swapView(sw) });
 });
 
 // ============ PRIVATE OPERATOR INSIGHTS (additive) ============
