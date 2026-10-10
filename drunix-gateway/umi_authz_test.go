@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -154,5 +155,57 @@ func TestReconciliationStaysOpen(t *testing.T) {
 	// is the rail proving its own books balance.
 	if w := callAs(h, http.MethodGet, "/umi/reconciliation", "", "", nil); w.Code != http.StatusOK {
 		t.Fatalf("anonymous reconciliation = %d, want 200: %s", w.Code, w.Body.String())
+	}
+}
+
+// A sealed ledger must stop the money, not just stop the block.
+//
+// Production hit this: the stored chain failed verification on restore, the
+// chain sealed itself and refused appends — and the rail kept answering
+// fund and settlement requests with ok:true. The wallet moved in memory and
+// nothing on the ledger could prove it, which is the one thing a settlement
+// rail must never do.
+func TestSealedLedgerRefusesMoneyMovement(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	// Give the wallet a history before the ledger stops accepting blocks.
+	fundRec := httptest.NewRecorder()
+	fundReq := httptest.NewRequest(http.MethodPost, "/umi/wallets/investor1/fund",
+		strings.NewReader(`{"amountINR":5000}`))
+	fundReq.Header.Set("Content-Type", "application/json")
+	fundReq.Header.Set("X-Fabric-Identity", "regulator1")
+	fundReq.Header.Set("X-Identity-Role", "Regulator")
+	srv.Router().ServeHTTP(fundRec, fundReq)
+	if fundRec.Code != http.StatusOK {
+		t.Fatalf("setup funding returned %d", fundRec.Code)
+	}
+
+	chain := srv.Pipeline.CP.Ledger
+	chain.mu.Lock()
+	chain.sealed = true
+	chain.mu.Unlock()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/umi/wallets/investor1/fund",
+		strings.NewReader(`{"amountINR":100000}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Fabric-Identity", "regulator1")
+	req.Header.Set("X-Identity-Role", "Regulator")
+	srv.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("funding on a sealed ledger returned %d, want 503: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "ERR_LEDGER_SEALED") {
+		t.Fatalf("want ERR_LEDGER_SEALED, got %s", rec.Body.String())
+	}
+
+	// Reading is still fine: a sealed chain can still show its books.
+	rec = httptest.NewRecorder()
+	read := httptest.NewRequest(http.MethodGet, "/umi/wallets/investor1", nil)
+	read.Header.Set("X-Fabric-Identity", "regulator1")
+	read.Header.Set("X-Identity-Role", "Regulator")
+	srv.Router().ServeHTTP(rec, read)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reading a wallet on a sealed ledger returned %d, want 200", rec.Code)
 	}
 }

@@ -227,6 +227,15 @@ func (c *DrunixChain) Snapshot() []*DrunixBlock {
 }
 
 // Durability reports how the chain is stored, for /drunix/ledger/status.
+// Sealed reports whether the chain refused to adopt the history it was
+// restored with. A sealed chain accepts no appends, so anything that would
+// have to be proved by a block must be refused rather than reported done.
+func (c *DrunixChain) Sealed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sealed
+}
+
 func (c *DrunixChain) Durability() map[string]interface{} {
 	c.mu.Lock()
 	defer c.mu.Unlock()
