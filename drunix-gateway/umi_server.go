@@ -130,8 +130,24 @@ func (s *Server) handleUMIConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUMIWallets(w http.ResponseWriter, r *http.Request) {
+	// The wallet book is every participant's cash position. A participant
+	// sees their own; supervisors see the rail.
+	c := callerOf(r)
+	if !umiRequireIdentity(w, c) {
+		return
+	}
+	wallets := s.UMI.Wallets()
+	if !c.supervisor() {
+		mine := make([]CBDCWallet, 0, 1)
+		for _, wl := range wallets {
+			if c.is(wl.Participant) {
+				mine = append(mine, wl)
+			}
+		}
+		wallets = mine
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"wallets":         s.UMI.Wallets(),
+		"wallets":         wallets,
 		"settlementAsset": "e₹-W wholesale CBDC (simulated, integer paise)",
 		"mode":            UMIMode,
 		"disclaimer":      UMIDisclaimer,
@@ -148,8 +164,15 @@ func (s *Server) handleUMIWallet(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(rest, "/")
 	participant := parts[0]
 
+	caller := callerOf(r)
+
 	if len(parts) > 1 && parts[1] == "fund" {
 		if !requirePost(w, r) {
+			return
+		}
+		// Funding credits a wallet with central-bank money that was never
+		// debited anywhere else. Anyone could do it for anyone.
+		if !umiRequireSupervisor(w, caller, "Funding a wholesale CBDC wallet") {
 			return
 		}
 		// Funding credits a wallet from the settlement bank. A retried
@@ -188,6 +211,9 @@ func (s *Server) handleUMIWallet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		if !umiRequireSelfOrSupervisor(w, caller, participant, "That wallet") {
+			return
+		}
 		wallet, err := s.UMI.OpenWallet(participant)
 		if err != nil {
 			umiErr(w, http.StatusBadRequest, err.Error(), "participant required")
@@ -197,6 +223,11 @@ func (s *Server) handleUMIWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A wallet read returns the cash balance and every settlement the
+	// participant has been party to.
+	if !umiRequireSelfOrSupervisor(w, caller, participant, "That wallet") {
+		return
+	}
 	wallet, ok := s.UMI.Wallet(participant)
 	if !ok {
 		umiErr(w, http.StatusNotFound, ErrUMINoWallet.Error(), "no wholesale CBDC wallet for "+participant)
@@ -261,6 +292,12 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 	body.AutoAssignISIN = true // demo-friendly default; override with explicit false
 	if err := umiDecode(r, &body); err != nil {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
+		return
+	}
+	// The buyer's wallet pays. Naming someone else as the buyer spent their
+	// cash for them, so the caller has to be the buyer (or a supervisor
+	// settling on the rail's behalf).
+	if c := callerOf(r); !body.DryRun && !umiRequireSelfOrSupervisor(w, c, body.Buyer, "That settlement account") {
 		return
 	}
 	si, err := s.UMI.SettleDvP(body)

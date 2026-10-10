@@ -8,7 +8,10 @@ const J = { 'Content-Type': 'application/json' };
 let p = 0, f = 0;
 const t = (n, c) => { if (c) { p++; console.log('  ok   ' + n); } else { f++; console.log('  FAIL ' + n); } };
 
-const post = (path, body) => fetch(BASE + path, { method: 'POST', headers: J, body: JSON.stringify(body) });
+// The rail checks who is asking before it moves anyone's money. These
+// fixtures act as the settlement supervisor.
+const RAIL_AS = { ...J, 'X-Fabric-Identity': 'regulator1', 'X-Identity-Role': 'Regulator' };
+const post = (path, body) => fetch(BASE + path, { method: 'POST', headers: RAIL_AS, body: JSON.stringify(body) });
 const metrics = async () => {
   const r = await fetch(BASE + '/api/umi/metrics');
   return { status: r.status, type: r.headers.get('content-type') || '', body: await r.text() };

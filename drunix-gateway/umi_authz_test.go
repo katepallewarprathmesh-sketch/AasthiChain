@@ -1,0 +1,158 @@
+package drunix
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+// The rail used to act on whoever the URL or the body named, with no idea
+// who was asking. Over HTTP that meant anyone who could reach it could read
+// a stranger's wholesale CBDC wallet, credit a wallet out of nothing, or run
+// a settlement that spent someone else's cash.
+
+func authzRail(t *testing.T) http.Handler {
+	t.Helper()
+	srv := newTestServerWithUMI(t)
+	return srv.Router()
+}
+
+func callAs(h http.Handler, method, path, identity, role string, payload interface{}) *httptest.ResponseRecorder {
+	var body *bytes.Reader
+	if payload != nil {
+		raw, _ := json.Marshal(payload)
+		body = bytes.NewReader(raw)
+	} else {
+		body = bytes.NewReader(nil)
+	}
+	r := httptest.NewRequest(method, path, body)
+	r.Header.Set("Content-Type", "application/json")
+	if identity != "" {
+		r.Header.Set("X-Fabric-Identity", identity)
+		r.Header.Set("X-Identity-Role", role)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+func TestWalletNeedsAnIdentifiedCaller(t *testing.T) {
+	h := authzRail(t)
+
+	if w := callAs(h, http.MethodGet, "/umi/wallets/investor1", "", "", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous wallet read = %d, want 401: %s", w.Code, w.Body.String())
+	}
+	if w := callAs(h, http.MethodGet, "/umi/wallets", "", "", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous wallet list = %d, want 401", w.Code)
+	}
+}
+
+func TestWalletIsNotReadableByAnotherParticipant(t *testing.T) {
+	h := authzRail(t)
+	if w := callAs(h, http.MethodPost, "/umi/wallets/investor1/fund", "regulator1", "Regulator",
+		map[string]float64{"amountINR": 50000}); w.Code != http.StatusOK {
+		t.Fatalf("supervisor funding = %d: %s", w.Code, w.Body.String())
+	}
+
+	w := callAs(h, http.MethodGet, "/umi/wallets/investor1", "investor2", "Investor", nil)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("stranger wallet read = %d, want 403: %s", w.Code, w.Body.String())
+	}
+
+	if w := callAs(h, http.MethodGet, "/umi/wallets/investor1", "investor1", "Investor", nil); w.Code != http.StatusOK {
+		t.Fatalf("owner wallet read = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	if w := callAs(h, http.MethodGet, "/umi/wallets/investor1", "regulator1", "Regulator", nil); w.Code != http.StatusOK {
+		t.Fatalf("supervisor wallet read = %d, want 200", w.Code)
+	}
+}
+
+func TestWalletListShowsOnlyYourOwn(t *testing.T) {
+	h := authzRail(t)
+	for _, who := range []string{"investor1", "investor2"} {
+		if w := callAs(h, http.MethodPost, "/umi/wallets/"+who+"/fund", "regulator1", "Regulator",
+			map[string]float64{"amountINR": 10000}); w.Code != http.StatusOK {
+			t.Fatalf("funding %s = %d", who, w.Code)
+		}
+	}
+
+	w := callAs(h, http.MethodGet, "/umi/wallets", "investor1", "Investor", nil)
+	var resp struct {
+		Wallets []CBDCWallet `json:"wallets"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Wallets) != 1 || resp.Wallets[0].Participant != "investor1" {
+		t.Fatalf("investor1 saw %d wallets: %+v", len(resp.Wallets), resp.Wallets)
+	}
+
+	w = callAs(h, http.MethodGet, "/umi/wallets", "regulator1", "Regulator", nil)
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Wallets) < 2 {
+		t.Fatalf("supervisor saw %d wallets, want the whole book", len(resp.Wallets))
+	}
+}
+
+func TestFundingIsASettlementBankAction(t *testing.T) {
+	h := authzRail(t)
+
+	// Crediting your own wallet is making money, not moving it.
+	w := callAs(h, http.MethodPost, "/umi/wallets/investor1/fund", "investor1", "Investor",
+		map[string]float64{"amountINR": 1000000})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("self-funding = %d, want 403: %s", w.Code, w.Body.String())
+	}
+
+	w = callAs(h, http.MethodPost, "/umi/wallets/investor1/fund", "investor2", "Investor",
+		map[string]float64{"amountINR": 1000000})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("funding a stranger = %d, want 403", w.Code)
+	}
+
+	if w := callAs(h, http.MethodPost, "/umi/wallets/investor1/fund", "", "",
+		map[string]float64{"amountINR": 1000000}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous funding = %d, want 401", w.Code)
+	}
+}
+
+func TestSettlementCannotSpendSomeoneElsesWallet(t *testing.T) {
+	h := authzRail(t)
+	if w := callAs(h, http.MethodPost, "/umi/wallets/investor1/fund", "regulator1", "Regulator",
+		map[string]float64{"amountINR": 1000000}); w.Code != http.StatusOK {
+		t.Fatalf("funding = %d: %s", w.Code, w.Body.String())
+	}
+
+	trade := map[string]interface{}{
+		"assetId": "PROP-AUTHZ-001", "seller": "originator1", "buyer": "investor1",
+		"tokens": 10, "pricePerTokenINR": 500,
+	}
+
+	// investor2 naming investor1 as the buyer spends investor1's money.
+	w := callAs(h, http.MethodPost, "/umi/dvp", "investor2", "Investor", trade)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("settling against a stranger's wallet = %d, want 403: %s", w.Code, w.Body.String())
+	}
+
+	if w := callAs(h, http.MethodPost, "/umi/dvp", "", "", trade); w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous settlement = %d, want 401", w.Code)
+	}
+
+	// A dry run prices a trade without moving anything, so it stays open.
+	dry := map[string]interface{}{
+		"assetId": "PROP-AUTHZ-001", "seller": "originator1", "buyer": "investor1",
+		"tokens": 10, "pricePerTokenINR": 500, "dryRun": true,
+	}
+	if w := callAs(h, http.MethodPost, "/umi/dvp", "investor2", "Investor", dry); w.Code == http.StatusForbidden {
+		t.Fatalf("dry run was refused: %s", w.Body.String())
+	}
+}
+
+func TestReconciliationStaysOpen(t *testing.T) {
+	h := authzRail(t)
+	// The public reconciliation view is deliberately readable by anyone: it
+	// is the rail proving its own books balance.
+	if w := callAs(h, http.MethodGet, "/umi/reconciliation", "", "", nil); w.Code != http.StatusOK {
+		t.Fatalf("anonymous reconciliation = %d, want 200: %s", w.Code, w.Body.String())
+	}
+}

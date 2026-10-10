@@ -8,7 +8,7 @@ const t = (n, c) => { if (c) { p++; console.log('  ok   ' + n); } else { f++; co
 
 const post = async (path, body) => {
   const r = await fetch(RAIL + path, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', headers: { 'content-type': 'application/json', 'X-Fabric-Identity': 'regulator1', 'X-Identity-Role': 'Regulator' }, body: JSON.stringify(body),
   });
   return { s: r.status, b: await r.json().catch(() => ({})) };
 };

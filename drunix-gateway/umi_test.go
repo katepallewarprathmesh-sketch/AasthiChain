@@ -299,19 +299,28 @@ func TestUMIRoutesAreAdditiveAndServe(t *testing.T) {
 		t.Errorf("config mode = %v, want simulation", cfg["mode"])
 	}
 
-	post := func(path string, body interface{}) *httptest.ResponseRecorder {
+	// Wallet and settlement routes act on someone's money, so the rail now
+	// wants to know who is asking. Funding is a settlement-bank act.
+	postAs := func(path, identity, role string, body interface{}) *httptest.ResponseRecorder {
 		raw, _ := json.Marshal(body)
 		r := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(raw))
 		r.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			r.Header.Set("X-Fabric-Identity", identity)
+			r.Header.Set("X-Identity-Role", role)
+		}
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
+	}
+	post := func(path string, body interface{}) *httptest.ResponseRecorder {
+		return postAs(path, "regulator1", "Regulator", body)
 	}
 
 	if w := post("/umi/wallets/investor1/fund", map[string]float64{"amountINR": 100000}); w.Code != http.StatusOK {
 		t.Fatalf("fund = %d: %s", w.Code, w.Body.String())
 	}
-	w := post("/umi/dvp", map[string]interface{}{
+	w := postAs("/umi/dvp", "investor1", "Investor", map[string]interface{}{
 		"assetId": tAsset, "seller": "originator1", "buyer": "investor1",
 		"tokens": 100, "pricePerTokenINR": 500,
 	})

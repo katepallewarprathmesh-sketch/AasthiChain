@@ -18,8 +18,10 @@ const j = async (u, opts) => {
   let b = null; try { b = JSON.parse(raw) } catch {}
   return { s: r.status, b, raw };
 };
+// The rail checks who is asking before it moves anyone's money. These
+// fixtures act as the settlement supervisor.
 const post = (u, body) => j(u, {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'regulator1', 'X-Identity-Role': 'Regulator' }, body: JSON.stringify(body)
 });
 
 const stamp = Date.now();

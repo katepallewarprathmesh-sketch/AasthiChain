@@ -18,7 +18,7 @@ const tok = Buffer.from(JSON.stringify({
 const auth = { 'content-type': 'application/json', authorization: 'Bearer ' + tok };
 const j = async (u, o) => { const r = await fetch(BASE + u, o); return { s: r.status, b: await r.json().catch(() => ({})) }; };
 const railPost = async (path, body) => {
-  const r = await fetch(RAIL + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const r = await fetch(RAIL + path, { method: 'POST', headers: { 'content-type': 'application/json', 'X-Fabric-Identity': 'regulator1', 'X-Identity-Role': 'Regulator' }, body: JSON.stringify(body) });
   return { s: r.status, b: await r.json().catch(() => ({})) };
 };
 

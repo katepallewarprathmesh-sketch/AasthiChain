@@ -47,7 +47,7 @@ async function listen(ms, duringFn) {
 
 const fund = (amt) => fetch(`${BASE}/api/umi/wallets/investor1/fund`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'regulator1', 'X-Identity-Role': 'Regulator' },
   body: JSON.stringify({ amountINR: amt }),
 });
 

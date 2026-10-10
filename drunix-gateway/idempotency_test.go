@@ -37,6 +37,8 @@ func dvpPost(t *testing.T, srv *Server, key string, payload map[string]interface
 		t.Fatalf("marshal: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/umi/dvp", bytes.NewReader(b))
+	req.Header.Set("X-Fabric-Identity", "regulator1")
+	req.Header.Set("X-Identity-Role", "Regulator")
 	if key != "" {
 		req.Header.Set("Idempotency-Key", key)
 	}
@@ -272,6 +274,10 @@ func postJSON(t *testing.T, srv *Server, path, key string, payload map[string]in
 	if key != "" {
 		req.Header.Set("Idempotency-Key", key)
 	}
+	// Money routes want an identified caller; these tests are about retry
+	// safety, so they act as the supervisor.
+	req.Header.Set("X-Fabric-Identity", "regulator1")
+	req.Header.Set("X-Identity-Role", "Regulator")
 	rec := httptest.NewRecorder()
 	srv.Router().ServeHTTP(rec, req)
 	return rec

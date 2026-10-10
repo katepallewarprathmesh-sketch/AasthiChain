@@ -35,7 +35,7 @@ chk "GET /health"                200 "$(code $GW/health)"
 chk "GET /drunix/ledger/status"  200 "$(code $GW/drunix/ledger/status)"
 chk "GET /fraud/config"          200 "$(code $GW/fraud/config)"
 chk "GET /drunix/pipeline/stats" 200 "$(code $GW/drunix/pipeline/stats)"
-chk "POST /drunix/submit"        201 "$(code -X POST -H 'Content-Type: application/json' -d '{"chaincode":"aasthichain","function":"TransferTokens","args":["PROP-GREEN-VALLEY-PUNE-001","originator1","investor1","10"],"creatorMsp":"InvestorMSP"}' $GW/drunix/submit)"
+chk "POST /drunix/submit"        201 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"chaincode":"aasthichain","function":"TransferTokens","args":["PROP-GREEN-VALLEY-PUNE-001","originator1","investor1","10"],"creatorMsp":"InvestorMSP"}' $GW/drunix/submit)"
 
 echo "== UI routes (SPA) =="
 for p in / /login /marketplace /ledger /support /umi /wallet; do
@@ -43,26 +43,30 @@ for p in / /login /marketplace /ledger /support /umi /wallet; do
 done
 
 echo "== UMI rail =="
+# The rail checks who is asking before it moves anyone's money. The harness
+# speaks to it as the settlement supervisor.
+
+RAIL_ID=(-H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator')
 chk "GET  /api/umi/config"        200 "$(code $API/api/umi/config)"
 # Seed a fresh asset per run. Re-seeding the demo asset returned 409
 # SUPPLY_EXCEEDED on the second sweep against a long-lived rail, because the
 # authorised cap was already set by the run before it — a failure about the
 # previous sweep, not about this one.
 SEEDASSET="PROP-SWEEP-$(date +%s%N)"
-chk "POST /api/umi/seed"          200 "$(code -X POST -H 'Content-Type: application/json' -d "{\"assetId\":\"$SEEDASSET\",\"holder\":\"originator1\",\"tokens\":15000}" $API/api/umi/seed)"
-chk "POST fund investor1"         200 "$(code -X POST -H 'Content-Type: application/json' -d '{"amountINR":100000}' $API/api/umi/wallets/investor1/fund)"
+chk "POST /api/umi/seed"          200 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d "{\"assetId\":\"$SEEDASSET\",\"holder\":\"originator1\",\"tokens\":15000}" $API/api/umi/seed)"
+chk "POST fund investor1"         200 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"amountINR":100000}' $API/api/umi/wallets/investor1/fund)"
 POOR="poor$(date +%s%N)"   # fresh underfunded participant (boot-seeded wallets may be rich)
-chk "POST fund $POOR"          200 "$(code -X POST -H 'Content-Type: application/json' -d '{"amountINR":2000}' $API/api/umi/wallets/$POOR/fund)"
-chk "POST dvp (happy)"            200 "$(code -X POST -H 'Content-Type: application/json' -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","seller":"originator1","buyer":"investor1","tokens":100,"pricePerTokenINR":500}' $API/api/umi/dvp)"
-chk "POST dvp (insufficient cash → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' -d "{\"assetId\":\"PROP-GREEN-VALLEY-PUNE-001\",\"seller\":\"originator1\",\"buyer\":\"$POOR\",\"tokens\":100,\"pricePerTokenINR\":500}" $API/api/umi/dvp)"
-chk "POST dvp (self → 400)"       400 "$(code -X POST -H 'Content-Type: application/json' -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","seller":"originator1","buyer":"originator1","tokens":1,"pricePerTokenINR":500}' $API/api/umi/dvp)"
-chk "POST dvp (bad amount → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","seller":"originator1","buyer":"investor1","tokens":-5,"pricePerTokenINR":500}' $API/api/umi/dvp)"
-chk "POST dvp (malformed json → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' -d '{oops' $API/api/umi/dvp)"
+chk "POST fund $POOR"          200 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"amountINR":2000}' $API/api/umi/wallets/$POOR/fund)"
+chk "POST dvp (happy)"            200 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","seller":"originator1","buyer":"investor1","tokens":100,"pricePerTokenINR":500}' $API/api/umi/dvp)"
+chk "POST dvp (insufficient cash → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d "{\"assetId\":\"PROP-GREEN-VALLEY-PUNE-001\",\"seller\":\"originator1\",\"buyer\":\"$POOR\",\"tokens\":100,\"pricePerTokenINR\":500}" $API/api/umi/dvp)"
+chk "POST dvp (self → 400)"       400 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","seller":"originator1","buyer":"originator1","tokens":1,"pricePerTokenINR":500}' $API/api/umi/dvp)"
+chk "POST dvp (bad amount → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","seller":"originator1","buyer":"investor1","tokens":-5,"pricePerTokenINR":500}' $API/api/umi/dvp)"
+chk "POST dvp (malformed json → 400)" 400 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{oops' $API/api/umi/dvp)"
 chk "GET  dvp with GET (→405)"    405 "$(code $API/api/umi/dvp)"
-chk "POST servicing"              200 "$(code -X POST -H 'Content-Type: application/json' -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","payer":"originator1","amountINR":6000}' $API/api/umi/servicing)"
+chk "POST servicing"              200 "$(code -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"assetId":"PROP-GREEN-VALLEY-PUNE-001","payer":"originator1","amountINR":6000}' $API/api/umi/servicing)"
 chk "GET  instructions"           200 "$(code $API/api/umi/instructions)"
 chk "GET  unknown instruction→404" 404 "$(code $API/api/umi/instructions/NOPE)"
-chk "GET  unknown wallet→404"     404 "$(code $API/api/umi/wallets/ghost)"
+chk "GET  unknown wallet→404"     404 "$(code "${RAIL_ID[@]}" $API/api/umi/wallets/ghost)"
 chk "GET  reconciliation"         200 "$(code $API/api/umi/reconciliation)"
 
 echo "== UMI invariants =="
@@ -79,13 +83,16 @@ chk "money conserved + chain valid" 0 "$?"
 echo "== concurrency over HTTP (20 parallel DvP on a wallet funded for 2) =="
 # unique participant per run so repeated sweeps don't inherit prior balances/servicing credits
 STRESS="stress$(date +%s%N)"
-curl -s -X POST -H 'Content-Type: application/json' -d '{"amountINR":1000}' $API/api/umi/wallets/$STRESS/fund >/dev/null
-seq 20 | xargs -P20 -I{} curl -s -o /tmp/stress.{} -w "%{http_code}\n" -X POST -H 'Content-Type: application/json' \
+curl -s -X POST -H 'Content-Type: application/json' "${RAIL_ID[@]}" -d '{"amountINR":1000}' $API/api/umi/wallets/$STRESS/fund >/dev/null
+seq 20 | xargs -P20 -I{} curl -s -o /tmp/stress.{} -w "%{http_code}\n" -X POST -H 'Content-Type: application/json' -H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator' \
   -d "{\"assetId\":\"PROP-GREEN-VALLEY-PUNE-001\",\"seller\":\"originator1\",\"buyer\":\"$STRESS\",\"tokens\":1,\"pricePerTokenINR\":500}" \
   $API/api/umi/dvp | sort | uniq -c | sed 's/^/  /'
 STRESS=$STRESS python3 - <<'EOF'
 import json,os,urllib.request
-w=json.load(urllib.request.urlopen('http://localhost:8080/api/umi/wallets/'+os.environ['STRESS']))['wallet']
+# A wallet read is scoped to its owner now, so ask as the supervisor.
+req=urllib.request.Request('http://localhost:8080/api/umi/wallets/'+os.environ['STRESS'],
+    headers={'X-Fabric-Identity':'regulator1','X-Identity-Role':'Regulator'})
+w=json.load(urllib.request.urlopen(req))['wallet']
 r=json.load(urllib.request.urlopen('http://localhost:8080/api/umi/reconciliation'))
 print("  stress wallet balance ₹",w['balanceINR'],"(expect 0) | reserved ₹",w['balanceINR']-w['availableINR'],"(expect 0)")
 print("  conserved after stress:",r['conserved'],"| chain valid:",r['chain']['valid'])

@@ -1627,7 +1627,7 @@ async function seedRailPosition(assetId, holder, tokens) {
   try {
     const r = await fetch(base + '/umi/seed', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}` },
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}`, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
       body: JSON.stringify({ assetId, holder, tokens, authorisedTokens: tokens }),
     });
     const body = await r.json().catch(() => ({}));
@@ -1647,10 +1647,12 @@ async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
   if (!base) return { skipped: 'UMI_GATEWAY_URL not set' };
   const amountINR = Number(pay.amountINR) || 0;
+  // This is the gateway settling on the rail after money actually arrived,
+  // not a person asking. It identifies itself as the settlement operator.
   const post = async (path, body, idem) => {
     const r = await fetch(base + path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem },
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: await r.json().catch(() => ({})) };
@@ -3329,13 +3331,39 @@ app.get('/api/umi/documents/fetch/:cid', async (req, res) => {
   }
 });
 
-app.all('/api/umi', umiProxy);
-app.all('/api/umi/*splat', umiProxy);
+// Identify the caller if they have credentials, but do not demand them:
+// some rail routes (reconciliation, the public ledger view) are deliberately
+// open, and the rail itself decides which ones need a name.
+function umiIdentify(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return next();
+  try {
+    const payload = decodeClerkOrMockToken(auth.split(' ')[1]);
+    if (payload && payload.identityId) req.user = payload;
+  } catch { /* an unreadable token is simply no identity */ }
+  return next();
+}
+
+app.all('/api/umi', umiIdentify, umiProxy);
+app.all('/api/umi/*splat', umiIdentify, umiProxy);
 async function umiProxy(req, res) {
   const suffix = req.originalUrl.replace(/^\/api\/umi/, '') || '/config';
   const target = UMI_GATEWAY_URL + '/umi' + (suffix.startsWith('/') ? suffix : '/' + suffix);
   try {
-    const init = { method: req.method, headers: { 'Content-Type': 'application/json' } };
+    // The rail decides what a caller may touch, so it has to know who the
+    // caller is. Node adds nothing of its own: it forwards the identity it
+    // already authenticated.
+    const fwd = { 'Content-Type': 'application/json' };
+    // Either the session we authenticated, or the identity headers the
+    // caller already presented (which is how production identifies people).
+    if (req.user && req.user.identityId) {
+      fwd['X-Fabric-Identity'] = req.user.identityId;
+      fwd['X-Identity-Role'] = req.user.role || '';
+    } else if (req.headers['x-fabric-identity'] || req.headers['x-identity-id']) {
+      fwd['X-Fabric-Identity'] = req.headers['x-fabric-identity'] || req.headers['x-identity-id'];
+      fwd['X-Identity-Role'] = req.headers['x-identity-role'] || '';
+    }
+    const init = { method: req.method, headers: fwd };
     if (!['GET', 'HEAD'].includes(req.method)) init.body = JSON.stringify(req.body || {});
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);

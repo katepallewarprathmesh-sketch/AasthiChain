@@ -593,7 +593,7 @@ async function seedRailPosition(assetId, holder, tokens) {
   try {
     const r = await fetch(base + '/umi/seed', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}` },
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}`, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
       body: JSON.stringify({ assetId, holder, tokens, authorisedTokens: tokens }),
     });
     const body = await r.json().catch(() => ({}));
@@ -613,10 +613,12 @@ async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
   if (!base) return { skipped: 'UMI_GATEWAY_URL not set' };
   const amountINR = Number(pay.amountINR) || 0;
+  // This is the gateway settling on the rail after money actually arrived,
+  // not a person asking. It identifies itself as the settlement operator.
   const post = async (path, body, idem) => {
     const r = await fetch(base + path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem },
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: await r.json().catch(() => ({})) };
@@ -4739,8 +4741,12 @@ export default async function handler(req, res) {
         // read — restricted documents are only served to their parties — and
         // without this every caller arrived anonymous.
         const fwd = { 'Content-Type': 'application/json' };
-        if (user && user.identityId && req.headers.authorization) {
+        // Production has no bearer tokens — callers identify with
+        // x-fabric-identity — so keying this on `authorization` alone meant
+        // every production caller reached the rail anonymous.
+        if (user && user.identityId && (req.headers.authorization || req.headers['x-fabric-identity'] || req.headers['x-identity-id'])) {
           fwd['X-Identity-Id'] = user.identityId;
+          fwd['X-Fabric-Identity'] = user.identityId;
           fwd['X-Identity-Role'] = user.role || '';
         }
         const upstream = await fetch(base.replace(/\/$/, '') + '/umi' + (suffix.startsWith('/') ? suffix : '/' + suffix) + (url.search || ''), {
