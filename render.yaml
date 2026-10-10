@@ -3,7 +3,7 @@
 #
 # Deploy: Render dashboard → New → Blueprint → point at this repo.
 # Then set UMI_GATEWAY_URL on Vercel to the service URL Render gives you
-# (e.g. https://aasthichain-umi-gateway.onrender.com) and redeploy the frontend.
+# (the live one is https://aasthichain.onrender.com) and redeploy the frontend.
 #
 # Free tier note: the instance sleeps after inactivity, so the first request
 # after a sleep is slow. Set DATABASE_URL (below) or the ledger is in-memory and

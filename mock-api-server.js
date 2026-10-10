@@ -3104,10 +3104,49 @@ app.get('/api/admin/insights', async (req, res) => {
 });
 
 // Lets the UI tell "wrong password" apart from "feature not configured".
+
+// The app and the settlement rail are deployed separately, so they drift: the
+// site can be serving a commit the rail has never heard of. That cost a long
+// debugging session once, when a fix looked live because Vercel had it and
+// was not live because the rail had not redeployed. Report both, and whether
+// the rail's own books still verify.
+async function railDeploymentStatus() {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return { configured: false };
+  const get = async (p) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const r = await fetch(base + p, { signal: ctrl.signal });
+      return r.ok ? await r.json() : null;
+    } finally { clearTimeout(timer); }
+  };
+  try {
+    const [health, recon] = await Promise.all([
+      get('/health').catch(() => null),
+      get('/umi/reconciliation').catch(() => null),
+    ]);
+    if (!health && !recon) return { configured: true, reachable: false };
+    const chain = (recon && recon.chain) || null;
+    return {
+      configured: true,
+      reachable: true,
+      build: (health && health.build && health.build.commit) || 'unknown',
+      ledgerValid: chain ? chain.valid === true : null,
+      ...(chain && chain.valid === false
+        ? { ledgerProblem: chain.reason, ledgerBrokenAt: chain.brokenAt }
+        : {}),
+    };
+  } catch {
+    return { configured: true, reachable: false };
+  }
+}
+
 app.get('/api/admin/insights/status', async (req, res) => {
   const { configuredKey } = await insightsReady;
   res.json({
     enabled: !!configuredKey(),
+    rail: await railDeploymentStatus(),
     // Build stamp: lets an operator confirm which commit a deployment is
     // actually serving, instead of guessing whether a redeploy took effect.
     build: process.env.VERCEL_GIT_COMMIT_SHA || process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'local',
