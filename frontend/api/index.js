@@ -1440,6 +1440,45 @@ function paymentOwner(user, requested) {
 
 const PAYMENT_SCOPED = /^\/api\/npci\/payments\/([^\/]+)(?:\/(approve|decline|refund|reattach|release|settle))?$/;
 
+// The capability list has always advertised these webhooks as auth:
+// 'signature', and /webhook/test still answers "signature verified in mock
+// mode". Nothing verified anything. A real bank callback carries no user
+// session, so the only thing that can authenticate it is a shared secret —
+// and when none is configured we must not pretend otherwise.
+function webhookSignatureValid(req) {
+  const secret = process.env.NPCI_WEBHOOK_SECRET;
+  if (!secret) return false;
+  const supplied = String(req.headers['x-setu-signature'] || req.headers['x-icici-signature']
+    || req.headers['x-webhook-signature'] || (req.body && req.body.signature) || '');
+  if (!supplied) return false;
+  const expected = crypto.createHmac('sha256', secret)
+    .update(JSON.stringify(req.body || {})).digest('hex');
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// A webhook names its payment in the body, so the path-based gate never saw
+// it: any signed-in user could post a SUCCESS callback for a stranger's
+// payment and move it to CONFIRMED — the state that says the money arrived —
+// with a UTR of their choosing.
+const WEBHOOK_PATHS = new Set(['/api/npci/webhook', '/api/npci/webhook/test']);
+
+function webhookViolation(method, path, user, req, store) {
+  if (method !== 'POST' || !WEBHOOK_PATHS.has(path)) return null;
+  if (webhookSignatureValid(req)) return null; // a real bank callback
+  const body = req.body || {};
+  const id = body.paymentId || body.referenceId || body.merchantTxnId || body.transactionId;
+  if (!id) return null; // the handler answers 400
+  const pay = store[id];
+  if (!pay) return null; // the handler answers 404
+  const self = user && user.identityId;
+  if (self && (pay.payerId === self || pay.payeeId === self)) return null;
+  const role = String((user && user.role) || '').toLowerCase();
+  if (SUPERVISORY.has(role) || role === 'originator') return null;
+  return pay.paymentId || id;
+}
+
 // Reading, approving, declining, refunding or settling someone else's
 // payment was open to any signed-in user. Declining was the damaging one: a
 // stranger could cancel a purchase mid-flight.
@@ -1500,8 +1539,20 @@ export default async function handler(req, res) {
     // header alone is enough here, unlike Express, because the serverless
     // clients (and tests/adminopsserverless) have always identified that way.
     const hasCredentials = Boolean(req.headers.authorization || req.headers['x-fabric-identity'] || req.headers['x-identity-id']);
-    if (!hasCredentials && requiresAuth(method, path)) {
+    // A bank has no session with us. If the callback carries a valid
+    // signature it is authenticated by that, and demanding a bearer token on
+    // top would make signature auth unusable by the only caller it is for.
+    const signedCallback = method === 'POST' && WEBHOOK_PATHS.has(path) && webhookSignatureValid(req);
+    if (!hasCredentials && !signedCallback && requiresAuth(method, path)) {
       return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+    }
+
+    const notYourWebhook = webhookViolation(method, path, user, req, npciPayments);
+    if (notYourWebhook) {
+      return res.status(403).json({
+        error: 'ERR_NOT_YOUR_PAYMENT',
+        message: `Payment ${notYourWebhook} belongs to someone else. A bank callback needs a valid signature.`,
+      });
     }
 
     const notYourPayment = paymentViolation(method, path, user, npciPayments);
@@ -1596,7 +1647,10 @@ export default async function handler(req, res) {
         apis: [
           { name: 'NPCI UPI Collect', endpoint: '/api/npci/collect', auth: 'Bearer JWT', status: 'live' },
           { name: 'UTR Reconciliation Lookup', endpoint: '/api/npci/utr/:utr', auth: 'Bearer JWT', status: 'live' },
-          { name: 'Bank Webhooks', endpoint: '/api/npci/webhook', auth: 'signature', status: 'live' },
+          // Report the auth that is actually in force, not the one we wish for.
+          { name: 'Bank Webhooks', endpoint: '/api/npci/webhook',
+            auth: process.env.NPCI_WEBHOOK_SECRET ? 'signature (HMAC-SHA256)' : 'Bearer JWT — payment owner only; set NPCI_WEBHOOK_SECRET for signature auth',
+            status: 'live' },
           { name: 'Drunix Ledger Flow', endpoint: '/api/drunix/ledger?paymentId=', auth: 'Bearer JWT', status: 'live' },
           { name: 'Fraud Scoring', endpoint: '/api/fraud/config', auth: 'Bearer JWT', status: 'live' },
           { name: 'Property Data (Bhoomi/Dharani)', endpoint: '/api/properties/:id/verify', auth: 'Bearer JWT', status: 'live' },

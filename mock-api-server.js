@@ -199,9 +199,18 @@ function decodeClerkOrMockToken(token) {
 }
 
 function authMiddleware(req, res, next) {
+  // A signed bank callback authenticates itself; it has no session with us,
+  // so demanding a bearer token on top would make signature auth unusable by
+  // the only caller it exists for.
+  if (req.method === 'POST' && WEBHOOK_PATHS.has(req.path) && webhookSignatureValid(req)) {
+    req.user = { identityId: 'bank-callback', mspId: 'BankMSP', role: 'Webhook' };
+    return next();
+  }
   // Authenticate, then check entitlement. Chained here rather than added to
   // each route so a new owner-scoped route cannot forget it.
-  return authenticate(req, res, () => ownershipGate(req, res, () => paymentGate(req, res, next)));
+  return authenticate(req, res, () =>
+    ownershipGate(req, res, () =>
+      paymentGate(req, res, () => webhookGate(req, res, next))));
 }
 
 function authenticate(req, res, next) {
@@ -274,6 +283,46 @@ function paymentOwner(user, requested) {
 }
 
 const PAYMENT_SCOPED = /^\/api\/npci\/payments\/([^\/]+)(?:\/(approve|decline|refund|reattach|release|settle))?$/;
+const WEBHOOK_PATHS = new Set(['/api/npci/webhook', '/api/npci/webhook/test']);
+
+// The capability list advertises these as auth: 'signature' and nothing ever
+// verified one. A bank callback carries no user session, so a shared secret
+// is the only thing that can authenticate it; with none configured, fall
+// back to the same ownership rule as the rest of the payment routes.
+function webhookSignatureValid(req) {
+  const secret = process.env.NPCI_WEBHOOK_SECRET;
+  if (!secret) return false;
+  const supplied = String(req.headers['x-setu-signature'] || req.headers['x-icici-signature']
+    || req.headers['x-webhook-signature'] || (req.body && req.body.signature) || '');
+  if (!supplied) return false;
+  const expected = crypto.createHmac('sha256', secret)
+    .update(JSON.stringify(req.body || {})).digest('hex');
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// The payment is named in the body here, so the path-based gate never saw
+// it: any signed-in user could post a SUCCESS callback against a stranger's
+// payment, moving it to CONFIRMED with a UTR of their choosing.
+function webhookGate(req, res, next) {
+  if (!WEBHOOK_PATHS.has(req.path) || req.method !== 'POST') return next();
+  if (webhookSignatureValid(req)) return next();
+  if (!req.user) return next();
+  const body = req.body || {};
+  const id = body.paymentId || body.referenceId || body.merchantTxnId || body.transactionId;
+  if (!id) return next();
+  const pay = npciPayments[id];
+  if (!pay) return next();
+  const self = req.user.identityId;
+  const role = String(req.user.role || '').toLowerCase();
+  if (pay.payerId === self || pay.payeeId === self) return next();
+  if (SUPERVISORY.has(role) || role === 'originator') return next();
+  return res.status(403).json({
+    error: 'ERR_NOT_YOUR_PAYMENT',
+    message: `Payment ${pay.paymentId} belongs to someone else. A bank callback needs a valid signature.`,
+  });
+}
 
 // Any signed-in user could read, approve, decline or refund anyone's
 // payment. Declining was the damaging one: cancelling a stranger's purchase.
@@ -2244,7 +2293,10 @@ app.get('/api/openfinance/capabilities', authMiddleware, (req, res) => {
     apis: [
       { name: 'NPCI UPI Collect', endpoint: '/api/npci/collect', auth: 'Bearer JWT', status: 'live' },
       { name: 'UTR Reconciliation Lookup', endpoint: '/api/npci/utr/:utr', auth: 'Bearer JWT', status: 'live' },
-      { name: 'Bank Webhooks', endpoint: '/api/npci/webhook', auth: 'signature', status: 'live' },
+      // Report the auth that is actually in force, not the one we wish for.
+      { name: 'Bank Webhooks', endpoint: '/api/npci/webhook',
+        auth: process.env.NPCI_WEBHOOK_SECRET ? 'signature (HMAC-SHA256)' : 'Bearer JWT — payment owner only; set NPCI_WEBHOOK_SECRET for signature auth',
+        status: 'live' },
       { name: 'Drunix Ledger Flow', endpoint: '/api/drunix/ledger?paymentId=', auth: 'Bearer JWT', status: 'live' },
       { name: 'Fraud Scoring', endpoint: '/api/fraud/config', auth: 'Bearer JWT', status: 'live' },
       { name: 'Property Data (Bhoomi/Dharani)', endpoint: '/api/properties/:id/verify', auth: 'Bearer JWT', status: 'live' },
@@ -2567,7 +2619,7 @@ app.post('/api/npci/webhook/test', authMiddleware, (req, res) => {
   utrIndex[pay.rrn] = paymentId;
   npciPayments[paymentId] = pay;
   addWebhookAudit({ webhookId: `wh-${Date.now()}-${paymentId}`, paymentId, status: 'SUCCESS', rrn: pay.rrn, utr: pay.utr, provider: 'setu-test', timestamp: new Date(), result: 'PAYMENT_CONFIRMED' });
-  res.json({ sent: payload, payment: pay, note: 'Simulated bank webhook — signature verified in mock mode' });
+  res.json({ sent: payload, payment: pay, note: 'Simulated bank webhook. No signature is verified unless NPCI_WEBHOOK_SECRET is set; without it only the payment owner may call this.' });
 });
 
 app.get('/api/npci/webhooks', authMiddleware, (req, res) => {
