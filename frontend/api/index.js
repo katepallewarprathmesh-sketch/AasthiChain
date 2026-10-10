@@ -1394,6 +1394,8 @@ const AUTH_REQUIRED = [
   ['GET', /^\/api\/credit\/loans\/[^\/]+$/],
   ['POST', /^\/api\/swap$/],
   ['GET', /^\/api\/admin\/ops$/],
+  ['POST', /^\/api\/chain\/tamper$/],
+  ['POST', /^\/api\/chain\/restore$/],
 ];
 
 // Being logged in is not the same as being entitled. These routes carry
@@ -3137,6 +3139,12 @@ export default async function handler(req, res) {
       if (!b) return res.status(404).json({ error: 'ERR_BLOCK_NOT_FOUND', query: key });
       return res.json({ ...b });
     }
+    // Rewriting the ledger is a regulator's demonstration, not an open
+    // endpoint: these took no credentials at all.
+    if ((path === '/api/chain/tamper' || path === '/api/chain/restore') && method === 'POST'
+        && !SUPERVISORY.has(String(user.role || '').toLowerCase())) {
+      return res.status(403).json({ error: 'ERR_NOT_REGULATOR', message: 'Only a regulator or admin can tamper with or restore the chain.' });
+    }
     if (path === '/api/chain/tamper' && method === 'POST') {
       const height = parseInt(req.body?.height ?? Math.max(1, drunixChain.length - 1));
       const r = drunixTamper(height);
@@ -3919,6 +3927,9 @@ export default async function handler(req, res) {
         const finalTxHash = isSimulated ? '' : (txHash || '0x' + (crypto.randomBytes ? crypto.randomBytes(32).toString('hex') : safeUUID().replace(/-/g,'')));
         testnetPayments[pid] = {
           paymentId: pid, assetId, tokenAmount, estimatedEth, txHash: finalTxHash, from, to,
+          // Who actually started this escrow. `from` comes from the body and
+          // is whatever the caller typed, so it cannot be the basis of a check.
+          initiatedBy: user.identityId,
           status: 'PENDING', createdAt: new Date(), drunixTransferId: null, isSimulated: !!isSimulated,
           sepoliaExplorer: isSimulated ? '' : `https://sepolia.etherscan.io/tx/${finalTxHash}`,
         };
@@ -3942,7 +3953,18 @@ export default async function handler(req, res) {
 
     if (path.match(/^\/api\/testnet\/payments\/[^\/]+\/confirm$/) && method === 'POST') {
       try {
-        const pid = path.split('/')[3];
+        // /api/testnet/payments/<id>/confirm — the id is segment 4, not 3.
+        // This read 'payments' as the payment id, so every confirm and
+        // release updated nothing and echoed back a status it never set.
+        const pid = decodeURIComponent(path.split('/')[4]);
+      // Confirming or releasing someone else's escrow is not yours to do.
+      const pay = testnetPayments[pid];
+      if (!pay) return res.status(404).json({ error: 'ERR_PAYMENT_NOT_FOUND', paymentId: pid });
+      const me = user.identityId;
+      if (!(pay.initiatedBy === me || pay.from === me || pay.to === me
+            || SUPERVISORY.has(String(user.role || '').toLowerCase()))) {
+        return res.status(403).json({ error: 'ERR_NOT_YOUR_PAYMENT', message: 'This testnet escrow belongs to another participant.' });
+      }
         if (testnetPayments[pid]) {
           testnetPayments[pid].status = 'CONFIRMED';
           testnetPayments[pid].drunixTransferId = req.body.drunixTransferId;
@@ -3956,7 +3978,18 @@ export default async function handler(req, res) {
 
     if (path.match(/^\/api\/testnet\/payments\/[^\/]+\/release$/) && method === 'POST') {
       try {
-        const pid = path.split('/')[3];
+        // /api/testnet/payments/<id>/confirm — the id is segment 4, not 3.
+        // This read 'payments' as the payment id, so every confirm and
+        // release updated nothing and echoed back a status it never set.
+        const pid = decodeURIComponent(path.split('/')[4]);
+      // Confirming or releasing someone else's escrow is not yours to do.
+      const pay = testnetPayments[pid];
+      if (!pay) return res.status(404).json({ error: 'ERR_PAYMENT_NOT_FOUND', paymentId: pid });
+      const me = user.identityId;
+      if (!(pay.initiatedBy === me || pay.from === me || pay.to === me
+            || SUPERVISORY.has(String(user.role || '').toLowerCase()))) {
+        return res.status(403).json({ error: 'ERR_NOT_YOUR_PAYMENT', message: 'This testnet escrow belongs to another participant.' });
+      }
         if (testnetPayments[pid]) {
           testnetPayments[pid].status = 'RELEASED';
           globalThis._aasthi_testnet = testnetPayments;

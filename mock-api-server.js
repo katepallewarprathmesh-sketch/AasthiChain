@@ -1384,6 +1384,9 @@ app.post('/api/testnet/payments/initiate', authMiddleware, (req, res) => {
     createdAt: new Date(),
     drunixTransferId: null,
     isSimulated: !!isSimulated,
+    // Who actually started this escrow. `from` comes from the body and is
+    // whatever the caller typed, so it cannot be the basis of a check.
+    initiatedBy: req.user.identityId,
     // Real flow: Etherscan-verifiable link, Simulated: no link, greyed out non-clickable visibly different
     sepoliaExplorer: isSimulated ? '' : `https://sepolia.etherscan.io/tx/${finalTxHash}`,
     escrowContract: '0x0000000000000000000000000000000000000000',
@@ -1405,8 +1408,20 @@ app.get('/api/testnet/payments/:id', authMiddleware, (req, res) => {
   res.json(pay);
 });
 
+// Confirming or releasing someone else's escrow is not yours to do.
+function testnetDenied(req, res, pid) {
+  const pay = testnetPayments[pid];
+  if (!pay) { res.status(404).json({ error: 'ERR_PAYMENT_NOT_FOUND', paymentId: pid }); return true; }
+  const me = req.user.identityId;
+  if (pay.initiatedBy === me || pay.from === me || pay.to === me) return false;
+  if (SUPERVISORY.has(String(req.user.role || '').toLowerCase())) return false;
+  res.status(403).json({ error: 'ERR_NOT_YOUR_PAYMENT', message: 'This testnet escrow belongs to another participant.' });
+  return true;
+}
+
 app.post('/api/testnet/payments/:id/confirm', authMiddleware, (req, res) => {
   const pid = req.params.id;
+  if (testnetDenied(req, res, pid)) return;
   if (testnetPayments[pid]) {
     testnetPayments[pid].status = 'CONFIRMED';
     testnetPayments[pid].drunixTransferId = req.body.drunixTransferId;
@@ -1417,6 +1432,7 @@ app.post('/api/testnet/payments/:id/confirm', authMiddleware, (req, res) => {
 
 app.post('/api/testnet/payments/:id/release', authMiddleware, (req, res) => {
   const pid = req.params.id;
+  if (testnetDenied(req, res, pid)) return;
   if (testnetPayments[pid]) {
     testnetPayments[pid].status = 'RELEASED';
     testnetPayments[pid].releasedAt = new Date();
@@ -2698,13 +2714,22 @@ app.get('/api/chain/block/:n', (req, res) => {
   res.json({ ...b });
 });
 // Demo-only (SIMULATION label in UI): mutate a committed block, then verify() proves detection.
-app.post('/api/chain/tamper', (req, res) => {
+// Rewriting the ledger is a regulator's demonstration, not an open endpoint:
+// these took no credentials at all.
+const supervisoryOnly = (req, res) => {
+  if (SUPERVISORY.has(String(req.user?.role || '').toLowerCase())) return false;
+  res.status(403).json({ error: 'ERR_NOT_REGULATOR', message: 'Only a regulator or admin can tamper with or restore the chain.' });
+  return true;
+};
+app.post('/api/chain/tamper', authMiddleware, (req, res) => {
+  if (supervisoryOnly(req, res)) return;
   const height = parseInt(req.body?.height ?? Math.max(1, drunixChain.length - 1));
   const r = drunixTamper(height);
   if (!r) return res.status(400).json({ error: 'ERR_CANNOT_TAMPER', message: 'Pick a committed, non-genesis block' });
   res.json({ simulated: true, warning: 'SIMULATION — demonstrating tamper-evidence', ...r, next: 'GET /api/chain/verify' });
 });
-app.post('/api/chain/restore', (req, res) => {
+app.post('/api/chain/restore', authMiddleware, (req, res) => {
+  if (supervisoryOnly(req, res)) return;
   const height = parseInt(req.body?.height ?? -1);
   if (height >= 0) return res.json({ restored: drunixRestore(height), height });
   let n = 0; for (const b of drunixChain) if (b._pristine && drunixRestore(b.height)) n++;
