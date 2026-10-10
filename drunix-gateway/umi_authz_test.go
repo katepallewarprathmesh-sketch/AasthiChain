@@ -199,6 +199,24 @@ func TestSealedLedgerRefusesMoneyMovement(t *testing.T) {
 		t.Fatalf("want ERR_LEDGER_SEALED, got %s", rec.Body.String())
 	}
 
+	// Per-route gating missed these three: each commits a block, none was
+	// covered, and all three used to answer as though the write had landed.
+	for _, w := range []struct{ path, body string }{
+		{"/umi/isin", `{"assetId":"PROP-SEALED-1","issuer":"originator1"}`},
+		{"/umi/dvp", `{"assetId":"PROP-SEALED-1","seller":"originator1","buyer":"investor1","tokens":1,"pricePerTokenINR":100}`},
+		{"/umi/documents", `{"assetId":"PROP-SEALED-1","kind":"TITLE_DEED","contentBase64":"aGVsbG8="}`},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, w.path, strings.NewReader(w.body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Fabric-Identity", "regulator1")
+		req.Header.Set("X-Identity-Role", "Regulator")
+		srv.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("POST %s on a sealed ledger returned %d, want 503: %s", w.path, rec.Code, rec.Body.String())
+		}
+	}
+
 	// Reading is still fine: a sealed chain can still show its books.
 	rec = httptest.NewRecorder()
 	read := httptest.NewRequest(http.MethodGet, "/umi/wallets/investor1", nil)

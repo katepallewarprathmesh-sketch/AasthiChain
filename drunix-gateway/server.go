@@ -116,7 +116,30 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/umi/metrics", s.handleMetrics)
 	s.registerDocumentRoutes(mux)
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
-	return logCORS(s.withMetrics(mux))
+	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
+}
+
+// sealedLedgerGate refuses every write once the ledger has stopped accepting
+// blocks.
+//
+// Per-route gating missed routes: ISIN assignment, baskets, offers and
+// document anchoring all commit blocks and none of them were covered. The
+// rail's promise is that anything it confirms has a block behind it, so the
+// check belongs in front of everything rather than on the handlers someone
+// remembered.
+func (s *Server) sealedLedgerGate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead &&
+			r.Method != http.MethodOptions && s.chainSealed() {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+				"error":   "ERR_LEDGER_SEALED",
+				"message": "the ledger failed verification on restore and is refusing new blocks, so this cannot be committed",
+				"hint":    "see GET /drunix/ledger/status",
+			})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func logCORS(next http.Handler) http.Handler {

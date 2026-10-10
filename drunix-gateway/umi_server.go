@@ -53,18 +53,6 @@ var umiEndpointList = []string{
 // anything.
 func (s *Server) durabilityGate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// A sealed chain cannot take a block, and the rail used to carry on
-		// anyway: the wallet moved in memory and the response said ok, with
-		// no block behind it. Refuse the write instead of reporting a
-		// settlement the ledger cannot prove.
-		if r.Method != http.MethodGet && r.Method != http.MethodOptions && s.chainSealed() {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
-				"error":   "ERR_LEDGER_SEALED",
-				"message": "the ledger failed verification on restore and is refusing new blocks, so this cannot be committed",
-				"hint":    "see GET /drunix/ledger/status",
-			})
-			return
-		}
 		if r.Method != http.MethodGet && r.Method != http.MethodOptions &&
 			UMIDurabilityStrict() && s.chainDegraded() {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
