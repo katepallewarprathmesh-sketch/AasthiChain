@@ -100,6 +100,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/drunix/ledger/status", s.handleLedgerStatus)
+	mux.HandleFunc("/drunix/ledger/recover", s.handleLedgerRecover)
 	mux.HandleFunc("/drunix/tx/", s.handleTx)
 	mux.HandleFunc("/drunix/submit", s.handleSubmit)
 	mux.HandleFunc("/drunix/evaluate", s.handleEvaluate)
@@ -129,6 +130,12 @@ func (s *Server) Router() http.Handler {
 // remembered.
 func (s *Server) sealedLedgerGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The repair route is the one write a sealed chain must still accept:
+		// refusing it would leave no way back from the state it describes.
+		if r.URL.Path == "/drunix/ledger/recover" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead &&
 			r.Method != http.MethodOptions && s.chainSealed() {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
@@ -465,5 +472,62 @@ func (s *Server) handlePipelineStats(w http.ResponseWriter, r *http.Request) {
 		"client":          map[string]interface{}{"id": p.Client.ID, "phase2": "collects endorsements, signs envelope"},
 		"transactionFlow": []string{"1-endorsement", "2-submit-txn", "3-ordering", "4-validation", "5-commit"},
 		"roles":           []string{"Client (signs envelope)", "LitePeer (endorsement, stateless)", "Orderer (RAFT, batches txns into blocks)", "ValidationService (VSCC, round-robin)", "CommittingPeer (MVCC + commit)"},
+	})
+}
+
+// handleLedgerRecover reopens a sealed chain by dropping the history it
+// cannot vouch for.
+//
+// This is destructive and it erases the evidence of whatever broke the
+// chain, so it is deliberately awkward: supervisors only, an explicit
+// confirmation string in the body, and the discarded heights and hashes are
+// written into the replacement block. The alternative was a rail that stays
+// stopped until someone edits the database by hand, which is worse — people
+// edit the database by hand and nobody ever finds out.
+func (s *Server) handleLedgerRecover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "ERR_METHOD", "message": "POST required"})
+		return
+	}
+	caller := callerOf(r)
+	if !umiRequireSupervisor(w, caller, "Repairing the ledger") {
+		return
+	}
+	var body struct {
+		Confirm string `json:"confirm"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Confirm != "TRUNCATE_TO_LAST_VALID" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error":   "ERR_CONFIRMATION_REQUIRED",
+			"message": `this discards every block from the first unverifiable one onwards — send {"confirm":"TRUNCATE_TO_LAST_VALID"} if that is what you want`,
+		})
+		return
+	}
+	if s.Pipeline == nil || s.Pipeline.CP == nil || s.Pipeline.CP.Ledger == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ERR_NO_LEDGER"})
+		return
+	}
+	chain := s.Pipeline.CP.Ledger
+	before := chain.Verify()
+	discarded, kept, err := chain.RecoverTruncate(caller.ID)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"error": "ERR_LEDGER_UNREPAIRABLE", "message": err.Error(),
+		})
+		return
+	}
+	after := chain.Verify()
+	log.Printf("Drunix chain: ledger repaired by %s — %d block(s) discarded, chain now valid=%v at height %d",
+		caller.ID, len(discarded), after.Valid, after.Height)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":             true,
+		"wasValid":       before.Valid,
+		"brokenAt":       before.BrokenAt,
+		"discardedCount": len(discarded),
+		"discarded":      discarded,
+		"keptThrough":    kept,
+		"chain":          after,
+		"note":           "the truncation is itself a block (LEDGER_TRUNCATED) naming every height and hash that was dropped",
 	})
 }

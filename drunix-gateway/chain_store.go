@@ -81,6 +81,17 @@ func (s *PostgresUMIStore) AppendBlock(b *DrunixBlock) error {
 }
 
 // BlockStoreMode labels the durable chain backend for /drunix/ledger/status.
+// DeleteBlocksAbove removes stored blocks past a height. Used only by the
+// sealed-chain repair, which keeps a record of what it dropped.
+func (s *PostgresUMIStore) DeleteBlocksAbove(ctx context.Context, height int64) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM umi_block WHERE height > $1`, height)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 func (s *PostgresUMIStore) BlockStoreMode() string { return s.Mode() }
 
 // --- chain wiring -----------------------------------------------------------

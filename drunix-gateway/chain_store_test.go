@@ -399,3 +399,83 @@ func TestInMemoryChainStillPublishesInline(t *testing.T) {
 		t.Fatal("an in-memory chain must still notify subscribers inline")
 	}
 }
+
+// DeleteBlocksAbove mirrors the SQL repair path. It is the only delete the
+// store has, and only the sealed-chain repair may call it.
+func (f *fakeBlockStore) DeleteBlocksAbove(ctx context.Context, height int64) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	kept := make([]int64, 0, len(f.order))
+	var removed int64
+	for _, h := range f.order {
+		if h > height {
+			delete(f.rows, h)
+			removed++
+			continue
+		}
+		kept = append(kept, h)
+	}
+	f.order = kept
+	return removed, nil
+}
+
+// A sealed chain is correct but terminal: it refuses to extend history it
+// cannot vouch for, so the rail stops settling and stays stopped. This is
+// the way back — and it must leave the repair on the record, not hide it.
+func TestSealedChainCanBeRepairedAndSaysWhatItDropped(t *testing.T) {
+	store := newFakeBlockStore()
+	c1, _ := NewChainWithStore(store)
+	c1.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI758681", "cashINR": 50000}})
+	c1.Append(BlockUMIServicingPaid, []map[string]interface{}{{"amountINR": 6000}})
+	c1.Append(BlockUMIDvPSettled, []map[string]interface{}{{"isin": "AASTHI758681", "cashINR": 1000}})
+	goodTip := c1.Blocks[1].Hash
+
+	// Someone edits a committed block in storage.
+	store.mu.Lock()
+	tampered := store.rows[2]
+	tampered.Txns = []map[string]interface{}{{"amountINR": 9999999}}
+	store.rows[2] = tampered
+	store.mu.Unlock()
+
+	c2, v2 := NewChainWithStore(store)
+	if v2.Valid || !c2.Sealed() {
+		t.Fatalf("a tampered chain must restore sealed, got valid=%v sealed=%v", v2.Valid, c2.Sealed())
+	}
+	if c2.Append("UMI_DVP_SETTLED", []map[string]interface{}{{"x": 1}}) != nil {
+		t.Fatal("a sealed chain must refuse appends")
+	}
+
+	discarded, kept, err := c2.RecoverTruncate("regulator1")
+	if err != nil {
+		t.Fatalf("repair failed: %v", err)
+	}
+	if len(discarded) != 2 {
+		t.Fatalf("expected the broken block and everything after it (2), got %d", len(discarded))
+	}
+	if kept != 1 || c2.Blocks[1].Hash != goodTip {
+		t.Fatalf("history before the break must be untouched: kept=%d", kept)
+	}
+	if v := c2.Verify(); !v.Valid {
+		t.Fatalf("chain should verify after repair: %+v", v)
+	}
+
+	// The repair is on the chain, naming what went.
+	tip := c2.Blocks[len(c2.Blocks)-1]
+	if tip.Type != "LEDGER_TRUNCATED" {
+		t.Fatalf("the repair should be recorded as a block, got %s", tip.Type)
+	}
+	if len(tip.Txns) == 0 || tip.Txns[0]["authorisedBy"] != "regulator1" {
+		t.Fatalf("the repair block should name who authorised it: %+v", tip.Txns)
+	}
+
+	// And the ledger is writable again — which is the whole point.
+	if c2.Append(BlockUMIDvPSettled, []map[string]interface{}{{"cashINR": 10}}) == nil {
+		t.Fatal("a repaired chain must accept new blocks")
+	}
+
+	// Durable storage agrees: a restart does not resurrect the dropped tail.
+	c3, v3 := NewChainWithStore(store)
+	if !v3.Valid || c3.Sealed() {
+		t.Fatalf("after repair a restart should come up clean: valid=%v sealed=%v", v3.Valid, c3.Sealed())
+	}
+}

@@ -227,3 +227,35 @@ func TestSealedLedgerRefusesMoneyMovement(t *testing.T) {
 		t.Fatalf("reading a wallet on a sealed ledger returned %d, want 200", rec.Code)
 	}
 }
+
+// The repair is destructive and erases what broke the chain, so it must be
+// hard to reach by accident and impossible to reach as a stranger.
+func TestLedgerRepairIsSupervisoryAndDeliberate(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	post := func(identity, role, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/drunix/ledger/recover", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := post("", "", `{"confirm":"TRUNCATE_TO_LAST_VALID"}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous repair = %d, want 401", rec.Code)
+	}
+	if rec := post("investor1", "Investor", `{"confirm":"TRUNCATE_TO_LAST_VALID"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("investor repair = %d, want 403", rec.Code)
+	}
+	rec := post("regulator1", "Regulator", `{}`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "ERR_CONFIRMATION_REQUIRED") {
+		t.Errorf("unconfirmed repair = %d %s, want 400 ERR_CONFIRMATION_REQUIRED", rec.Code, rec.Body.String())
+	}
+	// A healthy chain has nothing to discard, and saying so is not an error.
+	if rec := post("regulator1", "Regulator", `{"confirm":"TRUNCATE_TO_LAST_VALID"}`); rec.Code != http.StatusOK {
+		t.Errorf("repair on a healthy chain = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}

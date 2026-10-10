@@ -14,9 +14,11 @@ package drunix
 // verifies it without trusting the operator.
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -227,6 +229,75 @@ func (c *DrunixChain) Snapshot() []*DrunixBlock {
 }
 
 // Durability reports how the chain is stored, for /drunix/ledger/status.
+// firstBrokenLocked returns the height of the first block that does not
+// replay, or -1 when the whole chain verifies. Caller must hold c.mu.
+func (c *DrunixChain) firstBrokenLocked() int64 {
+	v := c.verifyLocked()
+	if v.Valid {
+		return -1
+	}
+	return v.BrokenAt
+}
+
+// RecoverTruncate discards every block from the first unverifiable one
+// onwards and reopens the chain for writing.
+//
+// A sealed chain is correct but terminal: the node refuses to extend history
+// it cannot vouch for, so the rail stops settling and stays stopped. The only
+// honest way back is to drop the part that does not replay — and to say, on
+// the chain itself, exactly what was dropped. The replacement block records
+// the discarded heights and their hashes, so the repair is auditable rather
+// than a quiet rewrite. Nothing before the break is touched.
+func (c *DrunixChain) RecoverTruncate(by string) (discarded []map[string]interface{}, keptHeight int64, err error) {
+	c.mu.Lock()
+	broken := c.firstBrokenLocked()
+	if broken < 0 {
+		c.mu.Unlock()
+		return nil, int64(len(c.Blocks) - 1), nil
+	}
+	if broken == 0 {
+		c.mu.Unlock()
+		return nil, 0, errors.New("genesis itself does not verify — this chain cannot be repaired by truncation")
+	}
+	for _, b := range c.Blocks[broken:] {
+		discarded = append(discarded, map[string]interface{}{
+			"height": b.Height, "type": b.Type, "hash": b.Hash, "timestamp": b.Timestamp,
+		})
+	}
+	if c.store != nil {
+		if tr, ok := c.store.(interface {
+			DeleteBlocksAbove(ctx context.Context, height int64) (int64, error)
+		}); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			n, derr := tr.DeleteBlocksAbove(ctx, broken-1)
+			cancel()
+			if derr != nil {
+				c.mu.Unlock()
+				return nil, 0, derr
+			}
+			log.Printf("Drunix chain: removed %d unverifiable block(s) above height %d from durable storage", n, broken-1)
+		} else {
+			c.mu.Unlock()
+			return nil, 0, errors.New("the durable block store cannot delete blocks, so this chain cannot be repaired in place")
+		}
+	}
+	c.Blocks = c.Blocks[:broken]
+	c.pending = nil
+	c.sealed = false
+	keptHeight = int64(len(c.Blocks) - 1)
+	c.mu.Unlock()
+
+	// Recorded as a block so the gap is part of the history, not hidden by it.
+	c.Append("LEDGER_TRUNCATED", []map[string]interface{}{{
+		"reason":        "stored history failed verification on restore",
+		"discarded":     discarded,
+		"discardedFrom": broken,
+		"keptThrough":   keptHeight,
+		"authorisedBy":  by,
+	}})
+	return discarded, keptHeight, nil
+}
+
 // Sealed reports whether the chain refused to adopt the history it was
 // restored with. A sealed chain accepts no appends, so anything that would
 // have to be proved by a block must be refused rather than reported done.
@@ -284,6 +355,11 @@ type ChainVerification struct {
 func (c *DrunixChain) Verify() ChainVerification {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.verifyLocked()
+}
+
+// verifyLocked is Verify without taking the lock. Caller must hold c.mu.
+func (c *DrunixChain) verifyLocked() ChainVerification {
 	for i, b := range c.Blocks {
 		expectPrev := GenesisPrevHash
 		if i > 0 {
