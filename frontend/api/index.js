@@ -1645,9 +1645,19 @@ export default async function handler(req, res) {
     if (path === '/api/drunix/ledger' && method === 'GET') {
       try {
         await initState();
+        // The settlement trace spells out the VPAs, the UTR, the RRN and the
+        // fraud score of whichever payment you name — and with no paymentId
+        // it used to default to the newest payment on the platform, whoever
+        // it belonged to.
         const pid = url.searchParams.get('paymentId');
-        const pay = pid ? npciPayments[pid] : Object.values(npciPayments).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+        const self = user && user.identityId;
+        const supervising = SUPERVISORY.has(String((user && user.role) || '').toLowerCase());
+        const visible = Object.values(npciPayments).filter((p) => supervising || p.payerId === self || p.payeeId === self);
+        const pay = pid ? npciPayments[pid] : visible.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
         if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId: pid });
+        if (!visible.some((p) => p.paymentId === pay.paymentId)) {
+          return res.status(403).json({ error: 'ERR_NOT_YOUR_PAYMENT', message: `Payment ${pay.paymentId} belongs to someone else.` });
+        }
         const txId = crypto.createHash('sha256').update(`aasthichain|SettleDvP|${pay.paymentId}|${pay.drunixTransferId || pay.utr || ''}`).digest('hex');
         const pseudoBlock = 100 + (parseInt(txId.slice(0, 6), 16) % 90000);
         const stages = [

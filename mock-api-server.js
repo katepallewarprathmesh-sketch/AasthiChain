@@ -2368,9 +2368,18 @@ app.delete('/api/properties/:id', authMiddleware, (req, res) => {
 });
 
 // Drunix transaction flow for a payment (FAQ 14 demo: Drunix Transaction Flow)
+// The settlement trace spells out the VPAs, the UTR, the RRN and the fraud
+// score of whichever payment you name — and with no paymentId it used to
+// default to the newest payment on the platform, whoever it belonged to.
 app.get('/api/drunix/ledger', authMiddleware, (req, res) => {
-  const pay = req.query.paymentId ? npciPayments[req.query.paymentId] : Object.values(npciPayments).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  const visible = paymentsVisibleTo(req.user);
+  const pay = req.query.paymentId
+    ? npciPayments[req.query.paymentId]
+    : visible.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
   if (!pay) return res.status(404).json({ error: 'Payment not found', paymentId: req.query.paymentId });
+  if (!visible.some(p => p.paymentId === pay.paymentId)) {
+    return res.status(403).json({ error: 'ERR_NOT_YOUR_PAYMENT', message: `Payment ${pay.paymentId} belongs to someone else.` });
+  }
   const crypto = require('crypto');
   const txId = crypto.createHash('sha256').update(`aasthichain|SettleDvP|${pay.paymentId}|${pay.drunixTransferId || pay.utr || ''}`).digest('hex');
   const pseudoBlock = 100 + (parseInt(txId.slice(0, 6), 16) % 90000);

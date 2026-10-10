@@ -89,5 +89,19 @@ t('a regulator still sees the full callback trail', mentions((await call('/api/n
 t('an outsider still gets a well-formed empty-ish list',
   Array.isArray(hooksOutsider.body.webhooks) && typeof hooksOutsider.body.count === 'number');
 
+// ---- the settlement trace
+// It names the VPAs, the UTR, the RRN and the fraud score, and with no
+// paymentId it used to hand back the newest payment on the platform.
+const traceNamed = await call(`/api/drunix/ledger?paymentId=${encodeURIComponent(paymentId)}`, INVESTOR2);
+t('a stranger cannot trace someone elses payment', traceNamed.status === 403, `got ${traceNamed.status}`);
+const traceDefault = await call('/api/drunix/ledger', INVESTOR2);
+t('and the no-argument trace does not fall back to theirs',
+  traceDefault.status === 404 || (traceDefault.body && traceDefault.body.paymentId !== paymentId),
+  `${traceDefault.status} ${JSON.stringify(traceDefault.body).slice(0, 120)}`);
+t('the payer can still trace their own',
+  (await call(`/api/drunix/ledger?paymentId=${encodeURIComponent(paymentId)}`, INVESTOR1)).status === 200);
+t('and a regulator can trace any',
+  (await call(`/api/drunix/ledger?paymentId=${encodeURIComponent(paymentId)}`, REGULATOR)).status === 200);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
