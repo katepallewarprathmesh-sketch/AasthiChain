@@ -437,6 +437,9 @@ func TestDocumentEndpointsRoundTrip(t *testing.T) {
 	          "visibility":"public","mediaType":"text/plain","content":"THE DEED"}`
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/umi/documents", strings.NewReader(body))
+	// Anchoring is limited to holders, registrars and supervisors.
+	req.Header.Set("X-Fabric-Identity", "registrar1")
+	req.Header.Set("X-Identity-Role", "Registrar")
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("anchor returned %d: %s", rec.Code, rec.Body.String())
@@ -506,7 +509,7 @@ func TestDocumentUploadAcceptsBase64AndDataURLs(t *testing.T) {
 	body := `{"assetId":"PROP-B","docType":"APPROVED_PLAN","submittedBy":"originator1",
 	          "visibility":"public","contentBase64":"data:application/pdf;base64,UERGQllURVM="}`
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/umi/documents", strings.NewReader(body)))
+	h.ServeHTTP(rec, docAnchorReq(body))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("anchor returned %d: %s", rec.Code, rec.Body.String())
 	}
@@ -522,7 +525,7 @@ func TestDuplicateAnchorIsA409(t *testing.T) {
 	body := `{"assetId":"PROP-A","docType":"TITLE_DEED","submittedBy":"o1","content":"same bytes"}`
 	for i, wantCode := range []int{http.StatusCreated, http.StatusConflict} {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/umi/documents", strings.NewReader(body)))
+		h.ServeHTTP(rec, docAnchorReq(body))
 		if rec.Code != wantCode {
 			t.Errorf("attempt %d returned %d, want %d: %s", i+1, rec.Code, wantCode, rec.Body.String())
 		}
@@ -702,4 +705,12 @@ func TestDigestAnchorAndContentAnchorCollide(t *testing.T) {
 	if st := dr.Stats(); st.Total != 1 {
 		t.Errorf("register holds %d records for one document", st.Total)
 	}
+}
+
+// docAnchorReq builds an anchor request from someone allowed to anchor.
+func docAnchorReq(body string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/umi/documents", strings.NewReader(body))
+	req.Header.Set("X-Fabric-Identity", "registrar1")
+	req.Header.Set("X-Identity-Role", "Registrar")
+	return req
 }

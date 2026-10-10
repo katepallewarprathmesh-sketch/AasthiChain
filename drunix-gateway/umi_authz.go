@@ -60,7 +60,7 @@ func firstHeader(r *http.Request, names ...string) string {
 func umiRequireIdentity(w http.ResponseWriter, c umiCaller) bool {
 	if c.anonymous() {
 		umiErr(w, http.StatusUnauthorized, "ERR_UMI_NO_IDENTITY",
-			"This route acts on a participant's balance and needs an identified caller.")
+			"This route acts on a named participant's record and needs an identified caller.")
 		return false
 	}
 	return true
@@ -87,5 +87,35 @@ func umiRequireSupervisor(w http.ResponseWriter, c umiCaller, what string) bool 
 		return true
 	}
 	umiErr(w, http.StatusForbidden, "ERR_UMI_NOT_SUPERVISOR", what+" is a settlement-bank action.")
+	return false
+}
+
+// umiRequireAssetStake decides who may anchor evidence against an asset.
+//
+// Anchoring was open to the world, including callers with no identity at
+// all: anyone could plant a second TITLE_DEED or a VALIDATION_CERTIFICATE on
+// someone else's listing, and the submittedBy field came from the request
+// body, so they could sign it as anybody. The verify report counts anchored
+// documents as evidence, which made this a way to forge due diligence.
+//
+// Rule: supervisors and registrars (who issue certificates) always may; a
+// participant may anchor against an asset they actually hold a position in.
+// Everyone else is refused.
+func umiRequireAssetStake(w http.ResponseWriter, c umiCaller, assetID string, holds func(assetID, holder string) int64) bool {
+	if !umiRequireIdentity(w, c) {
+		return false
+	}
+	if c.supervisor() || strings.EqualFold(c.Role, "registrar") {
+		return true
+	}
+	if assetID != "" && holds != nil && holds(assetID, c.ID) > 0 {
+		return true
+	}
+	writeJSON(w, http.StatusForbidden, map[string]interface{}{
+		"error":      "ERR_UMI_NOT_YOUR_ASSET",
+		"message":    "Anchoring a document against an asset is limited to its holders, a registrar, or a supervisor.",
+		"mode":       UMIMode,
+		"disclaimer": UMIDisclaimer,
+	})
 	return false
 }

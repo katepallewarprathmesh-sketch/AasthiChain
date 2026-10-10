@@ -25,9 +25,15 @@ const j = async (path, init) => {
   return { status: r.status, body, headers: r.headers };
 };
 
+// Anchoring evidence against an asset is limited to its holders, a
+// registrar, or a supervisor — a stranger used to be able to plant a deed.
 const post = (path, payload) => j(path, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Fabric-Identity': 'registrar1',
+    'X-Identity-Role': 'Registrar',
+  },
   body: JSON.stringify(payload),
 });
 

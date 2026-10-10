@@ -842,7 +842,7 @@ async function certifyOnRail({ assetId, subject, docType, title, parties, visibi
     try {
       const r = await fetch(base + '/umi/documents', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
         body: JSON.stringify({
           assetId, subject, docType, title,
           issuer: 'AasthiChain registry',
@@ -873,7 +873,7 @@ async function anchorDigestOnRail({ assetId, subject, docType, title, issuer, su
     try {
       const r = await fetch(base + '/umi/documents/digest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
         body: JSON.stringify({ assetId, subject, docType, title, issuer, submittedBy, sha256 }),
         signal: ctrl.signal,
       });
@@ -4337,7 +4337,7 @@ export default async function handler(req, res) {
               try {
                 const r = await fetch(railBase + '/umi/documents/digest', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
                   body: JSON.stringify({
                     subject: identityId,
                     docType: 'KYC_EVIDENCE',

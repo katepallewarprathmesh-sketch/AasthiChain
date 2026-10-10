@@ -2,6 +2,7 @@ package drunix
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -257,5 +258,66 @@ func TestLedgerRepairIsSupervisoryAndDeliberate(t *testing.T) {
 	// A healthy chain has nothing to discard, and saying so is not an error.
 	if rec := post("regulator1", "Regulator", `{"confirm":"TRUNCATE_TO_LAST_VALID"}`); rec.Code != http.StatusOK {
 		t.Errorf("repair on a healthy chain = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Anchoring is how evidence gets onto a listing, and the verify report
+// counts it. Leaving it open let a stranger plant a second title deed on
+// someone else's property — and sign it as whoever they liked.
+func TestAnchoringEvidenceNeedsAStakeInTheAsset(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	const asset = "PROP-ANCHOR-TEST"
+
+	// originator1 holds the asset; investor2 does not.
+	if _, err := srv.UMI.SeedPosition(asset, "originator1", 1000, 1000); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	anchor := func(identity, role string) *httptest.ResponseRecorder {
+		body := `{"assetId":"` + asset + `","docType":"TITLE_DEED","contentBase64":"` +
+			base64.StdEncoding.EncodeToString([]byte("deed "+identity+role)) + `"}`
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/umi/documents", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := anchor("", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous anchor = %d, want 401", rec.Code)
+	}
+	if rec := anchor("investor2", "Investor"); rec.Code != http.StatusForbidden {
+		t.Errorf("stranger anchor = %d, want 403: %s", rec.Code, rec.Body.String())
+	} else if !strings.Contains(rec.Body.String(), "ERR_UMI_NOT_YOUR_ASSET") {
+		t.Errorf("want ERR_UMI_NOT_YOUR_ASSET, got %s", rec.Body.String())
+	}
+	if rec := anchor("originator1", "Originator"); rec.Code != http.StatusCreated {
+		t.Errorf("holder anchor = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	if rec := anchor("registrar1", "Registrar"); rec.Code != http.StatusCreated {
+		t.Errorf("registrar anchor = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+
+	// And the anchor is attributed to the caller, not to whatever the body claimed.
+	body := `{"assetId":"` + asset + `","docType":"VALIDATION_CERTIFICATE","submittedBy":"regulator1",` +
+		`"contentBase64":"` + base64.StdEncoding.EncodeToString([]byte("cert")) + `"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/umi/documents", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Fabric-Identity", "originator1")
+	req.Header.Set("X-Identity-Role", "Originator")
+	srv.Router().ServeHTTP(rec, req)
+	var resp struct {
+		Document struct {
+			SubmittedBy string `json:"submittedBy"`
+		} `json:"document"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Document.SubmittedBy != "originator1" {
+		t.Errorf("submittedBy = %q, want the authenticated caller not the body's claim", resp.Document.SubmittedBy)
 	}
 }

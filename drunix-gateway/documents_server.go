@@ -17,6 +17,16 @@ import (
 )
 
 // registerDocumentRoutes mounts /umi/documents*.
+
+// assetHolding reports how many tokens a participant holds of an asset, or 0
+// when the rail is not wired. Used to decide who may anchor against it.
+func (s *Server) assetHolding(assetID, holder string) int64 {
+	if s.UMI == nil {
+		return 0
+	}
+	return s.UMI.PositionOf(assetID, holder)
+}
+
 func (s *Server) registerDocumentRoutes(mux *http.ServeMux) {
 	if s.Docs == nil {
 		return
@@ -115,9 +125,15 @@ func (s *Server) handleDocuments(w http.ResponseWriter, r *http.Request) {
 			}
 			content = decoded
 		}
+		caller := callerOf(r)
+		if !umiRequireAssetStake(w, caller, body.AssetID, s.assetHolding) {
+			return
+		}
+		// submittedBy used to be whatever the body said, so an anchor could be
+		// signed as anyone. It is the authenticated caller now.
 		doc, block, err := s.Docs.Anchor(AnchorRequest{
 			AssetID: body.AssetID, Subject: body.Subject, DocType: body.DocType,
-			Title: body.Title, Issuer: body.Issuer, SubmittedBy: body.SubmittedBy,
+			Title: body.Title, Issuer: body.Issuer, SubmittedBy: caller.ID,
 			MediaType: body.MediaType, Visibility: body.Visibility,
 			Content:   content,
 			ValidFrom: parseDay(body.ValidFrom), ValidTo: parseDay(body.ValidTo),
@@ -336,9 +352,13 @@ func (s *Server) handleDocAnchorDigest(w http.ResponseWriter, r *http.Request) {
 			"error": "ERR_UMI_DOC_FIELDS", "message": "body must be JSON"})
 		return
 	}
+	caller := callerOf(r)
+	if !umiRequireAssetStake(w, caller, body.AssetID, s.assetHolding) {
+		return
+	}
 	doc, block, err := s.Docs.AnchorDigest(AnchorRequest{
 		AssetID: body.AssetID, Subject: body.Subject, DocType: body.DocType,
-		Title: body.Title, Issuer: body.Issuer, SubmittedBy: body.SubmittedBy,
+		Title: body.Title, Issuer: body.Issuer, SubmittedBy: caller.ID,
 		ValidFrom: parseDay(body.ValidFrom), ValidTo: parseDay(body.ValidTo),
 	}, body.SHA256)
 	if err != nil {
