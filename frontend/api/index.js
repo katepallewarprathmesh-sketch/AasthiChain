@@ -1359,6 +1359,34 @@ function normaliseDocumentHash(documentHash, fields, ownerId) {
 // repair and read everyone's records.
 const SUPERVISORY_IDENTITIES = new Set(['registrar1', 'regulator1']);
 
+// A recipient has to be someone. Tokens sent to a blank or placeholder name
+// leave the sender's balance and land in a row nobody can ever authenticate
+// as — a burn dressed up as a transfer, and the response even called it
+// atomic. Known means: they hold a balance somewhere, they have a KYC record,
+// or they are one of the platform identities.
+const RECIPIENT_PLACEHOLDERS = new Set(['undefined', 'null', 'nan', 'none', 'nil', '-', 'n/a']);
+
+function recipientProblem(toId) {
+  const to = String(toId == null ? '' : toId).trim();
+  if (!to) return { error: 'ERR_NO_RECIPIENT', message: 'A transfer needs someone to transfer to.' };
+  if (RECIPIENT_PLACEHOLDERS.has(to.toLowerCase())) {
+    return { error: 'ERR_NO_RECIPIENT', message: `"${to}" is not a holder. Tokens sent there could never be moved again.` };
+  }
+  const known =
+    !!kycRecords[to] ||
+    SUPERVISORY_IDENTITIES.has(to) ||
+    Object.values(balances).some((b) => b && b.ownerId === to) ||
+    Object.values(properties).some((pr) => pr && pr.originatorId === to);
+  if (!known) {
+    return {
+      error: 'ERR_UNKNOWN_RECIPIENT',
+      message: `${to} is not a holder on this platform. Check the identity before sending tokens that cannot come back.`,
+    };
+  }
+  return null;
+}
+
+
 // Shaped like a user so the hundreds of `user.identityId` reads below stay
 // safe, but matching nobody and holding no role.
 const ANONYMOUS_USER = Object.freeze({
@@ -1452,8 +1480,6 @@ const AUTH_REQUIRED = [
   ['POST', /^\/api\/kyc\/digilocker\/callback$/],
   ['POST', /^\/api\/kyc\/digilocker\/pull-document$/],
   ['GET', /^\/api\/kyc\/[^\/]+$/],
-  ['POST', /^\/api\/payments\/confirm$/],
-  ['POST', /^\/api\/transfers\/failure-demo$/],
   ['POST', /^\/api\/testnet\/payments\/initiate$/],
   ['GET', /^\/api\/testnet\/payments\/[^\/]+$/],
   ['POST', /^\/api\/testnet\/payments\/[^\/]+\/confirm$/],
@@ -2984,85 +3010,10 @@ export default async function handler(req, res) {
       }
     }
 
-    if (path === '/api/npci/failure-demo' && method === 'POST') {
-      try {
-        const { scenario } = req.body || {};
-        const base = {
-          assetId: Object.keys(properties)[0] || 'PROP-demo',
-          tokenAmount: 100,
-          amountINR: 50000,
-          payerVpa: 'investor@aasthichain',
-          payeeVpa: 'originator@aasthichain',
-          note: `failure demo ${scenario}`,
-          payerId: 'investor1',
-          payeeId: 'originator1'
-        };
-        if (scenario === 'insufficient_funds') {
-          return res.json({
-            scenario,
-            expected: 'FAILED_INSUFFICIENT_FUNDS',
-            result: 'FAILED_INSUFFICIENT_FUNDS: have ₹1.00 need ₹50,000',
-            passed: true,
-            explanation: 'Payer VPA poor@aasthichain has ₹1, request ₹50k → rejected, then REFUNDED. No token move without payment.',
-            payerVpa: 'poor@aasthichain',
-            test: { ...base, payerVpa: 'poor@aasthichain', amountINR: 50000 }
-          });
-        }
-        if (scenario === 'kyc_unverified') {
-          return res.json({
-            scenario,
-            expected: 'FAILED_KYC_NOT_VERIFIED',
-            result: 'FAILED_KYC_NOT_VERIFIED: payer unverified_user KYC not verified',
-            passed: true,
-            explanation: 'KYC check — unverified_user not VERIFIED → collect fails at approval.',
-            test: { ...base, payerId: 'unverified_user' }
-          });
-        }
-        if (scenario === 'timeout') {
-          return res.json({
-            scenario,
-            expected: 'EXPIRED',
-            result: 'EXPIRED: collect request expired after 5 min',
-            passed: true,
-            explanation: 'UPI Collect 5-min window. If payer does not approve, marks EXPIRED → refund.',
-            test: base
-          });
-        }
-        if (scenario === 'declined') {
-          return res.json({
-            scenario,
-            expected: 'DECLINED',
-            result: 'DECLINED: user declined in UPI app',
-            passed: true,
-            explanation: 'Payer declines collect in UPI app → DECLINED → REFUNDED.',
-            test: base
-          });
-        }
-        if (scenario === 'invalid_vpa') {
-          return res.json({
-            scenario,
-            expected: 'FAILED_INVALID_VPA',
-            result: 'FAILED_INVALID_VPA: invalid VPA format',
-            passed: true,
-            explanation: 'VPA validation regex prevents malformed collect.',
-            test: { ...base, payerVpa: 'invalidvpa' }
-          });
-        }
-        if (scenario === 'duplicate_idempotency') {
-          return res.json({
-            scenario,
-            expected: 'IDEMPOTENT_SAME_PAYMENT',
-            result: 'Duplicate idempotency key returns same paymentId, no double-charge',
-            passed: true,
-            explanation: 'X-Idempotency-Key → same PaymentId, no second collect.',
-            test: { ...base, idempotencyKey: 'idem-duplicate-demo' }
-          });
-        }
-        return res.status(400).json({ error: 'unknown scenario' });
-      } catch (e) {
-        return res.status(500).json({ error: e.message });
-      }
-    }
+    // /api/npci/failure-demo used to live here. It matched on a scenario name
+    // and returned prewritten text with passed:true — the payment failures it
+    // described were never executed. The real behaviour is demonstrable:
+    // raise a collect that cannot fund and watch it fail.
 
     // ============ Fabric mock — with robust error handling ============
     if (path === '/api/auth/login' && method === 'POST') {
@@ -3954,6 +3905,8 @@ export default async function handler(req, res) {
         const amt = parseInt(amount);
         if (amt <= 0) return res.status(400).json({ error: 'ERR_INVALID_AMOUNT' });
         if (fromId === toId) return res.status(400).json({ error: 'ERR_INVALID_TRANSFER' });
+        const badRecipient = recipientProblem(toId);
+        if (badRecipient) return res.status(400).json(badRecipient);
         // Robust asset lookup — fallback to fixed ID or first property to prevent ERR_ASSET_NOT_FOUND across lambdas
         // Also handle newly tokenized properties that may be on different lambda instance
         let prop = properties[assetId];
@@ -4250,26 +4203,8 @@ export default async function handler(req, res) {
     // record: POST /api/npci/payments/{id}/approve issues the UTR, and
     // GET /api/npci/utr/{utr} is the receipt that proves it.
 
-    if (path === '/api/transfers/failure-demo' && method === 'POST') {
-      try {
-        const { scenario } = req.body || {};
-        if (scenario === 'insufficient_balance') {
-          return res.json({ scenario, expected: 'ERR_INSUFFICIENT_BALANCE', result: 'ERR_INSUFFICIENT_BALANCE: have 50 need 999999999', passed: true });
-        }
-        if (scenario === 'self_transfer') {
-          return res.json({ scenario, expected: 'ERR_INVALID_TRANSFER', result: 'ERR_INVALID_TRANSFER: self-transfer not allowed', passed: true });
-        }
-        if (scenario === 'kyc_unverified') {
-          return res.json({ scenario, expected: 'ERR_KYC_NOT_VERIFIED', result: 'ERR_KYC_NOT_VERIFIED: receiver unverified', passed: true });
-        }
-        if (scenario === 'zero_amount') {
-          return res.json({ scenario, expected: 'ERR_INVALID_AMOUNT', result: 'ERR_INVALID_AMOUNT', passed: true });
-        }
-        return res.status(400).json({ error: 'unknown scenario' });
-      } catch (e) {
-        return res.status(500).json({ error: e.message });
-      }
-    }
+    // /api/transfers/failure-demo used to live here, and reported four
+    // transfer rejections as passing without attempting any of them.
 
     // Testnet (secondary)
     if (path === '/api/testnet/payments/initiate' && method === 'POST') {

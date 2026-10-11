@@ -1228,6 +1228,12 @@ app.post('/api/transfers', authMiddleware, (req, res) => {
   const amt = parseInt(amount);
   if (amt <= 0) return res.status(400).json({ error: 'ERR_INVALID_AMOUNT' });
   if (fromId === toId) return res.status(400).json({ error: 'ERR_INVALID_TRANSFER: self-transfer not allowed' });
+  // A blank or placeholder recipient is a burn, not a transfer: the tokens
+  // leave the sender and land under a name nobody can authenticate as.
+  const toTrimmed = String(toId == null ? '' : toId).trim();
+  if (!toTrimmed || ['undefined', 'null', 'nan', 'none', 'nil', '-', 'n/a'].includes(toTrimmed.toLowerCase())) {
+    return res.status(400).json({ error: 'ERR_NO_RECIPIENT', message: 'A transfer needs someone to transfer to.' });
+  }
   let prop = properties[assetId];
   if (!prop) {
     // Cold-instance heal: property meta sent by the client that bought on a warm instance
@@ -1429,28 +1435,9 @@ app.get('/api/kyc/:identityId', authMiddleware, (req, res) => {
 // body it was handed, without reading a payment or checking the caller. The
 // real proof is the UTR issued at approval, readable at /api/npci/utr/{utr}.
 
-app.post('/api/transfers/failure-demo', authMiddleware, (req, res) => {
-  const { scenario } = req.body;
-  const callerId = req.user.identityId;
-  const assetId = req.body.assetId || Object.keys(properties)[0];
-  const prop = properties[assetId];
-  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
-
-  if (scenario === 'insufficient_balance') {
-    return res.json({ scenario, expected: 'ERR_INSUFFICIENT_BALANCE', result: 'ERR_INSUFFICIENT_BALANCE: have 50 need 999999999', passed: true, explanation: 'No partial transfer — atomic rejection per §6.2' });
-  }
-  if (scenario === 'self_transfer') {
-    return res.json({ scenario, expected: 'ERR_INVALID_TRANSFER', result: 'ERR_INVALID_TRANSFER: self-transfer not allowed', passed: true, explanation: 'Self-transfer blocked per §6.2' });
-  }
-  if (scenario === 'kyc_unverified') {
-    const randomId = 'unverified_user_' + crypto.randomUUID().slice(0,6);
-    return res.json({ scenario, expected: 'ERR_KYC_NOT_VERIFIED', result: `ERR_KYC_NOT_VERIFIED: receiver ${randomId} KYC not found`, passed: true, explanation: 'Transfer to unverified KYC wallet rejected per §6.2' });
-  }
-  if (scenario === 'zero_amount') {
-    return res.json({ scenario, expected: 'ERR_INVALID_AMOUNT', result: 'ERR_INVALID_AMOUNT: amount must be > 0', passed: true, explanation: 'Zero/negative amount rejected per §6.2' });
-  }
-  res.status(400).json({ error: 'unknown scenario', valid: ['insufficient_balance','self_transfer','kyc_unverified','zero_amount'] });
-});
+// /api/transfers/failure-demo is gone: it reported four transfer rejections
+// as passing without attempting any of them. The rejections themselves are
+// real and are exercised by tests/transferfailures.test.mjs.
 
 // === Sepolia Testnet Escrow — Atomic DvP Settlement Pattern Demo — Accurate Language ===
 let testnetPayments = {};
