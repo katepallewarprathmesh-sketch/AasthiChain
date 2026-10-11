@@ -1425,11 +1425,9 @@ app.get('/api/kyc/:identityId', authMiddleware, (req, res) => {
   res.json(rec);
 });
 
-app.post('/api/payments/confirm', authMiddleware, (req, res) => {
-  const { transferId, amountINR, method } = req.body;
-  const hash = crypto.createHash('sha256').update(transferId + amountINR + method).digest('hex');
-  res.json({ confirmationId: 'PAY-' + crypto.randomUUID(), transferId, amountINR, method, paymentHash: hash, status: 'CONFIRMED', note: 'Mock payment - in production, integrate with actual settlement rail. Token transfer triggered only after this confirmation per spec §1.2' });
-});
+// /api/payments/confirm is deliberately gone: it answered CONFIRMED for any
+// body it was handed, without reading a payment or checking the caller. The
+// real proof is the UTR issued at approval, readable at /api/npci/utr/{utr}.
 
 app.post('/api/transfers/failure-demo', authMiddleware, (req, res) => {
   const { scenario } = req.body;

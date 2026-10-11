@@ -4242,15 +4242,13 @@ export default async function handler(req, res) {
       }
     }
 
-    if (path === '/api/payments/confirm' && method === 'POST') {
-      try {
-        const { transferId, amountINR, method: payMethod } = req.body || {};
-        const hash = crypto.createHash('sha256').update((transferId||'') + (amountINR||'') + (payMethod||'')).digest('hex');
-        return res.json({ confirmationId: 'PAY-' + safeUUID(), transferId, amountINR, method: payMethod, paymentHash: hash, status: 'CONFIRMED' });
-      } catch (e) {
-        return res.status(500).json({ error: e.message });
-      }
-    }
+    // /api/payments/confirm is deliberately gone. It hashed three fields from
+    // the request body and answered CONFIRMED — no payment was looked up, no
+    // state was read or written, and the caller was never compared to anyone.
+    // Any signed-in user could mint an official-looking confirmation for any
+    // reference and any amount. A confirmation has to come from the payment
+    // record: POST /api/npci/payments/{id}/approve issues the UTR, and
+    // GET /api/npci/utr/{utr} is the receipt that proves it.
 
     if (path === '/api/transfers/failure-demo' && method === 'POST') {
       try {
