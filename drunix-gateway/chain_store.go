@@ -84,11 +84,29 @@ func (s *PostgresUMIStore) AppendBlock(b *DrunixBlock) error {
 // DeleteBlocksAbove removes stored blocks past a height. Used only by the
 // sealed-chain repair, which keeps a record of what it dropped.
 func (s *PostgresUMIStore) DeleteBlocksAbove(ctx context.Context, height int64) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM umi_block WHERE height > $1`, height)
+	// The outbox references umi_block(height), so deleting blocks on their own
+	// trips the foreign key and the repair fails with a database error instead
+	// of doing its job. Their events belong to discarded history and can never
+	// be delivered truthfully, so they go first, in the same transaction: both
+	// deletions happen or neither does.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM umi_outbox WHERE block_height > $1`, height); err != nil {
+		return 0, err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM umi_block WHERE height > $1`, height)
 	if err != nil {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
 	return n, nil
 }
 
