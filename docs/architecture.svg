@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" width="1200" height="860" role="img"
+     aria-label="AasthiChain architecture: owners, registrars, investors and regulators act through a React web app; a JavaScript edge proxies every money route to a Go settlement rail, which holds the authorisation layer, the e-rupee-W cash leg, the Drunix securities leg and a hash-chained append-only ledger backed by Postgres.">
+  <defs>
+    <style>
+      .t    { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .band { font-size: 13px; font-weight: 700; letter-spacing: .14em; fill: #8A8375; }
+      .box  { font-size: 15px; font-weight: 650; fill: #1E3A5F; }
+      .sub  { font-size: 12.5px; fill: #5C6B7F; }
+      .note { font-size: 12.5px; fill: #7A8191; }
+      .arrow{ font-size: 12px; fill: #7D8694; }
+      .tag  { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; }
+    </style>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#9AA3AF"/>
+    </marker>
+    <marker id="aGo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#00ADD8"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="860" fill="#F7F5F0"/>
+
+  <!-- ─────────────── people ─────────────── -->
+  <text class="t band" x="60" y="52">PEOPLE</text>
+  <g>
+    <rect x="60"  y="66" width="252" height="58" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
+    <text class="t box" x="80" y="92">Owner</text>
+    <text class="t sub" x="80" y="110">lists a property, mints tokens</text>
+
+    <rect x="336" y="66" width="252" height="58" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
+    <text class="t box" x="356" y="92">Registrar</text>
+    <text class="t sub" x="356" y="110">validates title — never the owner</text>
+
+    <rect x="612" y="66" width="252" height="58" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
+    <text class="t box" x="632" y="92">Investor</text>
+    <text class="t sub" x="632" y="110">buys from ₹500, earns rent</text>
+
+    <rect x="888" y="66" width="252" height="58" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
+    <text class="t box" x="908" y="92">Regulator</text>
+    <text class="t sub" x="908" y="110">freezes, audits, repairs</text>
+  </g>
+
+  <line x1="600" y1="124" x2="600" y2="162" stroke="#9AA3AF" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- ─────────────── browser ─────────────── -->
+  <text class="t band" x="60" y="190">BROWSER</text>
+  <rect x="60" y="204" width="1080" height="76" rx="12" fill="#FFFFFF" stroke="#DED8CC"/>
+  <text class="t box" x="84" y="232">React + Vite single-page app</text>
+  <text class="t sub" x="84" y="252">marketplace · property verification panel · ledger explorer · baskets · investor dashboard · calculators</text>
+  <text class="t sub" x="84" y="270">Clerk sign-in · public pages stay open to visitors and crawlers</text>
+
+  <line x1="600" y1="280" x2="600" y2="318" stroke="#9AA3AF" stroke-width="1.5" marker-end="url(#a)"/>
+  <text class="t arrow" x="612" y="304">HTTPS · /api/*</text>
+
+  <!-- ─────────────── edge ─────────────── -->
+  <text class="t band" x="60" y="346">EDGE — JAVASCRIPT, VERCEL</text>
+  <rect x="60" y="360" width="1080" height="112" rx="12" fill="#FFFFFF" stroke="#DED8CC"/>
+
+  <rect x="84" y="384" width="500" height="66" rx="9" fill="#FAF8F4" stroke="#E6E0D4"/>
+  <text class="t box" x="104" y="408">Owns outright</text>
+  <text class="t sub" x="104" y="428">property register · KYC · UPI Collect + PayU · fraud screen</text>
+  <text class="t sub" x="104" y="444">organisations · swaps · credit against tokens</text>
+
+  <rect x="616" y="384" width="500" height="66" rx="9" fill="#FAF8F4" stroke="#E6E0D4"/>
+  <text class="t box" x="636" y="408">Forwards only — /api/umi/*, /api/drunix/*</text>
+  <text class="t sub" x="636" y="428">zero settlement logic · passes the caller's identity through</text>
+  <text class="t sub" x="636" y="444">unreachable rail reports unknown, never healthy</text>
+
+  <line x1="600" y1="472" x2="600" y2="516" stroke="#00ADD8" stroke-width="2" marker-end="url(#aGo)"/>
+  <text class="t arrow" x="612" y="498">identity headers forwarded</text>
+
+  <!-- ─────────────── rail ─────────────── -->
+  <text class="t band" x="60" y="544">SETTLEMENT RAIL — GO, RENDER</text>
+  <rect x="60" y="558" width="1080" height="208" rx="12" fill="#FFFFFF" stroke="#00ADD8" stroke-width="1.6"/>
+
+  <!-- authorisation band -->
+  <rect x="84" y="580" width="1032" height="50" rx="9" fill="#EAF7FB" stroke="#B9E3F0"/>
+  <text class="t box" x="104" y="602">Authorisation — in front of the mux, not per route</text>
+  <text class="t sub" x="104" y="620">anonymous 401 · not yours 403 · supervisors are regulator and admin · every write names its caller, never the body</text>
+
+  <!-- three legs -->
+  <rect x="84" y="644" width="330" height="100" rx="9" fill="#FAF8F4" stroke="#E6E0D4"/>
+  <text class="t box" x="104" y="668">Cash leg — e₹-W wallets</text>
+  <text class="t sub" x="104" y="688">wholesale CBDC, simulated</text>
+  <text class="t sub" x="104" y="706">money is conserved: balances always</text>
+  <text class="t sub" x="104" y="722">reconcile against lifetime funding</text>
+
+  <rect x="435" y="644" width="330" height="100" rx="9" fill="#FAF8F4" stroke="#E6E0D4"/>
+  <text class="t box" x="455" y="668">Securities leg — Drunix</text>
+  <text class="t sub" x="455" y="688">positions, cap table, ISIN register</text>
+  <text class="t sub" x="455" y="706">baskets, servicing and income</text>
+  <text class="t sub" x="455" y="722">supply can never exceed authorised</text>
+
+  <rect x="786" y="644" width="330" height="100" rx="9" fill="#FFF7E8" stroke="#F0DFBE"/>
+  <text class="t box" x="806" y="668">Atomic DvP</text>
+  <text class="t sub" x="806" y="688">both legs move, or neither does</text>
+  <text class="t sub" x="806" y="706">idempotent: a retry returns the first</text>
+  <text class="t sub" x="806" y="722">outcome; a failure stays a failure</text>
+
+  <line x1="600" y1="766" x2="600" y2="800" stroke="#00ADD8" stroke-width="2" marker-end="url(#aGo)"/>
+  <text class="t arrow" x="612" y="788">block appended before state changes</text>
+
+  <!-- ─────────────── ledger ─────────────── -->
+  <rect x="60" y="800" width="1080" height="44" rx="10" fill="#1E3A5F"/>
+  <text class="t tag" x="84" y="821" fill="#8FD4EA">LEDGER</text>
+  <text class="t" x="156" y="821" font-size="14.5" font-weight="650" fill="#FFFFFF">Hash-chained, append-only · Postgres-durable · survives restart</text>
+  <text class="t" x="156" y="838" font-size="12.5" fill="#B9C6D6">tamper is detectable and seals the rail · a sealed chain is repaired only by a supervisor, and the repair says what it dropped</text>
+</svg>

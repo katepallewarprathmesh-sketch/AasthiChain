@@ -7,7 +7,7 @@
 **Fractional property tokens on a hash-chained ledger · UPI money leg · atomic delivery-versus-payment**
 
 [![Live](https://img.shields.io/badge/live-aasthi--chain.vercel.app-1E3A5F?style=flat-square)](https://aasthi-chain.vercel.app)
-[![Backend](https://img.shields.io/badge/backend-Go%201.22-00ADD8?style=flat-square&logo=go&logoColor=white)](drunix-gateway/)
+[![Backend](https://img.shields.io/badge/backend-Go%201.25-00ADD8?style=flat-square&logo=go&logoColor=white)](drunix-gateway/)
 [![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black)](frontend/)
 [![License](https://img.shields.io/badge/license-MIT-555?style=flat-square)](LICENSE)
 
@@ -49,12 +49,17 @@ the ownership transfer are one atomic operation — both move, or neither does.
 
 <div align="center">
 
-<img src="docs/architecture.png" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a Node edge handles property, payments and KYC and proxies settlement to a Go rail; every state change lands on a hash-chained append-only ledger." width="100%">
+<img src="docs/architecture.svg" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a JavaScript edge owns the property register, KYC and the UPI money leg and forwards every settlement call to a Go rail; the rail checks authorisation in front of its mux, moves the e-rupee-W cash leg and the Drunix securities leg atomically, and appends every state change to a hash-chained, Postgres-durable ledger." width="100%">
 
 </div>
 
 **Design rule:** settlement logic is written in **Go**, next to the ledger. The JavaScript layers are
 transport only. If a rule about money lives in JavaScript, that is a bug.
+
+The rail is deployed separately from the web app — Vercel serves the site and the edge, Render runs
+the Go rail — so the two can be redeployed, and fail, independently. When the rail cannot be
+reached, the app says *unknown*; it never reports a settlement surface as healthy because it could
+not ask.
 
 Listing is gated to the **Owner** role, so tokens always mint to the party that holds the asset — an
 Investor can never end up "owning" a property merely by creating the listing.
@@ -152,6 +157,18 @@ browsable without leaking a cap table.
 **Approval is independent.** Title validation is restricted to a Registrar, and refused when the
 validating identity is the one that registered the property.
 
+**Every route answers only to the people it belongs to.** Being signed in is not the same as being
+entitled, so authorisation is enforced in front of the router rather than route by route: an
+anonymous caller gets 401, a stranger gets 403, and a supervisor — regulator or admin — may act for
+someone else where that is genuinely their job. Attribution is always taken from the authenticated
+caller; a name in a request body is a claim, never a fact. Each rule ships with a suite that asserts
+the refused action changed no state.
+
+**A refusal is never a dead end.** Tamper detection seals the rail, which is correct and also
+terminal, so there is a documented way back: a supervisor-only recovery that drops the first
+unverifiable block onward and records every discarded height, the reason, and who authorised it.
+The cure leaves a trace instead of being a quiet edit to a database.
+
 ---
 
 ## Authentication
@@ -203,6 +220,11 @@ cd network && docker-compose up -d && ./scripts/create-channel.sh
 ```
 
 Or `make umi`.
+
+```bash
+bash regression.sh        # 87 checks against whichever server is on :8080
+cd drunix-gateway && go test ./...
+```
 
 **Seeing "Rail offline" on the deployed site?** Expected. Vercel runs only the Node edge; the Go rail
 needs a host. `render.yaml`, `drunix-gateway/Dockerfile` and `drunix-gateway/fly.toml` are included —
