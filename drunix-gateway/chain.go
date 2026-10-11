@@ -126,6 +126,39 @@ func NewChain() *DrunixChain {
 	return c
 }
 
+// freezeTxns takes a private, canonical copy of a block's transactions.
+//
+// Append used to keep the caller's own maps and slices. A block is supposed
+// to be immutable the instant it is hashed, but the rail hands in live
+// structures — a basket's component list, for instance — and goes on using
+// them. The merkle root is computed once, at commit; if anything behind
+// those references changes afterwards, the block's contents and its root
+// stop agreeing, and the next restart refuses the whole chain as tampered.
+//
+// That is not hypothetical: it is how the production ledger sealed itself at
+// the basket-created block. The durable write normally happens in the same
+// breath as the hash, but a failed write parks the block for retry while
+// still pointing at the caller's data, and the retry then stores something
+// the root no longer describes.
+//
+// Round-tripping through JSON both detaches the copy and normalises it to
+// exactly the shape a restore will decode, so a block verifies identically
+// in memory and after reload.
+func freezeTxns(txns []map[string]interface{}) []map[string]interface{} {
+	if txns == nil {
+		return nil
+	}
+	raw, err := json.Marshal(txns)
+	if err != nil {
+		return txns
+	}
+	var out []map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return txns
+	}
+	return out
+}
+
 // Append commits a new block and returns it.
 //
 // The block is written to durable storage inside the same critical section as
@@ -145,7 +178,7 @@ func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *D
 		Height:    int64(len(c.Blocks)),
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Type:      blockType,
-		Txns:      txns,
+		Txns:      freezeTxns(txns),
 		PrevHash:  prevHash,
 		Contract:  DvpContract,
 	}
