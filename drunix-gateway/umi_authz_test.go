@@ -511,3 +511,51 @@ func TestPrivateAnalyticsIsinAndRawSubmitAreScoped(t *testing.T) {
 	want("raw submit by an investor", call(http.MethodPost, "/drunix/submit", "investor2", "Investor", raw), http.StatusForbidden)
 	want("raw submit by a supervisor", call(http.MethodPost, "/drunix/submit", "regulator1", "Regulator", raw), http.StatusCreated)
 }
+
+// The pipeline runs chaincode straight through endorsement, ordering and
+// commit. policyFor() names who may run each function; nothing was checking
+// it at the HTTP door.
+func TestPipelineHonoursItsOwnEndorsementPolicy(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	run := func(identity, role, fn string, args ...string) *httptest.ResponseRecorder {
+		body := map[string]interface{}{"fn": fn, "args": args}
+		raw, _ := json.Marshal(body)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/drunix/pipeline", strings.NewReader(string(raw)))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		return rec
+	}
+	want := func(name string, rec *httptest.ResponseRecorder, code int) {
+		t.Helper()
+		if rec.Code != code {
+			t.Errorf("%s = %d, want %d: %s", name, rec.Code, code, rec.Body.String())
+		}
+	}
+
+	want("anonymous mint", run("", "", "MintPropertyTokens", "PROP-PIPE", "mallory", "100000"),
+		http.StatusUnauthorized)
+	want("investor mints to themselves", run("investor2", "Investor", "MintPropertyTokens", "PROP-PIPE", "investor2", "100000"),
+		http.StatusForbidden)
+	want("investor freezes someone's property", run("investor2", "Investor", "FreezeProperty", "PROP-PIPE"),
+		http.StatusForbidden)
+	want("originator freezes a property", run("originator1", "Originator", "FreezeProperty", "PROP-PIPE"),
+		http.StatusForbidden)
+
+	// The people the policy names still get through.
+	want("originator mints", run("originator1", "Originator", "MintPropertyTokens", "PROP-PIPE", "originator1", "1000"),
+		http.StatusOK)
+	want("regulator freezes", run("regulator1", "Regulator", "FreezeProperty", "PROP-PIPE"),
+		http.StatusOK)
+
+	// And an investor may still move what they hold: refused on balance, not
+	// on who they are.
+	rec := run("investor2", "Investor", "TransferTokens", "PROP-PIPE", "investor2", "investor1", "5")
+	if rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
+		t.Errorf("investor transfer = %d, should be judged on balance not identity: %s", rec.Code, rec.Body.String())
+	}
+}

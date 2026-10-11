@@ -388,12 +388,55 @@ func (s *Server) handlePipeline(w http.ResponseWriter, r *http.Request) {
 			priv[org][f] = []byte(v)
 		}
 	}
+	// policyFor() has always said who may run each function — Originator plus
+	// Registrar to mint, Regulator to freeze — but nothing checked the caller
+	// against it here, so the policy was decoration: an anonymous request
+	// could mint itself a hundred thousand tokens, move them, and freeze a
+	// stranger's property, all committed to the chain.
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
+	if !pipelineCallerMaySubmit(caller, body.Fn) {
+		umiErr(w, http.StatusForbidden, "ERR_ENDORSEMENT_POLICY",
+			"Running "+body.Fn+" through the pipeline needs "+pipelineWhoMay(body.Fn)+".")
+		return
+	}
 	res, err := s.Pipeline.Submit(body.Fn, body.Args, priv)
 	code := http.StatusOK
 	if err != nil {
 		code = http.StatusUnprocessableEntity
 	}
 	writeJSON(w, code, map[string]interface{}{"result": res, "error": errStr(err)})
+}
+
+// pipelineCallerMaySubmit enforces policyFor() at the door, in terms of the
+// roles the gateway actually forwards.
+func pipelineCallerMaySubmit(c umiCaller, fn string) bool {
+	if c.supervisor() {
+		return true
+	}
+	switch strings.ToLower(c.Role) {
+	case "originator", "registrar":
+		return fn != "FreezeProperty"
+	}
+	// Everyone else — investors — may only move what they already hold; the
+	// chaincode's balance check is the limit there.
+	switch fn {
+	case "MintPropertyTokens", "FreezeProperty":
+		return false
+	}
+	return true
+}
+
+func pipelineWhoMay(fn string) string {
+	switch fn {
+	case "MintPropertyTokens":
+		return "an originator, a registrar or a supervisor"
+	case "FreezeProperty":
+		return "a regulator"
+	}
+	return "an identified participant"
 }
 
 func errStr(err error) string {
