@@ -321,3 +321,68 @@ func TestAnchoringEvidenceNeedsAStakeInTheAsset(t *testing.T) {
 		t.Errorf("submittedBy = %q, want the authenticated caller not the body's claim", resp.Document.SubmittedBy)
 	}
 }
+
+// The secondary market reached the same money by a different path: the
+// seller on an offer and the buyer on a take both came from the request
+// body, so a stranger could fire-sale someone's holdings or settle a
+// purchase against someone else's wallet.
+func TestMarketplaceActsOnlyForTheCaller(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	const asset = "PROP-MARKET-TEST"
+	if _, err := srv.UMI.SeedPosition(asset, "originator1", 1000, 1000); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	do := func(method, path, identity, role, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		return rec
+	}
+	offerBody := `{"assetId":"` + asset + `","seller":"originator1","tokens":10,"pricePerTokenINR":1}`
+
+	if rec := do(http.MethodPost, "/umi/offers", "", "", offerBody); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous listing = %d, want 401", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/umi/offers", "investor2", "Investor", offerBody); rec.Code != http.StatusForbidden {
+		t.Errorf("listing someone else's tokens = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+
+	rec := do(http.MethodPost, "/umi/offers", "originator1", "Originator",
+		`{"assetId":"`+asset+`","seller":"originator1","tokens":10,"pricePerTokenINR":100}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("the seller's own listing = %d: %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Offer struct {
+			OfferID string `json:"offerId"`
+		} `json:"offer"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &created)
+	id := created.Offer.OfferID
+
+	// Taking it spends the named buyer's cash.
+	if rec := do(http.MethodPost, "/umi/offers/"+id+"/take", "", "", `{"buyer":"investor1","tokens":1}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous take = %d, want 401", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/umi/offers/"+id+"/take", "investor2", "Investor", `{"buyer":"investor1","tokens":1}`); rec.Code != http.StatusForbidden {
+		t.Errorf("take naming another buyer = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	// A dry run moves nothing, so it stays open.
+	if rec := do(http.MethodPost, "/umi/offers/"+id+"/take", "investor2", "Investor", `{"buyer":"investor1","tokens":1,"dryRun":true}`); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
+		t.Errorf("dry run take = %d, should not be refused on identity", rec.Code)
+	}
+
+	// Cancelling used to accept the real seller's name from the body.
+	if rec := do(http.MethodPost, "/umi/offers/"+id+"/cancel", "investor2", "Investor", `{"seller":"originator1"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("cancel by naming the seller = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodPost, "/umi/offers/"+id+"/cancel", "originator1", "Originator", `{}`); rec.Code != http.StatusOK {
+		t.Errorf("the seller's own cancel = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}

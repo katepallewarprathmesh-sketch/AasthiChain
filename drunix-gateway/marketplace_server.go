@@ -91,6 +91,19 @@ func (s *Server) handleOffers(w http.ResponseWriter, r *http.Request) {
 			umiErr(w, http.StatusBadRequest, "ERR_UMI_BAD_REQUEST", "Could not read the request body as JSON.")
 			return
 		}
+		// The seller was whatever the body said, so anyone — including a
+		// caller with no identity at all — could put a stranger's tokens on
+		// the market at any price they liked.
+		caller := callerOf(r)
+		if !umiRequireIdentity(w, caller) {
+			return
+		}
+		if strings.TrimSpace(body.Seller) == "" {
+			body.Seller = caller.ID
+		}
+		if !umiRequireSelfOrSupervisor(w, caller, body.Seller, "Listing tokens for sale") {
+			return
+		}
 		o, err := s.UMI.CreateOffer(body.AssetID, body.Seller, body.Tokens, body.PricePerTokenINR)
 		if err != nil {
 			offerFail(w, err)
@@ -148,6 +161,22 @@ func (s *Server) handleOfferByID(w http.ResponseWriter, r *http.Request) {
 			umiErr(w, http.StatusBadRequest, "ERR_UMI_BAD_REQUEST", "Could not read the request body as JSON.")
 			return
 		}
+		// Taking an offer spends the buyer's e₹-W. Naming someone else as the
+		// buyer used to settle against their wallet, which is the same hole
+		// the direct DvP route had, reached by a different path. A dry run
+		// moves nothing, so it stays open.
+		caller := callerOf(r)
+		if !body.DryRun {
+			if !umiRequireIdentity(w, caller) {
+				return
+			}
+			if strings.TrimSpace(body.Buyer) == "" {
+				body.Buyer = caller.ID
+			}
+			if !umiRequireSelfOrSupervisor(w, caller, body.Buyer, "Buying against an offer") {
+				return
+			}
+		}
 		o, si, err := s.UMI.TakeOffer(offerID, body.Buyer, body.Tokens, body.DryRun)
 		if err != nil {
 			// A failed settlement still produced an instruction worth showing.
@@ -172,7 +201,19 @@ func (s *Server) handleOfferByID(w http.ResponseWriter, r *http.Request) {
 			umiErr(w, http.StatusBadRequest, "ERR_UMI_BAD_REQUEST", "Could not read the request body as JSON.")
 			return
 		}
-		o, err := s.UMI.CancelOffer(offerID, strings.TrimSpace(body.Seller))
+		// CancelOffer compares against the seller it is given, and that used to
+		// come from the body: naming the real seller was enough to withdraw
+		// their offer. It is the authenticated caller now; a supervisor may
+		// still act for someone else.
+		caller := callerOf(r)
+		if !umiRequireIdentity(w, caller) {
+			return
+		}
+		seller := caller.ID
+		if caller.supervisor() && strings.TrimSpace(body.Seller) != "" {
+			seller = strings.TrimSpace(body.Seller)
+		}
+		o, err := s.UMI.CancelOffer(offerID, seller)
 		if err != nil {
 			offerFail(w, err)
 			return
