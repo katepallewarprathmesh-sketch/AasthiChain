@@ -207,7 +207,7 @@ export default function UMISettlement() {
           })),
       },
     }),
-    (d) => `Basket ${d.basket.basketId} defined · one unit = ${d.basket.components.map(x => `${x.tokensPerUnit} × ${x.assetId}`).join(' + ')} · block #${d.block?.height}`,
+    (d) => `Basket ${d.basket.basketId} defined · one unit = ${d.basket.components.map(x => `${x.tokensPerUnit} × ${propLabel(x.assetId)}`).join(' + ')} · block #${d.block?.height}`,
     'basket')
 
   const seed = () => run(
@@ -283,9 +283,37 @@ export default function UMISettlement() {
     seller, buyer, servPayer,
   ].filter(Boolean)))
 
+  const propOf = (id) => properties.find(x => x.assetId === id)
+
+  // An assetId is a database key, not a thing anyone recognises. Everywhere
+  // a property is named for a person, name it the way they know it: the
+  // title and the city, with the reference kept nearby for traceability.
   const propLabel = (id) => {
-    const pr = properties.find(x => x.assetId === id)
-    return pr ? `${pr.title} (${num(pr.totalTokens || 0)} tokens)` : id
+    const pr = propOf(id)
+    if (!pr) return id
+    const city = (pr.location && (pr.location.city || pr.location.state)) || ''
+    // Most titles already carry the city ("Green Valley Villas - Pune"), and
+    // appending it again read as "Pune — Pune".
+    const title = String(pr.title || '').trim()
+    if (!title) return `Untitled property · ${String(id).slice(0, 13)}…`
+    const hasCity = city && title.toLowerCase().includes(city.toLowerCase())
+    return city && !hasCity ? `${title} — ${city}` : title
+  }
+
+  // Price per token implied by the registered valuation, used to prefill the
+  // indicative price so nobody has to work it out by hand.
+  const pricePerToken = (id) => {
+    const pr = propOf(id)
+    const tokens = Number(pr && pr.totalTokens) || 0
+    const value = Number(pr && pr.valuationINR) || 0
+    return tokens > 0 && value > 0 ? Math.round(value / tokens) : 0
+  }
+
+  const propRef = (id) => {
+    const pr = propOf(id)
+    if (!pr) return id
+    const perToken = pricePerToken(id)
+    return `${num(pr.totalTokens || 0)} tokens${perToken ? ` · about ${money(perToken)} each` : ''} · ${id}`
   }
 
   const Field = ({ label, hint, children }) => (
@@ -357,7 +385,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
-            <Field label="Property">
+            <Field label="Property" hint={assetId ? propRef(assetId) : null}>
               <PropertyPicker value={assetId} onChange={(v) => {
                 setAssetId(v)
                 const pr = properties.find(x => x.assetId === v)
@@ -475,7 +503,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         sub="Validate → match → lock BOTH legs → commit in one block. If either leg fails, nothing moves: there is no settlement-risk window."
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
-          <Field label="Property">
+          <Field label="Property" hint={assetId ? propRef(assetId) : null}>
             <PropertyPicker value={assetId} onChange={(v) => {
               setAssetId(v)
               const pr = properties.find(x => x.assetId === v)
@@ -541,7 +569,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         sub="Rent / coupon paid pro-rata straight into holders' CBDC wallets on the due date — no registrar file exchange, no reconciliation batch."
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
-          <Field label="Property"><PropertyPicker value={servAsset} onChange={(v) => {
+          <Field label="Property" hint={servAsset ? propRef(servAsset) : null}><PropertyPicker value={servAsset} onChange={(v) => {
             setServAsset(v)
             const pr = properties.find(x => x.assetId === v)
             if (pr && pr.originatorId) setServPayer(pr.originatorId)
@@ -639,7 +667,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         {recon?.conservationNote && <p style={{ fontSize: 12.5, color: C.mut, marginTop: 10 }}>{recon.conservationNote}</p>}
         {isins.length > 0 && (
           <p style={{ fontSize: 12.5, color: C.mut, marginTop: 8 }}>
-            Pilot register: {isins.map(i => `${i.isin} (${i.assetId})`).join(' · ')}
+            Pilot register: {isins.map(i => `${i.isin} — ${propLabel(i.assetId)}`).join(' · ')}
           </p>
         )}
       </Card>
@@ -658,10 +686,30 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           </div>
           {legs.map((l, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
-              <Field label={`Property ${i + 1}`}>
-                <select style={input} value={l.assetId} onChange={e => setLeg(i, 'assetId', e.target.value)}>
+              <Field label={`Property ${i + 1}`} hint={l.assetId ? propRef(l.assetId) : 'Pick from the properties already tokenised on the rail'}>
+                <select
+                  style={input}
+                  value={l.assetId}
+                  onChange={e => {
+                    const id = e.target.value
+                    setLeg(i, 'assetId', id)
+                    // Prefill the indicative price from the registered
+                    // valuation. It stays editable; it just means nobody has
+                    // to divide a crore by fifteen thousand in their head.
+                    const implied = pricePerToken(id)
+                    if (implied && !Number(l.indicativePriceINR)) setLeg(i, 'indicativePriceINR', implied)
+                  }}>
                   <option value="">select a property…</option>
-                  {properties.map(p => <option key={p.assetId} value={p.assetId}>{p.assetId}</option>)}
+                  {properties.map(p => {
+                    // A basket needs distinct properties, so one already used
+                    // in another leg is shown but cannot be picked twice.
+                    const usedElsewhere = legs.some((other, n) => n !== i && other.assetId === p.assetId)
+                    return (
+                      <option key={p.assetId} value={p.assetId} disabled={usedElsewhere}>
+                        {propLabel(p.assetId)}{usedElsewhere ? ' — already in this basket' : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </Field>
               <Field label="Tokens per unit">
@@ -696,7 +744,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             <>
               <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: C.paper, border: `1px solid ${C.line}`, fontSize: 12.5, color: C.navy }}>
                 {ok
-                  ? <>One unit = <strong>{chosen.map(l => `${l.tokensPerUnit} × ${l.assetId}`).join('  +  ')}</strong>
+                  ? <>One unit = <strong>{chosen.map(l => `${l.tokensPerUnit} × ${propLabel(l.assetId)}`).join('  +  ')}</strong>
                       {nav > 0 && <> · indicative NAV <strong>{money(nav)}</strong> per unit</>}</>
                   : <span style={{ color: C.mut }}>
                       {dupes
@@ -732,7 +780,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                   </Pill>
                 </div>
                 <div style={{ fontSize: 12, color: C.mut, marginTop: 4 }}>
-                  one unit = {(b.components || []).map(c => `${c.tokensPerUnit} × ${c.assetId}`).join(' + ')}
+                  one unit = {(b.components || []).map(c => `${c.tokensPerUnit} × ${propLabel(c.assetId)}`).join(' + ')}
                   {' · '}{num(b.unitsOutstanding)} unit(s) outstanding
                   {b.navPerUnitINR ? <> · NAV {money(b.navPerUnitINR)}/unit</> : null}
                 </div>
