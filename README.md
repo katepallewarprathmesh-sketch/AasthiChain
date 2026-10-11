@@ -4,11 +4,11 @@
 
 ### Own premium Indian real estate from ₹500
 
-**Fractional property tokens on a hash-chained ledger · UPI money leg · atomic delivery-versus-payment**
+**Fractional property tokens on an append-only record · UPI money leg · atomic delivery-versus-payment**
 
 [![Live](https://img.shields.io/badge/live-aasthi--chain.vercel.app-1E3A5F?style=flat-square)](https://aasthi-chain.vercel.app)
-[![Backend](https://img.shields.io/badge/backend-Go%201.25-00ADD8?style=flat-square&logo=go&logoColor=white)](drunix-gateway/)
-[![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black)](frontend/)
+[![Settlement](https://img.shields.io/badge/settlement-atomic%20DvP-1E3A5F?style=flat-square)](#the-settlement-rails)
+[![Ledger](https://img.shields.io/badge/ledger-append--only-8A8375?style=flat-square)](#what-is-guaranteed)
 [![License](https://img.shields.io/badge/license-MIT-555?style=flat-square)](LICENSE)
 
 [Live site](https://aasthi-chain.vercel.app) · [Free calculators](https://aasthi-chain.vercel.app/tools) · [Learn](https://aasthi-chain.vercel.app/learn) · [Ledger explorer](https://aasthi-chain.vercel.app/ledger) · [UMI rail](https://aasthi-chain.vercel.app/umi)
@@ -130,38 +130,41 @@ ends. This is the middle.
 
 - **Atomic DvP.** Both legs move or neither does; a failure leaves no half-settled state behind.
 - **Central bank money is conserved.** Wallet balances always reconcile against lifetime funding —
-  the rail can neither create nor destroy money, and no floats go anywhere near it.
+  the rail can neither create money nor destroy it.
 - **Programmable servicing.** Rent and coupons are paid pro-rata on the due date, with no registrar
   file exchange.
 - **Safe retries.** A repeated settlement request returns the original outcome instead of settling
   twice, and a failure stays a failure.
-- **Standards trace.** Every instruction carries the ISO 20022 message family a real
-  securities-settlement rail would emit.
+- **Standards trace.** Every instruction carries the message family a real securities-settlement
+  rail would emit, so the trail is one a depository would recognise.
 
 Settlement refusals are always specific — which side was short, and by how much — never a generic
 error.
 
 ### Money leg — UPI Collect
 
-UPI Collect with amounts held in integer paise, moving through a payment lifecycle rather than a
-single hop. **PayU test mode** gives a genuine PSP round-trip: signed requests, verified callbacks
-and reconciliation against the provider. Every payment is risk-screened by an explainable fraud
-engine before approval. Settlement behind it stays simulated; no real money moves.
+A payment is a lifecycle, not a single hop: requested, approved, released, reconciled — and every
+amount is held as an exact figure rather than a rounded one, so no rupee is ever lost to arithmetic.
+The round-trip runs against a real payment provider's test environment, which means signed requests
+and callbacks the provider itself validates, not ones we grade ourselves. Each payment is
+risk-screened before approval, and the screen explains its reasoning rather than returning a score.
+No real money moves.
 
 ---
 
 ## What is guaranteed
 
-**The ledger is append-only and survives restart.** Blocks are written to durable storage before
-in-memory state is updated. Once committed, a block is never erased — including across process
-restarts — and tampering is detectable because each block carries the hash of its predecessor.
+**The record is append-only and survives restart.** An entry is written down durably before the
+change it describes is treated as real, so nothing can be true in the app but missing from the
+history. Once written, an entry is never erased, and every entry is sealed against the one before
+it — so a history that has been altered announces itself instead of passing quietly.
 
 **Supply is scarce.** Tokens cannot exceed the authorised supply of a property, and an owner's
 unsold stock is never counted as allocated.
 
-**Holder identity is private.** Anonymous reads of a property return `Investor A`, `Investor B`, …
-with a holder count. Real identities require authentication, so the marketplace stays publicly
-browsable without leaking a cap table.
+**Holder identity is private.** A visitor sees how many people hold a property and in what
+proportions, under anonymous labels. Real names need a session, so the marketplace stays open to
+browse without leaking a cap table.
 
 **Approval is independent.** Title validation is restricted to a Registrar, and refused when the
 validating identity is the one that registered the property.
@@ -232,9 +235,8 @@ make frontend     # run the web app against it
 make test         # the test suites
 ```
 
-Each piece can also be run on its own — the web app without the settlement core, the core without
-the Fabric network — which is useful when working on one layer at a time. Those commands, and what
-each process expects, are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Each layer can also be run on its own, which is useful when working on one of them at a time. Those
+commands, and what each process expects, are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 **Seeing "Rail offline" on the deployed site?** Expected until the settlement core is deployed and
 the web app is pointed at it; the app is honest about not being able to reach it rather than
@@ -254,19 +256,19 @@ Credentials are never committed.
 <details>
 <summary><b>What is live vs simulated</b> — click to expand</summary>
 
-**Live and real:** the chaincode and its duplicate-deed guard, the hash-chained append-only ledger,
-the Go pipeline, atomic DvP and its rollback, safe retries under concurrency, conservation of money,
-registrar-only title validation, verified sign-in and durable persistence.
+**Live and real:** the ownership rules and their duplicate-deed guard, the append-only record,
+atomic settlement and its rollback, safe retries under concurrency, conservation of money,
+independent title validation, verified sign-in and durable storage.
 
-**Simulated, and labelled as such:** the NPCI UPI rail (no live credentials exist outside a bank
-partnership), wholesale CBDC wallets (e₹-W is an RBI pilot, not a public API), the UMI rail itself
-(real access is the SEBI Regulatory Sandbox), DigiLocker KYC (Requester onboarding needs entity
-registration, an official domain, India-hosted servers and a MeitY review), the land-record hash,
-and the Sepolia escrow experiment.
+**Simulated, and labelled as such:** the national payments rail (no live credentials exist outside
+a bank partnership), the wholesale CBDC wallets (e₹-W is an RBI pilot, not a public API), the UMI
+rail itself (real access is the SEBI Regulatory Sandbox), government-issued KYC (onboarding needs
+entity registration, an official domain, India-hosted servers and a ministry review), the
+land-record lookup, and the public-chain escrow experiment.
 
-**PayU test mode is genuinely real** as far as it goes: signed requests are accepted by PayU's test
-environment, and tampered amounts and bad signatures are rejected by them, not by us. Only the
-settlement behind it is simulated.
+**The payment round-trip is genuinely real** as far as it goes: the provider's test environment
+accepts our signed requests, and tampered amounts and bad signatures are rejected by them, not by
+us. Only the settlement behind it is simulated.
 
 </details>
 
