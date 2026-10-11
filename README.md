@@ -174,7 +174,9 @@ above it.
 **A refusal is never a dead end.** Tamper detection seals the rail, which is correct and also
 terminal, so there is a documented way back: a supervisor-only recovery that drops the first
 unverifiable block onward and records every discarded height, the reason, and who authorised it.
-The cure leaves a trace instead of being a quiet edit to a database.
+The cure leaves a trace instead of being a quiet edit to a database — it has been exercised once on
+the deployed rail, dropping a single unverifiable block and leaving a `LEDGER_TRUNCATED` record of
+what went and why.
 
 ---
 
