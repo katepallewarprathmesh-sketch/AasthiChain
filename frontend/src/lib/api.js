@@ -15,11 +15,21 @@ class ApiClient {
       if (userStr) {
         identityId = JSON.parse(userStr).identityId || 'investor1'
       }
-      return {
+      const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         'X-Fabric-Identity': identityId
       }
+      // If an operator key has been entered this session, carry it. On a
+      // deployment where roles are not wired into the identity provider it
+      // is the only thing that proves the person at the keyboard runs this
+      // deployment, and without it the ops and diagnostics panels refuse
+      // their own owner.
+      try {
+        const adminKey = sessionStorage.getItem('aasthi_admin_key')
+        if (adminKey) headers['x-admin-key'] = adminKey
+      } catch { /* storage unavailable */ }
+      return headers
     } catch {
       return { 'Content-Type': 'application/json' }
     }

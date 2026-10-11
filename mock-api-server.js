@@ -213,10 +213,29 @@ function authMiddleware(req, res, next) {
       paymentGate(req, res, () => webhookGate(req, res, () => bodyPaymentGate(req, res, () => kycSubjectGate(req, res, next))))));
 }
 
+// The deployment's own key. Ops tooling, and the operator's own panels when
+// the identity provider carries no roles, have no browser session behind them.
+function operatorKeyOK(req) {
+  const expected = String(process.env.ADMIN_DASHBOARD_KEY || '').trim();
+  if (!expected) return false;
+  const got = String(req.headers['x-admin-key'] || '').trim();
+  if (!got || got.length !== expected.length) return false;
+  try { return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected)); } catch { return false; }
+}
+
 function authenticate(req, res, next) {
   const auth = req.headers.authorization;
   const fabricIdentityHeader = req.headers['x-fabric-identity'] || req.headers['x-fabric-role'];
-  if (!auth) return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+  if (!auth) {
+    if (operatorKeyOK(req)) {
+      const asked = String(fabricIdentityHeader || '').toLowerCase();
+      const known = { registrar1: 'Registrar', regulator1: 'Regulator', originator1: 'Originator', investor1: 'Investor', investor2: 'Investor' };
+      const id = known[asked] ? asked : 'regulator1';
+      req.user = { identityId: id, mspId: 'OperatorMSP', role: known[id] || 'Regulator', operatorKey: true };
+      return next();
+    }
+    return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
+  }
   try {
     const token = auth.split(' ')[1];
     let payload = decodeClerkOrMockToken(token);
@@ -3147,7 +3166,14 @@ app.post('/api/track', async (req, res) => {
 
 app.get('/api/admin/insights', async (req, res) => {
   const { authorise: insightsAuth, buildInsights } = await insightsReady;
-  const denied = insightsAuth(req);
+  // A regulator signed into the product should not have to paste the
+  // deployment secret to see the dashboard their role is for.
+  let who = null;
+  try {
+    const token = String(req.headers.authorization || '').split(' ')[1] || '';
+    if (token) who = decodeClerkOrMockToken(token);
+  } catch { /* no session */ }
+  const denied = insightsAuth(Object.assign(Object.create(Object.getPrototypeOf(req)), req, { user: who }));
   if (denied) return res.status(denied.status).json(denied.body);
 
   let rail = null;

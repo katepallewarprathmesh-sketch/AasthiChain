@@ -23,7 +23,10 @@ t('status endpoint stamps the build', typeof status.build === 'string' && status
 const no = await call({});
 t('no key is refused', no.s === 401);
 t('the refusal is JSON', !!no.b);
-t('the refusal explains itself', /admin key/i.test((no.b && no.b.message) || ''));
+// The wording changed when a supervisory session became a second way in:
+// pasting the key is no longer the only route to this dashboard.
+t('the refusal explains itself',
+  /operator key|admin key|regulator/i.test((no.b && no.b.message) || ''));
 
 const bad = await call({ 'x-admin-key': 'definitely-not-the-key' });
 t('a wrong key is refused', bad.s === 401);

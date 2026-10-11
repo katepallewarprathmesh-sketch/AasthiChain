@@ -29,8 +29,15 @@ function safeEqual(a, b) {
 
 /**
  * authorise returns null when the caller may proceed, or {status, body} to send.
+ *
+ * Two ways in: the operator key, or an already-established supervisory
+ * session passed in as `req.user`. The second exists because the key is a
+ * deployment secret — a regulator signed into the product should not have to
+ * paste it to see the dashboard their role is for.
  */
 function authorise(req) {
+  const role = String((req && req.user && req.user.role) || '').toLowerCase();
+  if (role === 'regulator' || role === 'admin') return null;
   const key = configuredKey();
   if (!key) {
     return {
@@ -47,7 +54,13 @@ function authorise(req) {
     (req.query && req.query.key) ||
     '';
   if (!presented || !safeEqual(presented, key)) {
-    return { status: 401, body: { error: 'ERR_UNAUTHORISED', message: 'Valid admin key required.' } };
+    return {
+      status: 401,
+      body: {
+        error: 'ERR_UNAUTHORISED',
+        message: 'This dashboard needs the operator key, or a signed-in regulator or admin session.',
+      },
+    };
   }
   return null;
 }

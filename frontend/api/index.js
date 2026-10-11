@@ -1393,9 +1393,66 @@ const ANONYMOUS_USER = Object.freeze({
   identityId: null, mspId: null, role: 'Anonymous', anonymous: true,
 });
 
+// Two ways to be an operator, both checkable on this side of the wire.
+//
+// The audit closed the old one: naming yourself regulator1 in a header made
+// you a regulator. That had to go, but nothing replaced it, so on a
+// deployment without demo auth there was no way to BE a registrar or a
+// regulator at all — every signed-in person fell through to investor1 and
+// the ops, diagnostics and insights panels refused their own owner.
+//
+//   1. the deployment's operator key, sent as x-admin-key
+//   2. a session whose person is named in SUPERVISOR_EMAILS or
+//      SUPERVISOR_CLERK_IDS, or who carries a role in their session claims
+//
+// Both are configured by whoever owns the deployment. Neither is something
+// a browser can assert on its own.
+function operatorKeyOK(req) {
+  const expected = (process.env.ADMIN_DASHBOARD_KEY || '').trim();
+  if (!expected) return false;
+  const got = String((req.headers && (req.headers['x-admin-key'] || req.headers['X-Admin-Key'])) || '').trim();
+  if (!got || got.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected));
+  } catch { return false; }
+}
+
+const envList = (name) =>
+  new Set(String(process.env[name] || '')
+    .split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
+
+// Does this verified session belong to someone the deployment has named as
+// an operator? Checked against the token's own subject and email, never
+// against anything the request merely states.
+function sessionIsOperator(payload) {
+  if (!payload) return false;
+  const ids = envList('SUPERVISOR_CLERK_IDS');
+  const emails = envList('SUPERVISOR_EMAILS');
+  if (!ids.size && !emails.size) return false;
+  const sub = String(payload.sub || '').toLowerCase();
+  const candidates = [
+    payload.email, payload.email_address, payload.primary_email_address,
+    payload.primaryEmailAddress, payload.user_email,
+  ].filter(Boolean).map((e) => String(e).toLowerCase());
+  if (sub && ids.has(sub)) return true;
+  return candidates.some((e) => emails.has(e));
+}
+
+// A role carried inside the session itself — set in Clerk's user metadata by
+// whoever administers the deployment, so it arrives signed rather than typed.
+function sessionRoleClaim(payload) {
+  if (!payload) return '';
+  const meta = payload.publicMetadata || payload.public_metadata || payload.metadata || {};
+  const raw = payload.fabricIdentity || payload.fabric_identity ||
+    meta.fabricIdentity || meta.fabric_identity || meta.identityId ||
+    payload.role || meta.role || '';
+  return String(raw || '').trim().toLowerCase();
+}
+
 function getUser(req) {
   try {
     const auth = req.headers.authorization || '';
+    const operator = operatorKeyOK(req);
     const fabricHeader = req.headers['x-fabric-identity'] || req.headers['X-Fabric-Identity'] || '';
     const roleMap = {
       originator1: { identityId: 'originator1', mspId: 'OriginatorMSP', role: 'Originator' },
@@ -1411,6 +1468,12 @@ function getUser(req) {
     // in the system. Demo mode still trusts the header so local tooling and
     // the regression suite keep working.
     if (!auth) {
+      // The operator key stands on its own: it is the deployment's own
+      // credential, and ops tooling has no browser session behind it.
+      if (operator) {
+        const asked = roleMap[(fabricHeader || '').toLowerCase()];
+        return { ...(asked || roleMap.regulator1), operatorKey: true };
+      }
       if (!DEMO_AUTH) return ANONYMOUS_USER;
       const mapped = roleMap[(fabricHeader || '').toLowerCase()];
       return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
@@ -1425,11 +1488,20 @@ function getUser(req) {
           // acting as, but not promote themselves: supervisory identities come
           // from a Clerk claim, never from a header the browser controls.
           const claimed = roleMap[(fabricHeader || '').toLowerCase()];
-          const mapped = claimed && (DEMO_AUTH || !SUPERVISORY_IDENTITIES.has(claimed.identityId))
+          // Someone the deployment has named as an operator, or who holds the
+          // operator key, may act as a supervisory identity. Everyone else
+          // may still switch between their own non-supervisory identities.
+          const entitled = DEMO_AUTH || operator || sessionIsOperator(payload);
+          const mapped = claimed && (entitled || !SUPERVISORY_IDENTITIES.has(claimed.identityId))
             ? claimed : null;
-          if (mapped) return { ...mapped, clerkId: payload.sub, clerk: true };
-          if (payload.fabricIdentity && roleMap[payload.fabricIdentity.toLowerCase()]) {
-            return { ...roleMap[payload.fabricIdentity.toLowerCase()], clerkId: payload.sub, clerk: true };
+          if (mapped) return { ...mapped, clerkId: payload.sub, clerk: true, operatorKey: operator || undefined };
+          // No identity asked for, but the session itself carries one.
+          const fromClaim = roleMap[sessionRoleClaim(payload)];
+          if (fromClaim) return { ...fromClaim, clerkId: payload.sub, clerk: true };
+          if (entitled) {
+            // An operator with no identity chosen still gets a supervisory
+            // view rather than being filed as an investor.
+            return { ...roleMap.regulator1, clerkId: payload.sub, clerk: true, operatorKey: operator || undefined };
           }
           return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor', clerkId: payload.sub, clerk: true };
         }
@@ -1439,7 +1511,11 @@ function getUser(req) {
 
     // A bearer token was sent and could not be verified. That is a failed
     // sign-in, not an anonymous visit, and the header behind it proves
-    // nothing either.
+    // nothing either — unless the operator key came with it.
+    if (operator) {
+      const asked = roleMap[(fabricHeader || '').toLowerCase()];
+      return { ...(asked || roleMap.regulator1), operatorKey: true };
+    }
     if (!DEMO_AUTH) return ANONYMOUS_USER;
     const mapped = roleMap[(fabricHeader || '').toLowerCase()];
     return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
@@ -1784,7 +1860,10 @@ export default async function handler(req, res) {
     // A caller is anonymous only with no bearer and no identity header. The
     // header alone is enough here, unlike Express, because the serverless
     // clients (and tests/adminopsserverless) have always identified that way.
+    // The deployment's own operator key counts as credentials: ops tooling
+    // and the operator's own panels have no browser session behind them.
     const hasCredentials = Boolean(req.headers.authorization)
+      || operatorKeyOK(req)
       || (DEMO_AUTH && Boolean(req.headers['x-fabric-identity'] || req.headers['x-identity-id']));
     // A bank has no session with us. If the callback carries a valid
     // signature it is authenticated by that, and demanding a bearer token on
@@ -4993,10 +5072,12 @@ export default async function handler(req, res) {
     // that runs this serverless handler instead. Same shape as the Express
     // route, reading the same in-memory state this module already keeps.
     if (path === '/api/admin/ops') {
-      if (!['Registrar', 'Regulator'].includes(user.role)) {
+      const opsRole = String((user && user.role) || '').toLowerCase();
+      if (!['registrar', 'regulator', 'admin'].includes(opsRole)) {
         return res.status(403).json({
           error: 'ERR_NOT_REGISTRAR',
-          message: 'The operations queue is for Registrars and Regulators.',
+          message: 'The operations queue is for Registrars, Regulators and operators.',
+          howToGetAccess: 'Sign in as a registrar or regulator, or send the deployment operator key as x-admin-key.',
         });
       }
 
@@ -5112,7 +5193,7 @@ export default async function handler(req, res) {
       });
     }
     if (path === '/api/admin/insights') {
-      const denied = insightsAuth({ headers: req.headers, query: Object.fromEntries(url.searchParams) });
+      const denied = insightsAuth({ headers: req.headers, query: Object.fromEntries(url.searchParams), user });
       if (denied) return res.status(denied.status).json(denied.body);
 
       let rail = null;

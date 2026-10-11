@@ -78,10 +78,15 @@ t('a supervisor reads the book', supervisor.status === 200, `got ${supervisor.st
 t('the book is actually populated for the supervisor',
   supervisor.status === 200 && /summary/.test(supervisor.raw), supervisor.raw.slice(0, 120));
 
-// No session at all is turned away by the sign-in gate before the
-// reconciliation rule is ever consulted — the ops key is not a way in here.
+// The deployment's operator key is itself a credential: ops tooling has no
+// browser session behind it, and the owner of the deployment is entitled to
+// the book. It was briefly refused here, which locked the operator out of a
+// view their own key is for.
 const keyed = await call('/api/npci/reconcile', null, { headers: { 'x-admin-key': ADMIN_KEY } });
-t('a keyed but sessionless caller is still refused', keyed.status === 401, `got ${keyed.status}`);
+t('the operator key reads the book', keyed.status === 200, `got ${keyed.status}`);
+
+const wrongKey = await call('/api/npci/reconcile', null, { headers: { 'x-admin-key': 'not-the-key' } });
+t('a wrong operator key does not', wrongKey.status === 401 || wrongKey.status === 403, `got ${wrongKey.status}`);
 
 // ---- the thing that made it worse than a disclosure: it hands out the keys
 t('a refused caller gets no UTRs to replay',

@@ -41,7 +41,25 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | `VITE_CLERK_PUBLISHABLE_KEY` | web app | Clerk auth. Use a `pk_live_` production key. |
 | `CLERK_ISSUER` | web app | Clerk Frontend API URL. **Set it** — without it, session signatures are not verified. |
 | `UMI_GATEWAY_URL` | web app | address of the settlement core; unset means the rail reports unreachable |
-| `ADMIN_DASHBOARD_KEY` | web app | private analytics page |
+| `ADMIN_DASHBOARD_KEY` | web app | operator key: private analytics, ops queue, deployment diagnostics |
+| `SUPERVISOR_EMAILS` | web app | comma-separated emails allowed to act as registrar/regulator |
+| `SUPERVISOR_CLERK_IDS` | web app | same, by Clerk user id (`user_…`) |
+
+### Getting into the operator panels
+
+Supervisory roles cannot be claimed by the browser — saying `X-Fabric-Identity: regulator1` has not
+been enough since the authorisation audit. On a deployment where the identity provider carries no
+role information, that left nobody able to open the ops queue, the deployment diagnostics or the
+insights dashboard. There are two supported ways in, both checked on the server:
+
+1. **The operator key.** Send `ADMIN_DASHBOARD_KEY` as the `x-admin-key` header. The insights page
+   has a box for it, and once entered it is reused for the other operator panels in that tab.
+2. **A named operator.** Put your sign-in email in `SUPERVISOR_EMAILS` (or your Clerk user id in
+   `SUPERVISOR_CLERK_IDS`). That person may then act as `registrar1` or `regulator1`. A role set in
+   the Clerk user's public metadata (`role` or `fabricIdentity`) works too.
+
+Everyone else keeps the same access they had: investors see their own things, and the panels answer
+403 with a line saying how access is granted.
 | `DATABASE_URL` | settlement core | Postgres, for durable blocks. Without it the ledger is in-memory and a restart erases it. |
 | `UMI_ENABLED` | settlement core | mounts the settlement routes |
 | `UMI_SEED_DEMO` | settlement core | demo fixtures. Set to `false` anywhere holding real positions. |
