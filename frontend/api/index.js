@@ -1680,6 +1680,28 @@ function utrReceiptView(pay) {
   };
 }
 
+// The reconciliation dashboard is the payments book: every payment id, every
+// amount, every failure reason, the raw provider callbacks, and a sample of
+// the UTR index — which is a list of other people's bank references, the one
+// thing the receipt route is keyed on. Its own note says "For Regulator". It
+// answered any signed-in caller.
+// Supervisor session only: the sign-in gate in front of this handler already
+// turns away a keyed-but-sessionless caller, so advertising an ops-key path
+// here would be a lie.
+function reconciliationRefusal(req, user) {
+  if (SUPERVISORY.has(String((user && user.role) || '').toLowerCase())) return null;
+  if (!user || !user.identityId || user.identityId === 'ANONYMOUS_USER') {
+    return { status: 401, body: { error: 'ERR_UNAUTHORIZED', message: 'The reconciliation book needs a supervisor session.' } };
+  }
+  return {
+    status: 403,
+    body: {
+      error: 'ERR_NOT_SUPERVISOR',
+      message: 'Reconciliation covers every participant\'s payments, so it is limited to a regulator. Your own payments are at /api/npci/payments.',
+    },
+  };
+}
+
 function paymentViolation(method, path, user, store) {
   const match = PAYMENT_SCOPED.exec(path);
   if (!match) return null;
@@ -2764,6 +2786,8 @@ export default async function handler(req, res) {
 
     // GET /api/npci/reconcile — reconciliation dashboard for Regulator/Admin
     if (path === '/api/npci/reconcile' && method === 'GET') {
+      const reconRefusal = reconciliationRefusal(req, user);
+      if (reconRefusal) return res.status(reconRefusal.status).json(reconRefusal.body);
       try {
         const all = Object.values(npciPayments);
         const now = new Date();

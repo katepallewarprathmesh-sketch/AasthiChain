@@ -412,7 +412,7 @@ export default function NPCIPayment({ assetId, tokenAmount, tokenPrice, onPaymen
                   <div style={{fontSize:10, color:'#475569', marginTop:4, lineHeight:1.5}}>
                     ₹{(payment.amountINR || 0).toLocaleString('en-IN')} paid · {payment.tokenAmount || 0} tokens transferred to you · UTR {payment.utr || payment.utr12 || ''} for bank statement · Secure & instant settlement · Webhook {payment.webhookReceivedAt ? '✓' : 'pending'} via {payment.provider || 'mock'} atomic DvP, no partial
                   </div>
-                  {payment.utr && <div style={{marginTop:6, display:'flex', gap:6}}><a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#065F46'}}>Verify UTR →</a><a href="/api/npci/reconcile" target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #E2E8F0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#475569'}}>Reconciliation Dashboard</a></div>}
+                  {payment.utr && <div style={{marginTop:6, display:'flex', gap:6}}><a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{fontSize:9, background:'white', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:6, textDecoration:'none', color:'#065F46'}}>Verify UTR →</a></div>}
                 </div>
               )}
             </div>

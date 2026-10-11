@@ -2748,6 +2748,14 @@ app.get('/api/npci/utr/:utr', optionalAuth, (req, res) => {
 // against the deployed one — the opposite way round from the usual drift, and
 // the reason it went unnoticed: nobody checks a dev-only page for being wrong.
 app.get('/api/npci/reconcile', authMiddleware, (req, res) => {
+  // The payments book of every participant, including a sample of the UTR
+  // index — other people's bank references. Regulator work, not user work.
+  if (!SUPERVISORY.has(String((req.user && req.user.role) || '').toLowerCase())) {
+    return res.status(403).json({
+      error: 'ERR_NOT_SUPERVISOR',
+      message: "Reconciliation covers every participant's payments, so it is limited to a regulator. Your own payments are at /api/npci/payments.",
+    });
+  }
   const all = Object.values(npciPayments);
   const now = new Date();
   const pendingWithoutUTR = all.filter(p => p.status === 'CONFIRMED' && !p.utr);
