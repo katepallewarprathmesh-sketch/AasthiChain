@@ -49,9 +49,11 @@ the ownership transfer are one atomic operation — both move, or neither does.
 
 <div align="center">
 
-<img src="docs/architecture.svg" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a JavaScript edge owns the property register, KYC and the UPI money leg and forwards every settlement call to a Go rail; the rail checks authorisation in front of its mux, moves the e-rupee-W cash leg and the Drunix securities leg atomically, and appends every state change to a hash-chained, Postgres-durable ledger." width="100%">
+<img src="docs/architecture.png" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a JavaScript edge owns the property register, KYC and the UPI money leg and forwards every settlement call to a Go rail; the rail checks authorisation in front of its mux, moves the e-rupee-W cash leg and the Drunix securities leg atomically, and appends every state change to a hash-chained, Postgres-durable ledger." width="100%">
 
 </div>
+
+<sub>Source: [`docs/architecture.svg`](docs/architecture.svg) — edit the SVG, re-export the PNG.</sub>
 
 **Design rule:** settlement logic is written in **Go**, next to the ledger. The JavaScript layers are
 transport only. If a rule about money lives in JavaScript, that is a bug.
@@ -164,6 +166,11 @@ someone else where that is genuinely their job. Attribution is always taken from
 caller; a name in a request body is a claim, never a fact. Each rule ships with a suite that asserts
 the refused action changed no state.
 
+**Nothing reaches the ledger around the rules.** The chaincode pipeline declares an endorsement
+policy per function — an originator and a registrar to mint, a regulator to freeze — and the HTTP
+door now enforces it, so no caller can reach the ledger underneath the business rules that sit
+above it.
+
 **A refusal is never a dead end.** Tamper detection seals the rail, which is correct and also
 terminal, so there is a documented way back: a supervisor-only recovery that drops the first
 unverifiable block onward and records every discarded height, the reason, and who authorised it.
@@ -179,6 +186,12 @@ articles — remain open to visitors and crawlers. Money routes require a sessio
 
 Demo role buttons are gone: the entry points are removed from the production bundle, old sessions
 are evicted on load, and the development login endpoint stays closed unless explicitly enabled.
+
+**An identity header is a claim, not a credential.** `X-Fabric-Identity` says which of your own
+identities you are acting as; it cannot establish that you are anyone. With no verifiable session
+the caller is anonymous and protected routes answer 401, and a supervisory identity — registrar or
+regulator — can never be assumed from a header at all. Demo mode is the single exception, which is
+why it must stay off in production.
 
 > **Operational note:** leave `DEMO_AUTH` **unset** in production, and set `CLERK_ISSUER` to your
 > Clerk Frontend API URL so anything unverifiable fails closed.
@@ -222,7 +235,7 @@ cd network && docker-compose up -d && ./scripts/create-channel.sh
 Or `make umi`.
 
 ```bash
-bash regression.sh        # 87 checks against whichever server is on :8080
+bash regression.sh        # 88 checks against whichever server is on :8080
 cd drunix-gateway && go test ./...
 ```
 
