@@ -3000,7 +3000,16 @@ export default async function handler(req, res) {
     }
 
     if (path === '/api/auth/users' && method === 'GET') {
-      try { return res.json({ users: await authStore.listUsers() }); } catch (e) { return res.status(500).json({ error: e.message }); }
+      // The directory carries every registered person's email address. Being
+      // signed in was enough to download it; it is a supervisory view now,
+      // and everyone else sees only themselves.
+      try {
+        const all = await authStore.listUsers();
+        const role = String((user && user.role) || '').toLowerCase();
+        if (SUPERVISORY.has(role) || role === 'registrar') return res.json({ users: all });
+        const self = user && user.identityId;
+        return res.json({ users: all.filter(u => u && u.id === self), scopedTo: self });
+      } catch (e) { return res.status(500).json({ error: e.message }); }
     }
 
     if (path === '/api/auth/jwks' && method === 'GET') {
@@ -4230,8 +4239,14 @@ export default async function handler(req, res) {
     }
 
     if (path === '/api/testnet/payments' && method === 'GET') {
+      // Same rule as the NPCI payments list: an escrow is visible to the
+      // person who opened it, and to a supervisor.
       try {
-        return res.json({ payments: Object.values(testnetPayments), count: Object.keys(testnetPayments).length });
+        const role = String((user && user.role) || '').toLowerCase();
+        const self = user && user.identityId;
+        const visible = Object.values(testnetPayments)
+          .filter(p => SUPERVISORY.has(role) || (p && p.initiatedBy === self));
+        return res.json({ payments: visible, count: visible.length });
       } catch (e) {
         return res.json({ payments: [], count: 0 });
       }

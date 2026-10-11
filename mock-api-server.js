@@ -440,7 +440,13 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
 });
 
 app.get('/api/auth/users', authMiddleware, (req, res) => {
-  res.json({ users: [...authMem.user.values()] });
+  // Mirrors the serverless rule: the directory holds everyone's email, so
+  // only supervisors and registrars see all of it.
+  const all = [...authMem.user.values()];
+  const role = String((req.user && req.user.role) || '').toLowerCase();
+  if (SUPERVISORY.has(role) || role === 'registrar') return res.json({ users: all });
+  const self = req.user && req.user.identityId;
+  res.json({ users: all.filter(u => u && u.id === self), scopedTo: self });
 });
 
 app.get('/api/auth/jwks', (req, res) => {
@@ -1531,9 +1537,14 @@ app.post('/api/testnet/payments/:id/release', authMiddleware, (req, res) => {
 });
 
 app.get('/api/testnet/payments', authMiddleware, (req, res) => {
+  // An escrow belongs to whoever opened it.
+  const role = String((req.user && req.user.role) || '').toLowerCase();
+  const self = req.user && req.user.identityId;
+  const visible = Object.values(testnetPayments)
+    .filter(p => SUPERVISORY.has(role) || (p && p.initiatedBy === self));
   res.json({ 
-    payments: Object.values(testnetPayments), 
-    count: Object.keys(testnetPayments).length, 
+    payments: visible, 
+    count: visible.length, 
     faucet: 'https://sepoliafaucet.com/', 
     explorer: 'https://sepolia.etherscan.io/', 
     contract: 'PaymentEscrow.sol — Sepolia Testnet — demonstrates atomic DvP settlement pattern, Sepolia test ETH has no monetary value, real on-chain testnet transactions when faucet available, simulated greyed out non-clickable when faucet unavailable' 
