@@ -25,18 +25,24 @@ class ApiClient {
       // is the only thing that proves the person at the keyboard runs this
       // deployment, and without it the ops and diagnostics panels refuse
       // their own owner.
-      try {
-        const adminKey = sessionStorage.getItem('aasthi_admin_key')
-        if (adminKey) headers['x-admin-key'] = adminKey
-      } catch { /* storage unavailable */ }
       return headers
     } catch {
       return { 'Content-Type': 'application/json' }
     }
   }
 
+  // The operator key is a deployment secret, so it travels only to the
+  // operator views that need it — not on every call the app happens to make.
+  operatorHeaders(path) {
+    if (!/^\/api\/(admin|db)\//.test(path) && path !== '/api/npci/reconcile') return {}
+    try {
+      const adminKey = sessionStorage.getItem('aasthi_admin_key')
+      return adminKey ? { 'x-admin-key': adminKey } : {}
+    } catch { return {} }
+  }
+
   async request(path, options = {}) {
-    const headers = { ...this.getAuthHeaders(), ...(options.headers || {}) }
+    const headers = { ...this.getAuthHeaders(), ...this.operatorHeaders(path), ...(options.headers || {}) }
     const res = await fetch(path, { ...options, headers })
     
     // Read as text first: a non-JSON body (an HTML error page, or a plain-text

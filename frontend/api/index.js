@@ -1817,6 +1817,31 @@ function paymentViolation(method, path, user, store) {
   return pay.paymentId || decodeURIComponent(match[1]);
 }
 
+// The operator key proves the deployment, not a person. Giving it a full
+// supervisory session was too much: with the key alone a caller could
+// register property, approve payments and reach the chain controls, all
+// attributed to regulator1 — and the browser now carries the key on operator
+// requests, so a leaked key would be a leaked regulator.
+//
+// So: the key reads. It does not act. Two maintenance routes are the stated
+// exceptions, because they exist for an operator with no session at all and
+// each is idempotent and audited.
+const KEY_WRITABLE = new Set(['/api/npci/rail/backfill', '/api/db/migrate']);
+
+function operatorKeyWriteRefusal(method, path, user) {
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null;
+  if (!user || !user.operatorKey) return null;          // a real session, not the bare key
+  if (user.clerkId) return null;                        // signed in AND holding the key
+  if (KEY_WRITABLE.has(path)) return null;
+  return {
+    status: 403,
+    body: {
+      error: 'ERR_KEY_IS_READ_ONLY',
+      message: 'The operator key opens the operator views. Acting on the platform needs a signed-in person, so the action has a name against it.',
+    },
+  };
+}
+
 function requiresAuth(method, path) {
   for (const [m, rx] of AUTH_REQUIRED) if (m === method && rx.test(path)) return true;
   return false;
@@ -1872,6 +1897,9 @@ export default async function handler(req, res) {
     if (!hasCredentials && !signedCallback && requiresAuth(method, path)) {
       return res.status(401).json({ error: 'ERR_UNAUTHORIZED' });
     }
+
+    const keyWrite = operatorKeyWriteRefusal(method, path, user);
+    if (keyWrite) return res.status(keyWrite.status).json(keyWrite.body);
 
     const notYourWebhook = webhookViolation(method, path, user, req, npciPayments);
     if (notYourWebhook) {

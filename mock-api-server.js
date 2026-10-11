@@ -228,6 +228,15 @@ function authenticate(req, res, next) {
   const fabricIdentityHeader = req.headers['x-fabric-identity'] || req.headers['x-fabric-role'];
   if (!auth) {
     if (operatorKeyOK(req)) {
+      // The key proves the deployment, not a person: it opens the operator
+      // views and nothing else. Acting on the platform needs a sign-in, so
+      // that the action has a name against it.
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.path !== '/api/npci/rail/backfill') {
+        return res.status(403).json({
+          error: 'ERR_KEY_IS_READ_ONLY',
+          message: 'The operator key opens the operator views. Acting on the platform needs a signed-in person.',
+        });
+      }
       const asked = String(fabricIdentityHeader || '').toLowerCase();
       const known = { registrar1: 'Registrar', regulator1: 'Regulator', originator1: 'Originator', investor1: 'Investor', investor2: 'Investor' };
       const id = known[asked] ? asked : 'regulator1';

@@ -54,6 +54,9 @@ insights dashboard. There are two supported ways in, both checked on the server:
 
 1. **The operator key.** Send `ADMIN_DASHBOARD_KEY` as the `x-admin-key` header. The insights page
    has a box for it, and once entered it is reused for the other operator panels in that tab.
+   **The key reads; it does not act.** Anything that changes state needs a signed-in person, so
+   the action has a name against it — the two exceptions are the idempotent maintenance routes
+   `/api/npci/rail/backfill` and `/api/db/migrate`.
 2. **A named operator.** Put your sign-in email in `SUPERVISOR_EMAILS` (or your Clerk user id in
    `SUPERVISOR_CLERK_IDS`). That person may then act as `registrar1` or `regulator1`. A role set in
    the Clerk user's public metadata (`role` or `fabricIdentity`) works too.
