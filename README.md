@@ -36,7 +36,7 @@ the ownership transfer are one atomic operation — both move, or neither does.
 | **Scarce by design** | you can only buy tokens that exist; sold-out supply is visible, never oversold |
 | **One deed, one tokenization** | the same document can never be tokenized twice |
 | **Independently verified** | a Registrar — never the owner — validates title before any token is minted |
-| **Auditable** | every state change is a block on a hash-chained, append-only ledger |
+| **Auditable** | every state change is written to an append-only record you can replay |
 
 > **Honest scoping.** The settlement rail is a faithful **simulation**. There is no public UMI API
 > and no live NPCI credential available outside a bank partnership — real access is the SEBI
@@ -44,36 +44,6 @@ the ownership transfer are one atomic operation — both move, or neither does.
 > responses. What is real: the ledger, the atomicity, the verification rules and the guardrails.
 
 ---
-
-## Architecture
-
-<div align="center">
-
-<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling and what they may touch; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to." width="100%">
-
-</div>
-
-<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg)</sub>
-
-**Design rule:** every rule about money lives in one place — the settlement core, beside the ledger
-it protects. The layers in front of it carry requests and identity and nothing else. If a rule about
-money can be found anywhere but the core, that is a bug.
-
-The system is read as four layers:
-
-| Layer | Responsibility |
-|---|---|
-| **Experience** | what each role can see and do, and the public pages anyone may read |
-| **Access** | establishes who is calling, and decides what that caller is entitled to touch |
-| **Settlement** | holds the cash leg and the ownership leg, and moves them as one |
-| **Record** | the append-only history every other layer answers to |
-
-The experience and the settlement core are deployed and scaled independently, so either can be
-replaced or can fail without taking the other with it. When the settlement core cannot be reached,
-the app says *unknown* — it never reports a settlement surface as healthy because it could not ask.
-
-Listing is gated to the **Owner** role, so tokens always mint to the party that holds the asset — an
-Investor can never end up "owning" a property merely by creating the listing.
 
 ## What you can do
 
@@ -169,41 +139,33 @@ browse without leaking a cap table.
 **Approval is independent.** Title validation is restricted to a Registrar, and refused when the
 validating identity is the one that registered the property.
 
-**Every route answers only to the people it belongs to.** Being signed in is not the same as being
-entitled. Entitlement is decided centrally rather than route by route, so a new surface is covered
-the day it ships: an unidentified caller is turned away, a stranger is refused, and a supervisor may
-act for someone else only where that is genuinely their job. Who you are is taken from your
-authenticated session — anything a request merely *says* about itself is a claim, not a fact. Every
-rule ships with a test that asserts the refused action changed no state.
+**Your things answer only to you.** Being signed in is not the same as being entitled: your wallet,
+your payments, your holdings, your documents and your notifications are yours, and a stranger is
+refused even when they know the reference. A regulator can look where that is genuinely the
+regulator's job, and nowhere else.
 
-**Nothing reaches the record around the rules.** Each operation on the ownership register declares
-who must approve it, and that declaration is enforced at the door, so no caller can reach the
-history underneath the business rules that sit above it.
+**A reference is not a key.** A bank reference shared on a receipt proves the payment happened. It
+does not reveal who else was involved, and it does not open a door to anything further.
 
-**A refusal is never a dead end.** Tamper detection stops the rail, which is correct and also
-terminal, so there is a documented, supervised way back that records exactly what was set aside, why,
-and on whose authority. The cure leaves a trace instead of being a quiet edit to a database — it has
-been used once in production, and the record of it is still there to read.
+**Nothing gets to the record around the rules.** Every change to ownership has to pass the same
+approvals whichever way it is attempted, so there is no quieter path to the same result.
+
+**A refusal is never a dead end.** If the record ever stops verifying, the platform stops rather
+than building on history it cannot vouch for — and there is a supervised way back that writes down
+exactly what was set aside, why, and on whose authority. It has been used once, and the record of it
+is still there to read.
 
 ---
 
-## Identity
+## Signing in
 
-**Sign-in is the only way in.** Sessions are issued by a managed identity provider and verified
-against its published signing keys on every request. Public pages — the marketplace, the ledger
-explorer, the calculators and the articles — stay open to visitors and crawlers. Anything that
-touches money or a holding needs a session.
+**Public to browse, signed in to act.** The marketplace, the ledger explorer, the calculators and
+the articles are open to anyone, including search engines. Anything that touches money or a holding
+asks you to sign in first.
 
-**Saying who you are is not the same as proving it.** A request can state which of *your own*
-identities you are acting as; it can never establish that you are someone else, and a supervisory
-role can never be asserted this way at all. Without a verifiable session the caller is treated as
-anonymous and protected surfaces simply refuse.
-
-Demo role switching is not part of the production build: the entry points are stripped, old sessions
-are evicted on load, and the development-only path stays closed unless an operator deliberately
-opens it.
-
-Deployment and configuration are documented in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+**You act as yourself.** You can act for any identity that is genuinely yours; you can never be
+taken for someone else on your say-so, and supervisory roles — registrar, regulator — are never
+handed out on request. If a session cannot be proven, the answer is no.
 
 ---
 
@@ -227,29 +189,10 @@ Explainers: [Demat 2.0](https://aasthi-chain.vercel.app/learn/what-is-demat-2) �
 
 ---
 
-## Quick start
+## For developers
 
-```bash
-make umi          # run the settlement core locally
-make frontend     # run the web app against it
-make test         # the test suites
-```
-
-Each layer can also be run on its own, which is useful when working on one of them at a time. Those
-commands, and what each process expects, are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-
-**Seeing "Rail offline" on the deployed site?** Expected until the settlement core is deployed and
-the web app is pointed at it; the app is honest about not being able to reach it rather than
-pretending the rail is fine.
-
-### Configuration
-
-The web app, the settlement core and the ledger store are each configured through environment
-variables — identity provider, settlement-core address, database and payment mode. The full list,
-with what each one does and which must never be set in production, is in
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-
-Credentials are never committed.
+How it fits together, how to run it, and every configuration switch:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ---
 

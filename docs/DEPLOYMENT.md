@@ -1,6 +1,7 @@
 # Running and deploying AasthiChain
 
-The README describes the system. This file is the operator's copy: exact commands, exact variables.
+The README describes the product and [`ARCHITECTURE.md`](ARCHITECTURE.md) describes the shape of the
+code. This file is the operator's copy: exact commands, exact variables.
 
 ## Processes
 
@@ -62,8 +63,8 @@ Credentials are never committed; `.env.payu` is gitignored.
 
 ## Diagram
 
-`docs/architecture.svg` is the editable source; `docs/architecture.png` is the export the README
-shows. Re-export after editing:
+`docs/architecture.svg` is the editable source; `docs/architecture.png` is the export
+[`ARCHITECTURE.md`](ARCHITECTURE.md) shows. Re-export after editing:
 
 ```bash
 pip install cairosvg
