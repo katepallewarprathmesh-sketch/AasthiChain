@@ -464,6 +464,12 @@ func (s *Server) handleUMIServicing(w http.ResponseWriter, r *http.Request) {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
 		return
 	}
+	// The payer field names the wallet this run is debited from, and it comes
+	// from the request body, so it is a claim. Without this check anyone could
+	// empty a stranger's e₹-W balance into every holder of any asset.
+	if !umiRequireSelfOrSupervisor(w, callerOf(r), body.Payer, "The wallet paying asset servicing") {
+		return
+	}
 	parseTS := func(v string) time.Time {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			return t.UTC()
@@ -515,6 +521,11 @@ func (s *Server) handleUMISeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.AssetID == "" || body.Holder == "" || body.Tokens <= 0 {
 		umiErr(w, http.StatusBadRequest, ErrUMIInvalidAmount.Error(), "assetId, holder and positive tokens required")
+		return
+	}
+	// Seeding issues securities out of nothing. Even as a demo fixture that is
+	// an issuance, so it answers only to a supervisor.
+	if !umiRequireSupervisor(w, callerOf(r), "Issuing a securities position") {
 		return
 	}
 	pos, err := s.UMI.SeedPosition(body.AssetID, body.Holder, body.Tokens, body.AuthorisedTokens)
