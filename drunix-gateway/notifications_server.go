@@ -38,6 +38,16 @@ func (s *Server) handleNotifications(w http.ResponseWriter, r *http.Request) {
 		action = parts[1]
 	}
 
+	// A settlement feed is a record of who traded what and when. Reading
+	// someone else's, or clearing it so they never see it, is theirs alone.
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
+	if !umiRequireSelfOrSupervisor(w, caller, participant, "Reading a notification feed") {
+		return
+	}
+
 	switch action {
 	case "":
 		if r.Method != http.MethodGet {

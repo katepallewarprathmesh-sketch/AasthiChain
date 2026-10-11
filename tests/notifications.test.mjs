@@ -11,7 +11,8 @@ const t = (n, c) => { if (c) { p++; console.log('  ok   ' + n); } else { f++; co
 // fixtures act as the settlement supervisor.
 const RAIL_AS = { ...J, 'X-Fabric-Identity': 'regulator1', 'X-Identity-Role': 'Regulator' };
 const post = (path, body) => fetch(BASE + path, { method: 'POST', headers: RAIL_AS, body: JSON.stringify(body) });
-const get = (path) => fetch(BASE + path);
+// Feeds are private to their owner now, so read them as the supervisor.
+const get = (path) => fetch(BASE + path, { headers: RAIL_AS });
 const feed = async (who) => (await (await get(`/api/umi/notifications/${who}`)).json());
 
 const tag = Date.now().toString(36);

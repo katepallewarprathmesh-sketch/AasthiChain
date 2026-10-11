@@ -37,6 +37,18 @@ func (s *Server) handleBaskets(w http.ResponseWriter, r *http.Request) {
 			umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
 			return
 		}
+		// A basket names a custodian who is answerable for it, and that name
+		// used to come from the body with nobody authenticated at all.
+		caller := callerOf(r)
+		if !umiRequireIdentity(w, caller) {
+			return
+		}
+		if strings.TrimSpace(body.Custodian) == "" {
+			body.Custodian = caller.ID
+		}
+		if !umiRequireSelfOrSupervisor(w, caller, body.Custodian, "Creating a basket") {
+			return
+		}
 		b, blk, err := s.UMI.CreateBasket(body.BasketID, body.Name, body.Custodian, body.Components)
 		if err != nil {
 			status := http.StatusBadRequest
@@ -103,6 +115,24 @@ func (s *Server) handleBasketByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := umiDecode(r, &body); err != nil {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
+		return
+	}
+
+	// Subscribing locks the holder's property tokens into units; redeeming
+	// unwinds them. Either way it is that holder's securities moving, so the
+	// holder has to be the caller rather than a name in the body.
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
+	if strings.TrimSpace(body.Holder) == "" {
+		body.Holder = caller.ID
+	}
+	what := "Subscribing for basket units"
+	if action == "redeem" {
+		what = "Redeeming basket units"
+	}
+	if !umiRequireSelfOrSupervisor(w, caller, body.Holder, what) {
 		return
 	}
 
@@ -269,7 +299,20 @@ func (s *Server) handleBasketTrade(w http.ResponseWriter, r *http.Request, id, a
 		return http.StatusBadRequest
 	}
 
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
+
 	if action == "transfer" {
+		// Units leave the "from" side for nothing in return, so only that
+		// participant (or a supervisor) can start it.
+		if strings.TrimSpace(body.From) == "" {
+			body.From = caller.ID
+		}
+		if !umiRequireSelfOrSupervisor(w, caller, body.From, "Transferring basket units") {
+			return
+		}
 		b, blk, err := s.UMI.TransferUnits(id, body.From, body.To, body.Units)
 		if err != nil {
 			umiErr(w, statusFor(err), errCode(err), basketHint(err))
@@ -282,6 +325,16 @@ func (s *Server) handleBasketTrade(w http.ResponseWriter, r *http.Request, id, a
 		return
 	}
 
+	// Same rule as the cash-leg DvP route: the wallet being debited belongs to
+	// the buyer, so the buyer has to be the caller. A dry run moves nothing.
+	if !body.DryRun {
+		if strings.TrimSpace(body.Buyer) == "" {
+			body.Buyer = caller.ID
+		}
+		if !umiRequireSelfOrSupervisor(w, caller, body.Buyer, "Buying basket units") {
+			return
+		}
+	}
 	trade, blk, err := s.UMI.SettleBasketDvP(id, body.Seller, body.Buyer,
 		body.Units, body.PricePerUnitINR, body.DryRun)
 	if err != nil {

@@ -386,3 +386,84 @@ func TestMarketplaceActsOnlyForTheCaller(t *testing.T) {
 		t.Errorf("the seller's own cancel = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// Baskets hold the same securities and spend the same wallets as the single
+// asset routes, and every participant on them came from the request body.
+func TestBasketRoutesActOnlyForTheCaller(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	for _, a := range []string{"PROP-BSK-A", "PROP-BSK-B"} {
+		if _, err := srv.UMI.SeedPosition(a, "originator1", 1000, 1000); err != nil {
+			t.Fatalf("seed %s: %v", a, err)
+		}
+	}
+	do := func(path, identity, role, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		return rec
+	}
+	basket := `{"basketId":"BSK-AUTHZ","name":"Authz","custodian":"originator1","components":[` +
+		`{"assetId":"PROP-BSK-A","tokensPerUnit":1,"indicativePriceINR":100},` +
+		`{"assetId":"PROP-BSK-B","tokensPerUnit":1,"indicativePriceINR":100}]}`
+
+	if rec := do("/umi/baskets", "", "", basket); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous basket creation = %d, want 401", rec.Code)
+	}
+	if rec := do("/umi/baskets", "investor2", "Investor", basket); rec.Code != http.StatusForbidden {
+		t.Errorf("basket under someone else's custody = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := do("/umi/baskets", "originator1", "Originator", basket); rec.Code != http.StatusCreated {
+		t.Fatalf("the custodian's own basket = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	for _, c := range []struct {
+		name, path, body string
+	}{
+		{"subscribe", "/umi/baskets/BSK-AUTHZ/subscribe", `{"holder":"originator1","units":5}`},
+		{"redeem", "/umi/baskets/BSK-AUTHZ/redeem", `{"holder":"originator1","units":1}`},
+		{"transfer", "/umi/baskets/BSK-AUTHZ/transfer", `{"from":"originator1","to":"investor2","units":1}`},
+		{"dvp", "/umi/baskets/BSK-AUTHZ/dvp", `{"seller":"originator1","buyer":"investor1","units":1,"pricePerUnitINR":100}`},
+	} {
+		if rec := do(c.path, "", "", c.body); rec.Code != http.StatusUnauthorized {
+			t.Errorf("anonymous %s = %d, want 401: %s", c.name, rec.Code, rec.Body.String())
+		}
+		if rec := do(c.path, "investor2", "Investor", c.body); rec.Code != http.StatusForbidden {
+			t.Errorf("%s on someone else's behalf = %d, want 403: %s", c.name, rec.Code, rec.Body.String())
+		}
+	}
+
+	// The holder's own subscription still works, and moves real tokens.
+	if rec := do("/umi/baskets/BSK-AUTHZ/subscribe", "originator1", "Originator", `{"holder":"originator1","units":5}`); rec.Code != http.StatusOK {
+		t.Errorf("the holder's own subscription = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Notification feeds say who traded what and when.
+func TestNotificationFeedsArePrivateToTheirOwner(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	check := func(method, path, identity, role string, want int) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("%s %s as %q = %d, want %d: %s", method, path, identity, rec.Code, want, rec.Body.String())
+		}
+	}
+	check(http.MethodGet, "/umi/notifications/investor1", "", "", http.StatusUnauthorized)
+	check(http.MethodGet, "/umi/notifications/investor1", "investor2", "Investor", http.StatusForbidden)
+	check(http.MethodPost, "/umi/notifications/investor1/read-all", "investor2", "Investor", http.StatusForbidden)
+	check(http.MethodGet, "/umi/notifications/investor1", "investor1", "Investor", http.StatusOK)
+	check(http.MethodPost, "/umi/notifications/investor1/read-all", "investor1", "Investor", http.StatusOK)
+	check(http.MethodGet, "/umi/notifications/investor1", "regulator1", "Regulator", http.StatusOK)
+}
