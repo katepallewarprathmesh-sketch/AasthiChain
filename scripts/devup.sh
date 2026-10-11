@@ -11,6 +11,12 @@
 # of seconds with warm caches; staleness is far more expensive than that.
 set -u
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+START=$SECONDS
+
+# Snapshot restore drops the executable bit on this file, which shows up as a
+# mode-only change in every `git status` and has to be undone before each
+# commit. Put it back first, so the tree is clean by the time anyone looks.
+[ -x "$0" ] || chmod +x "$0"
 
 # --- Go toolchain (lives in /tmp, a tmpfs that gets cleared between sessions) ---
 # The modules require go >= 1.25 since the security upgrade, so this has to
@@ -43,22 +49,39 @@ fi
 git -C "$REPO" remote get-url origin >/dev/null 2>&1 || \
   git -C "$REPO" remote add origin https://github.com/katepallewarprathmesh-sketch/AasthiChain.git
 
-# --- node deps (slow; only when genuinely absent) ---
+# --- node deps (only when genuinely absent) ---
 [ -d "$REPO/node_modules" ]          || (echo "[devup] npm install (root) ..."     && cd "$REPO" && npm install --silent)
 [ -d "$REPO/frontend/node_modules" ] || (echo "[devup] npm install (frontend) ..." && cd "$REPO/frontend" && npm install --silent)
 
 # --- always rebuild: cheap, and staleness here is a known foot-gun ---
-echo "[devup] building drunix-gateway ..."
-(cd "$REPO/drunix-gateway" && go build -o /tmp/umigw ./cmd/gateway) || { echo "[devup] GO BUILD FAILED"; exit 1; }
-
-echo "[devup] frontend build ..."
+# The Go binary and the frontend bundle share nothing, so they are built at the
+# same time: on a cold sandbox the Go build is the long pole (empty build
+# cache), and the frontend bundle hides underneath it instead of adding to it.
+# Logs are kept in files rather than interleaved on the terminal.
+echo "[devup] building drunix-gateway + frontend bundle ..."
+(cd "$REPO/drunix-gateway" && go build -o /tmp/umigw ./cmd/gateway) >/tmp/devup-go.log 2>&1 &
+GO_PID=$!
 # npm run build, not npx vite build: the real build also generates the
 # sitemap and prerenders a head per route. Calling vite directly left dist
 # in a state the prerender suite correctly failed.
-(cd "$REPO/frontend" && npm run build >/dev/null 2>&1) || { echo "[devup] FRONTEND BUILD FAILED"; exit 1; }
+(cd "$REPO/frontend" && npm run build) >/tmp/devup-web.log 2>&1 &
+WEB_PID=$!
 
-echo "[devup] ready: /tmp/umigw + node_modules + frontend/dist"
+FAILED=""
+wait $GO_PID  || FAILED="$FAILED go"
+wait $WEB_PID || FAILED="$FAILED frontend"
+if [ -n "$FAILED" ]; then
+  for part in $FAILED; do
+    case "$part" in
+      go)       echo "[devup] GO BUILD FAILED";       tail -20 /tmp/devup-go.log ;;
+      frontend) echo "[devup] FRONTEND BUILD FAILED"; tail -20 /tmp/devup-web.log ;;
+    esac
+  done
+  exit 1
+fi
+
+echo "[devup] ready in $((SECONDS - START))s: /tmp/umigw + node_modules + frontend/dist"
 echo
 echo "  Start the rail:  UMI_ENABLED=true UMI_SEED_DEMO=true DRUNIX_MODE=mock PORT=21100 /tmp/umigw"
 echo "  Start the app :  DEMO_AUTH=true ADMIN_DASHBOARD_KEY=<key> UMI_GATEWAY_URL=http://localhost:21100 node server.js"
-echo "  Verify        :  bash $REPO/regression.sh   (expects 73 passed)"
+echo "  Verify        :  bash $REPO/regression.sh   (expects 0 failed)"
