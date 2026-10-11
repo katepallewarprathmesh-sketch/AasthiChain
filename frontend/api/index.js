@@ -1639,6 +1639,47 @@ function bodyPaymentViolation(method, path, user, req, store) {
 // Reading, approving, declining, refunding or settling someone else's
 // payment was open to any signed-in user. Declining was the damaging one: a
 // stranger could cancel a purchase mid-flight.
+// A UTR is a bank reference people share: it goes on a receipt, into a
+// support ticket, to the counterparty. Treating it as a password was the
+// mistake — holding one returned the entire payment record, to anyone, with
+// no session at all: both VPAs, both identities, the internal ids, the risk
+// assessment. The owner-scoped payments list next door refuses exactly that.
+//
+// The reference stays checkable, because that is the point of a receipt, but
+// a checker who is not part of the payment gets only what a receipt proves:
+// the amount, the status and when it settled, with the account handles
+// masked. The payer, the payee and a supervisor still see everything.
+function utrEntitled(pay, user) {
+  const self = user && user.identityId;
+  if (self && self !== 'ANONYMOUS_USER' && (pay.payerId === self || pay.payeeId === self)) return true;
+  return SUPERVISORY.has(String((user && user.role) || '').toLowerCase());
+}
+
+function maskVpa(vpa) {
+  const v = String(vpa || '');
+  const at = v.indexOf('@');
+  if (at <= 0) return v ? '***' : '';
+  const name = v.slice(0, at);
+  return (name.length <= 2 ? name[0] || '' : name.slice(0, 2)) + '***' + v.slice(at);
+}
+
+// What a receipt proves, and nothing else.
+function utrReceiptView(pay) {
+  return {
+    paymentId: pay.paymentId,
+    status: pay.status,
+    amountINR: pay.amountINR,
+    tokenAmount: pay.tokenAmount,
+    payerVpa: maskVpa(pay.payerVpa),
+    payeeVpa: maskVpa(pay.payeeVpa),
+    provider: pay.provider || 'mock',
+    confirmedAt: pay.confirmedAt || null,
+    releasedAt: pay.releasedAt || null,
+    isSimulation: pay.isSimulation !== false,
+    note: 'Masked summary: a bank reference proves a payment happened, not who else was involved. Sign in as the payer or the payee for the full record.',
+  };
+}
+
 function paymentViolation(method, path, user, store) {
   const match = PAYMENT_SCOPED.exec(path);
   if (!match) return null;
@@ -2661,8 +2702,8 @@ export default async function handler(req, res) {
         row('Amount', '₹' + Number(pay.amountINR || 0).toLocaleString('en-IN')) +
         row('Tokens', Number(pay.tokenAmount || 0).toLocaleString('en-IN')) +
         row('Status', pay.status) +
-        row('Paid from', pay.payerVpa || '—', true) +
-        row('Paid to', pay.payeeVpa || '—', true) +
+        row('Paid from', (utrEntitled(pay, user) ? pay.payerVpa : maskVpa(pay.payerVpa)) || '—', true) +
+        row('Paid to', (utrEntitled(pay, user) ? pay.payeeVpa : maskVpa(pay.payeeVpa)) || '—', true) +
         row('Provider', (pay.provider === 'payu' ? 'PayU' : 'NPCI mock rail') + (pay.payuTestMode || pay.isSimulation ? ' · test mode, no real money' : '')) +
         row('Confirmed at', dt(pay.confirmedAt)) +
         row('Released at', dt(pay.releasedAt)) +
@@ -2684,10 +2725,12 @@ export default async function handler(req, res) {
           // Try search in payments directly (for legacy IMPS+RRN format)
           const found = Object.values(npciPayments).find(p => p.utr === utr || p.utr12 === utr || p.utrImps === utr || p.rrn === utr);
           if (!found) return utrVerifyRespond(req, res, utr, null, null, 'UTR not found');
+          const maySeeFound = utrEntitled(found, user);
           return utrVerifyRespond(req, res, utr, found, {
             utr,
             paymentId: found.paymentId,
-            payment: found,
+            payment: maySeeFound ? found : utrReceiptView(found),
+            scope: maySeeFound ? 'full' : 'receipt',
             reconciliation: {
               amountMatched: true,
               utrFormat: utr.length === 12 && /^\d{12}$/.test(utr) ? '12-digit numeric (real IMPS)' : utr.startsWith('IMPS') ? 'IMPS+RRN legacy (mock)' : 'unknown',
@@ -2699,10 +2742,12 @@ export default async function handler(req, res) {
         }
         const pay = npciPayments[paymentId];
         if (!pay) return utrVerifyRespond(req, res, utr, null, null, 'PaymentId from UTR index not found');
+        const maySee = utrEntitled(pay, user);
         return utrVerifyRespond(req, res, utr, pay, {
           utr,
           paymentId,
-          payment: pay,
+          payment: maySee ? pay : utrReceiptView(pay),
+          scope: maySee ? 'full' : 'receipt',
           reconciliation: {
             amountMatched: true,
             utrFormat: utr.length === 12 ? '12-digit numeric' : 'IMPS+RRN',

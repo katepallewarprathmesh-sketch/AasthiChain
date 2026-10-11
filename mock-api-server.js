@@ -2688,8 +2688,8 @@ function utrVerifyRespond(req, res, utr, pay, payload, errCode) {
     row('Amount', '₹' + Number(pay.amountINR || 0).toLocaleString('en-IN')) +
     row('Tokens', Number(pay.tokenAmount || 0).toLocaleString('en-IN')) +
     row('Status', pay.status) +
-    row('Paid from', pay.payerVpa || '—', true) +
-    row('Paid to', pay.payeeVpa || '—', true) +
+    row('Paid from', (utrEntitledMock(pay, req) ? pay.payerVpa : maskVpaMock(pay.payerVpa)) || '—', true) +
+    row('Paid to', (utrEntitledMock(pay, req) ? pay.payeeVpa : maskVpaMock(pay.payeeVpa)) || '—', true) +
     row('Provider', (pay.provider === 'payu' ? 'PayU' : 'NPCI mock rail') + (pay.payuTestMode || pay.isSimulation ? ' · test mode, no real money' : '')) +
     row('Confirmed at', dt(pay.confirmedAt)) +
     row('Released at', dt(pay.releasedAt)) +
@@ -2702,11 +2702,44 @@ function utrVerifyRespond(req, res, utr, pay, payload, errCode) {
     `</div></div></body></html>`;
   res.status(200).send(html);
 }
+// A UTR is a bank reference people share — a receipt, a support ticket, a
+// message to the counterparty. Holding one used to return the whole payment
+// record to anyone: both VPAs, both identities, internal ids. The reference
+// stays checkable; a checker who is not part of the payment now sees only
+// what a receipt proves, with the handles masked.
+function utrEntitledMock(pay, req) {
+  const self = req.user && req.user.identityId;
+  if (self && (pay.payerId === self || pay.payeeId === self)) return true;
+  return ['regulator', 'admin'].includes(String((req.user && req.user.role) || '').toLowerCase());
+}
+
+function maskVpaMock(vpa) {
+  const v = String(vpa || '');
+  const at = v.indexOf('@');
+  if (at <= 0) return v ? '***' : '';
+  const name = v.slice(0, at);
+  return (name.length <= 2 ? name[0] || '' : name.slice(0, 2)) + '***' + v.slice(at);
+}
+
+function utrReceiptViewMock(pay) {
+  return {
+    paymentId: pay.paymentId, status: pay.status, amountINR: pay.amountINR,
+    tokenAmount: pay.tokenAmount, payerVpa: maskVpaMock(pay.payerVpa),
+    payeeVpa: maskVpaMock(pay.payeeVpa), provider: pay.provider || 'mock',
+    confirmedAt: pay.confirmedAt || null, releasedAt: pay.releasedAt || null,
+    isSimulation: pay.isSimulation !== false,
+    note: 'Masked summary: a bank reference proves a payment happened, not who else was involved. Sign in as the payer or the payee for the full record.',
+  };
+}
+
 app.get('/api/npci/utr/:utr', optionalAuth, (req, res) => {
   let pay = utrIndex[req.params.utr] ? npciPayments[utrIndex[req.params.utr]] : null;
   if (!pay) pay = Object.values(npciPayments).find(p => p.utr === req.params.utr || p.utr12 === req.params.utr || p.utrImps === req.params.utr || p.rrn === req.params.utr);
   if (!pay) return utrVerifyRespond(req, res, req.params.utr, null, null, 'UTR not found');
-  utrVerifyRespond(req, res, req.params.utr, pay, { utr: req.params.utr, paymentId: pay.paymentId, status: pay.status, amountINR: pay.amountINR, rrn: pay.rrn, upiTxnId: pay.upiTxnId, confirmedAt: pay.confirmedAt, releasedAt: pay.releasedAt, drunixTransferId: pay.drunixTransferId, payment: pay });
+  const maySee = utrEntitledMock(pay, req);
+  utrVerifyRespond(req, res, req.params.utr, pay, maySee
+    ? { utr: req.params.utr, paymentId: pay.paymentId, status: pay.status, amountINR: pay.amountINR, rrn: pay.rrn, upiTxnId: pay.upiTxnId, confirmedAt: pay.confirmedAt, releasedAt: pay.releasedAt, drunixTransferId: pay.drunixTransferId, payment: pay, scope: 'full' }
+    : { utr: req.params.utr, paymentId: pay.paymentId, status: pay.status, amountINR: pay.amountINR, confirmedAt: pay.confirmedAt, releasedAt: pay.releasedAt, payment: utrReceiptViewMock(pay), scope: 'receipt' });
 });
 
 // UTRReconciliation.jsx reads summary/issues/recentWebhooks. This route used to
