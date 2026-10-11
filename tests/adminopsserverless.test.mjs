@@ -10,6 +10,12 @@
 // It imports the handler directly and feeds it a request object, so it needs no
 // listening port and no deployment.
 
+// The handler reads DEMO_AUTH once at module load. Outside demo mode an
+// identity header is just a claim and buys nothing, which is the point of
+// tests/identityclaim.test.mjs; here we want a named caller without standing
+// up Clerk, so switch demo auth on before importing.
+process.env.DEMO_AUTH = 'true';
+
 const { default: handler } = await import('../frontend/api/index.js');
 
 function mockRes() {

@@ -1355,6 +1355,16 @@ function normaliseDocumentHash(documentHash, fields, ownerId) {
   return { hash: h, derived: false };
 }
 
+// Identities nobody may claim with a header: they can approve, freeze,
+// repair and read everyone's records.
+const SUPERVISORY_IDENTITIES = new Set(['registrar1', 'regulator1']);
+
+// Shaped like a user so the hundreds of `user.identityId` reads below stay
+// safe, but matching nobody and holding no role.
+const ANONYMOUS_USER = Object.freeze({
+  identityId: null, mspId: null, role: 'Anonymous', anonymous: true,
+});
+
 function getUser(req) {
   try {
     const auth = req.headers.authorization || '';
@@ -1367,7 +1377,13 @@ function getUser(req) {
       regulator1: { identityId: 'regulator1', mspId: 'RegulatorMSP', role: 'Regulator' },
     };
 
+    // A header is a claim, not a credential. With no bearer token at all the
+    // caller is anonymous: naming yourself regulator1 in X-Fabric-Identity
+    // used to make you one, which handed a stranger every supervisory route
+    // in the system. Demo mode still trusts the header so local tooling and
+    // the regression suite keep working.
     if (!auth) {
+      if (!DEMO_AUTH) return ANONYMOUS_USER;
       const mapped = roleMap[(fabricHeader || '').toLowerCase()];
       return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
     }
@@ -1377,7 +1393,12 @@ function getUser(req) {
       const payload = decodeToken(token);
       if (payload) {
         if (payload.clerk) {
-          const mapped = roleMap[(fabricHeader || '').toLowerCase()];
+          // A signed-in person may say which of their own identities they are
+          // acting as, but not promote themselves: supervisory identities come
+          // from a Clerk claim, never from a header the browser controls.
+          const claimed = roleMap[(fabricHeader || '').toLowerCase()];
+          const mapped = claimed && (DEMO_AUTH || !SUPERVISORY_IDENTITIES.has(claimed.identityId))
+            ? claimed : null;
           if (mapped) return { ...mapped, clerkId: payload.sub, clerk: true };
           if (payload.fabricIdentity && roleMap[payload.fabricIdentity.toLowerCase()]) {
             return { ...roleMap[payload.fabricIdentity.toLowerCase()], clerkId: payload.sub, clerk: true };
@@ -1388,10 +1409,16 @@ function getUser(req) {
       }
     } catch {}
 
+    // A bearer token was sent and could not be verified. That is a failed
+    // sign-in, not an anonymous visit, and the header behind it proves
+    // nothing either.
+    if (!DEMO_AUTH) return ANONYMOUS_USER;
     const mapped = roleMap[(fabricHeader || '').toLowerCase()];
     return mapped || { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
   } catch {
-    return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' };
+    return DEMO_AUTH
+      ? { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor' }
+      : ANONYMOUS_USER;
   }
 }
 
@@ -1649,7 +1676,8 @@ export default async function handler(req, res) {
     // A caller is anonymous only with no bearer and no identity header. The
     // header alone is enough here, unlike Express, because the serverless
     // clients (and tests/adminopsserverless) have always identified that way.
-    const hasCredentials = Boolean(req.headers.authorization || req.headers['x-fabric-identity'] || req.headers['x-identity-id']);
+    const hasCredentials = Boolean(req.headers.authorization)
+      || (DEMO_AUTH && Boolean(req.headers['x-fabric-identity'] || req.headers['x-identity-id']));
     // A bank has no session with us. If the callback carries a valid
     // signature it is authenticated by that, and demanding a bearer token on
     // top would make signature auth unusable by the only caller it is for.
