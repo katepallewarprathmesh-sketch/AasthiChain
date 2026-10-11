@@ -49,24 +49,31 @@ the ownership transfer are one atomic operation — both move, or neither does.
 
 <div align="center">
 
-<img src="docs/architecture.png" alt="AasthiChain architecture: Owner, Registrar, Investor and Regulator act through a React web app; a JavaScript edge owns the property register, KYC and the UPI money leg and forwards every settlement call to a Go rail; the rail checks authorisation in front of its mux, moves the e-rupee-W cash leg and the Drunix securities leg atomically, and appends every state change to a hash-chained, Postgres-durable ledger." width="100%">
+<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling and what they may touch; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to." width="100%">
 
 </div>
 
-<sub>Source: [`docs/architecture.svg`](docs/architecture.svg) — edit the SVG, re-export the PNG.</sub>
+<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg)</sub>
 
-**Design rule:** settlement logic is written in **Go**, next to the ledger. The JavaScript layers are
-transport only. If a rule about money lives in JavaScript, that is a bug.
+**Design rule:** every rule about money lives in one place — the settlement core, beside the ledger
+it protects. The layers in front of it carry requests and identity and nothing else. If a rule about
+money can be found anywhere but the core, that is a bug.
 
-The rail is deployed separately from the web app — Vercel serves the site and the edge, Render runs
-the Go rail — so the two can be redeployed, and fail, independently. When the rail cannot be
-reached, the app says *unknown*; it never reports a settlement surface as healthy because it could
-not ask.
+The system is read as four layers:
+
+| Layer | Responsibility |
+|---|---|
+| **Experience** | what each role can see and do, and the public pages anyone may read |
+| **Access** | establishes who is calling, and decides what that caller is entitled to touch |
+| **Settlement** | holds the cash leg and the ownership leg, and moves them as one |
+| **Record** | the append-only history every other layer answers to |
+
+The experience and the settlement core are deployed and scaled independently, so either can be
+replaced or can fail without taking the other with it. When the settlement core cannot be reached,
+the app says *unknown* — it never reports a settlement surface as healthy because it could not ask.
 
 Listing is gated to the **Owner** role, so tokens always mint to the party that holds the asset — an
 Investor can never end up "owning" a property merely by creating the listing.
-
----
 
 ## What you can do
 
@@ -160,43 +167,40 @@ browsable without leaking a cap table.
 validating identity is the one that registered the property.
 
 **Every route answers only to the people it belongs to.** Being signed in is not the same as being
-entitled, so authorisation is enforced in front of the router rather than route by route: an
-anonymous caller gets 401, a stranger gets 403, and a supervisor — regulator or admin — may act for
-someone else where that is genuinely their job. Attribution is always taken from the authenticated
-caller; a name in a request body is a claim, never a fact. Each rule ships with a suite that asserts
-the refused action changed no state.
+entitled. Entitlement is decided centrally rather than route by route, so a new surface is covered
+the day it ships: an unidentified caller is turned away, a stranger is refused, and a supervisor may
+act for someone else only where that is genuinely their job. Who you are is taken from your
+authenticated session — anything a request merely *says* about itself is a claim, not a fact. Every
+rule ships with a test that asserts the refused action changed no state.
 
-**Nothing reaches the ledger around the rules.** The chaincode pipeline declares an endorsement
-policy per function — an originator and a registrar to mint, a regulator to freeze — and the HTTP
-door now enforces it, so no caller can reach the ledger underneath the business rules that sit
-above it.
+**Nothing reaches the record around the rules.** Each operation on the ownership register declares
+who must approve it, and that declaration is enforced at the door, so no caller can reach the
+history underneath the business rules that sit above it.
 
-**A refusal is never a dead end.** Tamper detection seals the rail, which is correct and also
-terminal, so there is a documented way back: a supervisor-only recovery that drops the first
-unverifiable block onward and records every discarded height, the reason, and who authorised it.
-The cure leaves a trace instead of being a quiet edit to a database — it has been exercised once on
-the deployed rail, dropping a single unverifiable block and leaving a `LEDGER_TRUNCATED` record of
-what went and why.
+**A refusal is never a dead end.** Tamper detection stops the rail, which is correct and also
+terminal, so there is a documented, supervised way back that records exactly what was set aside, why,
+and on whose authority. The cure leaves a trace instead of being a quiet edit to a database — it has
+been used once in production, and the record of it is still there to read.
 
 ---
 
-## Authentication
+## Identity
 
-**Sign-in is the only way in.** Production uses **Clerk**, with signatures verified against Clerk's
-published keys. Public routes — the marketplace, the ledger explorer, the calculators and the
-articles — remain open to visitors and crawlers. Money routes require a session.
+**Sign-in is the only way in.** Sessions are issued by a managed identity provider and verified
+against its published signing keys on every request. Public pages — the marketplace, the ledger
+explorer, the calculators and the articles — stay open to visitors and crawlers. Anything that
+touches money or a holding needs a session.
 
-Demo role buttons are gone: the entry points are removed from the production bundle, old sessions
-are evicted on load, and the development login endpoint stays closed unless explicitly enabled.
+**Saying who you are is not the same as proving it.** A request can state which of *your own*
+identities you are acting as; it can never establish that you are someone else, and a supervisory
+role can never be asserted this way at all. Without a verifiable session the caller is treated as
+anonymous and protected surfaces simply refuse.
 
-**An identity header is a claim, not a credential.** `X-Fabric-Identity` says which of your own
-identities you are acting as; it cannot establish that you are anyone. With no verifiable session
-the caller is anonymous and protected routes answer 401, and a supervisory identity — registrar or
-regulator — can never be assumed from a header at all. Demo mode is the single exception, which is
-why it must stay off in production.
+Demo role switching is not part of the production build: the entry points are stripped, old sessions
+are evicted on load, and the development-only path stays closed unless an operator deliberately
+opens it.
 
-> **Operational note:** leave `DEMO_AUTH` **unset** in production, and set `CLERK_ISSUER` to your
-> Clerk Frontend API URL so anything unverifiable fails closed.
+Deployment and configuration are documented in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ---
 
@@ -223,42 +227,27 @@ Explainers: [Demat 2.0](https://aasthi-chain.vercel.app/learn/what-is-demat-2) �
 ## Quick start
 
 ```bash
-# 1 — frontend only (no Go, no Docker)
-cd frontend && npm install && npm run dev        # :5173
-
-# 2 — with the Go settlement rail
-cd drunix-gateway && go run ./cmd/gateway                       # :21100
-DEMO_AUTH=true UMI_GATEWAY_URL=http://localhost:21100 node server.js  # :8080
-
-# 3 — everything, including the Fabric network
-cd network && docker-compose up -d && ./scripts/create-channel.sh
+make umi          # run the settlement core locally
+make frontend     # run the web app against it
+make test         # the test suites
 ```
 
-Or `make umi`.
+Each piece can also be run on its own — the web app without the settlement core, the core without
+the Fabric network — which is useful when working on one layer at a time. Those commands, and what
+each process expects, are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-```bash
-bash regression.sh        # 88 checks against whichever server is on :8080
-cd drunix-gateway && go test ./...
-```
+**Seeing "Rail offline" on the deployed site?** Expected until the settlement core is deployed and
+the web app is pointed at it; the app is honest about not being able to reach it rather than
+pretending the rail is fine.
 
-**Seeing "Rail offline" on the deployed site?** Expected. Vercel runs only the Node edge; the Go rail
-needs a host. `render.yaml`, `drunix-gateway/Dockerfile` and `drunix-gateway/fly.toml` are included —
-deploy it, then set `UMI_GATEWAY_URL` on Vercel and redeploy.
+### Configuration
 
-### Environment
+The web app, the settlement core and the ledger store are each configured through environment
+variables — identity provider, settlement-core address, database and payment mode. The full list,
+with what each one does and which must never be set in production, is in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-| Variable | Where | Purpose |
-|---|---|---|
-| `VITE_CLERK_PUBLISHABLE_KEY` | Vercel | Clerk auth. Use a `pk_live_` production key. |
-| `UMI_GATEWAY_URL` | Vercel | points the proxy at the Go rail |
-| `DATABASE_URL` | rail host | Postgres — durable blocks. Without it, in-memory. |
-| `UMI_ENABLED`, `UMI_SEED_DEMO`, `DRUNIX_MODE` | rail host | rail configuration |
-| `CLERK_ISSUER` | Vercel | Clerk Frontend API URL. Set it to enforce signature verification. |
-| `ADMIN_DASHBOARD_KEY` | Vercel | private analytics page |
-| `DEMO_AUTH` | — | **leave unset in production** |
-| `NPCI_MODE`, `PAYU_MERCHANT_KEY`, `PAYU_SALT` | local | `mock` · `payu` · `real` |
-
-Credentials are never committed; `.env.payu` is gitignored.
+Credentials are never committed.
 
 ---
 
@@ -267,7 +256,7 @@ Credentials are never committed; `.env.payu` is gitignored.
 
 **Live and real:** the chaincode and its duplicate-deed guard, the hash-chained append-only ledger,
 the Go pipeline, atomic DvP and its rollback, safe retries under concurrency, conservation of money,
-registrar-only title validation, Clerk authentication and Postgres persistence.
+registrar-only title validation, verified sign-in and durable persistence.
 
 **Simulated, and labelled as such:** the NPCI UPI rail (no live credentials exist outside a bank
 partnership), wholesale CBDC wallets (e₹-W is an RBI pilot, not a public API), the UMI rail itself
