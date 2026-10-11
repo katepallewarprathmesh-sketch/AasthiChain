@@ -1503,6 +1503,25 @@ const AUTH_REQUIRED = [
 // Supervisory roles still see everything: that is the regulator's job, and
 // the registrar's for KYC.
 const SUPERVISORY = new Set(['regulator', 'admin']);
+
+// Operational diagnostics describe the deployment, not the business: which
+// storage backend is live, which credentials are configured, the table and
+// index inventory, and how many rows sit in each. Anonymous callers were
+// getting all of it, including the leading characters of the database URL —
+// enough to name the provider and the database user. It is a map of the
+// building handed out at the door. Operators still need it, so it answers to
+// a supervisor session or the ops key, and to nobody else.
+function opsDiagnosticsRefusal(req, user) {
+  const key = (process.env.ADMIN_DASHBOARD_KEY || '').trim();
+  const presented = (req.headers['x-admin-key'] || '').toString();
+  if (key && presented === key) return null;
+  const role = String((user && user.role) || '').toLowerCase();
+  if (SUPERVISORY.has(role)) return null;
+  if (!user || !user.identityId || user.identityId === 'ANONYMOUS_USER') {
+    return { status: 401, body: { error: 'ERR_UNAUTHORIZED', message: 'Deployment diagnostics need an operator session.' } };
+  }
+  return { status: 403, body: { error: 'ERR_NOT_OPERATOR', message: 'Deployment diagnostics are limited to operators.' } };
+}
 const OWNER_SCOPED = [
   ['GET', /^\/api\/kyc\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
   ['PUT', /^\/api\/kyc\/([^\/]+)$/, ['regulator', 'admin', 'registrar']],
@@ -4709,6 +4728,8 @@ export default async function handler(req, res) {
 
     // ============ Persistent DB Config (Phase 4) — Real DB with Postgres + Vercel KV + GitHub ============
     if (path === '/api/db/config' && method === 'GET') {
+      const refusal = opsDiagnosticsRefusal(req, user);
+      if (refusal) return res.status(refusal.status).json(refusal.body);
       try {
         const realMode = realDB.getMode()
         await realDB.init()
@@ -4803,6 +4824,8 @@ export default async function handler(req, res) {
     }
 
     if (path === '/api/db/stats' && method === 'GET') {
+      const refusal = opsDiagnosticsRefusal(req, user);
+      if (refusal) return res.status(refusal.status).json(refusal.body);
       try {
         const realMode = realDB.getMode()
         await realDB.init()
