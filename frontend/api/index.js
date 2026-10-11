@@ -1421,6 +1421,9 @@ const AUTH_REQUIRED = [
   ['GET', /^\/api\/balances\/[^\/]+\/[^\/]+$/],
   ['GET', /^\/api\/transfers\/history$/],
   ['PUT', /^\/api\/kyc\/[^\/]+$/],
+  ['POST', /^\/api\/kyc\/digilocker\/init$/],
+  ['POST', /^\/api\/kyc\/digilocker\/callback$/],
+  ['POST', /^\/api\/kyc\/digilocker\/pull-document$/],
   ['GET', /^\/api\/kyc\/[^\/]+$/],
   ['POST', /^\/api\/payments\/confirm$/],
   ['POST', /^\/api\/transfers\/failure-demo$/],
@@ -1496,6 +1499,27 @@ function ownershipViolation(method, path, user) {
     return subject;
   }
   return null;
+}
+
+// The DigiLocker routes name their subject in the body, not the URL, so the
+// table above never saw them: anyone could run the flow for any identityId
+// and come out the other side with that person marked KYC VERIFIED, a block
+// anchored in their name, and their documents readable. A registrar does
+// verify other people's KYC, which is the job, so they stay allowed.
+const KYC_BODY_SUBJECT = new Set([
+  '/api/kyc/digilocker/init',
+  '/api/kyc/digilocker/callback',
+  '/api/kyc/digilocker/pull-document',
+]);
+
+function kycSubjectViolation(method, path, body, user) {
+  if (method !== 'POST' || !KYC_BODY_SUBJECT.has(path)) return null;
+  const subject = String((body && body.identityId) || '').trim();
+  if (!subject) return null; // the handler answers 400
+  if (user && subject === user.identityId) return null;
+  const role = String((user && user.role) || '').toLowerCase();
+  if (role === 'registrar' || SUPERVISORY.has(role)) return null;
+  return subject;
 }
 
 // A payment belongs to the signed-in caller who created it. A supervisor may
@@ -1655,6 +1679,14 @@ export default async function handler(req, res) {
       return res.status(403).json({
         error: 'ERR_NOT_YOUR_PAYMENT',
         message: `Payment ${notYourPayment} belongs to someone else.`,
+      });
+    }
+
+    const notYourKyc = kycSubjectViolation(method, path, req.body, user);
+    if (notYourKyc) {
+      return res.status(403).json({
+        error: 'ERR_NOT_YOUR_KYC',
+        message: `KYC for ${notYourKyc} is theirs to complete. Registrars may verify on someone's behalf.`,
       });
     }
 

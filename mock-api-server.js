@@ -210,7 +210,7 @@ function authMiddleware(req, res, next) {
   // each route so a new owner-scoped route cannot forget it.
   return authenticate(req, res, () =>
     ownershipGate(req, res, () =>
-      paymentGate(req, res, () => webhookGate(req, res, () => bodyPaymentGate(req, res, next)))));
+      paymentGate(req, res, () => webhookGate(req, res, () => bodyPaymentGate(req, res, () => kycSubjectGate(req, res, next))))));
 }
 
 function authenticate(req, res, next) {
@@ -361,6 +361,28 @@ function paymentGate(req, res, next) {
   return res.status(403).json({
     error: 'ERR_NOT_YOUR_PAYMENT',
     message: `Payment ${pay.paymentId} belongs to someone else.`,
+  });
+}
+
+// Mirrors kycSubjectViolation in frontend/api/index.js: the DigiLocker routes
+// name whose KYC it is in the body, where the URL-keyed table cannot see it.
+const KYC_BODY_SUBJECT = new Set([
+  '/api/kyc/digilocker/init',
+  '/api/kyc/digilocker/callback',
+  '/api/kyc/digilocker/pull-document',
+]);
+
+function kycSubjectGate(req, res, next) {
+  if (req.method !== 'POST' || !KYC_BODY_SUBJECT.has(req.path)) return next();
+  const subject = String((req.body && req.body.identityId) || '').trim();
+  if (!subject) return next();
+  const self = req.user && req.user.identityId;
+  if (subject === self) return next();
+  const role = String((req.user && req.user.role) || '').toLowerCase();
+  if (role === 'registrar' || SUPERVISORY.has(role)) return next();
+  return res.status(403).json({
+    error: 'ERR_NOT_YOUR_KYC',
+    message: `KYC for ${subject} is theirs to complete. Registrars may verify on someone's behalf.`,
   });
 }
 
