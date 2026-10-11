@@ -467,3 +467,47 @@ func TestNotificationFeedsArePrivateToTheirOwner(t *testing.T) {
 	check(http.MethodPost, "/umi/notifications/investor1/read-all", "investor1", "Investor", http.StatusOK)
 	check(http.MethodGet, "/umi/notifications/investor1", "regulator1", "Regulator", http.StatusOK)
 }
+
+// Analytics is a participant's whole financial picture; ISIN assignment and
+// raw ledger submission both write blocks.
+func TestPrivateAnalyticsIsinAndRawSubmitAreScoped(t *testing.T) {
+	srv := newTestServerWithUMI(t)
+	const asset = "PROP-ISIN-AUTHZ"
+	if _, err := srv.UMI.SeedPosition(asset, "originator1", 100, 100); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	call := func(method, path, identity, role, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if identity != "" {
+			req.Header.Set("X-Fabric-Identity", identity)
+			req.Header.Set("X-Identity-Role", role)
+		}
+		srv.Router().ServeHTTP(rec, req)
+		return rec
+	}
+	want := func(name string, rec *httptest.ResponseRecorder, code int) {
+		t.Helper()
+		if rec.Code != code {
+			t.Errorf("%s = %d, want %d: %s", name, rec.Code, code, rec.Body.String())
+		}
+	}
+
+	// The market-wide view is aggregate and stays open.
+	want("rail analytics anonymous", call(http.MethodGet, "/umi/analytics", "", "", ""), http.StatusOK)
+	want("someone's analytics anonymous", call(http.MethodGet, "/umi/analytics/investor1", "", "", ""), http.StatusUnauthorized)
+	want("someone else's analytics", call(http.MethodGet, "/umi/analytics/investor1", "investor2", "Investor", ""), http.StatusForbidden)
+	want("own analytics", call(http.MethodGet, "/umi/analytics/investor1", "investor1", "Investor", ""), http.StatusOK)
+	want("supervisor reads analytics", call(http.MethodGet, "/umi/analytics/investor1", "regulator1", "Regulator", ""), http.StatusOK)
+
+	isin := `{"assetId":"` + asset + `","issuer":"originator1","depository":"NSDL"}`
+	want("isin anonymous", call(http.MethodPost, "/umi/isin", "", "", isin), http.StatusUnauthorized)
+	want("isin by a stranger", call(http.MethodPost, "/umi/isin", "investor2", "Investor", isin), http.StatusForbidden)
+	want("isin by the holder", call(http.MethodPost, "/umi/isin", "originator1", "Originator", isin), http.StatusOK)
+
+	raw := `{"chaincode":"aasthichain","function":"TransferTokens","args":["` + asset + `","originator1","investor2","100"],"creatorMsp":"InvestorMSP"}`
+	want("raw submit anonymous", call(http.MethodPost, "/drunix/submit", "", "", raw), http.StatusUnauthorized)
+	want("raw submit by an investor", call(http.MethodPost, "/drunix/submit", "investor2", "Investor", raw), http.StatusForbidden)
+	want("raw submit by a supervisor", call(http.MethodPost, "/drunix/submit", "regulator1", "Regulator", raw), http.StatusCreated)
+}

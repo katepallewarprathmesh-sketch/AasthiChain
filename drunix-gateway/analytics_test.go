@@ -313,7 +313,11 @@ func TestAnalyticsEndpointsRespond(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/umi/analytics/investor1", nil))
+	// A participant's own performance is private; read it as that participant.
+	invReq := httptest.NewRequest(http.MethodGet, "/umi/analytics/investor1", nil)
+	invReq.Header.Set("X-Fabric-Identity", "investor1")
+	invReq.Header.Set("X-Identity-Role", "Investor")
+	h.ServeHTTP(rec, invReq)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("investor analytics returned %d: %s", rec.Code, rec.Body.String())
 	}

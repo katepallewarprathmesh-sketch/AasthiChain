@@ -30,6 +30,7 @@ chk "GET /api/chain/verify after transfer" 200 "$(code $API/api/chain/verify)"
 V=$(curl -s $API/api/chain/verify | python3 -c "import json,sys;print(json.load(sys.stdin)['valid'])")
 chk "legacy chain still valid"   True "$V"
 
+RAIL_ID=(-H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator')
 echo "== existing Go gateway (must be untouched) =="
 chk "GET /health"                200 "$(code $GW/health)"
 chk "GET /drunix/ledger/status"  200 "$(code $GW/drunix/ledger/status)"
@@ -46,7 +47,6 @@ echo "== UMI rail =="
 # The rail checks who is asking before it moves anyone's money. The harness
 # speaks to it as the settlement supervisor.
 
-RAIL_ID=(-H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator')
 chk "GET  /api/umi/config"        200 "$(code $API/api/umi/config)"
 # Seed a fresh asset per run. Re-seeding the demo asset returned 409
 # SUPPLY_EXCEEDED on the second sweep against a long-lived rail, because the

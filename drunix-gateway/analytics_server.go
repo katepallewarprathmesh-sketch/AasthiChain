@@ -72,6 +72,16 @@ func (s *Server) handleInvestorAnalytics(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
+	// One participant's analytics is their net worth, cash balance, realised
+	// and unrealised P&L and how concentrated they are. The market-wide view
+	// above is aggregate and stays public; this one is not.
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
+	if !umiRequireSelfOrSupervisor(w, caller, participant, "Reading a participant's performance") {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"analytics":  s.UMI.Analytics(participant),
 		"mode":       UMIMode,

@@ -268,6 +268,18 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
 		return
 	}
+	// This writes straight to the ledger, bypassing every business rule the
+	// rail enforces above it — a stranger could post a token transfer here
+	// and have it committed. It is an operator tool, so operators only.
+	caller := callerOf(r)
+	if !umiRequireIdentity(w, caller) {
+		return
+	}
+	if !caller.supervisor() {
+		umiErr(w, http.StatusForbidden, "ERR_NOT_SUPERVISORY",
+			"Submitting a transaction straight to the ledger is a supervisory action. Use the rail routes instead.")
+		return
+	}
 	rec, err := s.Ledger.SubmitTransaction(body.Chaincode, body.Function, body.Args, body.CreatorMSP)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})

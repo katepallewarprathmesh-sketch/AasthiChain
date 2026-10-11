@@ -272,6 +272,12 @@ func (s *Server) handleUMIISIN(w http.ResponseWriter, r *http.Request) {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
 		return
 	}
+	// An ISIN is the asset's identity in the depository, and assigning one
+	// commits a block. Only people with a stake in the asset may name it.
+	caller := callerOf(r)
+	if !umiRequireAssetStake(w, caller, body.AssetID, s.UMI.PositionOf) {
+		return
+	}
 	rec, blk, err := s.UMI.AssignISIN(body.AssetID, body.Issuer, body.Depository)
 	if err != nil {
 		umiErr(w, http.StatusBadRequest, err.Error(), "assetId required")

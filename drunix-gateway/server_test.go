@@ -21,7 +21,11 @@ func TestServerEndpoints(t *testing.T) {
 	// submit
 	r = httptest.NewRecorder()
 	body := `{"chaincode":"aasthichain","function":"SettleDvP","args":["PAY-9","UTR-9","PROP-1","originator1","investor1"],"creatorMsp":"InvestorMSP"}`
-	h.ServeHTTP(r, httptest.NewRequest("POST", "/drunix/submit", strings.NewReader(body)))
+	// Raw ledger submission is supervisory.
+	submitReq := httptest.NewRequest("POST", "/drunix/submit", strings.NewReader(body))
+	submitReq.Header.Set("X-Fabric-Identity", "regulator1")
+	submitReq.Header.Set("X-Identity-Role", "Regulator")
+	h.ServeHTTP(r, submitReq)
 	if r.Code != 201 {
 		t.Fatalf("submit: %d %s", r.Code, r.Body.String())
 	}
