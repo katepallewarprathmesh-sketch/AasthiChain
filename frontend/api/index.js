@@ -9,6 +9,7 @@ import { realDB } from './lib/db_real.js';
 // INSIDE the Vercel project root (frontend/) and actually gets bundled.
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
 import { recordHit, trafficSummary } from './lib/traffic.mjs';
+import { validateChatRequest, rateLimit as aiRateLimit, buildPropertyContext, askGroq, isConfigured as aiConfigured, LIMITS as AI_LIMITS } from './lib/ai.mjs';
 import { authStore, verificationLockedOut } from './lib/authstore.js';
 import { ensureClerkKeys, verifyClerkJWT, clerkVerificationEnabled, hasUnknownKid } from './lib/clerkjwt.mjs';
 
@@ -943,6 +944,30 @@ const governance = (typeof globalThis !== 'undefined' && globalThis._aasthi_gov)
 const creditLoans = (typeof globalThis !== 'undefined' && globalThis._aasthi_loans) || {};
 if (typeof globalThis !== 'undefined') { globalThis._aasthi_yield = yieldBalances; globalThis._aasthi_gov = governance; globalThis._aasthi_loans = creditLoans; }
 function drunixTokenPrice(assetId) { const p = properties[assetId]; return p && p.totalTokens ? Math.floor(p.valuationINR / p.totalTokens) : 0; }
+// The public listing view. Economics are DERIVED from live balances, never
+// stored, so a listing cannot disagree with the ledger about what is actually
+// left. Hoisted out of the route because the AI assistant must quote exactly
+// these numbers rather than compute its own — a second implementation would
+// eventually disagree with the page, and the assistant would be wrong in a
+// way nobody noticed.
+function publicPropertyView(p) {
+  const held = Object.values(balances).filter(b => b.assetId === p.assetId && Number(b.balance) > 0);
+  const ownerBal = held.find(b => b.ownerId === p.originatorId);
+  const available = ownerBal ? Math.max(0, Number(ownerBal.balance)) : 0;
+  const total = Number(p.totalTokens) || 0;
+  const sold = Math.max(0, total - available);
+  const price = Number(p.pricePerTokenINR) || (total ? p.valuationINR / total : 0);
+  return {
+    ...p, subscription: subscriptionOf(p),
+    pricePerTokenINR: Math.round(price * 100) / 100,
+    tokensAvailable: available, tokensSold: sold,
+    fundedPct: total ? Math.round((sold / total) * 1000) / 10 : 0,
+    holderCount: held.filter(b => b.ownerId !== p.originatorId).length,
+    minInvestmentINR: Math.round(price * 100) / 100,
+    annualRentPerTokenINR: Math.round(price * ((Number(p.expectedYieldPct) || 0) / 100) * 100) / 100,
+  };
+}
+
 function drunixLockedTokens(assetId, identityId) { let l = 0; for (const L of Object.values(creditLoans)) if (L.status === 'ACTIVE' && L.assetId === assetId && L.identityId === identityId) l += parseInt(L.tokens); return l; }
 function drunixNav(identityId) {
   const holdings = []; let assetsValue = 0;
@@ -3258,6 +3283,59 @@ export default async function handler(req, res) {
     // Who the server thinks you are. The browser used to decide this for
     // itself and put the answer in a header, which is how everyone ended up
     // as investor1. It should ask instead.
+    // POST /api/ai/chat — Aasthi AI.
+    //
+    // Reads only. It is given the same public listing view the marketplace
+    // renders and cannot see anything owner-scoped, so there is nothing
+    // private for it to leak and nothing for it to act on. See lib/ai.mjs.
+    if (path === '/api/ai/chat') {
+      if (method !== 'POST') {
+        return res.status(405).json({ error: 'ERR_METHOD_NOT_ALLOWED', message: 'Use POST.' });
+      }
+      if (!aiConfigured()) {
+        return res.status(503).json({
+          error: 'ERR_AI_NOT_CONFIGURED',
+          message: 'The assistant is not switched on for this deployment. Set GROQ_API_KEY to enable it.',
+        });
+      }
+
+      // The listings this answers questions about are public, so the
+      // assistant is too by default. A deployment that would rather pay for
+      // its own users only can set AI_REQUIRE_SIGNIN=true.
+      const anonymous = !user || !user.identityId || user.identityId === 'ANONYMOUS_USER';
+      if (String(process.env.AI_REQUIRE_SIGNIN || '').toLowerCase() === 'true' && anonymous) {
+        return res.status(401).json({ error: 'ERR_UNAUTHORIZED', message: 'Sign in to ask the assistant.' });
+      }
+
+      const invalid = validateChatRequest(req.body);
+      if (invalid) return res.status(invalid.status).json(invalid.body);
+
+      // Signed-in people get their own budget; everyone else shares one per
+      // address, so one visitor cannot spend the allowance of the next.
+      const callerKey = anonymous
+        ? `ip:${String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown').split(',')[0].trim()}`
+        : `id:${user.identityId}`;
+      const limited = aiRateLimit(callerKey);
+      if (limited) {
+        res.setHeader('Retry-After', String(limited.body.retryAfterSeconds || 60));
+        return res.status(limited.status).json(limited.body);
+      }
+
+      const context = buildPropertyContext(Object.values(properties).map(publicPropertyView));
+      const answer = await askGroq({ messages: req.body.messages, propertyContext: context });
+      return res.status(answer.status).json(answer.body);
+    }
+
+    // GET /api/ai/status — whether the assistant exists here, so the UI can
+    // stay out of the way on deployments without a key.
+    if (path === '/api/ai/status' && method === 'GET') {
+      return res.json({
+        enabled: aiConfigured(),
+        requiresSignIn: String(process.env.AI_REQUIRE_SIGNIN || '').toLowerCase() === 'true',
+        limits: { maxMessageChars: AI_LIMITS.maxMessageChars, requestsPerMinute: AI_LIMITS.requestsPerWindow },
+      });
+    }
+
     if (path === '/api/auth/me' && method === 'GET') {
       const anonymous = !user || !user.identityId || user.identityId === 'ANONYMOUS_USER';
       if (anonymous) {
@@ -3664,25 +3742,7 @@ export default async function handler(req, res) {
     }
     if (path === '/api/properties' && method === 'GET') {
       try {
-        // Economics are DERIVED from live balances, never stored, so a listing
-        // cannot disagree with the ledger about what is actually left.
-        const view = (p) => {
-          const held = Object.values(balances).filter(b => b.assetId === p.assetId && Number(b.balance) > 0);
-          const ownerBal = held.find(b => b.ownerId === p.originatorId);
-          const available = ownerBal ? Math.max(0, Number(ownerBal.balance)) : 0;
-          const total = Number(p.totalTokens) || 0;
-          const sold = Math.max(0, total - available);
-          const price = Number(p.pricePerTokenINR) || (total ? p.valuationINR / total : 0);
-          return {
-            ...p, subscription: subscriptionOf(p),
-            pricePerTokenINR: Math.round(price * 100) / 100,
-            tokensAvailable: available, tokensSold: sold,
-            fundedPct: total ? Math.round((sold / total) * 1000) / 10 : 0,
-            holderCount: held.filter(b => b.ownerId !== p.originatorId).length,
-            minInvestmentINR: Math.round(price * 100) / 100,
-            annualRentPerTokenINR: Math.round(price * ((Number(p.expectedYieldPct) || 0) / 100) * 100) / 100,
-          };
-        };
+        const view = publicPropertyView;
         const q = (k) => url.searchParams.get(k);
         let list = Object.values(properties).map(view);
         if (q('status')) list = list.filter(p => p.status === q('status'));

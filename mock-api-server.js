@@ -3306,6 +3306,43 @@ function ageMins(ts) {
 }
 
 // Who the server thinks you are. The browser used to decide this for itself.
+// Aasthi AI. The rules, the validation and the grounding all live in
+// frontend/api/lib/ai.mjs so this rig and the serverless handler cannot
+// drift. It is ESM, hence the dynamic import.
+const aiLib = () => import('./frontend/api/lib/ai.mjs');
+
+app.get('/api/ai/status', async (req, res) => {
+  const ai = await aiLib();
+  res.json({
+    enabled: ai.isConfigured(),
+    requiresSignIn: String(process.env.AI_REQUIRE_SIGNIN || '').toLowerCase() === 'true',
+    limits: { maxMessageChars: ai.LIMITS.maxMessageChars, requestsPerMinute: ai.LIMITS.requestsPerWindow },
+  });
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+  const ai = await aiLib();
+  if (!ai.isConfigured()) {
+    return res.status(503).json({
+      error: 'ERR_AI_NOT_CONFIGURED',
+      message: 'The assistant is not switched on for this deployment. Set GROQ_API_KEY to enable it.',
+    });
+  }
+  const invalid = ai.validateChatRequest(req.body);
+  if (invalid) return res.status(invalid.status).json(invalid.body);
+
+  const key = `ip:${String(req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim()}`;
+  const limited = ai.rateLimit(key);
+  if (limited) {
+    res.setHeader('Retry-After', String(limited.body.retryAfterSeconds || 60));
+    return res.status(limited.status).json(limited.body);
+  }
+
+  const context = ai.buildPropertyContext(Object.values(properties).map(marketplaceView));
+  const answer = await ai.askGroq({ messages: req.body.messages, propertyContext: context });
+  res.status(answer.status).json(answer.body);
+});
+
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({
     identityId: req.user.identityId,

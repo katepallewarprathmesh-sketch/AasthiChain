@@ -44,6 +44,10 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | `ADMIN_DASHBOARD_KEY` | web app | operator key: private analytics, ops queue, deployment diagnostics |
 | `SUPERVISOR_EMAILS` | web app | comma-separated emails allowed to act as registrar/regulator |
 | `IDENTITY_ALIASES` | web app | pin named people to an existing ledger identity, e.g. `you@example.com=investor1` |
+| `GROQ_API_KEY` | web app | enables Aasthi AI. Without it the assistant is off and the launcher does not render |
+| `GROQ_MODEL` | web app | optional, defaults to `llama-3.3-70b-versatile` |
+| `GROQ_BASE_URL` | web app | optional, point the client at a proxy instead of api.groq.com |
+| `AI_REQUIRE_SIGNIN` | web app | optional, `true` restricts the assistant to signed-in people |
 | `SUPERVISOR_CLERK_IDS` | web app | same, by Clerk user id (`user_…`) |
 
 ### Getting into the operator panels
@@ -58,6 +62,31 @@ insights dashboard. There are two supported ways in, both checked on the server:
    **The key reads; it does not act.** Anything that changes state needs a signed-in person, so
    the action has a name against it — the two exceptions are the idempotent maintenance routes
    `/api/npci/rail/backfill` and `/api/db/migrate`.
+### Aasthi AI
+
+A Groq-backed assistant that answers questions about the properties listed on the deployment.
+Set `GROQ_API_KEY` to switch it on; with no key the endpoint answers 503 saying so and the
+floating launcher never renders, so a deployment without a key simply does not have the
+feature rather than having a broken one.
+
+What it can and cannot do, by construction:
+
+- It is given the **public listing view** — the same figures the marketplace renders, derived
+  from live balances. It never sees holdings, payments, KYC records or identities, because
+  nothing owner-scoped is in that view.
+- It **cannot act**. There are no tool calls. It cannot mint, transfer, approve, release or
+  reclassify anything; the ledger and the settlement core remain the only things that decide
+  what is true.
+- Every figure it quotes is computed by `publicPropertyView`, the same function behind
+  `GET /api/properties`, so the assistant and the page cannot disagree.
+- A caller cannot inject a `system` message, so the rules above cannot be argued away.
+- Rate limited per signed-in identity, or per address for anonymous visitors, defaulting to
+  12 requests a minute. This is in-memory and therefore per instance: a courtesy brake, not a
+  security control.
+
+`GET /api/ai/status` reports whether it is enabled. `POST /api/ai/chat` takes
+`{ messages: [{ role: 'user' | 'assistant', content: string }] }`.
+
 ### Who a signed-in person is
 
 Each signed-in person resolves to their own ledger identity, derived from their Clerk

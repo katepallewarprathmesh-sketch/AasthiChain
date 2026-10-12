@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import NotificationBell from './components/NotificationBell.jsx'
+const AasthiAI = lazy(() => import('./components/AasthiAI.jsx'))
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { trackPageview } from './lib/track'
 import { checkFreshness } from './lib/freshness'
@@ -549,6 +550,9 @@ function AppContent({ user, setUser }) {
         </Suspense>
       </main>
       <Footer />
+      {/* Floats above everything, hides itself on deployments with no
+          assistant configured. Lazy so it costs nothing on first paint. */}
+      <Suspense fallback={null}><AasthiAI /></Suspense>
     </ErrorBoundary>
   )
 }
