@@ -134,33 +134,53 @@ jobs:
           echo "stack did not come up" >&2
           exit 1
 
-      - name: Document register
-        env:
-          ADMIN_DASHBOARD_KEY: devkey
-        run: node tests/documents.test.mjs
-
-      - name: Secondary market
-        run: node tests/secondarymarket.test.mjs
-
-      - name: Supply conservation
-        run: node tests/supplyconservation.test.mjs
-
-      - name: Metrics, notifications and the ledger stream
+      # The PayU callback suites need a gateway in payu mode with known test
+      # credentials, on its own port. Started here, stopped below.
+      - name: Boot the PayU callback rig
         run: |
-          node tests/metrics.test.mjs
-          node tests/notifications.test.mjs
-          node tests/ledgerstream.test.mjs
+          NPCI_MODE=payu PAYU_MERCHANT_KEY=testkey PAYU_SALT=testsalt \
+          PAYU_BASE_URL=https://test.payu.in/_payment \
+          ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=http://localhost:21100 \
+          PORT=8099 node mock-api-server.js >/tmp/payu-rig.log 2>&1 &
+          echo $! > /tmp/payu.pid
+          for i in $(seq 1 40); do
+            curl -fsS localhost:8099/api/health >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo "payu rig did not come up" >&2
+          exit 1
 
-      - name: Admin operations
+      # Suites are discovered, not listed. This job used to name eight of them
+      # by hand while tests/ grew past fifty, so most of the authorisation and
+      # scope work was never covered here at all — it only ran locally through
+      # regression.sh. A new file in tests/ is now in CI the moment it exists.
+      #
+      # The Solidity and IPFS suites are the exception: they need solc, a
+      # local EVM chain and the reference hasher, which only the contracts
+      # job installs. Running them here would just make them skip.
+      - name: Every suite in tests/
         env:
           ADMIN_DASHBOARD_KEY: devkey
-        run: node tests/adminops.test.mjs
+        run: |
+          skip="contracts cidconformance evmmirror"
+          failed=""
+          for f in tests/*.test.mjs; do
+            name="$(basename "$f" .test.mjs)"
+            case " $skip " in *" $name "*) echo "-- $name (covered by the contracts job)"; continue;; esac
+            echo "== $name"
+            if ! node "$f"; then failed="$failed $name"; fi
+          done
+          if [ -n "$failed" ]; then
+            echo "Failed suites:$failed" >&2
+            exit 1
+          fi
 
       - name: Stop the stack
         if: always()
         run: |
           kill "$(cat /tmp/app.pid)" 2>/dev/null || true
           kill "$(cat /tmp/rail.pid)" 2>/dev/null || true
+          kill "$(cat /tmp/payu.pid)" 2>/dev/null || true
 
   contracts:
     name: Solidity and IPFS conformance
