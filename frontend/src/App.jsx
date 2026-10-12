@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react'
 import NotificationBell from './components/NotificationBell.jsx'
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import { trackPageview } from './lib/track'
+import { checkFreshness } from './lib/freshness'
 import { applySeo } from './lib/seo'
 
 // Error Boundary to catch blank screen errors shows error instead of blank per §1.4 voice
@@ -364,6 +365,16 @@ function AppContent({ user, setUser }) {
   useEffect(() => { setInternalUser(user) }, [user])
 
   useEffect(() => { prefetchLikelyRoutes() }, [])
+
+  // A tab left open through a deployment keeps running the old bundle, so
+  // people see screens that were fixed hours ago. Check once on load, and
+  // again whenever the tab is brought back to the front.
+  useEffect(() => {
+    checkFreshness()
+    const onVisible = () => { if (document.visibilityState === 'visible') checkFreshness() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
 
   // First-party pageview beacon. Fires on every route change; silent, honours
   // Do Not Track, and cannot throw into the render path.

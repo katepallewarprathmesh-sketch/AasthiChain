@@ -1,7 +1,18 @@
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Stamp the build into the bundle so a tab can tell whether the code it is
+// running is the code the server is serving. Vercel exposes the commit as an
+// env var; locally we ask git.
+function buildStamp() {
+  const fromEnv = process.env.VERCEL_GIT_COMMIT_SHA || process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT
+  if (fromEnv) return String(fromEnv).slice(0, 12)
+  try { return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim().slice(0, 12) } catch { return 'dev' }
+}
+
 export default defineConfig({
+  define: { __BUILD_STAMP__: JSON.stringify(buildStamp()) },
   plugins: [react()],
   build: {
     target: 'es2020',
