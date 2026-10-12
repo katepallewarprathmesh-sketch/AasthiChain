@@ -66,6 +66,16 @@ Every property page carries a verification panel that answers, in plain language
 You can prove your own copy of the deed matches the one on the ledger without uploading anything:
 hash the file locally and paste the result.
 
+### Ask the assistant
+
+A question box on the site answers questions about how any of this works and what is currently
+listed — what a token costs, which property is cheapest, what a registrar validation means. It is
+given the same public listing information a visitor can already see, and nothing else: asked who
+holds what, it refuses and points at the public ledger view. Asked about a property that does not
+exist, it says so instead of inventing one. It can answer, and that is all it can do — it has no
+way to move a token, a rupee or a document. Where it is not configured, it is simply absent, not a
+button that fails.
+
 ### Hold many properties as one unit
 
 A **basket** is a single tradeable unit backed by a fixed recipe of several properties — two tokens
@@ -147,6 +157,12 @@ regulator's job, and nowhere else.
 **A reference is not a key.** A bank reference shared on a receipt proves the payment happened. It
 does not reveal who else was involved, and it does not open a door to anything further.
 
+**A pause means paused.** When a supervisor halts trading in a property, the halt is written down
+before the answer comes back, so it is still in force on the next request and after a restart, and
+it applies to every route that could move those tokens rather than the most obvious one — a longer
+way round is not a way round. The same authority can lift it, which returns the property to exactly
+the state it was in beforehand; both the halt and the lift are part of the permanent record.
+
 **Nothing gets to the record around the rules.** Every change to ownership has to pass the same
 approvals whichever way it is attempted, so there is no quieter path to the same result.
 
@@ -201,7 +217,9 @@ How it fits together, how to run it, and every configuration switch:
 
 **Live and real:** the ownership rules and their duplicate-deed guard, the append-only record,
 atomic settlement and its rollback, safe retries under concurrency, conservation of money,
-independent title validation, verified sign-in and durable storage.
+independent title validation, verified sign-in, the supervisory halt and the way back from it, and
+durable storage. The assistant is live, and its limits — public data only, no ability to act — are
+enforced on the server rather than requested of the model.
 
 **Simulated, and labelled as such:** the national payments rail (no live credentials exist outside
 a bank partnership), the wholesale CBDC wallets (e₹-W is an RBI pilot, not a public API), the UMI
