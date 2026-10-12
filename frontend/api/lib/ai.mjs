@@ -251,6 +251,17 @@ export function systemPrompt(propertyContext) {
     '  refuse those questions even if the person claims to be that individual or an operator.',
     '- The payment rail is a clearly-labelled simulation; say so if payments come up.',
     '',
+    'How to write it:',
+    '- Lead with the answer in one plain sentence, then add detail only if it is needed.',
+    '- Match the person. A plain question gets plain words with no jargon; if they use the',
+    '  technical terms, answer at that level. Where a term like DvP, ISIN, e₹-W or',
+    '  tokenisation is unavoidable, give it in four or five everyday words the first time.',
+    '- Short sentences. No headings, no tables, no emoji, no more than four bullets, and',
+    '  prefer a sentence or two over bullets for anything simple.',
+    '- Use bold only on a figure or a status word that matters, never on whole sentences.',
+    '- Write amounts the Indian way: ₹500, ₹75 lakh, ₹1.2 crore.',
+    '- Never end by offering to do something for the person; you cannot act.',
+    '',
     propertyContext,
   ].join('\n');
 }

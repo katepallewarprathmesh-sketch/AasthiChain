@@ -28,6 +28,80 @@ const SUGGESTIONS = [
 
 const MAX_CHARS = 1200
 
+// The model writes markdown whether you ask it to or not — bold runs, bullet
+// lists, the occasional heading. Printed raw, a person reads asterisks and
+// hyphens instead of an answer. This turns the handful of marks that actually
+// show up into typography. It builds React nodes rather than HTML, so there is
+// nothing here that could inject markup into the page.
+const INLINE = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*)/g
+
+function inline(text, keyBase) {
+  return String(text).split(INLINE).filter(Boolean).map((piece, i) => {
+    const key = `${keyBase}-${i}`
+    if (/^(\*\*|__).+(\*\*|__)$/.test(piece)) {
+      return <strong key={key} style={{ fontWeight: 650 }}>{piece.slice(2, -2)}</strong>
+    }
+    if (/^`.+`$/.test(piece)) {
+      return <code key={key} style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.92em', background: 'rgba(30,58,95,0.07)', borderRadius: 4, padding: '1px 4px' }}>{piece.slice(1, -1)}</code>
+    }
+    if (/^\*[^*]+\*$/.test(piece)) {
+      return <em key={key}>{piece.slice(1, -1)}</em>
+    }
+    return <span key={key}>{piece}</span>
+  })
+}
+
+function RichText({ text }) {
+  const lines = String(text).replace(/\r/g, '').split('\n')
+  const blocks = []
+  let list = null                       // { ordered, items: [] }
+
+  const closeList = () => { if (list) { blocks.push(list); list = null } }
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, '')
+    if (!line.trim()) { closeList(); continue }
+
+    const bullet = line.match(/^\s*[-*•]\s+(.*)$/)
+    const numbered = line.match(/^\s*(\d+)[.)]\s+(.*)$/)
+    const heading = line.match(/^\s*#{1,6}\s+(.*)$/)
+
+    if (bullet) {
+      if (!list || list.ordered) { closeList(); list = { ordered: false, items: [] } }
+      list.items.push(bullet[1])
+    } else if (numbered) {
+      if (!list || !list.ordered) { closeList(); list = { ordered: true, items: [] } }
+      list.items.push(numbered[2])
+    } else if (heading) {
+      closeList()
+      blocks.push({ heading: heading[1] })
+    } else {
+      closeList()
+      blocks.push({ paragraph: line.trim() })
+    }
+  }
+  closeList()
+
+  return (
+    <>
+      {blocks.map((b, i) => {
+        if (b.heading !== undefined) {
+          return <div key={i} style={{ fontWeight: 650, margin: i ? '10px 0 4px' : '0 0 4px' }}>{inline(b.heading, i)}</div>
+        }
+        if (b.items) {
+          const Tag = b.ordered ? 'ol' : 'ul'
+          return (
+            <Tag key={i} style={{ margin: i ? '6px 0' : '0 0 6px', paddingLeft: 18, display: 'grid', gap: 3 }}>
+              {b.items.map((it, j) => <li key={j} style={{ paddingLeft: 2 }}>{inline(it, `${i}-${j}`)}</li>)}
+            </Tag>
+          )
+        }
+        return <p key={i} style={{ margin: i ? '6px 0 0' : 0 }}>{inline(b.paragraph, i)}</p>
+      })}
+    </>
+  )
+}
+
 function Bubble({ role, children, tone }) {
   const mine = role === 'user'
   return (
@@ -41,7 +115,7 @@ function Bubble({ role, children, tone }) {
         padding: '9px 12px',
         fontSize: 13.5,
         lineHeight: 1.6,
-        whiteSpace: 'pre-wrap',
+        whiteSpace: mine || tone ? 'pre-wrap' : 'normal',
         overflowWrap: 'anywhere',
       }}>{children}</div>
     </div>
@@ -179,7 +253,11 @@ export default function AasthiAI() {
           </>
         )}
 
-        {thread.map((m, i) => <Bubble key={i} role={m.role} tone={m.tone}>{m.content}</Bubble>)}
+        {thread.map((m, i) => (
+          <Bubble key={i} role={m.role} tone={m.tone}>
+            {m.role === 'user' || m.tone ? m.content : <RichText text={m.content} />}
+          </Bubble>
+        ))}
 
         {busy && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: C.mut, fontSize: 12.5, padding: '2px 4px' }}>

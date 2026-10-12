@@ -197,6 +197,27 @@ t('the last message must be from the user',
 }
 
 // ---------------------------------------------------------------------------
+// 3b. The reply has to be readable by whoever asked
+//
+// The panel renders a few marks as typography, but a wall of headings, tables
+// and bolded sentences reads as noise either way — and someone who asked a
+// plain question should not be handed jargon.
+// ---------------------------------------------------------------------------
+{
+  const { systemPrompt: sp } = await import('../frontend/api/lib/ai.mjs');
+  const p = sp('none').toLowerCase();
+  t('the assistant is told to answer in one plain sentence first', p.includes('one plain sentence'));
+  t('the assistant is told to match the asker', p.includes('match the person'));
+  t('the assistant is told to explain jargon the first time',
+    p.includes('everyday words') && p.includes('dvp'));
+  t('the assistant is told to keep the shape simple',
+    p.includes('no headings') && p.includes('no tables'));
+  t('the assistant is told to bold figures, not sentences', p.includes('never on whole sentences'));
+  t('the assistant is told to write amounts the Indian way', p.includes('lakh') && p.includes('crore'));
+  t('the assistant is told not to offer to act', p.includes('never end by offering'));
+}
+
+// ---------------------------------------------------------------------------
 // 4b. When Groq retires the model underneath us
 //
 // This shipped pinned to llama-3.3-70b-versatile, which Groq shut down on
