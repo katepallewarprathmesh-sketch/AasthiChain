@@ -137,11 +137,27 @@ function clearFailedVerifications(identifier) { verificationAttempts.delete(iden
 // An invitation is addressed to someone. Demo identities are not email
 // addresses, so the local part is what we match on: inviting
 // "investor2@anything" invites investor2.
-export function invitationIsFor(inv, userId) {
+// Who an invitation is addressed to.
+//
+// Matching on the local part of the address alone threw the domain away, so
+// an invitation sent to cfo@some-other-company.example was accepted by
+// whoever happened to be identified as "cfo" here. An invitation carries a
+// role, so that was a way to be handed membership — sometimes admin — of an
+// organisation you were never invited to.
+//
+// The order now: an invitation pinned to an identity matches that identity;
+// otherwise the session's verified email must match the invited address in
+// full. The local-part fallback survives only in demo deployments, where
+// identities are literally named investor1 and no email exists at all.
+export function invitationIsFor(inv, userId, opts = {}) {
   if (!inv || !userId) return false
   if (inv.identity_id) return inv.identity_id === userId
-  const local = String(inv.email || '').split('@')[0].toLowerCase()
-  return !!local && local === String(userId).toLowerCase()
+  const invited = String(inv.email || '').trim().toLowerCase()
+  if (!invited) return false
+  const mine = String(opts.email || '').trim().toLowerCase()
+  if (mine) return mine === invited
+  if (!opts.allowLocalPart) return false
+  return invited.split('@')[0] === String(userId).toLowerCase()
 }
 
 export class AuthStore {
@@ -356,11 +372,14 @@ export class AuthStore {
   }
 
   // ===== invitation =====
-  async createInvitation({ organizationId, email, role, invitedBy, expiresInHours = 168 }) {
+  async createInvitation({ organizationId, email, role, invitedBy, identityId = null, expiresInHours = 168 }) {
     await this.init()
     const id = uid('inv')
-    const row = { id, organization_id: organizationId, email: String(email || '').toLowerCase(), role: role || 'member', status: 'pending', expires_at: new Date(Date.now() + expiresInHours * 3600 * 1000), created_at: new Date(), invited_by: invitedBy || null }
+    const row = { id, organization_id: organizationId, email: String(email || '').toLowerCase(), identity_id: identityId || null, role: role || 'member', status: 'pending', expires_at: new Date(Date.now() + expiresInHours * 3600 * 1000), created_at: new Date(), invited_by: invitedBy || null }
     if (this.mode === 'postgres') {
+      // The invitation table has no identity_id column, so a pinned identity
+      // is only honoured by the in-memory store; on postgres the verified
+      // email is the match, which is the stronger check anyway.
       await this.pool.query(`INSERT INTO invitation (id, organization_id, email, role, status, expires_at, invited_by) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [row.id, row.organization_id, row.email, row.role, row.status, row.expires_at, row.invited_by])
     } else {
       this.mem.invitation.set(id, row)
@@ -368,7 +387,7 @@ export class AuthStore {
     return row
   }
 
-  async acceptInvitation(invitationId, userId) {
+  async acceptInvitation(invitationId, userId, opts = {}) {
     await this.init()
     let inv
     if (this.mode === 'postgres') {
@@ -379,8 +398,12 @@ export class AuthStore {
     if (!inv) throw new Error('invitation not found: ' + invitationId)
     // Knowing an invitation id is not the same as having been invited. This
     // lives in the store so both backends and both servers get it.
-    if (!invitationIsFor(inv, userId)) {
-      const err = new Error(`invitation ${invitationId} was issued to ${inv.email}`)
+    if (!invitationIsFor(inv, userId, opts)) {
+      const err = new Error(
+        opts && opts.email
+          ? `This invitation was issued to ${inv.email}, which is not the address you signed in with.`
+          : `This invitation was issued to ${inv.email}. Sign in with that address to accept it.`
+      )
       err.code = 'ERR_NOT_INVITED'
       throw err
     }

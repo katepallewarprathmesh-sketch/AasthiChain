@@ -1424,6 +1424,15 @@ const envList = (name) =>
 // Does this verified session belong to someone the deployment has named as
 // an operator? Checked against the token's own subject and email, never
 // against anything the request merely states.
+function sessionEmail(payload) {
+  if (!payload) return '';
+  const candidates = [
+    payload.email, payload.email_address, payload.primary_email_address,
+    payload.primaryEmailAddress, payload.user_email,
+  ].filter(Boolean);
+  return candidates.length ? String(candidates[0]).toLowerCase() : '';
+}
+
 function sessionIsOperator(payload) {
   if (!payload) return false;
   const ids = envList('SUPERVISOR_CLERK_IDS');
@@ -1494,16 +1503,16 @@ function getUser(req) {
           const entitled = DEMO_AUTH || operator || sessionIsOperator(payload);
           const mapped = claimed && (entitled || !SUPERVISORY_IDENTITIES.has(claimed.identityId))
             ? claimed : null;
-          if (mapped) return { ...mapped, clerkId: payload.sub, clerk: true, operatorKey: operator || undefined };
+          if (mapped) return { ...mapped, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, operatorKey: operator || undefined };
           // No identity asked for, but the session itself carries one.
           const fromClaim = roleMap[sessionRoleClaim(payload)];
-          if (fromClaim) return { ...fromClaim, clerkId: payload.sub, clerk: true };
+          if (fromClaim) return { ...fromClaim, clerkId: payload.sub, email: sessionEmail(payload), clerk: true };
           if (entitled) {
             // An operator with no identity chosen still gets a supervisory
             // view rather than being filed as an investor.
-            return { ...roleMap.regulator1, clerkId: payload.sub, clerk: true, operatorKey: operator || undefined };
+            return { ...roleMap.regulator1, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, operatorKey: operator || undefined };
           }
-          return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor', clerkId: payload.sub, clerk: true };
+          return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor', clerkId: payload.sub, email: sessionEmail(payload), clerk: true };
         }
         if (payload.identityId) return payload;
       }
@@ -3288,7 +3297,7 @@ export default async function handler(req, res) {
         if (!supervising && !['owner', 'admin'].includes(mine)) {
           return res.status(403).json({ error: 'ERR_NOT_ORG_ADMIN', message: 'Only an owner or admin of this organisation can invite.' });
         }
-        return res.status(201).json(await authStore.createInvitation({ organizationId: orgId, email, role, invitedBy: user.identityId }));
+        return res.status(201).json(await authStore.createInvitation({ organizationId: orgId, email, role, invitedBy: user.identityId, identityId: (req.body || {}).identityId || null }));
       } catch (e) { return res.status(500).json({ error: e.message }); }
     }
     if (orgInvMatch && method === 'GET') {
@@ -3308,7 +3317,14 @@ export default async function handler(req, res) {
         const { invitationId } = req.body || {};
         if (!invitationId) return res.status(400).json({ error: 'invitationId required' });
         await authStore.init();
-        return res.json({ member: await authStore.acceptInvitation(invitationId, user.identityId) });
+        return res.json({
+          member: await authStore.acceptInvitation(invitationId, user.identityId, {
+            email: user.email || '',
+            // Demo identities have no email behind them, so the looser match
+            // is allowed there and nowhere else.
+            allowLocalPart: DEMO_AUTH,
+          }),
+        });
       } catch (e) {
         // Accepting an invitation addressed to someone else is a refusal,
         // not a malformed request.

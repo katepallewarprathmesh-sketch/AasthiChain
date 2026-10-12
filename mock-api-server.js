@@ -594,14 +594,25 @@ function orgRoleOf(identityId, organizationId) {
 }
 const isSupervisor = (user) => SUPERVISORY.has(String((user && user.role) || '').toLowerCase());
 
-// An invitation is addressed to someone. Demo identities are not email
-// addresses, so the local part is what we match on: inviting
-// "investor2@anything" invites investor2.
-function invitationIsFor(inv, identityId) {
+// Who an invitation is addressed to. Matching the local part alone threw the
+// domain away, so an invitation to cfo@another-company.example was accepted
+// by whoever was identified as "cfo" here — and an invitation carries a
+// role. An invitation pinned to an identity matches that identity; otherwise
+// the signed-in email must match in full. The loose match survives only in
+// demo mode, where identities are named investor1 and have no email.
+// This rig issues its own demo identities rather than real sign-ins, so the
+// looser match applies here unless the deployment says otherwise.
+const DEMO_IDENTITIES = String(process.env.DEMO_AUTH || 'true').toLowerCase() !== 'false';
+
+function invitationIsFor(inv, identityId, opts = {}) {
   if (!inv) return false;
   if (inv.identity_id) return inv.identity_id === identityId;
-  const local = String(inv.email || '').split('@')[0].toLowerCase();
-  return !!local && local === String(identityId).toLowerCase();
+  const invited = String(inv.email || '').trim().toLowerCase();
+  if (!invited) return false;
+  const mine = String(opts.email || '').trim().toLowerCase();
+  if (mine) return mine === invited;
+  if (!opts.allowLocalPart) return false;
+  return invited.split('@')[0] === String(identityId).toLowerCase();
 }
 
 app.get('/api/orgs', authMiddleware, (req, res) => {
@@ -646,8 +657,11 @@ app.post('/api/invitations/accept', authMiddleware, (req, res) => {
   const inv = authMem.invitation.get(invitationId);
   if (!inv) return res.status(404).json({ error: 'invitation not found' });
   // Knowing an invitation id is not the same as having been invited.
-  if (!invitationIsFor(inv, req.user.identityId)) {
-    return res.status(403).json({ error: 'ERR_NOT_INVITED', message: `This invitation was issued to ${inv.email}.` });
+  if (!invitationIsFor(inv, req.user.identityId, { email: req.user.email || '', allowLocalPart: DEMO_IDENTITIES })) {
+    return res.status(403).json({
+      error: 'ERR_NOT_INVITED',
+      message: `This invitation was issued to ${inv.email}. Sign in with that address to accept it.`,
+    });
   }
   if (inv.status !== 'pending') return res.status(400).json({ error: 'invitation already ' + inv.status });
   if (new Date(inv.expires_at) < new Date()) { inv.status = 'expired'; return res.status(400).json({ error: 'invitation expired' }); }
