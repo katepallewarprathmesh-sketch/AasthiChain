@@ -966,6 +966,26 @@ function assetTradingProblem(assetId) {
   return null;
 }
 
+// A catalogue is a list of things you could actually buy. A DRAFT has not
+// been near a registrar yet — nobody outside the person who registered it
+// should be reading it as a listing, and the assistant should not be
+// describing it as one either. Supervisors and the owner still see their own.
+function listingIsPublic(p) {
+  if (!p || !p.status) return false;
+  if (p.status !== 'DRAFT') return true;
+  // Lifecycle status stays DRAFT until tokens are minted, so a registrar's
+  // approval is the line that matters: a checked listing waiting to be
+  // tokenised is real, an unchecked one is paperwork.
+  return String(p.registrarValidationStatus || '').toUpperCase() === 'VALIDATED';
+}
+
+function visibleListings(all, user) {
+  const supervisor = !!(user && (SUPERVISORY_IDENTITIES.has(user.identityId) || user.operatorKey));
+  return all.filter((p) => listingIsPublic(p)
+    || supervisor
+    || (user && user.identityId && p.originatorId === user.identityId));
+}
+
 function publicPropertyView(p) {
   const held = Object.values(balances).filter(b => b.assetId === p.assetId && Number(b.balance) > 0);
   const ownerBal = held.find(b => b.ownerId === p.originatorId);
@@ -3338,7 +3358,11 @@ export default async function handler(req, res) {
         return res.status(limited.status).json(limited.body);
       }
 
-      const context = buildPropertyContext(Object.values(properties).map(publicPropertyView));
+      // The assistant describes the catalogue, so it sees the catalogue — not
+      // half-registered drafts that nobody can buy.
+      const context = buildPropertyContext(
+        Object.values(properties).filter(listingIsPublic).map(publicPropertyView),
+      );
       const answer = await askGroq({ messages: req.body.messages, propertyContext: context });
       return res.status(answer.status).json(answer.body);
     }
@@ -3771,7 +3795,7 @@ export default async function handler(req, res) {
       try {
         const view = publicPropertyView;
         const q = (k) => url.searchParams.get(k);
-        let list = Object.values(properties).map(view);
+        let list = visibleListings(Object.values(properties), user).map(view);
         if (q('status')) list = list.filter(p => p.status === q('status'));
         if (q('city')) list = list.filter(p => ((p.location && p.location.city) || '').toLowerCase() === q('city').toLowerCase());
         if (q('type')) list = list.filter(p => (p.propertyType || '').toLowerCase() === q('type').toLowerCase());
@@ -3788,8 +3812,8 @@ export default async function handler(req, res) {
         return res.json({
           properties: list, count: list.length,
           facets: {
-            cities: [...new Set(Object.values(properties).map(p => p.location && p.location.city).filter(Boolean))].sort(),
-            types: [...new Set(Object.values(properties).map(p => p.propertyType).filter(Boolean))].sort(),
+            cities: [...new Set(list.map(p => p.location && p.location.city).filter(Boolean))].sort(),
+            types: [...new Set(list.map(p => p.propertyType).filter(Boolean))].sort(),
           },
         });
       } catch (e) {

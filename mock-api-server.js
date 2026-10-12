@@ -831,6 +831,27 @@ if (documentHash && String(documentHash).trim().length !== 64) return res.status
   res.status(201).json(resp);
 });
 
+// A catalogue is a list of things you could actually buy. A DRAFT has not
+// been near a registrar yet — nobody outside the person who registered it
+// should be reading it as a listing. Supervisors and the owner still see
+// their own.
+function listingIsPublic(p) {
+  if (!p || !p.status) return false;
+  if (p.status !== 'DRAFT') return true;
+  // Lifecycle status stays DRAFT until tokens are minted, so a registrar's
+  // approval is the line that matters: a checked listing waiting to be
+  // tokenised is real, an unchecked one is paperwork.
+  return String(p.registrarValidationStatus || '').toUpperCase() === 'VALIDATED';
+}
+
+function visibleListings(all, user) {
+  // SUPERVISORY here is a set of roles, not identities.
+  const supervisor = !!(user && (SUPERVISORY.has(String(user.role || '').toLowerCase()) || user.operatorKey));
+  return all.filter((p) => listingIsPublic(p)
+    || supervisor
+    || (user && user.identityId && p.originatorId === user.identityId));
+}
+
 // Marketplace economics are DERIVED from live balances, never stored, so a
 // listing can never disagree with the ledger about how much is actually left.
 function marketplaceView(p) {
@@ -875,7 +896,7 @@ function publicHolderView(holders) {
 
 app.get('/api/properties', optionalAuth, (req, res) => {
   const { status, city, type, minYield, maxPrice, sort } = req.query;
-  let list = Object.values(properties).map(marketplaceView);
+  let list = visibleListings(Object.values(properties), req.user).map(marketplaceView);
   if (status) list = list.filter(p => p.status === status);
   if (city) list = list.filter(p => (p.location && p.location.city || '').toLowerCase() === String(city).toLowerCase());
   if (type) list = list.filter(p => (p.propertyType || '').toLowerCase() === String(type).toLowerCase());
@@ -892,8 +913,8 @@ app.get('/api/properties', optionalAuth, (req, res) => {
   res.json({
     properties: list, count: list.length, fabricMode: 'mock', indexUsed: 'idx_property_status',
     facets: {
-      cities: [...new Set(Object.values(properties).map(p => p.location && p.location.city).filter(Boolean))].sort(),
-      types: [...new Set(Object.values(properties).map(p => p.propertyType).filter(Boolean))].sort(),
+      cities: [...new Set(list.map(p => p.location && p.location.city).filter(Boolean))].sort(),
+      types: [...new Set(list.map(p => p.propertyType).filter(Boolean))].sort(),
     },
   });
 });
@@ -3383,7 +3404,7 @@ app.post('/api/ai/chat', async (req, res) => {
     return res.status(limited.status).json(limited.body);
   }
 
-  const context = ai.buildPropertyContext(Object.values(properties).map(marketplaceView));
+  const context = ai.buildPropertyContext(Object.values(properties).filter(listingIsPublic).map(marketplaceView));
   const answer = await ai.askGroq({ messages: req.body.messages, propertyContext: context });
   res.status(answer.status).json(answer.body);
 });
