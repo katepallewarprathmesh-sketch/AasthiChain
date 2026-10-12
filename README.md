@@ -183,6 +183,12 @@ asks you to sign in first.
 taken for someone else on your say-so, and supervisory roles — registrar, regulator — are never
 handed out on request. If a session cannot be proven, the answer is no.
 
+**Whoever runs the deployment can walk through all four roles.** Holding the deployment's own key
+puts a role picker back in the header, so an owner, a registrar, an investor and a regulator can be
+tried one after another against the same data — which is the only honest way to show that each one
+is refused the things it should be. The key proves who is at the keyboard; it is not a role in
+itself, and on its own, with nobody signed in behind it, it can look but never act.
+
 ---
 
 ## Free tools and explainers
