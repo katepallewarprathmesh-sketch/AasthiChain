@@ -471,6 +471,10 @@ function AppContent({ user, setUser }) {
           role: me.role || aasthiUser.role,
           mspId: me.mspId || aasthiUser.mspId,
           canSwitchIdentity: !!me.canSwitchIdentity,
+          // The server knows which email this session really carries. That is
+          // the one that has to be named for the deployment to recognise its
+          // own owner, so it is worth keeping rather than guessing later.
+          clerkEmail: me.email || aasthiUser.clerkEmail || '',
         }
         localStorage.setItem('aasthi_user', JSON.stringify(resolved))
         setInternalUser(resolved)
@@ -500,7 +504,23 @@ function AppContent({ user, setUser }) {
   // here, the same key the insights page takes, and it lives in session
   // storage rather than on disk.
   const handleOperatorUnlock = async () => {
-    const entered = window.prompt('Operator key — restores the role switcher for this tab.\n\nIt is the ADMIN_DASHBOARD_KEY set on this deployment (Vercel → Settings → Environment Variables). If you do not know it, set it to a value of your choosing there, redeploy, and use that.')
+    // Two ways in, and the easy one is named first. Nobody should have to go
+    // hunting for a secret they set months ago to look at their own demo.
+    const who = (internalUser && internalUser.clerkEmail) || ''
+    const entered = window.prompt(
+      [
+        'Switch between the demo roles.',
+        '',
+        who ? `You are signed in as ${who}.` : 'You are signed in.',
+        '',
+        'Easiest, and it sticks on every device:',
+        `  add SUPERVISOR_EMAILS = ${who || 'your sign-in email'}`,
+        '  in Vercel → Settings → Environment Variables, then redeploy.',
+        '  The role dropdown then appears on its own, with nothing to type.',
+        '',
+        'Just for this tab: paste the operator key (ADMIN_DASHBOARD_KEY) below.',
+      ].join('\n'),
+    )
     const k = String(entered || '').trim()
     if (!k) return
     try {
