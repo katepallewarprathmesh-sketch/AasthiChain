@@ -31,10 +31,17 @@ class ApiClient {
     }
   }
 
-  // The operator key is a deployment secret, so it travels only to the
-  // operator views that need it — not on every call the app happens to make.
+  // The operator key is a deployment secret. It travels to this deployment
+  // and nowhere else, and only when the person at the keyboard has entered
+  // it this session.
+  //
+  // It used to go only to the operator views. That was too narrow: the key
+  // is also what tells the server this session may act as one of the shared
+  // demo identities, so without it on ordinary calls the role switcher put
+  // you in a role the very next request ignored. Session storage, so it dies
+  // with the tab.
   operatorHeaders(path) {
-    if (!/^\/api\/(admin|db)\//.test(path) && path !== '/api/npci/reconcile') return {}
+    if (!/^\/api\//.test(path)) return {}
     try {
       const adminKey = sessionStorage.getItem('aasthi_admin_key')
       return adminKey ? { 'x-admin-key': adminKey } : {}

@@ -263,7 +263,7 @@ function Footer() {
   )
 }
 
-function Nav({ user, onLogout, onRoleSwitch }) {
+function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock }) {
   const location = useLocation()
   const isActive = (p) => location.pathname === p || location.pathname.startsWith(p)
   const isLanding = location.pathname === '/'
@@ -334,8 +334,22 @@ function Nav({ user, onLogout, onRoleSwitch }) {
                   identities. Only a session the server lets do that should
                   see it; for everyone else it offered to make them someone
                   else and the server would simply ignore the request. */}
+              {user.canSwitchIdentity === false && (
+                <button
+                  onClick={onOperatorUnlock}
+                  title="Enter the operator key to switch between the demo roles"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: isMobile ? 11 : 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: 'transparent', color: mut, border: `1px solid ${chipBorder}`, padding: isMobile ? '6px 8px' : '7px 10px' }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 118 0v3"/></svg>
+                  {isMobile ? 'Roles' : 'Operator'}
+                </button>
+              )}
               <div style={{ display: user.canSwitchIdentity === false ? 'none' : 'flex', alignItems: 'center', gap: 8, background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 8, padding: '4px 8px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: dark ? '#64718A' : '#9CA3AF' }}>ROLE</span>
+                <span
+                  onClick={onOperatorLock}
+                  title="Stop acting as a demo role and go back to your own account"
+                  style={{ fontSize: 10, fontWeight: 700, color: dark ? '#64718A' : '#9CA3AF', cursor: 'pointer' }}
+                >ROLE</span>
                 <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: twoRow ? 130 : isMobile ? 110 : undefined }}>
                   {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>
@@ -440,7 +454,12 @@ function AppContent({ user, setUser }) {
     ;(async () => {
       try {
         const res = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}` },
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}`,
+            // Whether this session may wear a demo identity is partly a
+            // question of whether it holds the deployment's own key.
+            ...(() => { try { const k = sessionStorage.getItem('aasthi_admin_key'); return k ? { 'x-admin-key': k } : {} } catch { return {} } })(),
+          },
           cache: 'no-store',
         })
         if (!res.ok) return
@@ -473,6 +492,44 @@ function AppContent({ user, setUser }) {
     } catch {
       window.location.href='/'
     }
+  }
+
+  // The role switcher is for whoever runs this deployment. On a deployment
+  // where the identity provider carries no role information, the operator key
+  // is the only thing that proves that is who you are — so it can be entered
+  // here, the same key the insights page takes, and it lives in session
+  // storage rather than on disk.
+  const handleOperatorUnlock = async () => {
+    const entered = window.prompt('Operator key (ADMIN_DASHBOARD_KEY) — restores the role switcher for this tab')
+    const k = String(entered || '').trim()
+    if (!k) return
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}`,
+          'x-admin-key': k,
+        },
+        cache: 'no-store',
+      })
+      const me = res.ok ? await res.json() : null
+      if (!me || !me.canSwitchIdentity) {
+        window.alert('That key was not accepted. Nothing has been changed.')
+        return
+      }
+      sessionStorage.setItem('aasthi_admin_key', k)
+      const resolved = { ...(internalUser || {}), identityId: me.identityId, role: me.role, mspId: me.mspId, canSwitchIdentity: true }
+      localStorage.setItem('aasthi_user', JSON.stringify(resolved))
+      setInternalUser(resolved)
+      setUser(resolved)
+    } catch {
+      window.alert('Could not reach the server to check that key.')
+    }
+  }
+
+  const handleOperatorLock = () => {
+    try { sessionStorage.removeItem('aasthi_admin_key') } catch { /* nothing to clear */ }
+    try { localStorage.removeItem('aasthi_clerk_demo_identity') } catch { /* nothing to clear */ }
+    window.location.reload()
   }
 
   const handleRoleSwitch = (roleData) => {
@@ -512,7 +569,7 @@ function AppContent({ user, setUser }) {
 
   return (
     <ErrorBoundary>
-      <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
+      <Nav user={effectiveUser} onLogout={handleLogout} onRoleSwitch={handleRoleSwitch} onOperatorUnlock={handleOperatorUnlock} onOperatorLock={handleOperatorLock} />
       <main className="container" style={{paddingTop:0, paddingBottom:0}}>
         <Suspense fallback={<RouteFallback />}>
         <Routes>
