@@ -950,6 +950,22 @@ function drunixTokenPrice(assetId) { const p = properties[assetId]; return p && 
 // these numbers rather than compute its own — a second implementation would
 // eventually disagree with the page, and the assistant would be wrong in a
 // way nobody noticed.
+// A freeze stops transfers. It has to stop swaps too, or the halt is simply
+// a longer route: propose a swap of the frozen asset, have the counterparty
+// accept, and the tokens move anyway. The same money is reachable through
+// more than one route family, so the rule has to live wherever it moves.
+function assetTradingProblem(assetId) {
+  const prop = properties[assetId];
+  if (!prop) return { error: 'ERR_ASSET_NOT_FOUND', message: `No such property: ${assetId}` };
+  if (prop.status === 'FROZEN') {
+    return { error: 'ERR_ASSET_FROZEN', message: `${assetId} is frozen by a supervisor and cannot change hands.` };
+  }
+  if (prop.status !== 'TOKENIZED') {
+    return { error: 'ERR_NOT_TRADEABLE', message: `${assetId} is ${prop.status}, not TOKENIZED, so its tokens cannot change hands.` };
+  }
+  return null;
+}
+
 function publicPropertyView(p) {
   const held = Object.values(balances).filter(b => b.assetId === p.assetId && Number(b.balance) > 0);
   const ownerBal = held.find(b => b.ownerId === p.originatorId);
@@ -1637,6 +1653,7 @@ const AUTH_REQUIRED = [
   ['POST', /^\/api\/properties\/[^\/]+\/validate$/],
   ['POST', /^\/api\/properties\/[^\/]+\/mint$/],
   ['POST', /^\/api\/properties\/[^\/]+\/freeze$/],
+  ['POST', /^\/api\/properties\/[^\/]+\/unfreeze$/],
   ['POST', /^\/api\/transfers$/],
   ['GET', /^\/api\/balances\/wallet\/[^\/]+$/],
   ['GET', /^\/api\/balances\/[^\/]+\/[^\/]+$/],
@@ -3615,6 +3632,10 @@ export default async function handler(req, res) {
       if (!giveAssetId || !getAssetId || !(gt > 0) || !(rt > 0)) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'giveAssetId, giveTokens, getAssetId, getTokens required' });
       if (giveAssetId === getAssetId) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'Pick two different properties' });
       if (!counterparty || counterparty === me) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'counterparty identity required' });
+      for (const id of [giveAssetId, getAssetId]) {
+        const problem = assetTradingProblem(id);
+        if (problem) return res.status(problem.error === 'ERR_ASSET_NOT_FOUND' ? 404 : 400).json(problem);
+      }
       const mine = balances[giveAssetId + '~' + me];
       const theirs = balances[getAssetId + '~' + counterparty];
       if (!mine || mine.balance < gt + drunixLockedTokens(giveAssetId, me)) return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', message: 'You lack enough unlocked tokens on ' + giveAssetId });
@@ -3660,6 +3681,12 @@ export default async function handler(req, res) {
       }
       if (sw.status !== 'PROPOSED') return res.status(409).json({ error: 'ERR_SWAP_NOT_PENDING', status: sw.status });
       const { giveAssetId, getAssetId, giveTokens: gt, getTokens: rt, proposer } = sw;
+      // A property can be frozen between the proposal and the acceptance,
+      // which is exactly when a supervisor is most likely to act.
+      for (const id of [giveAssetId, getAssetId]) {
+        const problem = assetTradingProblem(id);
+        if (problem) return res.status(409).json(problem);
+      }
       // Holdings move between proposal and acceptance, so check again now.
       const mine = balances[giveAssetId + '~' + proposer];
       const theirs = balances[getAssetId + '~' + me];
@@ -4134,6 +4161,39 @@ export default async function handler(req, res) {
       }
     }
 
+    // A freeze has to be liftable by the people who can apply it, or an
+    // investigation that clears a property leaves it permanently untradeable
+    // and the only remedy is a database edit.
+    const unfreezeMatch = path.match(/^\/api\/properties\/([^\/]+)\/unfreeze$/);
+    if (unfreezeMatch && method === 'POST') {
+      try {
+        const id = decodeURIComponent(unfreezeMatch[1]);
+        const prop = properties[id];
+        if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+        if (!['Regulator', 'Registrar'].includes(user.role)) {
+          return res.status(403).json({
+            error: 'ERR_NOT_REGULATOR',
+            message: 'Only a Regulator or Registrar can lift a freeze.',
+          });
+        }
+        if (prop.status !== 'FROZEN') {
+          return res.status(409).json({ error: 'ERR_NOT_FROZEN', assetId: id, status: prop.status });
+        }
+        prop.status = prop.statusBeforeFreeze || 'TOKENIZED';
+        prop.unfrozenAt = new Date();
+        prop.unfrozenBy = user.identityId;
+        prop.updatedAt = new Date();
+        delete prop.statusBeforeFreeze;
+        properties[id] = prop;
+        globalThis._aasthi_properties = properties;
+        saveAllPersisted();
+        drunixAppend('ASSET_UNFROZEN', [{ kind: 'unfreeze', assetId: id, by: user.identityId, restoredTo: prop.status }]);
+        return res.json({ assetId: id, status: prop.status, unfrozenBy: user.identityId });
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
     const freezeMatch = path.match(/^\/api\/properties\/([^\/]+)\/freeze$/);
     if (freezeMatch && method === 'POST') {
       try {
@@ -4147,11 +4207,26 @@ export default async function handler(req, res) {
             message: 'Only a Regulator or Registrar can freeze an asset.',
           });
         }
+        if (prop.status === 'FROZEN') {
+          return res.status(409).json({ error: 'ERR_ALREADY_FROZEN', assetId: id, message: 'This property is already frozen.' });
+        }
+        // Remember what it was, so lifting the freeze puts it back rather
+        // than guessing at TOKENIZED.
+        prop.statusBeforeFreeze = prop.status;
         prop.status = 'FROZEN';
+        prop.frozenAt = new Date();
+        prop.frozenBy = user.identityId;
+        prop.frozenReason = req.body.reason || null;
         prop.updatedAt = new Date();
         properties[id] = prop;
         globalThis._aasthi_properties = properties;
-        return res.json({ assetId: id, status: 'FROZEN', reason: req.body.reason });
+        // Without this the freeze lived only in this instance's memory: the
+        // next request reloaded properties from the persisted copy and the
+        // property was tradeable again, while the regulator had been told
+        // 200 FROZEN. The strongest control in the system was cosmetic.
+        saveAllPersisted();
+        drunixAppend('ASSET_FROZEN', [{ kind: 'freeze', assetId: id, by: user.identityId, reason: prop.frozenReason }]);
+        return res.json({ assetId: id, status: 'FROZEN', reason: req.body.reason, frozenBy: user.identityId });
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }

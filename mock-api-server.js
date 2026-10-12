@@ -1257,11 +1257,46 @@ app.post('/api/properties/:id/freeze', authMiddleware, (req, res) => {
       message: 'Only a Regulator or Registrar can freeze an asset.',
     });
   }
+  if (prop.status === 'FROZEN') return res.status(409).json({ error: 'ERR_ALREADY_FROZEN', assetId: req.params.id });
+  prop.statusBeforeFreeze = prop.status;
   prop.status = 'FROZEN';
+  prop.frozenAt = new Date();
+  prop.frozenBy = req.user.identityId;
+  prop.frozenReason = req.body.reason || null;
   prop.updatedAt = new Date();
   properties[req.params.id] = prop;
-  res.json({ assetId: req.params.id, status: 'FROZEN', reason: req.body.reason, fabricMode: 'mock' });
+  drunixAppend('ASSET_FROZEN', [{ kind: 'freeze', assetId: req.params.id, by: req.user.identityId, reason: prop.frozenReason }]);
+  res.json({ assetId: req.params.id, status: 'FROZEN', reason: req.body.reason, frozenBy: req.user.identityId, fabricMode: 'mock' });
 });
+
+// A freeze has to be liftable by the people who can apply it, or a cleared
+// investigation leaves the property permanently untradeable.
+app.post('/api/properties/:id/unfreeze', authMiddleware, (req, res) => {
+  const prop = properties[req.params.id];
+  if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+  if (!['Regulator', 'Registrar'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'ERR_NOT_REGULATOR', message: 'Only a Regulator or Registrar can lift a freeze.' });
+  }
+  if (prop.status !== 'FROZEN') return res.status(409).json({ error: 'ERR_NOT_FROZEN', assetId: req.params.id, status: prop.status });
+  prop.status = prop.statusBeforeFreeze || 'TOKENIZED';
+  prop.unfrozenAt = new Date();
+  prop.unfrozenBy = req.user.identityId;
+  prop.updatedAt = new Date();
+  delete prop.statusBeforeFreeze;
+  properties[req.params.id] = prop;
+  drunixAppend('ASSET_UNFROZEN', [{ kind: 'unfreeze', assetId: req.params.id, by: req.user.identityId, restoredTo: prop.status }]);
+  res.json({ assetId: req.params.id, status: prop.status, unfrozenBy: req.user.identityId });
+});
+
+// A freeze stops transfers; it has to stop swaps too, or the halt is just a
+// longer route to the same movement.
+function assetTradingProblem(assetId) {
+  const prop = properties[assetId];
+  if (!prop) return { error: 'ERR_ASSET_NOT_FOUND', message: `No such property: ${assetId}` };
+  if (prop.status === 'FROZEN') return { error: 'ERR_ASSET_FROZEN', message: `${assetId} is frozen by a supervisor and cannot change hands.` };
+  if (prop.status !== 'TOKENIZED') return { error: 'ERR_NOT_TRADEABLE', message: `${assetId} is ${prop.status}, not TOKENIZED, so its tokens cannot change hands.` };
+  return null;
+}
 
 app.post('/api/transfers', authMiddleware, (req, res) => {
   const { assetId, fromId: reqFrom, toId, amount, clientState } = req.body;
@@ -3090,6 +3125,10 @@ app.post('/api/swap', authMiddleware, (req, res) => {
   if (!giveAssetId || !getAssetId || !(gt > 0) || !(rt > 0)) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'giveAssetId, giveTokens, getAssetId, getTokens required' });
   if (giveAssetId === getAssetId) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'Pick two different properties' });
   if (!counterparty || counterparty === me) return res.status(400).json({ error: 'ERR_INVALID_INPUT', message: 'counterparty identity required' });
+  for (const id of [giveAssetId, getAssetId]) {
+    const problem = assetTradingProblem(id);
+    if (problem) return res.status(problem.error === 'ERR_ASSET_NOT_FOUND' ? 404 : 400).json(problem);
+  }
   const mine = balances[giveAssetId + '~' + me];
   const theirs = balances[getAssetId + '~' + counterparty];
   if (!mine || mine.balance < gt + drunixLockedTokens(giveAssetId, me)) return res.status(400).json({ error: 'ERR_INSUFFICIENT_BALANCE', message: 'You lack enough unlocked tokens on ' + giveAssetId });
@@ -3131,6 +3170,12 @@ app.post('/api/swap/:id/accept', authMiddleware, (req, res) => {
   }
   if (sw.status !== 'PROPOSED') return res.status(409).json({ error: 'ERR_SWAP_NOT_PENDING', status: sw.status });
   const { giveAssetId, getAssetId, giveTokens: gt, getTokens: rt, proposer } = sw;
+  // A property can be frozen between the proposal and the acceptance, which
+  // is exactly when a supervisor is most likely to act.
+  for (const id of [giveAssetId, getAssetId]) {
+    const problem = assetTradingProblem(id);
+    if (problem) return res.status(409).json(problem);
+  }
   // Holdings move between proposal and acceptance, so check again now.
   const mine = balances[giveAssetId + '~' + proposer];
   const theirs = balances[getAssetId + '~' + me];
