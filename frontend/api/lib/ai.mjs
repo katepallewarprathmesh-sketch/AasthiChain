@@ -23,7 +23,41 @@
 //   * No key configured means the feature is OFF and says so, rather than
 //     half-working.
 
-const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// An ordered list, not a single name. Groq retires models on a schedule —
+// llama-3.3-70b-versatile, which this shipped with, was shut down on
+// 2026-08-16 and every call came back 404 model_not_found. When the head of
+// the list is gone the next one answers, and the fix is an environment
+// variable rather than a deploy. GROQ_MODEL still works for a single pin.
+const MODELS = String(process.env.GROQ_MODELS || process.env.GROQ_MODEL || '')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+if (MODELS.length === 0) {
+  MODELS.push('openai/gpt-oss-120b', 'qwen/qwen3.6-27b', 'openai/gpt-oss-20b');
+}
+
+// gpt-oss always reasons, and spends those tokens from the same budget as the
+// answer, so a tight reply cap returns an empty or cut-off string. Give that
+// family headroom and keep the reasoning out of the reply.
+function requestOptionsFor(model) {
+  if (model.includes('gpt-oss')) {
+    return { max_tokens: LIMITS.maxReplyTokens + 700, reasoning_effort: 'low' };
+  }
+  return { max_tokens: LIMITS.maxReplyTokens };
+}
+
+// A model that is gone says so with 404 model_not_found or 400
+// model_decommissioned. Anything else — a bad request, a rate limit, an
+// outage — must not be hidden behind a silent failover.
+function modelIsGone(e) {
+  const status = Number(e && (e.status || e.statusCode)) || 0;
+  if (status !== 404 && status !== 400) return false;
+  const text = JSON.stringify((e && (e.error || e.response?.data)) || e?.message || '').toLowerCase();
+  return text.includes('model_not_found')
+    || text.includes('model_decommissioned')
+    || text.includes('does not exist')
+    || text.includes('decommissioned');
+}
 
 // Deliberately small. A chat window is not a document upload, and every
 // character here is a character someone else's rate limit is paying for.
@@ -245,16 +279,33 @@ export async function askGroq({ messages, propertyContext }) {
     maxRetries: 1,
   });
 
+  const wire = [
+    { role: 'system', content: systemPrompt(propertyContext) },
+    ...messages.map((m) => ({ role: m.role, content: String(m.content).trim() })),
+  ];
+
   try {
-    const completion = await client.chat.completions.create({
-      model: MODEL,
-      temperature: 0.2, // a factual assistant, not a creative one
-      max_tokens: LIMITS.maxReplyTokens,
-      messages: [
-        { role: 'system', content: systemPrompt(propertyContext) },
-        ...messages.map((m) => ({ role: m.role, content: String(m.content).trim() })),
-      ],
-    });
+    let completion = null;
+    let model = MODELS[0];
+    let lastGone = null;
+    for (const candidate of MODELS) {
+      try {
+        completion = await client.chat.completions.create({
+          model: candidate,
+          temperature: 0.2, // a factual assistant, not a creative one
+          ...requestOptionsFor(candidate),
+          messages: wire,
+        });
+        model = candidate;
+        break;
+      } catch (err) {
+        if (!modelIsGone(err)) throw err;
+        lastGone = err;
+        console.warn(`[ai] ${candidate} is no longer served by Groq — trying the next model`);
+      }
+    }
+    if (!completion) throw lastGone || new Error('no model available');
+
     const reply = completion?.choices?.[0]?.message?.content;
     if (!reply || !String(reply).trim()) {
       return {
@@ -266,7 +317,7 @@ export async function askGroq({ messages, propertyContext }) {
       status: 200,
       body: {
         reply: String(reply).trim(),
-        model: MODEL,
+        model,
         usage: completion?.usage
           ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens }
           : undefined,
@@ -277,6 +328,12 @@ export async function askGroq({ messages, propertyContext }) {
     // the upstream message is not echoed back in case it carries detail about
     // the account or the key.
     const status = Number(e && (e.status || e.statusCode)) || 0;
+    if (modelIsGone(e)) {
+      // Every model in the list has been retired. That is a configuration
+      // problem on this deployment, not a transient upstream fault.
+      console.error(`[ai] none of the configured models are served any more: ${MODELS.join(', ')}`);
+      return { status: 503, body: { error: 'ERR_AI_NO_MODEL', message: 'The assistant has no model available on this deployment.' } };
+    }
     if (status === 401 || status === 403) {
       return { status: 503, body: { error: 'ERR_AI_NOT_CONFIGURED', message: 'The assistant is misconfigured on this deployment.' } };
     }

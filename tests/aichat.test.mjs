@@ -195,6 +195,81 @@ t('the last message must be from the user',
 }
 
 // ---------------------------------------------------------------------------
+// 4b. When Groq retires the model underneath us
+//
+// This shipped pinned to llama-3.3-70b-versatile, which Groq shut down on
+// 2026-08-16; every call came back 404 model_not_found and the assistant was
+// simply dead. The model is a list now, so a retirement costs a request, not
+// an outage — but a genuine bad request must still not be hidden behind the
+// failover.
+// ---------------------------------------------------------------------------
+{
+  const { createServer } = await import('node:http');
+
+  const seen = [];
+  let gone = ['model-a'];
+  let hardFail = false;
+  const stub = createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      const model = (() => { try { return JSON.parse(body).model; } catch { return ''; } })();
+      seen.push(model);
+      if (hardFail) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        return res.end('{"error":{"message":"messages[0] is malformed","code":"invalid_request_error"}}');
+      }
+      if (gone.includes(model)) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        return res.end('{"error":{"message":"The model does not exist","code":"model_not_found"}}');
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Still answering.' } }] }));
+    });
+  });
+  await new Promise((r) => stub.listen(0, '127.0.0.1', r));
+  const port = stub.address().port;
+
+  const savedKey = process.env.GROQ_API_KEY;
+  const savedBase = process.env.GROQ_BASE_URL;
+  const savedModels = process.env.GROQ_MODELS;
+  process.env.GROQ_API_KEY = 'test-key';
+  process.env.GROQ_BASE_URL = `http://127.0.0.1:${port}`;
+  process.env.GROQ_MODELS = 'model-a, model-b, model-c';
+
+  // The list is read when the module loads, so this needs its own instance.
+  const { askGroq: ask } = await import('../frontend/api/lib/ai.mjs?models=1');
+  const call = () => ask({ messages: [{ role: 'user', content: 'hi' }], propertyContext: 'none' });
+
+  let r = await call();
+  t('a retired model falls through to the next one',
+    r.status === 200 && r.body.reply === 'Still answering.', `${r.status} ${r.body.error || ''}`);
+  t('  and the answer names the model that actually replied', r.body.model === 'model-b', String(r.body.model));
+  t('  and it tried the retired one first', seen[0] === 'model-a' && seen[1] === 'model-b', seen.join(','));
+
+  seen.length = 0;
+  gone = ['model-a', 'model-b', 'model-c'];
+  r = await call();
+  t('every model being gone is reported as a configuration fault',
+    r.status === 503 && r.body.error === 'ERR_AI_NO_MODEL' && !r.body.reply, `${r.status} ${r.body.error}`);
+  t('  and it did try all of them', seen.length === 3, seen.join(','));
+
+  seen.length = 0;
+  gone = [];
+  hardFail = true;
+  r = await call();
+  t('a genuine bad request is not retried against every model',
+    seen.length === 1, seen.join(','));
+  t('  and it is reported as an upstream failure',
+    r.status === 502 && r.body.error === 'ERR_AI_UPSTREAM', `${r.status} ${r.body.error}`);
+
+  if (savedKey === undefined) delete process.env.GROQ_API_KEY; else process.env.GROQ_API_KEY = savedKey;
+  if (savedBase === undefined) delete process.env.GROQ_BASE_URL; else process.env.GROQ_BASE_URL = savedBase;
+  if (savedModels === undefined) delete process.env.GROQ_MODELS; else process.env.GROQ_MODELS = savedModels;
+  await new Promise((r2) => stub.close(r2));
+}
+
+// ---------------------------------------------------------------------------
 // 5. The route itself
 // ---------------------------------------------------------------------------
 const status = await fetch(`${API}/api/ai/status`).then(r => r.json()).catch(() => null);

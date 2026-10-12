@@ -45,7 +45,8 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | `SUPERVISOR_EMAILS` | web app | comma-separated emails allowed to act as registrar/regulator |
 | `IDENTITY_ALIASES` | web app | pin named people to an existing ledger identity, e.g. `you@example.com=investor1` |
 | `GROQ_API_KEY` | web app | enables Aasthi AI. Without it the assistant is off and the launcher does not render |
-| `GROQ_MODEL` | web app | optional, defaults to `llama-3.3-70b-versatile` |
+| `GROQ_MODELS` | web app | optional, comma-separated models tried in order. Defaults to `openai/gpt-oss-120b, qwen/qwen3.6-27b, openai/gpt-oss-20b`. Groq retires models on a schedule, so when the first one is gone the next answers and the fix is this variable, not a deploy |
+| `GROQ_MODEL` | web app | optional, pins a single model and overrides the default list |
 | `GROQ_BASE_URL` | web app | optional, point the client at a proxy instead of api.groq.com |
 | `AI_REQUIRE_SIGNIN` | web app | optional, `true` restricts the assistant to signed-in people |
 | `SUPERVISOR_CLERK_IDS` | web app | same, by Clerk user id (`user_…`) |
