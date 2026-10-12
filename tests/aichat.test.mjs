@@ -218,6 +218,32 @@ t('the last message must be from the user',
 }
 
 // ---------------------------------------------------------------------------
+// 3c. Nothing the model writes should reach a person as punctuation
+//
+// Asterisks and pipe tables were what people actually saw. The panel renders
+// markdown now, but the reply is also tidied on the server so a tab running
+// an older bundle still gets something readable.
+// ---------------------------------------------------------------------------
+{
+  const { tidyReply: tidy } = await import('../frontend/api/lib/ai.mjs');
+
+  t('bold markers do not reach the reader', tidy('**₹500** per token') === '₹500 per token');
+  t('italic markers do not either', tidy('a *property* is split') === 'a property is split');
+  t('headings become plain lines', tidy('## Heading\n\ntext') === 'Heading\n\ntext');
+  t('every bullet is the same character', tidy('* one\n+ two\n- three') === '- one\n- two\n- three');
+
+  const table = tidy('| Leg | What moves |\n|---|---|\n| Securities | tokens |\n| Cash | e-rupee |');
+  t('a table becomes readable lines, not pipes',
+    !table.includes('|') && table.includes('Leg: Securities') && table.includes('What moves: tokens'), table);
+
+  t('a sentence after a list is not glued to it',
+    tidy('- one\n- two\nAnd then this.').endsWith('\n\nAnd then this.'));
+  t('plain prose is left exactly as it is',
+    tidy('Tokens cost ₹500 each. You can buy one.') === 'Tokens cost ₹500 each. You can buy one.');
+  t('an arithmetic asterisk survives', tidy('100 * 500 = 50,000') === '100 * 500 = 50,000');
+}
+
+// ---------------------------------------------------------------------------
 // 4b. When Groq retires the model underneath us
 //
 // This shipped pinned to llama-3.3-70b-versatile, which Groq shut down on

@@ -270,6 +270,65 @@ export function systemPrompt(propertyContext) {
 // The call itself
 // ---------------------------------------------------------------------------
 
+// The model is told to write plainly, and mostly does — but "mostly" is not a
+// guarantee, and a stray table or a line of asterisks reaches the person
+// before anyone notices. So the reply is tidied on the way out: whatever the
+// model reaches for, what leaves this function is prose, short lists and
+// nothing a reader has to decode. Doing it here rather than in the browser
+// also means a tab running yesterday's bundle gets clean text.
+export function tidyReply(raw) {
+  let text = String(raw || '').replace(/\r/g, '');
+
+  // A markdown table is unreadable in a chat column. Keep the content as
+  // "heading: value" lines and drop the scaffolding.
+  const lines = text.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const isRow = /^\s*\|.*\|\s*$/.test(line);
+    if (!isRow) { out.push(line); continue; }
+    const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    const next = lines[i + 1] || '';
+    const isDivider = /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(next) && next.includes('-');
+    if (isDivider) {
+      const head = cells(line);
+      i += 1;
+      while (i + 1 < lines.length && /^\s*\|.*\|\s*$/.test(lines[i + 1])) {
+        i += 1;
+        const row = cells(lines[i]);
+        const pairs = row.map((v, k) => (head[k] && head[k] !== v ? `${head[k]}: ${v}` : v)).filter(Boolean);
+        out.push(`- ${pairs.join(' — ')}`);
+      }
+    } else {
+      out.push(`- ${cells(line).filter(Boolean).join(' — ')}`);
+    }
+  }
+  text = out.join('\n');
+
+  text = text
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')            // headings are just a line
+    .replace(/\*\*\*(.+?)\*\*\*/g, '$1')
+    .replace(/\*\*(.+?)\*\*/g, '$1')               // the asterisks people kept seeing
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, '$1$2')
+    .replace(/^\s*[*+]\s+/gm, '- ')                // one bullet character, not three
+    .replace(/^\s*[-–—]\s+/gm, '- ')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // A sentence pressed against the end of a list reads as part of it. Give it
+  // the blank line the markdown would have had.
+  const spaced = [];
+  text.split('\n').forEach((line, i, all) => {
+    const prev = i ? all[i - 1] : '';
+    if (prev.startsWith('- ') && line.trim() && !line.startsWith('- ')) spaced.push('');
+    spaced.push(line);
+  });
+
+  return spaced.join('\n').trim();
+}
+
 // One model, one question, with a single second chance at a transient fault.
 async function askOnce(client, model, wire) {
   for (let attempt = 0; ; attempt += 1) {
@@ -357,7 +416,7 @@ export async function askGroq({ messages, propertyContext }) {
     return {
       status: 200,
       body: {
-        reply: String(reply).trim(),
+        reply: tidyReply(reply),
         model,
         usage: completion?.usage
           ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens }
