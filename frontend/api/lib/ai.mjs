@@ -49,6 +49,23 @@ function requestOptionsFor(model) {
 // A model that is gone says so with 404 model_not_found or 400
 // model_decommissioned. Anything else — a bad request, a rate limit, an
 // outage — must not be hidden behind a silent failover.
+// A 5xx, a connection reset or a timeout is weather, not a verdict. The one
+// thing that must not happen is a person seeing "could not be reached" for a
+// hiccup that a second attempt would have answered.
+function worthRetrying(e) {
+  const status = Number(e && (e.status || e.statusCode)) || 0;
+  if (status >= 500) return true;
+  if (status === 408 || status === 409) return true;
+  if (status) return false;
+  const name = String((e && (e.name || e.code)) || '').toLowerCase();
+  const text = String((e && e.message) || '').toLowerCase();
+  return name.includes('timeout') || name.includes('connection') || name.includes('abort')
+    || text.includes('timeout') || text.includes('timed out')
+    || text.includes('fetch failed') || text.includes('econnreset') || text.includes('socket');
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function modelIsGone(e) {
   const status = Number(e && (e.status || e.statusCode)) || 0;
   if (status !== 404 && status !== 400) return false;
@@ -242,6 +259,24 @@ export function systemPrompt(propertyContext) {
 // The call itself
 // ---------------------------------------------------------------------------
 
+// One model, one question, with a single second chance at a transient fault.
+async function askOnce(client, model, wire) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await client.chat.completions.create({
+        model,
+        temperature: 0.2, // a factual assistant, not a creative one
+        ...requestOptionsFor(model),
+        messages: wire,
+      });
+    } catch (err) {
+      if (attempt >= 1 || !worthRetrying(err)) throw err;
+      console.warn(`[ai] ${model} did not answer (${(err && (err.status || err.code || err.name)) || 'unknown'}) — trying once more`);
+      await sleep(400);
+    }
+  }
+}
+
 /**
  * Asks Groq. Returns {status, body} ready to send either way — a failure
  * upstream is reported as a failure here, never as a confident answer.
@@ -290,12 +325,7 @@ export async function askGroq({ messages, propertyContext }) {
     let lastGone = null;
     for (const candidate of MODELS) {
       try {
-        completion = await client.chat.completions.create({
-          model: candidate,
-          temperature: 0.2, // a factual assistant, not a creative one
-          ...requestOptionsFor(candidate),
-          messages: wire,
-        });
+        completion = await askOnce(client, candidate, wire);
         model = candidate;
         break;
       } catch (err) {
@@ -340,9 +370,16 @@ export async function askGroq({ messages, propertyContext }) {
     if (status === 429) {
       return { status: 429, body: { error: 'ERR_AI_BUSY', message: 'The assistant is rate-limited upstream right now. Try again shortly.' } };
     }
+    console.error(`[ai] upstream failed: status=${status || 'none'} ${(e && (e.code || e.name)) || ''}`);
+    if (worthRetrying(e)) {
+      return {
+        status: 503,
+        body: { error: 'ERR_AI_TIMEOUT', message: 'The assistant took too long to answer. Ask again — it usually goes through on the second try.' },
+      };
+    }
     return {
       status: 502,
-      body: { error: 'ERR_AI_UPSTREAM', message: 'The assistant could not be reached. Try again shortly.' },
+      body: { error: 'ERR_AI_UPSTREAM', message: 'The assistant could not answer that one. Try rephrasing it.' },
     };
   }
 }

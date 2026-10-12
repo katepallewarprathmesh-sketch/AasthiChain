@@ -177,8 +177,10 @@ t('the last message must be from the user',
     !/bad key/i.test(JSON.stringify(r.body)));
 
   mode = 'boom'; r = await call();
-  t('an upstream failure is reported as a failure',
-    r.status === 502 && r.body.error === 'ERR_AI_UPSTREAM' && !r.body.reply, `${r.status} ${r.body.error}`);
+  t('an upstream failure is reported as a failure, never as an answer',
+    r.status === 503 && r.body.error === 'ERR_AI_TIMEOUT' && !r.body.reply, `${r.status} ${r.body.error}`);
+  t('  and the person is told a second try is worth it',
+    /again/i.test(String(r.body.message || '')), String(r.body.message));
 
   mode = 'empty'; r = await call();
   t('an empty completion is not passed off as an answer',
@@ -254,8 +256,30 @@ t('the last message must be from the user',
     r.status === 503 && r.body.error === 'ERR_AI_NO_MODEL' && !r.body.reply, `${r.status} ${r.body.error}`);
   t('  and it did try all of them', seen.length === 3, seen.join(','));
 
+  // A hiccup on the first attempt must not reach the person at all.
   seen.length = 0;
   gone = [];
+  let flaky = 1;
+  const flakyStub = createServer((req, res) => {
+    req.on('data', () => {});
+    req.on('end', () => {
+      seen.push('try');
+      if (flaky-- > 0) { res.writeHead(503, { 'content-type': 'application/json' }); return res.end('{"error":{"message":"overloaded"}}'); }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Second time lucky.' } }] }));
+    });
+  });
+  await new Promise((r2) => flakyStub.listen(0, '127.0.0.1', r2));
+  process.env.GROQ_BASE_URL = `http://127.0.0.1:${flakyStub.address().port}`;
+  const { askGroq: askFlaky } = await import('../frontend/api/lib/ai.mjs?models=2');
+  r = await askFlaky({ messages: [{ role: 'user', content: 'hi' }], propertyContext: 'none' });
+  t('a one-off upstream hiccup is retried instead of shown',
+    r.status === 200 && r.body.reply === 'Second time lucky.', `${r.status} ${r.body.error || ''}`);
+  t('  and it took two attempts to get there', seen.length === 2, String(seen.length));
+  await new Promise((r2) => flakyStub.close(r2));
+  process.env.GROQ_BASE_URL = `http://127.0.0.1:${port}`;
+
+  seen.length = 0;
   hardFail = true;
   r = await call();
   t('a genuine bad request is not retried against every model',
