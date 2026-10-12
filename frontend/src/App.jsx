@@ -500,7 +500,7 @@ function AppContent({ user, setUser }) {
   // here, the same key the insights page takes, and it lives in session
   // storage rather than on disk.
   const handleOperatorUnlock = async () => {
-    const entered = window.prompt('Operator key (ADMIN_DASHBOARD_KEY) — restores the role switcher for this tab')
+    const entered = window.prompt('Operator key — restores the role switcher for this tab.\n\nIt is the ADMIN_DASHBOARD_KEY set on this deployment (Vercel → Settings → Environment Variables). If you do not know it, set it to a value of your choosing there, redeploy, and use that.')
     const k = String(entered || '').trim()
     if (!k) return
     try {
