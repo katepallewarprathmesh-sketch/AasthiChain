@@ -1,18 +1,18 @@
 {
-  "name": "user",
+  "name": "aasthichain",
   "version": "1.0.0",
-  "description": "**Drunix Hackathon x Citi \u2014 Problem Statement 2 (Real Asset Tokenization)** Version 1.1 | Track A Improvements Implemented | Production-Ready Release",
+  "description": "Fractional real-estate tokens on an append-only record, with a UPI money leg and atomic delivery-versus-payment.",
   "main": "server.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bash regression.sh",
     "smoke": "cd frontend && npm run smoke"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
