@@ -5117,7 +5117,11 @@ export default async function handler(req, res) {
     // route, reading the same in-memory state this module already keeps.
     if (path === '/api/admin/ops') {
       const opsRole = String((user && user.role) || '').toLowerCase();
-      if (!['registrar', 'regulator', 'admin'].includes(opsRole)) {
+      // The key opens the operator views. It has to be honoured even when a
+      // browser session is present, because the browser always names an
+      // identity in X-Fabric-Identity — usually investor1 — and that was
+      // enough to refuse an operator who had just typed the key in.
+      if (!operatorKeyOK(req) && !['registrar', 'regulator', 'admin'].includes(opsRole)) {
         return res.status(403).json({
           error: 'ERR_NOT_REGISTRAR',
           message: 'The operations queue is for Registrars, Regulators and operators.',

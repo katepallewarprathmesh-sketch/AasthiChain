@@ -90,5 +90,28 @@ if (HAS_DIAG) {
 const anonOps = await call(OPS, {});
 t('an anonymous visitor is refused', anonOps.status === 401 || anonOps.status === 403, `got ${anonOps.status}`);
 
+// A signed-in browser always names an identity of its own in
+// X-Fabric-Identity — usually investor1 — and that was enough to make the
+// gate ignore the operator key the person had just typed in. So the one
+// case that matters for an operator sitting in front of the page, signed
+// in and holding the key, was the one case that failed.
+{
+  const session = tokenFor('investor1', 'Investor');
+  const withKey = await call('/api/admin/ops', {
+    token: session, key: ADMIN_KEY, identity: 'investor1',
+  });
+  t('a signed-in person holding the key still gets the queues',
+    withKey.status === 200, `got ${withKey.status}`);
+
+  const withoutKey = await call('/api/admin/ops', { token: session, identity: 'investor1' });
+  t('  and without the key they are still refused',
+    withoutKey.status === 403, `got ${withoutKey.status}`);
+
+  const wrongKey = await call('/api/admin/ops', {
+    token: session, key: 'not-the-key', identity: 'investor1',
+  });
+  t('  and a wrong key does not help', wrongKey.status === 403, `got ${wrongKey.status}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

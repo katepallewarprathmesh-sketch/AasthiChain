@@ -3306,10 +3306,15 @@ function ageMins(ts) {
 }
 
 app.get('/api/admin/ops', authMiddleware, async (req, res) => {
-  if (!['Registrar', 'Regulator'].includes(req.user.role)) {
+  // The operator key opens this view on its own, even alongside a browser
+  // session: the browser always names an identity of its own, and that was
+  // enough to refuse an operator who had just typed the key in.
+  const opsRole = String(req.user.role || '').toLowerCase();
+  if (!operatorKeyOK(req) && !['registrar', 'regulator', 'admin'].includes(opsRole)) {
     return res.status(403).json({
       error: 'ERR_NOT_REGISTRAR',
-      message: 'The operations queue is for Registrars and Regulators.',
+      message: 'The operations queue is for Registrars, Regulators and operators.',
+      howToGetAccess: 'Sign in as a registrar or regulator, or enter the deployment operator key.',
     });
   }
 

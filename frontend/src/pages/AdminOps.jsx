@@ -49,17 +49,89 @@ function Row({ children }) {
   )
 }
 
+const KEY_STORE = 'aasthi_admin_key'
+
+// Being refused should never be the end of the page. The old version decided
+// locally, from the role in the browser's own copy of the user, and rendered
+// a dead end — which was wrong in both directions: it hid the page from
+// operators the server would have admitted, and it showed the page to people
+// the server then refused, leaving "Loading the queues…" above a bare
+// refusal and nothing to do about it. The server decides now, and when it
+// says no it also says how to get in.
+function NoAccess({ detail, howTo, role, onKey }) {
+  const [input, setInput] = useState('')
+  const submit = (e) => {
+    e.preventDefault()
+    const k = input.trim()
+    if (!k) return
+    try { sessionStorage.setItem(KEY_STORE, k) } catch { /* storage unavailable */ }
+    setInput('')
+    onKey()
+  }
+  return (
+    <div style={{ maxWidth: 760, margin: '40px auto', padding: '0 20px' }}>
+      <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0 }}>Operations</h1>
+      <p style={{ fontSize: 14, color: C.mut, marginTop: 8, lineHeight: 1.6 }}>
+        {detail || 'The operations queue is for registrars, regulators and operators.'}
+        {role ? <> You are signed in as <strong>{role}</strong>.</> : null}
+      </p>
+      {howTo && <p style={{ fontSize: 13.5, color: C.mut, lineHeight: 1.6 }}>{howTo}</p>}
+
+      <form onSubmit={submit} style={{
+        marginTop: 18, padding: 16, background: '#fff',
+        border: `1px solid ${C.line}`, borderRadius: 12,
+      }}>
+        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: C.navy, marginBottom: 6 }}>
+          Operator key
+        </label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            type="password" value={input} onChange={e => setInput(e.target.value)}
+            placeholder="the deployment's ADMIN_DASHBOARD_KEY"
+            style={{
+              flex: '1 1 240px', padding: '9px 11px', fontSize: 13,
+              border: `1px solid ${C.line}`, borderRadius: 8, minWidth: 0,
+            }} />
+          <button type="submit" style={{
+            padding: '9px 16px', borderRadius: 8, border: 'none',
+            background: C.navy, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+          }}>Unlock</button>
+        </div>
+        <p style={{ fontSize: 11.5, color: C.mut, margin: '8px 0 0', lineHeight: 1.6 }}>
+          Kept in this tab only, and never sent anywhere but the operator panels. The key opens
+          the queues to read; approving or releasing anything still needs a signed-in registrar
+          or regulator.
+        </p>
+      </form>
+
+      <p style={{ fontSize: 13, color: C.mut, marginTop: 16 }}>
+        <Link to="/dashboard" style={{ color: C.navy }}>Go to your dashboard</Link> instead.
+      </p>
+    </div>
+  )
+}
+
 export default function AdminOps({ user }) {
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
+  const [denied, setDenied] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    setLoading(true); setErr(null)
+    setLoading(true); setErr(null); setDenied(null)
     try {
       setData(await api.getAdminOps())
     } catch (e) {
-      setErr(e.message || 'Could not load the operations queue')
+      // A refusal is not a failure to load: it has its own screen, with the
+      // server's own explanation of how to get in.
+      if (e.status === 401 || e.status === 403) {
+        setDenied({
+          detail: (e.data && e.data.message) || e.message,
+          howTo: e.data && e.data.howToGetAccess,
+        })
+      } else {
+        setErr(e.message || 'Could not load the operations queue')
+      }
     } finally {
       setLoading(false)
     }
@@ -68,18 +140,9 @@ export default function AdminOps({ user }) {
   useEffect(() => { load() }, [load])
 
   const role = user && user.role
-  const allowed = ['Registrar', 'Regulator'].includes(role)
 
-  if (!allowed) {
-    return (
-      <div style={{ maxWidth: 760, margin: '40px auto', padding: '0 20px' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#111827' }}>Operations</h1>
-        <p style={{ fontSize: 14, color: C.mut }}>
-          This view is for Registrars and Regulators. You are signed in as {role || 'a guest'}.
-          {' '}<Link to="/dashboard" style={{ color: C.navy }}>Go to your dashboard</Link>.
-        </p>
-      </div>
-    )
+  if (denied) {
+    return <NoAccess detail={denied.detail} howTo={denied.howTo} role={role} onKey={load} />
   }
 
   const q = (data && data.queues) || {}
@@ -95,7 +158,9 @@ export default function AdminOps({ user }) {
               ? data.actionable === 0
                 ? 'Nothing is waiting on a human right now.'
                 : `${data.actionable} item${data.actionable === 1 ? '' : 's'} need attention.`
-              : 'Loading the queues…'}
+              : loading
+                ? 'Loading the queues…'
+                : 'The queues could not be loaded.'}
           </p>
         </div>
         <button
