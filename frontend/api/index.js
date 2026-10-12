@@ -1424,6 +1424,57 @@ const envList = (name) =>
 // Does this verified session belong to someone the deployment has named as
 // an operator? Checked against the token's own subject and email, never
 // against anything the request merely states.
+// Every signed-in person was the same person.
+//
+// A verified Clerk session with no supervisory claim fell through to
+// investor1 — all of them, every account. That is not a cosmetic naming
+// problem: ownership scoping is what keeps one investor's payments, wallet
+// and holdings away from another, and it is keyed on exactly this identity.
+// With everyone sharing one, every one of those gates was a gate between a
+// person and themselves. Two strangers saw each other's money.
+//
+// So a session now resolves to its own identity, derived from the Clerk
+// subject, which is stable for the life of the account. A deployment can
+// pin particular people to an existing ledger identity — this is how the
+// holder of today's production positions keeps them — via IDENTITY_ALIASES,
+// a comma-separated list of email=identity or clerkSubject=identity.
+// A person signing in for the first time gets the same KYC standing they
+// had a moment ago as investor1, which is a mock VERIFIED record. This keeps
+// the buying flow working exactly as it did; it is not a KYC decision, and a
+// real provider should replace it before any of this is real money.
+function ensureKycRecord(identityId) {
+  if (!identityId || identityId === 'ANONYMOUS_USER') return;
+  if (kycRecords[identityId]) return;
+  kycRecords[identityId] = {
+    docType: 'kyc', identityId, kycStatus: 'VERIFIED',
+    verifiedAt: new Date().toISOString(), provider: 'mock-inherited',
+  };
+}
+
+function identityAliases() {
+  const raw = String(process.env.IDENTITY_ALIASES || '').trim();
+  const map = new Map();
+  if (!raw) return map;
+  for (const pair of raw.split(',')) {
+    const [from, to] = pair.split('=').map((x) => String(x || '').trim());
+    if (from && to) map.set(from.toLowerCase(), to);
+  }
+  return map;
+}
+
+function personalIdentity(payload) {
+  const sub = String((payload && payload.sub) || '').trim();
+  const email = sessionEmail(payload);
+  const aliases = identityAliases();
+  const alias = aliases.get(email) || aliases.get(sub.toLowerCase());
+  if (alias) return alias;
+  // Clerk subjects are already url-safe ("user_2ab..."), but anything else
+  // that arrives here should not be able to smuggle a path separator into an
+  // identity that ends up in a URL.
+  const safe = sub.replace(/[^A-Za-z0-9_-]/g, '');
+  return safe ? `person_${safe}` : 'ANONYMOUS_USER';
+}
+
 function sessionEmail(payload) {
   if (!payload) return '';
   const candidates = [
@@ -1501,18 +1552,23 @@ function getUser(req) {
           // operator key, may act as a supervisory identity. Everyone else
           // may still switch between their own non-supervisory identities.
           const entitled = DEMO_AUTH || operator || sessionIsOperator(payload);
-          const mapped = claimed && (entitled || !SUPERVISORY_IDENTITIES.has(claimed.identityId))
-            ? claimed : null;
-          if (mapped) return { ...mapped, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, operatorKey: operator || undefined };
+          // Only an entitled session may wear one of the shared demo
+          // identities. For everyone else the header is ignored outright:
+          // honouring it was how every signed-in person became investor1,
+          // because that is what the browser puts there by default.
+          const mapped = claimed && entitled ? claimed : null;
+          if (mapped) return { ...mapped, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, entitled: true, operatorKey: operator || undefined };
           // No identity asked for, but the session itself carries one.
           const fromClaim = roleMap[sessionRoleClaim(payload)];
-          if (fromClaim) return { ...fromClaim, clerkId: payload.sub, email: sessionEmail(payload), clerk: true };
+          if (fromClaim) return { ...fromClaim, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, entitled: true };
           if (entitled) {
             // An operator with no identity chosen still gets a supervisory
             // view rather than being filed as an investor.
-            return { ...roleMap.regulator1, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, operatorKey: operator || undefined };
+            return { ...roleMap.regulator1, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, entitled: true, operatorKey: operator || undefined };
           }
-          return { identityId: 'investor1', mspId: 'InvestorMSP', role: 'Investor', clerkId: payload.sub, email: sessionEmail(payload), clerk: true };
+          const own = personalIdentity(payload);
+          ensureKycRecord(own);
+          return { identityId: own, mspId: 'InvestorMSP', role: 'Investor', clerkId: payload.sub, email: sessionEmail(payload), clerk: true, personal: true };
         }
         if (payload.identityId) return payload;
       }
@@ -3197,6 +3253,27 @@ export default async function handler(req, res) {
 
     if (path === '/api/auth/jwks' && method === 'GET') {
       try { return res.json(await authStore.getJwks()); } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+
+    // Who the server thinks you are. The browser used to decide this for
+    // itself and put the answer in a header, which is how everyone ended up
+    // as investor1. It should ask instead.
+    if (path === '/api/auth/me' && method === 'GET') {
+      const anonymous = !user || !user.identityId || user.identityId === 'ANONYMOUS_USER';
+      if (anonymous) {
+        return res.status(401).json({ error: 'ERR_UNAUTHORIZED', message: 'Not signed in.' });
+      }
+      return res.json({
+        identityId: user.identityId,
+        role: user.role,
+        mspId: user.mspId,
+        email: user.email || null,
+        clerkId: user.clerkId || null,
+        // Whether this session may act as one of the shared demo identities.
+        // The role switcher in the header exists only for those who can.
+        canSwitchIdentity: !!(DEMO_AUTH || user.entitled || user.operatorKey),
+        personal: !!user.personal,
+      });
     }
 
     if (path === '/api/auth/schema' && method === 'GET') {

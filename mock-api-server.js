@@ -3305,6 +3305,18 @@ function ageMins(ts) {
   return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 60000)) : null;
 }
 
+// Who the server thinks you are. The browser used to decide this for itself.
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  res.json({
+    identityId: req.user.identityId,
+    role: req.user.role,
+    mspId: req.user.mspId,
+    email: req.user.email || null,
+    canSwitchIdentity: true,
+    personal: false,
+  });
+});
+
 app.get('/api/admin/ops', authMiddleware, async (req, res) => {
   // The operator key opens this view on its own, even alongside a browser
   // session: the browser always names an identity of its own, and that was

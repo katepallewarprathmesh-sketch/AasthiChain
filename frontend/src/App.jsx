@@ -329,7 +329,11 @@ function Nav({ user, onLogout, onRoleSwitch }) {
           )}
           {user ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 8, padding: '4px 8px' }}>
+              {/* The role switcher moves you between the shared demo
+                  identities. Only a session the server lets do that should
+                  see it; for everyone else it offered to make them someone
+                  else and the server would simply ignore the request. */}
+              <div style={{ display: user.canSwitchIdentity === false ? 'none' : 'flex', alignItems: 'center', gap: 8, background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 8, padding: '4px 8px' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: dark ? '#64718A' : '#9CA3AF' }}>ROLE</span>
                 <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: twoRow ? 130 : isMobile ? 110 : undefined }}>
                   {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
@@ -426,6 +430,33 @@ function AppContent({ user, setUser }) {
     localStorage.setItem('aasthi_user', JSON.stringify(aasthiUser))
     setInternalUser(aasthiUser)
     setUser(aasthiUser)
+
+    // The identity above is a guess the browser makes about itself, and it
+    // guesses investor1 for everybody. Ask the server which identity this
+    // session actually resolves to and use that instead — otherwise the
+    // dashboard reads someone else's positions, or is refused for reading
+    // its own.
+    ;(async () => {
+      try {
+        const res = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}` },
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const me = await res.json()
+        if (!me || !me.identityId) return
+        const resolved = {
+          ...aasthiUser,
+          identityId: me.identityId,
+          role: me.role || aasthiUser.role,
+          mspId: me.mspId || aasthiUser.mspId,
+          canSwitchIdentity: !!me.canSwitchIdentity,
+        }
+        localStorage.setItem('aasthi_user', JSON.stringify(resolved))
+        setInternalUser(resolved)
+        setUser(resolved)
+      } catch { /* leave the local guess in place */ }
+    })()
   }, [isClerkConfigured, isLoaded, isSignedIn, clerkUser])
 
   const handleLogout = async () => {

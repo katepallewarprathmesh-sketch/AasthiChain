@@ -43,6 +43,7 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | `UMI_GATEWAY_URL` | web app | address of the settlement core; unset means the rail reports unreachable |
 | `ADMIN_DASHBOARD_KEY` | web app | operator key: private analytics, ops queue, deployment diagnostics |
 | `SUPERVISOR_EMAILS` | web app | comma-separated emails allowed to act as registrar/regulator |
+| `IDENTITY_ALIASES` | web app | pin named people to an existing ledger identity, e.g. `you@example.com=investor1` |
 | `SUPERVISOR_CLERK_IDS` | web app | same, by Clerk user id (`user_…`) |
 
 ### Getting into the operator panels
@@ -57,6 +58,24 @@ insights dashboard. There are two supported ways in, both checked on the server:
    **The key reads; it does not act.** Anything that changes state needs a signed-in person, so
    the action has a name against it — the two exceptions are the idempotent maintenance routes
    `/api/npci/rail/backfill` and `/api/db/migrate`.
+### Who a signed-in person is
+
+Each signed-in person resolves to their own ledger identity, derived from their Clerk
+subject (`person_user_2ab…`). Before, every signed-in person became `investor1`, which meant
+ownership checks could not tell two investors apart.
+
+Positions created under the old behaviour still belong to `investor1`. To hand them to a real
+person, name them in `IDENTITY_ALIASES`:
+
+```
+IDENTITY_ALIASES=you@example.com=investor1,colleague@example.com=investor2
+```
+
+Matched on the verified email or the Clerk subject. Anyone not named there gets their own
+identity, and a first-time person inherits the mock `VERIFIED` KYC standing they previously
+had as `investor1`, so the buying flow is unchanged — replace that with a real provider before
+this handles real money.
+
 2. **A named operator.** Put your sign-in email in `SUPERVISOR_EMAILS` (or your Clerk user id in
    `SUPERVISOR_CLERK_IDS`). That person may then act as `registrar1` or `regulator1`. A role set in
    the Clerk user's public metadata (`role` or `fabricIdentity`) works too.
