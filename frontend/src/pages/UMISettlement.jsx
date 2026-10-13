@@ -15,7 +15,8 @@
 // is not running the page says so plainly and nothing else in the app changes.
 
 import React, { useCallback, useEffect, useState } from 'react'
-import api from '../lib/api'
+import { umiFetch as umi } from '../lib/umiFetch'
+import WorkDeskPanel from '../components/WorkDeskPanel'
 
 const C = {
   paper: '#F7F5F0', navy: '#1E3A5F', line: '#E5E7EB', mut: '#6B7280',
@@ -26,23 +27,6 @@ const C = {
 
 const money = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
 const num = (n) => Number(n || 0).toLocaleString('en-IN')
-
-async function umi(path, options = {}) {
-  // The rail decides what a caller may read or move, so it has to be told who
-  // is asking. This page built its own fetch and sent no identity at all, so
-  // every participant-scoped route answered ERR_UMI_NO_IDENTITY however the
-  // person was signed in. Borrow the same headers the rest of the app sends.
-  const res = await fetch('/api/umi' + path, {
-    headers: { ...api.getAuthHeaders(), ...api.operatorHeaders('/api/umi' + path) },
-    ...options,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    method: options.body ? (options.method || 'POST') : (options.method || 'GET'),
-  })
-  const text = await res.text()
-  let data = {}
-  try { data = text ? JSON.parse(text) : {} } catch { data = { error: 'ERR_BAD_RESPONSE', message: text.slice(0, 200) } }
-  return { ok: res.ok, status: res.status, data }
-}
 
 // The rail returns machine codes. Operators need a sentence that says what to do.
 const ERRORS = {
@@ -811,6 +795,8 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           </div>
         )}
       </Card>
+
+      <WorkDeskPanel properties={properties} participants={participants} propLabel={propLabel} />
       </>)}
     </div>
   )

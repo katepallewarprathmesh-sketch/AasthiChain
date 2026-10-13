@@ -41,6 +41,9 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | `VITE_CLERK_PUBLISHABLE_KEY` | web app | Clerk auth. Use a `pk_live_` production key. |
 | `CLERK_ISSUER` | web app | Clerk Frontend API URL. **Set it** — without it, session signatures are not verified. |
 | `UMI_GATEWAY_URL` | web app | address of the settlement core; unset means the rail reports unreachable |
+| `WORK_ENABLED` | settlement core | `false` removes the work-order desk (`/umi/work/*`) and changes nothing else |
+| `WORK_PROVIDER_URL` | settlement core | Rezoomex endpoint for publishing work orders; unset means the adapter runs in simulation and says so on every payload |
+| `WORK_PROVIDER_KEY` | settlement core | bearer token for the above; both must be set before the adapter reports `live` |
 | `ADMIN_DASHBOARD_KEY` | web app | operator key: private analytics, ops queue, deployment diagnostics |
 | `SUPERVISOR_EMAILS` | web app | comma-separated emails allowed to act as registrar/regulator |
 | `IDENTITY_ALIASES` | web app | pin named people to an existing ledger identity, e.g. `you@example.com=investor1` |

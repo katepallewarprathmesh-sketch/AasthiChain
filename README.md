@@ -125,6 +125,21 @@ implemented here, end to end, and can be run and audited from this repository.
 Settlement refusals are always specific — which side was short, and by how much — never a generic
 error.
 
+### Work orders — upkeep paid on delivery
+
+A tokenised building still has to be inspected, repaired, revalued and re-verified, and that cost
+used to sit outside the model entirely: off-ledger, on trust, against an invoice nobody could audit.
+The work desk applies the rail's own discipline to it. The fee is **reserved** on the funder's e₹-W
+wallet when the order is funded — reserved money cannot be spent on anything else, including a
+settlement — and it moves to the worker in the same locked step that anchors the deliverable's
+SHA-256 to the ledger. There is no state in which someone has been paid and no evidence exists.
+
+Only the funder pays out, only the assigned worker can deliver, and a dispute freezes the escrow
+rather than deciding anything. The talent boundary is an adapter for **Rezoomex**, the Pune gig-work
+platform whose own premise is that pay follows task completion; it is marked `simulation` on every
+payload until `WORK_PROVIDER_URL` and `WORK_PROVIDER_KEY` are set. Design notes:
+[`docs/WORK_ORDERS.md`](docs/WORK_ORDERS.md).
+
 ### Money leg — UPI Collect
 
 A payment is a lifecycle, not a single hop: requested, approved, released, reconciled — and every

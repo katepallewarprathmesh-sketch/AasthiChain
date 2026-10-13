@@ -28,6 +28,7 @@ and the UPI payment lifecycle; it does not own balances, positions or the chain.
 | **Experience** | what each role can see and do, and the public pages anyone may read |
 | **Access** | establishes who is calling, and decides what that caller is entitled to touch |
 | **Settlement** | holds the cash leg and the ownership leg, and moves them as one |
+| **Work** | escrows a fee against a defined deliverable, and releases it only against anchored evidence (see [WORK_ORDERS.md](WORK_ORDERS.md)) |
 | **Record** | the append-only history every other layer answers to |
 
 The experience and the settlement core deploy independently, so either can be replaced — or fail —

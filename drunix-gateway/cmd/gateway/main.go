@@ -110,6 +110,22 @@ func main() {
 			log.Printf("UMI demo state seeded: 15000 tokens to %s, e₹-W wallets investor1 ₹1,00,000 / investor2 ₹50,000",
 				envOr("UMI_SEED_OWNER", "originator1"))
 		}
+
+		// Work desk — escrowed property upkeep paid on accepted delivery
+		// (work.go), with the Rezoomex adapter at the talent boundary.
+		// WORK_ENABLED=false removes the routes and changes nothing else.
+		if os.Getenv("WORK_ENABLED") != "false" {
+			provider := drunix.NewRezoomexProvider()
+			srv.Work = drunix.NewWorkDesk(srv.UMI, provider)
+			// The chain is the desk's durable store: replaying WORK_* blocks
+			// restores the orders and re-applies any escrow that was still
+			// held when the process stopped.
+			if n := srv.Work.RestoreWorkFromChain(); n > 0 {
+				log.Printf("Work desk restored %d order(s) from the ledger", n)
+			}
+			log.Printf("Work desk mounted at /umi/work/* — escrow released against an anchored deliverable; talent provider %q mode=%s",
+				provider.Name(), provider.Mode())
+		}
 	}
 	log.Printf("Drunix pipeline wired: LitePeer + Orderer(3, RAFT sim) + ValidationService + CommittingPeer on hash-chained ledger")
 	// PaaS hosts (Render, Railway, Cloud Run, Fly) inject $PORT — honour it,
