@@ -32,9 +32,9 @@ export const ROUTE_SEO = {
       'Inspect the append-only ownership ledger block by block. SHA-512 linkage, merkle roots and live chain verification for every tokenised property transfer.',
   },
   '/umi': {
-    title: 'UMI Settlement Rail — Atomic DvP in e₹-W | AasthiChain',
+    title: 'Aasthi Settlement Interface — Atomic DvP in e₹-W | AasthiChain',
     description:
-      "Watch an atomic delivery-versus-payment settle on a simulation of RBI's Unified Market Interface: securities leg and wholesale CBDC cash leg commit in one block, or neither moves.",
+      "ASI is AasthiChain's own settlement rail, built to the pattern RBI set out for the Unified Market Interface: the securities leg and the wholesale CBDC cash leg commit in one block, or neither moves.",
   },
   '/tools': {
     title: 'Free Property Investment Calculators | AasthiChain',
