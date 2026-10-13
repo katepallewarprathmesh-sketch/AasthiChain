@@ -29,7 +29,7 @@ the money leg and the ownership leg as one atomic operation. Both move, or neith
 > ledger, the atomicity, the verification rules and the guardrails. The exact line between the two
 > is itemised at the end of this file.
 
-**Contents** — [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](#contributing)
+**Contents** — [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Pages](#pages) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](#contributing)
 
 ---
 
@@ -153,12 +153,34 @@ environment.
 | `chaincode/` | Hyperledger Fabric chaincode (Go) for the Fabric deployment path. |
 | `api-gateway/`, `payment-gateway/` | Go services for the Fabric path and the payment leg. |
 | `contracts/` | Solidity escrow experiment (public-chain, simulated). |
-| `tests/` | 58 `.mjs` end-to-end suites, driven by `regression.sh`. |
+| `tests/` | 59 `.mjs` end-to-end suites, driven by `regression.sh`. |
 | `scripts/`, `Makefile`, `regression.sh` | Dev bootstrap, common tasks, the full sweep. |
 | `docs/` | [Deployment](docs/DEPLOYMENT.md) · [Work orders](docs/WORK_ORDERS.md) · [Demo walkthrough](docs/DEMO.md) |
+| `SECURITY.md` | What is in scope, what is openly simulated, and how to report a flaw privately. |
 
 This is **four independent Go modules** plus a Vite frontend and a Node API — a root-level
 `go build ./...` cannot work. CI builds each module from its own directory.
+
+---
+
+## Pages
+
+Everything is public to read except the five marked **session**. Search engines are
+welcome on the public ones.
+
+| Route | What it is |
+|---|---|
+| `/` · `/marketplace` · `/property/:id` | landing, the catalogue, and a single listing with its verification panel |
+| `/market` | secondary market — holders trading tokens with each other |
+| `/umi` | **the settlement rail.** DvP, e₹-W wallets, pilot ISINs, servicing, baskets, the work desk |
+| `/ledger` | block explorer — every state change, replayable from the first block |
+| `/verify` | hash your own copy of a deed and check it against the ledger, without uploading it |
+| `/insights` | platform metrics; operator detail needs the key |
+| `/dashboard` · `/wallet` | **session.** holdings, income, settlement history, e₹-W balance |
+| `/admin` · `/admin/ops` | **session.** operator queues — what is waiting on a human |
+| `/regulator` | **session.** supervisory view: halts, cap tables, reconciliation |
+| `/learn` · `/tools` | index pages, plus three explainers and six calculators beneath them |
+| `/login` · `/about` · `/support` · `/privacy` · `/terms` | sign-in and the ordinary pages a real platform has |
 
 ---
 
@@ -211,7 +233,7 @@ The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reco
 ## Testing
 
 ```bash
-npm test                  # regression.sh — 103 checks across 58 suites (needs both servers up)
+npm test                  # regression.sh — 104 checks across 59 suites (needs both servers up)
 make umi-test             # go vet + go test -race ./... in the settlement core
 cd frontend && npm run smoke
 ```
@@ -373,7 +395,7 @@ Issues and pull requests are welcome.
 1. Fork, branch from `main`.
 2. Keep money rules in the Go core — see [the design rule](#the-design-rule). A rule added to the JS
    edge will be asked to move.
-3. Run `npm test` (103 checks) and `make umi-test` before opening a PR, and run `gofmt` — CI enforces
+3. Run `npm test` (104 checks) and `make umi-test` before opening a PR, and run `gofmt` — CI enforces
    it.
 4. If you touch `frontend/api/index.js`, check whether `mock-api-server.js` needs the same change.
 5. New behaviour ships with a test that fails without it.
