@@ -380,6 +380,8 @@ Issues and pull requests are welcome.
 
 Commit messages are plain language describing the *why*, not a changelog of the diff.
 
+Found a security flaw? Please report it privately — see [`SECURITY.md`](SECURITY.md).
+
 ---
 
 <details>
