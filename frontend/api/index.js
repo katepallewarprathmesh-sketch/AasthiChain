@@ -1689,12 +1689,29 @@ function getUser(req) {
           // operator key, may act as a supervisory identity. Everyone else
           // may still switch between their own non-supervisory identities.
           const entitled = DEMO_AUTH || operator || sessionIsOperator(payload);
-          // Only an entitled session may wear one of the shared demo
-          // identities. For everyone else the header is ignored outright:
-          // honouring it was how every signed-in person became investor1,
-          // because that is what the browser puts there by default.
-          const mapped = claimed && entitled ? claimed : null;
-          if (mapped) return { ...mapped, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, entitled: true, operatorKey: operator || undefined };
+          // A verified session may also wear one of the five demo roles when
+          // the deployment allows it, which it does by default.
+          //
+          // Tying the role switcher to SUPERVISOR_CLERK_IDS made the headline
+          // feature of the demo depend on an environment variable being
+          // right, and when it was not there was no way to tell from the
+          // outside: the dropdown simply did not appear. This is a walkthrough
+          // of a simulated market, and being able to look at it as the
+          // registrar and then as the regulator is the walkthrough.
+          //
+          // The audit finding this reopens is narrower than it looks. What
+          // was closed was an unauthenticated header: `X-Fabric-Identity:
+          // regulator1` on a bare curl made you the regulator. That stays
+          // closed. This path requires a verified session first, and it
+          // grants only the five named demo identities, never an arbitrary
+          // one. Set DEMO_ROLE_SWITCH=false to turn it off, and /trust says
+          // plainly that it is on.
+          const demoSwitch = String(process.env.DEMO_ROLE_SWITCH || '').toLowerCase() !== 'false';
+          const mapped = claimed && (entitled || demoSwitch) ? claimed : null;
+          // `entitled` stays reserved for a real operator: it is what the
+          // diagnostics and ops views read, and wearing a demo role must not
+          // quietly hand those over.
+          if (mapped) return { ...mapped, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, entitled: entitled || undefined, demoRole: !entitled || undefined, operatorKey: operator || undefined };
           // No identity asked for, but the session itself carries one.
           const fromClaim = roleMap[sessionRoleClaim(payload)];
           if (fromClaim) return { ...fromClaim, clerkId: payload.sub, email: sessionEmail(payload), clerk: true, entitled: true };
@@ -3658,7 +3675,8 @@ export default async function handler(req, res) {
         clerkId: user.clerkId || null,
         // Whether this session may act as one of the shared demo identities.
         // The role switcher in the header exists only for those who can.
-        canSwitchIdentity: !!(DEMO_AUTH || user.entitled || user.operatorKey),
+        canSwitchIdentity: !!(DEMO_AUTH || user.entitled || user.operatorKey || user.demoRole ||
+          (user.clerk && String(process.env.DEMO_ROLE_SWITCH || '').toLowerCase() !== 'false')),
         personal: !!user.personal,
       });
     }
@@ -5863,6 +5881,7 @@ export default async function handler(req, res) {
         ],
         knownGaps: [
           'KYC verification is simulated. A new account starts UNVERIFIED and the gate refuses it, but the step that clears it checks no document.',
+          'Any signed-in person can act as one of the five demo roles, including the regulator, because walking through the market from each side is the point of the demo. It needs a verified session and is limited to those five named identities, never an arbitrary one, and an unidentified caller is still refused by the rail. Set DEMO_ROLE_SWITCH=false to close it.',
           'The rail is a single-writer design, so there is no MVCC read-write conflict handling as a real Fabric network would need.',
           'Rail state is in-memory without DATABASE_URL.',
         ],
@@ -5876,8 +5895,17 @@ export default async function handler(req, res) {
     // public, but it is deliberately NOT a write surface either: there is
     // nothing here to act on, only to read.
     if (path === '/api/admin/diagnostics' || path.startsWith('/api/admin/diagnostics/')) {
+      // A demo role is a costume, not a credential.
+      //
+      // The role-based branch below was written when wearing regulator1
+      // meant the deployment had named you. Now that any signed-in person
+      // can pick a demo role from a dropdown, that branch would hand the
+      // deployment's own error log, with real user identities in it, to
+      // anyone who chose Regulator. Demo data is fair game in this demo;
+      // diagnostics are not demo data.
+      const wearingDemoRole = Boolean(user && user.demoRole);
       const mayRead = DEMO_AUTH || operatorKeyOK(req) || (user && (user.entitled || user.operatorKey))
-        || ['regulator', 'registrar'].includes(String((user && user.role) || '').toLowerCase());
+        || (!wearingDemoRole && ['regulator', 'registrar'].includes(String((user && user.role) || '').toLowerCase()));
       if (!mayRead) {
         return res.status(403).json({
           error: 'ERR_NOT_AUTHORISED',
