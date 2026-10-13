@@ -1081,6 +1081,26 @@ function railProxyAuth() {
   return process.env.UMI_PROXY_SECRET ? { 'X-Proxy-Auth': process.env.UMI_PROXY_SECRET } : {};
 }
 
+// A hosted JSON-RPC provider carries its API key in the URL path or query, and
+// the rail puts its endpoint into human-readable status strings. Those strings
+// are served publicly. The rail redacts them at source now, but a rail that
+// has not been redeployed yet does not, and this proxy is the last place the
+// bytes pass through before a browser sees them. Reduce every URL we forward
+// to scheme and host: an endpoint is worth showing, a credential is not.
+function scrubEndpointSecrets(text) {
+  if (typeof text !== 'string' || text.indexOf('http') === -1) return text;
+  return text.replace(/https?:\/\/[^\s"'\\]+/g, (raw) => {
+    try {
+      const u = new URL(raw);
+      // Keep plain origins and our own repo links intact; strip anything that
+      // carries a path or a query, which is where provider keys live.
+      if ((u.pathname === '/' || u.pathname === '') && !u.search) return raw;
+      if (/(github|aasthi|etherscan)\./i.test(u.hostname)) return raw;
+      return u.origin;
+    } catch { return raw; }
+  });
+}
+
 // The honesty page describes boundaries that live on the rail host, so it has
 // to ask the rail. A short timeout and a null on failure: an unreachable rail
 // must leave the page saying "unknown", never "not configured".
@@ -5665,7 +5685,7 @@ export default async function handler(req, res) {
             gateway: base,
           });
         }
-        return res.status(upstream.status).send(text);
+        return res.status(upstream.status).send(scrubEndpointSecrets(text));
       } catch (e) {
         return res.status(503).json({
           error: 'ERR_UMI_RAIL_UNAVAILABLE',
