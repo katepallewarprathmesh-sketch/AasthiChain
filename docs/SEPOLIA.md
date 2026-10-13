@@ -10,12 +10,26 @@ Nothing in this document has been run against Sepolia. It is written from the
 code that would do it, and the fact that it is untried is exactly why the
 trust page still says the connector is not configured.
 
-## What you need
+## What you need, and what you do not
 
-- A Sepolia RPC endpoint. Any provider, or your own node.
-- An account with a little Sepolia ETH, from a faucet. Deployment and each
-  anchor cost gas; nothing here needs real money.
-- The private key or an unlocked account for that address.
+Read and write have very different requirements here, and the first version
+of this document ran them together. They are separate:
+
+**To verify cross-ledger commits (the interop connector), you need only an RPC
+URL.** The check is `eth_call` against `verifyDigest`, which is a read. No
+account, no private key, no Sepolia ETH. Any public Sepolia endpoint works.
+
+**To write document anchors (the mirror in `evm_mirror.go`), you need more,
+and the current code cannot do it through a hosted provider.** It calls
+`eth_sendTransaction`, which asks the node to sign. Infura, Alchemy and the
+endpoint behind MetaMask hold no keys for you, so they reject it. Writing
+needs either a node that holds an unlocked account (anvil, geth, a local
+signer in front of the provider) or local signing in the mirror, which is not
+written yet.
+
+So for the interop work the sequence is: deploy the registry once from a
+wallet you already control, then give the rail a read-only RPC URL and the
+contract address. Deployment is the only step that spends gas.
 
 ## 1. Deploy the registry
 
@@ -44,7 +58,8 @@ On the rail host (Render), set:
 ```
 EVM_RPC_URL=https://sepolia.<your provider>/<key>
 EVM_REGISTRY_ADDRESS=0x<deployed address>
-EVM_SENDER_ADDRESS=0x<account with the registrar role>
+# only for anchor writes, and only against a node that holds this account:
+# EVM_SENDER_ADDRESS=0x<account with the registrar role>
 ```
 
 Restart. Two things change on their own:
@@ -57,8 +72,10 @@ Restart. Two things change on their own:
   back.
 
 The same variables also switch on the existing document mirror
-(`evm_mirror.go`), so document anchors start being written to Sepolia too.
-KYC evidence is excluded from that mirror by design and stays excluded.
+(`evm_mirror.go`). Against a hosted provider its writes will fail, for the
+signing reason above, and that failure is contained: anchoring to the local
+chain is unaffected and no settlement can fail because of it. KYC evidence is
+excluded from the mirror by design and stays excluded.
 
 ## 3. Confirm it rather than assume it
 
