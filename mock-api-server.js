@@ -2099,23 +2099,47 @@ function payuRequestHash(key, txnid, amount, productinfo, firstname, email, udf,
     [key, txnid, amount, productinfo, firstname, email, udf[0], udf[1], udf[2], udf[3], udf[4], '', '', '', '', '', salt].join('|')
   ).digest('hex');
 }
-function payuResponseHash(salt, status, email, firstname, productinfo, amount, txnid, key, udf) {
+function payuResponseHash(salt, status, email, firstname, productinfo, amount, txnid, key, udf, prefix) {
   // PayU formula: sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
   // The 6 pipes after `status` = 5 EMPTY slots (udf10..udf6). Verified against docs.payu.in —
   // a previous 4-slot version rejected every real PayU callback (synthetic tests passed
   // because signer and verifier shared the same wrong formula).
-  return crypto.createHash('sha512').update(
-    [salt, status, '', '', '', '', '', udf[4], udf[3], udf[2], udf[1], udf[0], email, firstname, productinfo, amount, txnid, key].join('|')
-  ).digest('hex');
+  //
+  // `prefix` carries the documented variants. PayU prepends additional_charges,
+  // and inserts splitInfo after status, when those features are switched on for
+  // the merchant account — a dashboard toggle, with no code change on our side.
+  const head = [salt, status];
+  if (prefix && prefix.splitInfo) head.push(prefix.splitInfo);
+  const parts = [...head, '', '', '', '', '', udf[4], udf[3], udf[2], udf[1], udf[0], email, firstname, productinfo, amount, txnid, key];
+  if (prefix && prefix.additionalCharges) parts.unshift(prefix.additionalCharges);
+  return crypto.createHash('sha512').update(parts.join('|')).digest('hex');
 }
 function verifyPayUResponse(params, key, salt) {
   const g = (k) => String(params[k] ?? '').trim();
   const udf = [g('udf1'), g('udf2'), g('udf3'), g('udf4'), g('udf5')];
-  const want = payuResponseHash(salt, g('status'), g('email'), g('firstname'), g('productinfo'), g('amount'), g('txnid'), key, udf);
-  const got = g('hash');
-  try {
-    return got.length === want.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
-  } catch { return false; }
+  const got = g('hash').toLowerCase();
+  // PayU documents four shapes of the reverse hash, and which one arrives is a
+  // property of the merchant account rather than of our request. Rejecting the
+  // three we did not expect would mean 403-ing a callback for money PayU had
+  // already taken, leaving the payment PENDING for ever. So try each, and
+  // record which one matched.
+  const addl = g('additional_charges') || g('additionalCharges');
+  const split = g('splitInfo');
+  const variants = [
+    ['generic', {}],
+    ...(addl ? [['additional_charges', { additionalCharges: addl }]] : []),
+    ...(split ? [['split', { splitInfo: split }]] : []),
+    ...(addl && split ? [['additional_charges+split', { additionalCharges: addl, splitInfo: split }]] : []),
+  ];
+  for (const [name, prefix] of variants) {
+    const want = payuResponseHash(salt, g('status'), g('email'), g('firstname'), g('productinfo'), g('amount'), g('txnid'), key, udf, prefix);
+    try {
+      if (got.length === want.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got))) {
+        return { ok: true, variant: name };
+      }
+    } catch { /* length mismatch — try the next shape */ }
+  }
+  return { ok: false, variant: null };
 }
 // Payments are persisted and replayed by idempotency key, so a checkout built
 // before transactionCurrency was added would keep replaying without it and
@@ -2365,7 +2389,8 @@ app.all('/api/npci/payu/callback', (req, res) => {
   const params = parsePayUParams(req);
   const g = (k) => String(params[k] ?? '').trim();
   if (!g('txnid')) return res.status(400).send('<html><body><h3>txnid missing</h3></body></html>');
-  if (!verifyPayUResponse(params, payu.key, payu.salt)) {
+  const sig = verifyPayUResponse(params, payu.key, payu.salt);
+  if (!sig.ok) {
     addWebhookAudit({ webhookId: `payu-hashfail-${Date.now()}`, paymentId: g('txnid'), status: g('status'), provider: 'payu', timestamp: new Date(), result: 'HASH_MISMATCH', raw: params });
     return res.status(403).send('<html><body><h3>✗ Hash verification failed — payload rejected</h3></body></html>');
   }
@@ -2397,7 +2422,7 @@ app.all('/api/npci/payu/callback', (req, res) => {
   pay.webhookReceivedAt = new Date();
   npciIdem[webhookId] = pay;
   npciPayments[pay.paymentId] = pay;
-  addWebhookAudit({ webhookId, paymentId: pay.paymentId, status: pay.status, rrn: pay.rrn, utr: pay.utr, provider: 'payu', amount: pay.amountINR, timestamp: new Date(), result: 'OK', raw: params });
+  addWebhookAudit({ webhookId, paymentId: pay.paymentId, status: pay.status, rrn: pay.rrn, utr: pay.utr, provider: 'payu', amount: pay.amountINR, timestamp: new Date(), result: 'OK', hashVariant: sig.variant, raw: params });
   // Settle here rather than waiting for the browser to come back and drive
   // it. PayU has taken the money by now; if the tab is closed or the return
   // trip fails the tokens would never move and nothing would reach the
