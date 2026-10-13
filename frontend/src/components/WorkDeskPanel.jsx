@@ -9,7 +9,7 @@
 // All logic is in Go (drunix-gateway/work.go). This is a thin client.
 
 import React, { useCallback, useEffect, useState } from 'react'
-import { umiFetch, explainRail } from '../lib/umiFetch'
+import { umiFetch, umiPost, explainRail } from '../lib/umiFetch'
 
 const C = {
   navy: '#1E3A5F', line: '#E5E7EB', mut: '#6B7280',
@@ -88,31 +88,29 @@ export default function WorkDeskPanel({ properties = [], participants = [], prop
   }
 
   const create = () => act(
-    () => umiFetch('/work', {
-      body: {
-        assetId, title, category, spec, feeINR: Number(fee),
-        acceptanceCriteria: criteria.split('\n').map(s => s.trim()).filter(Boolean),
-      },
+    () => umiPost('/work', {
+      assetId, title, category, spec, feeINR: Number(fee),
+      acceptanceCriteria: criteria.split('\n').map(s => s.trim()).filter(Boolean),
     }),
     (d) => `Work order ${d.order.orderId} opened. No money is held until you fund it.`)
 
-  const fund = (id) => act(() => umiFetch(`/work/${id}/fund`),
+  const fund = (id) => act(() => umiPost(`/work/${id}/fund`),
     (d) => `${money(d.order.feeINR)} reserved on the funder's e₹-W wallet and held against delivery.`)
 
-  const assign = (id, worker) => worker && act(() => umiFetch(`/work/${id}/assign`, { body: { worker } }),
+  const assign = (id, worker) => worker && act(() => umiPost(`/work/${id}/assign`, { worker }),
     (d) => `${d.order.worker} is now engaged on ${d.order.orderId}.`)
 
-  const accept = (id) => act(() => umiFetch(`/work/${id}/accept`),
+  const accept = (id) => act(() => umiPost(`/work/${id}/accept`),
     (d) => `Accepted — ${money(d.order.feeINR)} released to ${d.order.worker}, committed as block #${d.order.blockHeight}.`)
 
   const dispute = (id) => {
     const reason = window.prompt('What is wrong with the delivery?')
-    if (reason) act(() => umiFetch(`/work/${id}/dispute`, { body: { reason } }), 'Disputed. The escrow stays frozen until it is resolved.')
+    if (reason) act(() => umiPost(`/work/${id}/dispute`, { reason }), 'Disputed. The escrow stays frozen until it is resolved.')
   }
 
   const refund = (id) => {
     const reason = window.prompt('Why is this being refunded?') || 'no reason given'
-    act(() => umiFetch(`/work/${id}/refund`, { body: { reason } }),
+    act(() => umiPost(`/work/${id}/refund`, { reason }),
       (d) => `${money(d.order.feeINR)} released back to ${d.order.funder}.`)
   }
 

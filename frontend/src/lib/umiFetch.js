@@ -8,6 +8,14 @@
 
 import api from './api'
 
+// Mutations must say so. umiFetch infers GET when there is no body, which is
+// right for reads and quietly wrong for an action that needs no arguments:
+// "fund this order" and "accept this delivery" are POSTs carrying nothing, and
+// inferring GET for them sent the work desk's two most important buttons to
+// the rail as reads. It answered ERR_METHOD and the escrow could not be moved.
+// Anything that changes state goes through here, where the method is stated.
+export const umiPost = (path, body) => umiFetch(path, { method: 'POST', body })
+
 export async function umiFetch(path, options = {}) {
   const url = '/api/umi' + path
   const res = await fetch(url, {
