@@ -335,6 +335,11 @@ type UMIRail struct {
 	// generated certificates into (see certificates.go). Optional.
 	docs *DocumentRegistry
 
+	// interop is the Cacti-style cross-ledger gateway (see interop.go). It
+	// keeps its own lock and moves tokens through the securities ledger,
+	// never through the settlement path.
+	interop *InteropGateway
+
 	// private holds the Fabric-style private data collections (see
 	// privatedata.go). It keeps its own lock and owns no balance, so a
 	// write to it can never delay a settlement.
@@ -393,7 +398,7 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 	if sec == nil {
 		sec = NewMemorySecurities()
 	}
-	return &UMIRail{
+	r := &UMIRail{
 		wallets:       make(map[string]*CBDCWallet),
 		authorised:    make(map[string]int64),
 		derived:       make(map[string]bool),
@@ -410,6 +415,10 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		private:       newPrivateStore(chain),
 		notifications: newNotifyStore(),
 	}
+	// The gateway needs the rail it moves tokens on, so it is attached
+	// after the struct exists rather than inside the literal.
+	r.interop = newInteropGateway(r, chain)
+	return r
 }
 
 // SettlementCounts reports settled and failed totals plus a breakdown of the
@@ -441,6 +450,9 @@ func (r *UMIRail) PositionOf(assetID, holder string) int64 {
 	defer r.mu.Unlock()
 	return r.securities.Position(assetID, holder)
 }
+
+// Interop exposes the cross-ledger gateway (see interop.go).
+func (r *UMIRail) Interop() *InteropGateway { return r.interop }
 
 // Private exposes the private data collections (see privatedata.go).
 func (r *UMIRail) Private() *PrivateStore { return r.private }
@@ -508,6 +520,7 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	// because they were never on it. Outside the rail lock: the store has
 	// its own.
 	r.private.restorePrivateDataFromChain()
+	r.interop.restoreInteropFromChain(r.chain)
 
 	if mem, ok := r.securities.(*MemorySecurities); ok {
 		for _, p := range snap.Positions {

@@ -38,6 +38,11 @@ var umiEndpointList = []string{
 	"POST /umi/private/{collection}          {\"key\":\"...\",\"owner\":\"...\",\"value\":{...}}  (member roles only)",
 	"GET  /umi/private/{collection}/{key}",
 	"POST /umi/private/{collection}/{key}/verify  {\"value\":{...}}  check a copy you already hold",
+	"GET  /umi/interop",
+	"GET  /umi/interop/transfers?limit=50",
+	"POST /umi/interop/lock                  {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":10,\"remoteLedger\":\"evm\",\"remoteAccount\":\"0x...\"}",
+	"POST /umi/interop/{id}/commit           {\"remoteTxRef\":\"0x...\",\"digest\":\"...\"}  (supervisor)",
+	"POST /umi/interop/{id}/abort            {\"reason\":\"...\"}  returns the tokens",
 	"GET  /umi/reconciliation",
 	"POST /umi/seed                          {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":15000}  (demo positions only)",
 	"POST /umi/supply/restate                {\"assetId\":\"...\",\"holder\":\"...\",\"authorisedTokens\":15000,\"reason\":\"...\"}  (supervisor; corrects an inflated book)",
@@ -124,6 +129,8 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	// Private data collections (see privatedata.go): hashes on the chain,
 	// values behind a membership policy.
 	s.registerPrivateDataRoutes(mux)
+	// Cross-ledger transfer, Cacti-framed (see interop.go).
+	s.registerInteropRoutes(mux)
 	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)

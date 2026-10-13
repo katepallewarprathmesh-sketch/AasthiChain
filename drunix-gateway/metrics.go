@@ -108,6 +108,16 @@ func routeFor(path string) string {
 			return "/umi/documents/subject/{id}"
 		}
 		return "/umi/documents/{id}"
+	case p == "/umi/interop" || p == "/umi/interop/transfers" || p == "/umi/interop/lock":
+		return p
+	case strings.HasPrefix(p, "/umi/interop/"):
+		if strings.HasSuffix(p, "/commit") {
+			return "/umi/interop/{id}/commit"
+		}
+		if strings.HasSuffix(p, "/abort") {
+			return "/umi/interop/{id}/abort"
+		}
+		return "/umi/interop/{id}"
 	case p == "/umi/private/collections":
 		return "/umi/private/collections"
 	case strings.HasPrefix(p, "/umi/private/"):
