@@ -1,4 +1,10 @@
-// UMI Settlement — RBI Unified Market Interface rail (SEBI Demat 2.0 pattern).
+// Aasthi Settlement Interface (ASI) — our settlement rail, built to the
+// pattern RBI's Unified Market Interface describes (SEBI Demat 2.0): a
+// securities leg and a wholesale-CBDC cash leg that move as one.
+//
+// The name matters. This is our implementation, not a connection to the real
+// UMI, and nothing here speaks to RBI or a depository. The API paths stay
+// /api/umi/* because that is the pattern they implement.
 //
 // Securities leg: Drunix property-fraction tokens on the permissioned ledger.
 // Cash leg: wholesale CBDC (e₹-W) wallets.
@@ -9,6 +15,7 @@
 // is not running the page says so plainly and nothing else in the app changes.
 
 import React, { useCallback, useEffect, useState } from 'react'
+import api from '../lib/api'
 
 const C = {
   paper: '#F7F5F0', navy: '#1E3A5F', line: '#E5E7EB', mut: '#6B7280',
@@ -21,8 +28,12 @@ const money = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFra
 const num = (n) => Number(n || 0).toLocaleString('en-IN')
 
 async function umi(path, options = {}) {
+  // The rail decides what a caller may read or move, so it has to be told who
+  // is asking. This page built its own fetch and sent no identity at all, so
+  // every participant-scoped route answered ERR_UMI_NO_IDENTITY however the
+  // person was signed in. Borrow the same headers the rest of the app sends.
   const res = await fetch('/api/umi' + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...api.getAuthHeaders(), ...api.operatorHeaders('/api/umi' + path) },
     ...options,
     body: options.body ? JSON.stringify(options.body) : undefined,
     method: options.body ? (options.method || 'POST') : (options.method || 'GET'),
@@ -35,6 +46,9 @@ async function umi(path, options = {}) {
 
 // The rail returns machine codes. Operators need a sentence that says what to do.
 const ERRORS = {
+  ERR_UMI_NO_IDENTITY: 'The rail could not tell who is asking. Sign in, then try again — this action is recorded against a named participant.',
+  ERR_UMI_NOT_YOURS: 'That record belongs to another participant. Switch to their role, or ask as a regulator.',
+  ERR_UMI_NOT_SUPERVISOR: 'Only a regulator or an operator can do this — it creates money rather than moving it.',
   ERR_UMI_NO_HOLDERS: 'Nobody holds this asset except the payer, so there is nobody to pay. Settle a DvP to a buyer first, then distribute.',
   ERR_UMI_INSUFFICIENT_CBDC: 'The buyer\u2019s e\u20B9-W wallet does not hold enough cash for this instruction. Use the top-up button shown above, or add cash in step 1, then retry.',
   ERR_UMI_INSUFFICIENT_TOKENS: 'The seller does not hold that many tokens. Open \u201CDemo setup\u201D to give them a starting position, or lower the token count.',
@@ -344,7 +358,7 @@ export default function UMISettlement() {
   if (railDown) {
     return (
       <div className="container" style={{ padding: '28px 16px', maxWidth: 900 }}>
-        <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', color: C.navy }}>UMI Settlement Rail</h1>
+        <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', color: C.navy }}>Aasthi Settlement Interface</h1>
         <div style={{ background: C.warnBg, border: `1px solid ${C.warnLine}`, borderRadius: 12, padding: 18, color: C.warn }}>
           <strong>Rail offline.</strong>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#7C4A03' }}>{railDown.message || 'The Go UMI gateway is not reachable.'}</p>
@@ -360,10 +374,18 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
     <div className="container" style={{ padding: '24px 16px 60px', maxWidth: 1080 }}>
       <header style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 28, color: C.navy, margin: 0 }}>UMI Settlement Rail</h1>
+          <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 28, color: C.navy, margin: 0 }}>Aasthi Settlement Interface</h1>
           <Pill tone="warn">SIMULATION</Pill>
-          <Pill>Go · drunix-gateway/umi.go</Pill>
+          <Pill>ASI · built to the UMI pattern</Pill>
+          <Pill>Go · drunix-gateway</Pill>
         </div>
+        <p style={{ color: C.mut, fontSize: 13.5, maxWidth: 820, marginTop: 8 }}>
+          ASI is AasthiChain's own settlement rail. It follows the pattern RBI set out for the
+          Unified Market Interface — a securities leg and a wholesale central-bank-money leg that
+          settle as one — and implements it end to end here: wallets, atomic delivery-versus-payment,
+          asset servicing, baskets and a full reconciliation of the books. It is not connected to
+          RBI, NPCI or a depository, and does not claim to be.
+        </p>
         <p style={{ color: C.mut, fontSize: 13.5, maxWidth: 820, marginTop: 8 }}>
           {config?.pattern}
         </p>

@@ -101,12 +101,16 @@ holdings, income and settlement history in one place.
 
 ## The settlement rails
 
-### UMI — the Demat 2.0 cash leg
+### ASI — the Aasthi Settlement Interface
 
 In September 2026 SEBI and RBI launched **Demat 2.0**: bonds issued as native tokens on the
 depositories' permissioned DLT, with the **cash leg settled in wholesale CBDC (e₹-W)** through the
 Unified Market Interface — ₹1,025 crore issued by REC, L&T and IIFL. AasthiChain already had both
 ends. This is the middle.
+
+**ASI is our own rail, built to that pattern** — not a connection to the real UMI, which is a
+regulated rail reachable only through a bank partnership or the SEBI sandbox. What follows is
+implemented here, end to end, and can be run and audited from this repository.
 
 - **Atomic DvP.** Both legs move or neither does; a failure leaves no half-settled state behind.
 - **Central bank money is conserved.** Wallet balances always reconcile against lifetime funding —

@@ -147,5 +147,23 @@ const recon = await call('/api/umi/reconciliation', null);
 t('reconciliation is still readable by anyone', recon.status === 200, `got ${recon.status}`);
 t('  and still balances', recon.body && recon.body.conserved === true, JSON.stringify(recon.body).slice(0, 120));
 
+// ---- the identity actually reaches the rail
+//
+// The settlement page built its own fetch and sent no identity with it, so
+// every participant-scoped route answered ERR_UMI_NO_IDENTITY however the
+// person was signed in. A signed-in caller must come out the other side of
+// the proxy as somebody: refused for being the wrong participant is correct,
+// refused for being nobody is a bug.
+const sessionIsCarried = await call('/api/umi/wallets/investor1', INVESTOR2);
+t('a signed-in caller never reaches the rail anonymous',
+  (sessionIsCarried.body || {}).error !== 'ERR_UMI_NO_IDENTITY',
+  JSON.stringify(sessionIsCarried.body).slice(0, 120));
+t('  they are refused as the wrong participant instead',
+  sessionIsCarried.status === 403, `got ${sessionIsCarried.status}`);
+t('  and their own records open normally',
+  (await call('/api/umi/wallets/investor2', INVESTOR2)).status === 200);
+t('  while a caller with no session is still nobody',
+  ((await call('/api/umi/wallets/investor1', null)).body || {}).error === 'ERR_UMI_NO_IDENTITY');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
