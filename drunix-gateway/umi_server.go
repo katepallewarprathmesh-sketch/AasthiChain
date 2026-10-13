@@ -30,6 +30,7 @@ var umiEndpointList = []string{
 	"GET  /umi/assets/{assetId}",
 	"POST /umi/carbon/retire                 {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":10}",
 	"GET  /umi/carbon/retirements",
+	"GET  /umi/throughput",
 	"GET  /umi/reconciliation",
 	"POST /umi/seed                          {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":15000}  (demo positions only)",
 	"POST /umi/supply/restate                {\"assetId\":\"...\",\"holder\":\"...\",\"authorisedTokens\":15000,\"reason\":\"...\"}  (supervisor; corrects an inflated book)",
@@ -112,6 +113,7 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/assets/", s.handleUMIAsset)
 	mux.HandleFunc("/umi/carbon/retire", s.durabilityGate(s.handleUMICarbonRetire))
 	mux.HandleFunc("/umi/carbon/retirements", s.handleUMICarbonRetirements)
+	mux.HandleFunc("/umi/throughput", s.handleUMIThroughput)
 	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)

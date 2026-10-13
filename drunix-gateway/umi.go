@@ -357,6 +357,11 @@ type UMIRail struct {
 	// could be issued twice.
 	retired     map[string]int64
 	retirements []Retirement
+
+	// engine measures the settlement critical section (see throughput.go).
+	// Separate from the HTTP metrics because the question a reviewer asks
+	// about a settlement engine is not how long a request took.
+	engine *engineStats
 }
 
 // ServicingRecord is one holder's share of one servicing run — the row an
@@ -389,6 +394,7 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		derived:       make(map[string]bool),
 		assets:        make(map[string]*AssetProfile),
 		retired:       make(map[string]int64),
+		engine:        newEngineStats(),
 		isins:         make(map[string]*PilotISIN),
 		instructions:  make(map[string]*SettlementInstruction),
 		baskets:       make(map[string]*Basket),
@@ -911,7 +917,18 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	now := time.Now().UTC()
 	cashPaise := INRToPaise(float64(req.Tokens) * req.PricePerTokenINR)
 
+	// Measurement, not behaviour. started/queued bracket the wait for the
+	// settlement lock, which is the single-writer bottleneck this rail
+	// accepts on purpose; see throughput.go for why it is published rather
+	// than hidden. The result is recorded on every exit path, including the
+	// early returns, so a refused settlement still counts against latency.
+	started := time.Now()
+	r.engine.enterQueue()
 	r.mu.Lock()
+	r.engine.leaveQueue()
+	lockWait := time.Since(started)
+	settledOK := false
+	defer func() { r.engine.observe(lockWait, time.Since(started), settledOK) }()
 	si := &SettlementInstruction{
 		InstructionID:    r.nextID("UMI"),
 		AssetID:          req.AssetID,
@@ -1109,6 +1126,7 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	// Contract note: the confirmation a counterparty keeps. Filed after the
 	// lock is released and never able to affect the settlement above.
 	r.fileContractNote(si)
+	settledOK = si.Status == UMIStatusSettled
 	return si, nil
 }
 

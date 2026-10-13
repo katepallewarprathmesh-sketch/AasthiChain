@@ -18,6 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { umiFetch as umi } from '../lib/umiFetch'
 import WorkDeskPanel from '../components/WorkDeskPanel'
 import CarbonPanel from '../components/CarbonPanel'
+import ThroughputPanel from '../components/ThroughputPanel'
 
 const C = {
   paper: '#F7F5F0', navy: '#1E3A5F', line: '#E5E7EB', mut: '#6B7280',
@@ -873,6 +874,8 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       <WorkDeskPanel properties={properties} participants={participants} propLabel={propLabel} />
 
       <CarbonPanel participants={participants} />
+
+      <ThroughputPanel />
       </>)}
     </div>
   )
