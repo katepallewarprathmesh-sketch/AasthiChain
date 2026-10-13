@@ -15,21 +15,6 @@ const C = {
 
 const n = (v) => Number(v || 0).toLocaleString('en-IN')
 
-// The rail describes its connectors in prose, and for a hosted JSON-RPC
-// provider that prose contains the endpoint, whose path or query is the API
-// key. The rail and the proxy both strip it now, but a deployment can lag
-// behind either of them, so the component refuses to paint a URL it was
-// handed: scheme and host at most, never a path.
-function safeStatus(text) {
-  if (typeof text !== 'string') return text
-  return text.replace(/https?:\/\/\S+/g, (raw) => {
-    try {
-      const u = new URL(raw)
-      return u.origin
-    } catch { return 'the configured endpoint' }
-  })
-}
-
 export default function InteropPanel() {
   const [d, setD] = useState(null)
   const [rows, setRows] = useState([])
@@ -81,7 +66,6 @@ export default function InteropPanel() {
               </span>
             </div>
             <div style={{ fontSize: 11.5, color: C.mut, marginTop: 2 }}>{c.kind}</div>
-            <div style={{ fontSize: 11.5, color: '#334155', marginTop: 6 }}>{safeStatus(c.status)}</div>
           </div>
         ))}
       </div>

@@ -74,13 +74,14 @@ check('ordinary links are left alone', () => {
   assert.match(JSON.parse(sent).repo, /github\.com\/katepallewarprathmesh-sketch\/AasthiChain/)
 })
 
-// Belt and braces: the panel must not paint a raw URL even if both server
-// layers are stale.
+// The endpoint prose is no longer shown in the UI at all, so the only way a
+// URL can appear on screen is if someone puts it back.
 const panel = readFileSync(new URL('../frontend/src/components/InteropPanel.jsx', import.meta.url), 'utf8')
-check('the panel renders connector status through a scrubber', () => {
-  assert.match(panel, /function safeStatus/)
-  assert.match(panel, /\{safeStatus\(c\.status\)\}/)
-  assert.ok(!/>\{c\.status\}</.test(panel), 'raw c.status is still painted somewhere')
+check('the panel does not paint the connector status prose at all', () => {
+  assert.ok(!/\{c\.status\}/.test(panel), 'connector status is rendered again')
+  assert.ok(!/\{safeStatus\(/.test(panel), 'scrubbed status is rendered again')
+  // The badge is what the card is for, so it must survive the removal.
+  assert.match(panel, /c\.configured \? 'configured' : 'not configured'/)
 })
 
 rail.close()
