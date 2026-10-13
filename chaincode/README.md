@@ -1,13 +1,13 @@
-# Chaincode — AasthiChain
+# Chaincode: AasthiChain
 
 ## NPCI Drunix Tokenization
 
-This chaincode targets **NPCI Drunix** — NPCI's open-source blockchain platform for enterprise tokenization and digital assets (Hyperledger Fabric fork, Apache 2.0). Drunix is Fabric-compatible, so these Go contracts (fabric-contract-api) deploy as-is on a Drunix network:
+This chaincode targets **NPCI Drunix**, NPCI's open-source blockchain platform for enterprise tokenization and digital assets (Hyperledger Fabric fork, Apache 2.0). Drunix is Fabric-compatible, so these Go contracts (fabric-contract-api) deploy as-is on a Drunix network:
 
-- **Real-world assets as fractional tokens** — each verified property mints a fixed token supply (`MintPropertyTokens`), balances held per owner (`balance~assetId~ownerId` composite keys)
-- **UPI settlement mapped to Drunix identities** — the payment gateway's escrow release passes `drunixTransferId`; money (UPI Collect → UTR) and tokens (Drunix transfer) move atomically (DvP)
-- **T+0 settlement** — UPI handle (VPA) ↔ on-chain identity mapping in the gateway layer
-- **Governed multi-org network** — OriginatorMSP / RegistrarMSP / InvestorMSP / RegulatorMSP endorsement mirrors Drunix multi-organization networks
+- **Real-world assets as fractional tokens**: each verified property mints a fixed token supply (`MintPropertyTokens`), balances held per owner (`balance~assetId~ownerId` composite keys)
+- **UPI settlement mapped to Drunix identities**: the payment gateway's escrow release passes `drunixTransferId`; money (UPI Collect → UTR) and tokens (Drunix transfer) move atomically (DvP)
+- **T+0 settlement**: UPI handle (VPA) ↔ on-chain identity mapping in the gateway layer
+- **Governed multi-org network**: OriginatorMSP / RegistrarMSP / InvestorMSP / RegulatorMSP endorsement mirrors Drunix multi-organization networks
 
 Implements spec §5 API with full §6 edge cases.
 
@@ -37,7 +37,7 @@ Chaincode checks MSP at function level (defense in depth), but real enforcement 
 - KYC unverified: ERR_KYC_NOT_VERIFIED for both sender and receiver
 - Zero/negative amount: ERR_INVALID_AMOUNT
 - Frozen asset: check status != FROZEN before transfer
-- MVCC double-spend: Fabric's read-write set validation rejects second conflicting tx automatically — caller retries
+- MVCC double-spend: Fabric's read-write set validation rejects second conflicting tx automatically: caller retries
 - Integer-only tokens: no decimals, smallest unit = 1 token
 - Document hash collision: flagged via hash~docHash~assetId index
 - Clock skew: use block timestamp from `ctx.GetStub().GetTxTimestamp()`, not local peer clock
@@ -45,10 +45,10 @@ Chaincode checks MSP at function level (defense in depth), but real enforcement 
 
 ### SQL Indexes (Drunix on-chain SQL)
 In production Drunix, these would be actual SQL CREATE INDEX statements on the state DB:
-- `idx_balance_owner` on (ownerId) — fast wallet lookups
-- `idx_balance_asset` on (assetId) — cap table per property
-- `idx_property_status` on (status) — marketplace listing
-- `idx_transfer_asset_time` on (assetId, txTimestamp) — regulator audit
+- `idx_balance_owner` on (ownerId): fast wallet lookups
+- `idx_balance_asset` on (assetId): cap table per property
+- `idx_property_status` on (status): marketplace listing
+- `idx_transfer_asset_time` on (assetId, txTimestamp): regulator audit
 
 ### Testing
 ```bash

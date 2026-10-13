@@ -1,23 +1,23 @@
-# AasthiChain Payment Gateway — Go Implementation
+# AasthiChain Payment Gateway: Go Implementation
 
-Stay close with Golang — production-ready implementation of UPI Webhook + UTR reconciliation, DigiLocker KYC, Property Data, Persistent DB.
+Stay close with Golang: production-ready implementation of UPI Webhook + UTR reconciliation, DigiLocker KYC, Property Data, Persistent DB.
 
-## Architecture — Go Modules
+## Architecture: Go Modules
 
 ```
 payment-gateway/
-├── gateway.go              — Core UPI Collect: PENDING→CONFIRMED→RELEASED, idempotency, KYC, balance checks
-├── webhook.go              — NEW: Webhook + UTR reconciliation (Phase 1)
-├── digilocker.go           — NEW: DigiLocker KYC (Phase 2)
-├── property_data.go        — NEW: Property data verification Bhoomi/Dharani (Phase 3)
-├── db.go                   — NEW: Persistent DB abstraction file-backed/Postgres (Phase 4)
-├── server.go               — NEW: Go HTTP server integrating all modules
-├── real_npcibank.go        — Real NPCI via Setu/ICICI/Decentro
-├── gateway_test.go         — Existing tests
-├── webhook_test.go         — NEW: UTR12, webhook signature, idempotency, reconciliation
-├── digilocker_test.go      — NEW: DigiLocker OAuth flow
-├── property_data_test.go   — NEW: Property verification
-├── db_test.go              — NEW: FileStore, Postgres abstraction
+├── gateway.go              - Core UPI Collect: PENDING→CONFIRMED→RELEASED, idempotency, KYC, balance checks
+├── webhook.go              - NEW: Webhook + UTR reconciliation (Phase 1)
+├── digilocker.go           - NEW: DigiLocker KYC (Phase 2)
+├── property_data.go        - NEW: Property data verification Bhoomi/Dharani (Phase 3)
+├── db.go                   - NEW: Persistent DB abstraction file-backed/Postgres (Phase 4)
+├── server.go               - NEW: Go HTTP server integrating all modules
+├── real_npcibank.go        - Real NPCI via Setu/ICICI/Decentro
+├── gateway_test.go         - Existing tests
+├── webhook_test.go         - NEW: UTR12, webhook signature, idempotency, reconciliation
+├── digilocker_test.go      - NEW: DigiLocker OAuth flow
+├── property_data_test.go   - NEW: Property verification
+├── db_test.go              - NEW: FileStore, Postgres abstraction
 └── go.mod
 ```
 
@@ -83,11 +83,11 @@ type ReconciliationReport struct {
 ```
 
 ### Endpoints (Go server.go)
-- POST /api/npci/webhook — production webhook
-- GET /api/npci/utr/:utr — UTR lookup
-- GET /api/npci/reconcile — Regulator dashboard
-- POST /api/npci/webhook/test — test webhook
-- GET /api/npci/webhooks — audit log
+- POST /api/npci/webhook: production webhook
+- GET /api/npci/utr/:utr: UTR lookup
+- GET /api/npci/reconcile: Regulator dashboard
+- POST /api/npci/webhook/test: test webhook
+- GET /api/npci/webhooks: audit log
 
 ## Phase 2: DigiLocker KYC (Go)
 
@@ -156,7 +156,7 @@ Indexes: idx_properties_status, idx_transfers_asset, idx_npcipayments_status, id
 
 Toggle: Set DATABASE_URL env (Neon/Supabase/RDS) → auto switches to Postgres, no code change
 
-## Go Server — Production Ready
+## Go Server: Production Ready
 
 ```go
 // server.go
@@ -205,7 +205,7 @@ Tests:
 - Concurrency with sync.RWMutex for utrIndex, webhooks
 - Real HMAC SHA256 signature verification
 - Postgres with pg driver, connection pooling
-- Same interface as JS mock — easy toggle mock/real
+- Same interface as JS mock: easy toggle mock/real
 - Production-ready: handles idempotency, amount mismatch, forward transitions, audit log
 
 ## Integration with JS Frontend
@@ -214,7 +214,7 @@ Tests:
 - Go server.go provides same endpoints with Go implementation
 - For Vercel: JS version deployed (serverless)
 - For production Go server: deploy server.go to Cloud Run/Fly.io with DATABASE_URL
-- Both share same API contract — frontend works with either
+- Both share same API contract: frontend works with either
 
 ## Env Vars
 
@@ -235,5 +235,5 @@ BHOOMI_API_KEY=xxx
 
 - All existing gateway.go functionality retained
 - New files additive: webhook.go, digilocker.go, property_data.go, db.go, server.go
-- GatewayWithWebhook embeds *Gateway — all old methods still work
+- GatewayWithWebhook embeds *Gateway: all old methods still work
 - Tests pass for both old and new

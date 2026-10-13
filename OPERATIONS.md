@@ -7,8 +7,8 @@ Things only you can do, with the exact commands. Work top to bottom.
 ## 1 · Deploy the Go rail (blocking everything else)
 
 **The deployed rail is several commits behind and that is why features look
-missing in production.** It is reachable, not down — it answers `/api/umi/config`
-and `/api/umi/wallets` with 200 — but it is running a build from before the
+missing in production.** It is reachable, not down. It answers `/api/umi/config`
+and `/api/umi/wallets` with 200, but it is running a build from before the
 basket and ownership work landed, so those routes 404 on the live site while
 passing every test locally.
 
@@ -38,7 +38,7 @@ below may call it `drunix-gateway`).
 for p in /api/umi/baskets /api/umi/holdings/investor1 /api/umi/ownership/PROP-GREEN-VALLEY-PUNE-001; do
   printf '%s %s\n' "$(curl -s -o /dev/null -w '%{http_code}' https://aasthi-chain.vercel.app$p)" "$p"
 done
-# want 200 200 200 — anything 404 means the old build is still serving
+# want 200 200 200; anything 404 means the old build is still serving
 ```
 
 ```bash
@@ -99,14 +99,14 @@ for a in '"PROP-INDIABULLS-001",10000' \
 done
 ```
 
-Check the asset IDs against `/insights` first — correct them in the loop if they differ.
+Check the asset IDs against `/insights` first, and correct them in the loop if they differ.
 Then confirm `/insights` shows every property at **100.0% or below**, with no red overflow line.
 
 ---
 
 ## 3 · Switch demo seeding off
 
-Once the books are correct, seeding has no further use — it issues securities.
+Once the books are correct, seeding has no further use: it issues securities.
 
 - Render → `drunix-gateway` → Environment → `UMI_SEED_DEMO` = `false` → redeploy
 - `POST /umi/seed` then returns 404.
@@ -116,12 +116,12 @@ Once the books are correct, seeding has no further use — it issues securities.
 ## 4 · Clerk production key
 
 Clerk is now the only way into the product, and the current key is
-`pk_test_…` — a development instance, capped around 100 users, with a dev banner.
+`pk_test_…`, a development instance capped around 100 users, with a dev banner.
 
 1. Clerk dashboard → create a **production** instance
 2. Add the domain `aasthi-chain.vercel.app`
 3. Vercel → Environment Variables → `VITE_CLERK_PUBLISHABLE_KEY` = the `pk_live_…` key
-4. Redeploy, then **sign in yourself before telling anyone** — this is the door; test it.
+4. Redeploy, then **sign in yourself before telling anyone**. This is the door; test it.
 
 ---
 
@@ -131,7 +131,7 @@ Shipped but dormant. Without it, a forged Clerk-shaped JWT is still accepted.
 
 - Vercel → `CLERK_ISSUER` = your Clerk Frontend API URL
   (`https://<instance>.clerk.accounts.dev`, or your production domain)
-- Redeploy, then sign in again to confirm. If sign-in breaks, the issuer value is wrong —
+- Redeploy, then sign in again to confirm. If sign-in breaks, the issuer value is wrong:
   unset it and the API reverts to the previous behaviour immediately.
 
 ---
@@ -161,7 +161,7 @@ cd frontend && npm run indexnow
 The salt is the only thing standing between a stranger and a forged
 payment-success callback. The response hash is
 `sha512(salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)`
-— anyone holding the salt can compute a hash the gateway will accept and mark
+Anyone holding the salt can compute a hash the gateway will accept and mark
 an unpaid order as settled. Treat any salt that has been pasted into a chat,
 an issue, a screenshot or a log as burned.
 
@@ -174,14 +174,14 @@ because callbacks signed with the old salt stop verifying the moment PayU
 starts signing with the new one.
 
 1. **Generate** a new salt in the PayU dashboard
-   (Settings → Security / Salt & Key). Keep the old one visible — PayU shows
+   (Settings → Security / Salt & Key). Keep the old one visible, because PayU shows
    both during the overlap.
 2. **Update the environment** everywhere the gateway runs. Production is
    Vercel: Project → Settings → Environment Variables → `PAYU_SALT`. Also
    update any local `.env.payu`. Do not edit `.env.payu.example`; it holds
    placeholders on purpose.
 3. **Redeploy.** Vercel does not apply an env-var change to the running
-   deployment — trigger a fresh deploy or the old salt stays live.
+   deployment, so trigger a fresh deploy or the old salt stays live.
 4. **Verify** with a ₹1 test purchase end to end, and confirm the callback is
    accepted rather than rejected for a hash mismatch. Then revoke the old salt
    in the PayU dashboard.

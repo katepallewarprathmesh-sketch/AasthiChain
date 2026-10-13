@@ -1,14 +1,14 @@
-# payment-gateway — NPCI-style UPI/IMPS Settlement Rail (Simulation)
+# payment-gateway: NPCI-style UPI/IMPS Settlement Rail (Simulation)
 
-**Status: SIMULATION — Not live NPCI integration. Sandbox credentials not available for hackathon. Modeled on NPCI UPI Collect + IMPS UTR pattern.**
+**Status: SIMULATION. Not live NPCI integration. Sandbox credentials not available for hackathon. Modeled on NPCI UPI Collect + IMPS UTR pattern.**
 
-This module replaces the primary payment leg for AasthiChain's atomic DvP (Delivery vs Payment). The Drunix/Fabric tokenization engine is untouched — only the payment rail changes from Sepolia testnet ETH (now secondary) to INR-based UPI-style flow.
+This module replaces the primary payment leg for AasthiChain's atomic DvP (Delivery vs Payment). The Drunix/Fabric tokenization engine is untouched; only the payment rail changes from Sepolia testnet ETH (now secondary) to INR-based UPI-style flow.
 
 ## Why UPI Collect (P2M Collect) + IMPS?
 
-- **Real estate payment pattern:** Seller (Originator) requests payment, buyer (Investor) approves via UPI app — matches UPI Collect flow, not UPI Intent (buyer-initiated). Buyer gets collect notification: `originator@aasthichain requests ₹2,50,000 for Green Valley Villas`.
+- **Real estate payment pattern:** Seller (Originator) requests payment, buyer (Investor) approves via UPI app: matches UPI Collect flow, not UPI Intent (buyer-initiated). Buyer gets collect notification: `originator@aasthichain requests ₹2,50,000 for Green Valley Villas`.
 - **NPCI rail:** UPI Collect → IMPS settlement. Money moves via IMPS with UTR (Unique Transaction Reference, 12-digit numeric + check). NPCI switch generates RRN (Retrieval Reference Number, 12-digit) + UPI Txn ID (35-char alphanumeric) for reconciliation.
-- **No live credentials:** NPCI does not offer public UPI sandbox (PPRO docs: "Sandbox Not Available from UPI"). No Drunix Hackathon-published NPCI sandbox found (searched). So we hand-rolled deterministic simulator inspired by `upi-mock-engine` (Haskell deterministic UPI switch simulator) — clearly labeled as internal simulation.
+- **No live credentials:** NPCI does not offer public UPI sandbox (PPRO docs: "Sandbox Not Available from UPI"). No Drunix Hackathon-published NPCI sandbox found (searched). So we hand-rolled deterministic simulator inspired by `upi-mock-engine` (Haskell deterministic UPI switch simulator): clearly labeled as internal simulation.
 
 ## Flow
 
@@ -35,16 +35,16 @@ This module replaces the primary payment leg for AasthiChain's atomic DvP (Deliv
 4. Settlement Released (CONFIRMED → RELEASED)
    POST /api/npci/payments/{id}/release
    IMPS settlement: UTR credited to payee, status=RELEASED
-   If Drunix fails: REFUNDED (atomic — money not moved without tokens)
+   If Drunix fails: REFUNDED (atomic: money not moved without tokens)
 
 Failure paths preserved per Track A7 pattern.
 ```
 
 ## ID Formats (Mirroring NPCI)
 
-- **VPA:** `investor@aasthichain`, `originator@aasthichain` — handle@psp pattern, validated via regex `^[a-z0-9._-]{2,64}@[a-z]{3,64}$`
-- **UPI Txn ID:** `AAST` + `YYYYMMDD` + `8-char random` + checksum, e.g., `AAST20260921X7K9P2Q1` — 35-char max, alphanumeric, NPCI spec
-- **RRN:** 12-digit numeric, first 3 digits 418 (NPCI test range), e.g., `418209123456` — Retrieval Reference Number
+- **VPA:** `investor@aasthichain`, `originator@aasthichain`: handle@psp pattern, validated via regex `^[a-z0-9._-]{2,64}@[a-z]{3,64}$`
+- **UPI Txn ID:** `AAST` + `YYYYMMDD` + `8-char random` + checksum, e.g., `AAST20260921X7K9P2Q1`: 35-char max, alphanumeric, NPCI spec
+- **RRN:** 12-digit numeric, first 3 digits 418 (NPCI test range), e.g., `418209123456`: Retrieval Reference Number
 - **UTR / IMPS Ref:** 16-digit: `IMPS` + 12-digit RRN + 4-digit time-based suffix, or 12-digit numeric for UPI, e.g., `IMPS418209123456`
 - **PaymentId:** `NPCI-` + 12-char upper alphanumeric, e.g., `NPCI-7F3A9B2C1D4E`
 
@@ -52,13 +52,13 @@ Failure paths preserved per Track A7 pattern.
 
 - All amounts in paise internally (int64) to avoid float, displayed in ₹
 - Example: ₹75L property, 15,000 tokens → ₹500/token → 500 tokens = ₹2,50,000
-- No testnet ETH in primary flow — that is now secondary experimental toggle.
+- No testnet ETH in primary flow: that is now secondary experimental toggle.
 
 ## LIVE vs MOCKED (Track A6 extended)
 
 - **LIVE:** Chaincode 9 functions, API gateway JWT+MSP+rate limit+idempotency, React 4 roles, Raft 3-node, Postgres SQL 4 indexes, Drunix token transfer
-- **MOCKED (pluggable):** KYC (DigiLocker stub), land registry (DILRMP stub), **NPCI payment rail (this module) — simulation, not live NPCI integration, sandbox credentials not available**, Sepolia escrow now secondary experimental
-- Honest: UI shows "SIMULATION — No live NPCI" badge, no fabricated NPCI success.
+- **MOCKED (pluggable):** KYC (DigiLocker stub), land registry (DILRMP stub), **NPCI payment rail (this module): simulation, not live NPCI integration, sandbox credentials not available**, Sepolia escrow now secondary experimental
+- Honest: UI shows "SIMULATION: No live NPCI" badge, no fabricated NPCI success.
 
 ## Tests
 

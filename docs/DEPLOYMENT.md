@@ -7,21 +7,21 @@ exact commands, exact variables.
 
 | Process | What it is | Default port |
 |---|---|---|
-| Web app + edge | `node server.js` — serves the built frontend and the API handler | 8080 |
-| Settlement core | `drunix-gateway` — the Go rail that owns the ledger | 21100 |
-| Fabric network | optional, only for the chaincode path | — |
+| Web app + edge | `node server.js`, serving the built frontend and the API handler | 8080 |
+| Settlement core | `drunix-gateway`, the Go rail that owns the ledger | 21100 |
+| Fabric network | optional, only for the chaincode path | n/a |
 
 ## Local
 
 ```bash
-# 1 — frontend only, no Go and no Docker
+# 1: frontend only, no Go and no Docker
 cd frontend && npm install && npm run dev        # :5173
 
-# 2 — with the settlement core
+# 2: with the settlement core
 cd drunix-gateway && go run ./cmd/gateway                            # :21100
 DEMO_AUTH=true UMI_GATEWAY_URL=http://localhost:21100 node server.js  # :8080
 
-# 3 — everything, including the Fabric network
+# 3: everything, including the Fabric network
 cd network && docker-compose up -d && ./scripts/create-channel.sh
 ```
 
@@ -39,9 +39,9 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | Variable | Where | Purpose |
 |---|---|---|
 | `VITE_CLERK_PUBLISHABLE_KEY` | web app | Clerk auth. Use a `pk_live_` production key. |
-| `CLERK_ISSUER` | web app | Clerk Frontend API URL. **Set it** — without it, session signatures are not verified. |
+| `CLERK_ISSUER` | web app | Clerk Frontend API URL. **Set it**, because without it session signatures are not verified. |
 | `UMI_GATEWAY_URL` | web app | address of the settlement core; unset means the rail reports unreachable |
-| `UMI_PROXY_SECRET` | **both** | shared secret proving a request came from the web app. The settlement core is on a public URL, so without this it believes `X-Identity-Role: regulator` from anyone. Set the SAME value on the core and the web app — on the core alone, the app locks itself out; on the app alone, nothing changes. `GET /umi/config` reports `identityTrust.mode` as `open` or `shared-secret` |
+| `UMI_PROXY_SECRET` | **both** | shared secret proving a request came from the web app. The settlement core is on a public URL, so without this it believes `X-Identity-Role: regulator` from anyone. Set the SAME value on the core and the web app. On the core alone, the app locks itself out; on the app alone, nothing changes. `GET /umi/config` reports `identityTrust.mode` as `open` or `shared-secret` |
 | `WORK_ENABLED` | settlement core | `false` removes the work-order desk (`/umi/work/*`) and changes nothing else |
 | `WORK_PROVIDER_URL` | settlement core | Rezoomex endpoint for publishing work orders; unset means the adapter runs in simulation and says so on every payload |
 | `WORK_PROVIDER_KEY` | settlement core | bearer token for the above; both must be set before the adapter reports `live` |
@@ -57,7 +57,7 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 
 ### Getting into the operator panels
 
-Supervisory roles cannot be claimed by the browser — saying `X-Fabric-Identity: regulator1` has not
+Supervisory roles cannot be claimed by the browser; saying `X-Fabric-Identity: regulator1` has not
 been enough since the authorisation audit. On a deployment where the identity provider carries no
 role information, that left nobody able to open the ops queue, the deployment diagnostics or the
 insights dashboard. There are two supported ways in, both checked on the server:
@@ -65,7 +65,7 @@ insights dashboard. There are two supported ways in, both checked on the server:
 1. **The operator key.** Send `ADMIN_DASHBOARD_KEY` as the `x-admin-key` header. The insights page
    has a box for it, and once entered it is reused for the other operator panels in that tab.
    **The key reads; it does not act.** Anything that changes state needs a signed-in person, so
-   the action has a name against it — the two exceptions are the idempotent maintenance routes
+   the action has a name against it. The two exceptions are the idempotent maintenance routes
    `/api/npci/rail/backfill` and `/api/db/migrate`.
 ### Aasthi AI
 
@@ -76,7 +76,7 @@ feature rather than having a broken one.
 
 What it can and cannot do, by construction:
 
-- It is given the **public listing view** — the same figures the marketplace renders, derived
+- It is given the **public listing view**, the same figures the marketplace renders, derived
   from live balances. It never sees holdings, payments, KYC records or identities, because
   nothing owner-scoped is in that view.
 - It **cannot act**. There are no tool calls. It cannot mint, transfer, approve, release or
@@ -107,7 +107,7 @@ IDENTITY_ALIASES=you@example.com=investor1,colleague@example.com=investor2
 
 Matched on the verified email or the Clerk subject. Anyone not named there gets their own
 identity, and a first-time person inherits the mock `VERIFIED` KYC standing they previously
-had as `investor1`, so the buying flow is unchanged — replace that with a real provider before
+had as `investor1`, so the buying flow is unchanged; replace that with a real provider before
 this handles real money.
 
 2. **A named operator.** Put your sign-in email in `SUPERVISOR_EMAILS` (or your Clerk user id in
@@ -122,7 +122,7 @@ Everyone else keeps the same access they had: investors see their own things, an
 | `DRUNIX_MODE` | settlement core | `mock` simulator, or `real` against a Fabric network |
 | `NPCI_WEBHOOK_SECRET` | web app | HMAC secret for payment callbacks; callbacks are refused when unset |
 | `NPCI_MODE`, `PAYU_MERCHANT_KEY`, `PAYU_SALT` | web app | `mock` · `payu` · `real` |
-| `DEMO_AUTH` | — | development only. **Never set it in production** — it lets a request name its own identity. |
+| `DEMO_AUTH` | *(none)* | development only. **Never set it in production**, because it lets a request name its own identity. |
 
 Credentials are never committed; `.env.payu` is gitignored.
 

@@ -18,18 +18,18 @@
 ---
 
 A premium flat costs ₹75 lakh and you cannot buy 0.1% of it. AasthiChain converts a registrar-verified
-property into a fixed number of tokens — a ₹75 L villa becomes **15,000 tokens at ₹500** — and settles
+property into a fixed number of tokens (a ₹75 L villa becomes **15,000 tokens at ₹500**) and settles
 the money leg and the ownership leg as one atomic operation. Both move, or neither does.
 
 **Stack:** Go settlement core (`drunix-gateway`) · Node/Express + Vercel serverless API edge · React 19 + Vite frontend · Hyperledger Fabric chaincode.
 
 > **Honest scoping.** The settlement rail is a faithful **simulation**. There is no public UMI API and
-> no live NPCI credential outside a bank partnership — real access is the SEBI Regulatory Sandbox.
+> no live NPCI credential outside a bank partnership; real access is the SEBI Regulatory Sandbox.
 > Every simulated surface is labelled as such in the UI and in API responses. What is real: the
 > ledger, the atomicity, the verification rules and the guardrails. The exact line between the two
 > is itemised at the end of this file.
 
-**Contents** — [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Pages](#pages) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](#contributing)
+**Contents**: [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Pages](#pages) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](#contributing)
 
 ---
 
@@ -44,7 +44,7 @@ npm install
 (cd frontend && npm install && npm run build)
 ```
 
-Start the Go settlement rail on `:21100` — it seeds demo wallets, ISINs and positions on first boot:
+Start the Go settlement rail on `:21100`, which seeds demo wallets, ISINs and positions on first boot:
 
 ```bash
 cd drunix-gateway && go run ./cmd/gateway     # listens on :21100
@@ -83,11 +83,11 @@ API to `:8080`. `make umi` and `make frontend` wrap the two long commands above.
 
 </div>
 
-<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg) — edit the SVG, then re-export the PNG (command in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).</sub>
+<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg). Edit the SVG, then re-export the PNG (command in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).</sub>
 
 ### The design rule
 
-Every rule about money lives in one place — the settlement core, beside the ledger it protects. The
+Every rule about money lives in one place: the settlement core, beside the ledger it protects. The
 layers in front of it carry requests and identity and nothing else. **If a rule about money can be
 found anywhere but the core, that is a bug.**
 
@@ -105,7 +105,7 @@ KYC and the UPI payment lifecycle; it does not own balances, positions or the ch
 | **Work** | escrows a fee against a deliverable, releases it only against anchored evidence | `drunix-gateway/work*.go` |
 | **Record** | the append-only history every other layer answers to | `drunix-gateway/chain.go` |
 
-The experience and the settlement core deploy independently, so either can be replaced — or fail —
+The experience and the settlement core deploy independently, so either can be replaced, or fail,
 without the other. When the core cannot be reached the app reports *unknown*; it never reports a
 settlement surface as healthy because it could not ask.
 
@@ -115,7 +115,7 @@ Entitlement is decided in front of the router rather than route by route, so a n
 the day it ships:
 
 - an unidentified caller is refused with 401, a stranger with 403;
-- a supervisor — regulator or admin — may act for someone else where that is the role's job;
+- a supervisor (regulator or admin) may act for someone else where that is the role's job;
 - attribution always comes from the authenticated caller, never from a field in the request body;
 - reads are scoped as tightly as writes, including diagnostics, receipts and reconciliation views.
 
@@ -136,7 +136,7 @@ the chain, every height and hash it dropped and who authorised it.
 
 `frontend/api/index.js` is the serverless handler production serves. `mock-api-server.js` is an
 Express rig used for local payment testing and as a fixture by several suites. **They implement the
-same surface and must be patched together** — a fix applied to one is live in exactly one
+same surface and must be patched together**. A fix applied to one is live in exactly one
 environment.
 
 ---
@@ -146,9 +146,9 @@ environment.
 | Path | What it is |
 |---|---|
 | `drunix-gateway/` | **Go settlement core.** UMI/ASI rail, e₹-W wallets, DvP, work escrow, the chain. Port 21100. |
-| `frontend/src/` | React 19 + Vite app — marketplace, ledger explorer, dashboards, calculators, explainers. |
+| `frontend/src/` | React 19 + Vite app: marketplace, ledger explorer, dashboards, calculators, explainers. |
 | `frontend/api/index.js` | Vercel serverless API edge; property register, auth, KYC, payments, rail proxy. |
-| `server.js` | Local/Render Node server — same surface as the serverless edge, plus SSE and static `dist`. |
+| `server.js` | Local/Render Node server: same surface as the serverless edge, plus SSE and static `dist`. |
 | `mock-api-server.js` | Express rig for PayU round-trip testing; a fixture for several suites. |
 | `chaincode/` | Hyperledger Fabric chaincode (Go) for the Fabric deployment path. |
 | `api-gateway/`, `payment-gateway/` | Go services for the Fabric path and the payment leg. |
@@ -158,7 +158,7 @@ environment.
 | `docs/` | [Deployment](docs/DEPLOYMENT.md) · [Work orders](docs/WORK_ORDERS.md) · [Demo walkthrough](docs/DEMO.md) |
 | `SECURITY.md` | What is in scope, what is openly simulated, and how to report a flaw privately. |
 
-This is **four independent Go modules** plus a Vite frontend and a Node API — a root-level
+This is **four independent Go modules** plus a Vite frontend and a Node API, so a root-level
 `go build ./...` cannot work. CI builds each module from its own directory.
 
 ---
@@ -171,13 +171,13 @@ welcome on the public ones.
 | Route | What it is |
 |---|---|
 | `/` · `/marketplace` · `/property/:id` | landing, the catalogue, and a single listing with its verification panel |
-| `/market` | secondary market — holders trading tokens with each other |
+| `/market` | secondary market: holders trading tokens with each other |
 | `/umi` | **the settlement rail.** DvP, e₹-W wallets, pilot ISINs, servicing, baskets, the work desk |
-| `/ledger` | block explorer — every state change, replayable from the first block |
+| `/ledger` | block explorer: every state change, replayable from the first block |
 | `/verify` | hash your own copy of a deed and check it against the ledger, without uploading it |
 | `/insights` | platform metrics; operator detail needs the key |
 | `/dashboard` · `/wallet` | **session.** holdings, income, settlement history, e₹-W balance |
-| `/admin` · `/admin/ops` | **session.** operator queues — what is waiting on a human |
+| `/admin` · `/admin/ops` | **session.** operator queues: what is waiting on a human |
 | `/regulator` | **session.** supervisory view: halts, cap tables, reconciliation |
 | `/learn` · `/tools` | index pages, plus three explainers and six calculators beneath them |
 | `/login` · `/about` · `/support` · `/privacy` · `/terms` | sign-in and the ordinary pages a real platform has |
@@ -195,7 +195,7 @@ Everything has a safe default; nothing below is required to boot except where ma
 | `PORT` | `8080` / `21100` | App and rail ports. |
 | `ADMIN_DASHBOARD_KEY` | *(none)* | Unlocks admin insights and the role switcher. Needed by the full suite. |
 | `UMI_PROXY_SECRET` | *(none)* | Shared secret binding identity headers to a trusted proxy. **Set on both hosts or neither.** |
-| `GROQ_API_KEY` | *(none)* | Enables the assistant. Absent, it is cleanly absent — not a button that fails. |
+| `GROQ_API_KEY` | *(none)* | Enables the assistant. Absent, it is cleanly absent, not a button that fails. |
 | `UMI_SEED_DEMO` | on | Seeds demo wallets/ISINs on an empty rail. Set `false` for a bare ledger. |
 | `WORK_PROVIDER_URL` / `_KEY` | *(none)* | Rezoomex adapter. Absent, work orders are marked `simulation`. |
 
@@ -223,7 +223,7 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/properties
 | `GET /api/umi/config` | rail capabilities and the `UMI_*` block types it commits |
 | `GET /api/umi/wallets` · `POST /api/umi/dvp` | e₹-W balances; atomic delivery-versus-payment |
 | `POST /api/npci/collect` → `/approve` → `/release` | the UPI payment lifecycle |
-| `POST /api/ai/chat` | the assistant — public listing data only, cannot act |
+| `POST /api/ai/chat` | the assistant: public listing data only, cannot act |
 
 The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reconciliation`,
 `/umi/isin`, `/drunix/chain`) is reachable directly on `:21100` in development.
@@ -233,19 +233,19 @@ The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reco
 ## Testing
 
 ```bash
-npm test                  # regression.sh — 104 checks across 59 suites (needs both servers up)
+npm test                  # regression.sh: 104 checks across 59 suites (needs both servers up)
 make umi-test             # go vet + go test -race ./... in the settlement core
 cd frontend && npm run smoke
 ```
 
 The full sweep expects the app started with `ADMIN_DASHBOARD_KEY` set, and starts the PayU rig on
-`:8099` itself — several suites fail standalone because they depend on it:
+`:8099` itself, so several suites fail standalone because they depend on it:
 
 ```bash
 DEMO_AUTH=true ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=http://localhost:21100 node server.js
 ```
 
-A mass failure is almost always a dead rail rather than a bug — check `curl localhost:21100/health`
+A mass failure is almost always a dead rail rather than a bug, so check `curl localhost:21100/health`
 first. CI runs each Go module separately, builds the frontend, and enforces `gofmt`.
 
 ---
@@ -258,9 +258,9 @@ moves, the app asks the rail whether the trade *would* settle, so a shortfall is
 than a failure discovered afterwards.
 
 **Check that a listing is real.** Every property page answers, in plain language: was title validated
-by a registrar, and *who* — an owner validating their own listing is refused outright; is the deed
+by a registrar, and *who* (an owner validating their own listing is refused outright); is the deed
 fingerprinted, and does it collide with another listing; does the ledger still replay cleanly. You
-can prove your own copy of a deed matches the ledger without uploading anything — hash it locally and
+can prove your own copy of a deed matches the ledger without uploading anything: hash it locally and
 paste the result.
 
 **Ask the assistant.** A question box answers how things work and what is listed. It gets the same
@@ -274,7 +274,7 @@ unit redeemable rather than notional. A basket that is not fully backed is never
 healthy.
 
 **Earn rent, split fairly.** Rent and coupons are paid straight into holders' wallets. The split can
-follow a snapshot of who holds what today, or **how long each holder actually held** — so someone who
+follow a snapshot of who holds what today, or **how long each holder actually held**, so someone who
 bought yesterday does not collect a full quarter's rent.
 
 **See the whole history.** Ownership is a journal of changes, not just a balance, so the register can
@@ -284,19 +284,19 @@ be replayed for any window.
 
 ## Settlement rails
 
-### ASI — the Aasthi Settlement Interface
+### ASI, the Aasthi Settlement Interface
 
 In September 2026 SEBI and RBI launched **Demat 2.0**: bonds issued as native tokens on the
 depositories' permissioned DLT, with the **cash leg settled in wholesale CBDC (e₹-W)** through the
-Unified Market Interface — ₹1,025 crore issued by REC, L&T and IIFL. AasthiChain already had both
+Unified Market Interface, with ₹1,025 crore issued by REC, L&T and IIFL. AasthiChain already had both
 ends. This is the middle.
 
-**ASI is our own rail, built to that pattern** — not a connection to the real UMI, which is reachable
+**ASI is our own rail, built to that pattern**, not a connection to the real UMI, which is reachable
 only through a bank partnership or the SEBI sandbox. What follows is implemented here, end to end,
 and can be run and audited from this repository.
 
 - **Atomic DvP.** Both legs move or neither does; a failure leaves no half-settled state.
-- **Central bank money is conserved.** Balances always reconcile against lifetime funding — the rail
+- **Central bank money is conserved.** Balances always reconcile against lifetime funding, so the rail
   can neither create money nor destroy it.
 - **Programmable servicing.** Rent and coupons paid pro-rata on the due date, no registrar file
   exchange.
@@ -305,14 +305,14 @@ and can be run and audited from this repository.
 - **Standards trace.** Every instruction carries the ISO 20022 message family a real
   securities-settlement rail would emit.
 
-Refusals are always specific — which side was short, and by how much — never a generic error.
+Refusals are always specific: which side was short, and by how much. Never a generic error.
 
-### Work orders — upkeep paid on delivery
+### Work orders: upkeep paid on delivery
 
 A tokenised building still has to be inspected, repaired and revalued, and that cost used to sit
 outside the model: off-ledger, on trust, against an invoice nobody could audit. The fee is
-**reserved** on the funder's e₹-W wallet when the order is funded — reserved money cannot be spent on
-anything else, including a settlement — and moves to the worker in the same locked step that anchors
+**reserved** on the funder's e₹-W wallet when the order is funded (reserved money cannot be spent on
+anything else, including a settlement), and moves to the worker in the same locked step that anchors
 the deliverable's SHA-256 to the ledger. There is no state in which someone has been paid and no
 evidence exists.
 
@@ -321,9 +321,9 @@ rather than deciding anything. The talent boundary is an adapter for **Rezoomex*
 platform whose own premise is that pay follows task completion. Design notes:
 [`docs/WORK_ORDERS.md`](docs/WORK_ORDERS.md).
 
-### Money leg — UPI Collect
+### Money leg: UPI Collect
 
-A payment is a lifecycle, not a hop: requested, approved, released, reconciled — every amount held as
+A payment is a lifecycle, not a hop: requested, approved, released, reconciled, with every amount held as
 an exact figure, so no rupee is lost to arithmetic. The round-trip runs against a real provider's
 test environment, so signed requests and callbacks are validated by the provider rather than graded
 by us. Each payment is risk-screened before approval, and the screen explains its reasoning rather
@@ -335,7 +335,7 @@ than returning a score. No real money moves.
 
 **The record is append-only and survives restart.** An entry is written durably before the change it
 describes is treated as real. Once written it is never erased, and each entry is sealed against the
-one before it — so an altered history announces itself instead of passing quietly.
+one before it, so an altered history announces itself instead of passing quietly.
 
 **Supply is scarce.** Tokens cannot exceed a property's authorised supply, and an owner's unsold
 stock is never counted as allocated.
@@ -355,14 +355,14 @@ reference. A regulator can look where that is genuinely the regulator's job, and
 nothing about who else was involved.
 
 **A pause means paused.** A supervisor's halt is written down before the answer comes back, so it
-survives a restart and applies to every route that could move those tokens — a longer way round is
+survives a restart and applies to every route that could move those tokens. A longer way round is
 not a way round. The same authority can lift it; both halt and lift are permanent record.
 
 **Nothing reaches the record around the rules.** Every ownership change passes the same approvals
 whichever way it is attempted.
 
 **A refusal is never a dead end.** If the record stops verifying, the platform stops rather than
-building on history it cannot vouch for — and there is a supervised way back that writes down what
+building on history it cannot vouch for, and there is a supervised way back that writes down what
 was set aside, why, and on whose authority. It has been used once, and the record of it is still
 there to read.
 
@@ -393,26 +393,25 @@ Explainers: [Demat 2.0](https://aasthi-chain.vercel.app/learn/what-is-demat-2) �
 Issues and pull requests are welcome.
 
 1. Fork, branch from `main`.
-2. Keep money rules in the Go core — see [the design rule](#the-design-rule). A rule added to the JS
+2. Keep money rules in the Go core; see [the design rule](#the-design-rule). A rule added to the JS
    edge will be asked to move.
-3. Run `npm test` (104 checks) and `make umi-test` before opening a PR, and run `gofmt` — CI enforces
-   it.
+3. Run `npm test` (104 checks) and `make umi-test` before opening a PR, and run `gofmt`, which CI enforces.
 4. If you touch `frontend/api/index.js`, check whether `mock-api-server.js` needs the same change.
 5. New behaviour ships with a test that fails without it.
 
 Commit messages are plain language describing the *why*, not a changelog of the diff.
 
-Found a security flaw? Please report it privately — see [`SECURITY.md`](SECURITY.md).
+Found a security flaw? Please report it privately: see [`SECURITY.md`](SECURITY.md).
 
 ---
 
 <details>
-<summary><b>What is live vs simulated</b> — click to expand</summary>
+<summary><b>What is live vs simulated</b> (click to expand)</summary>
 
 **Live and real:** the ownership rules and their duplicate-deed guard, the append-only record, atomic
 settlement and its rollback, safe retries under concurrency, conservation of money, independent title
 validation, verified sign-in, the supervisory halt and the way back from it, and durable storage. The
-assistant is live, and its limits — public data only, no ability to act — are enforced on the server
+assistant is live, and its limits (public data only, no ability to act) are enforced on the server
 rather than requested of the model.
 
 **Simulated, and labelled as such:** the national payments rail (no live credentials exist outside a
@@ -427,7 +426,7 @@ Only the settlement behind it is simulated.
 </details>
 
 <details>
-<summary><b>Regulatory context</b> — click to expand</summary>
+<summary><b>Regulatory context</b> (click to expand)</summary>
 
 The **Asset Tokenisation (Regulation) Bill 2026** is a pending Private Member's Bill, not law. It
 proposes KYC/AML obligations, a registered custodian, registrar validation and a regulator freeze
@@ -445,7 +444,7 @@ legal structure, not a code change, and is documented as Phase 2 rather than bui
 ## Support
 
 The in-app [Support page](https://aasthi-chain.vercel.app/support) carries UPI and GitHub Sponsors
-links. These are **donations to the project, not investments** — they buy no tokens and no stake.
+links. These are **donations to the project, not investments**. They buy no tokens and no stake.
 
 <div align="center">
 

@@ -1,4 +1,4 @@
-# Work Orders — escrowed property work, settled on completion
+# Work Orders: escrowed property work, settled on completion
 
 **Status:** design + implementation (this document ships with the code).
 **Partner context:** Rezoomex, a Pune tech gig-work platform whose defining idea is that
@@ -18,7 +18,7 @@ invoice nobody can audit. For an investor holding 400 tokens of a Pune apartment
 maintenance spend is the single largest unexplained hole in the model.
 
 That gap has the same shape as the one ASI already closed for trading: two things that
-must happen together — **work delivered** and **money paid** — with no honest way to make
+must happen together, **work delivered** and **money paid**, with no honest way to make
 them simultaneous. ASI's answer was atomic DvP. This module applies the identical
 discipline to labour.
 
@@ -48,7 +48,7 @@ CREATED ──fund──► FUNDED ──assign──► ASSIGNED ──submit�
 ```
 
 Terminal: `ACCEPTED`, `REFUNDED`, `CANCELLED`. Every transition is rejected unless it is
-legal from the current state — the engine never infers intent from a bare status write.
+legal from the current state. The engine never infers intent from a bare status write.
 
 ## 4. Where the money sits
 
@@ -92,7 +92,7 @@ source.
 
 ## 6. Who may do what
 
-Enforced in Go, next to the state it protects — the JS layer stays a pure proxy.
+Enforced in Go, next to the state it protects. The JS layer stays a pure proxy.
 
 | Action | Permitted caller |
 |---|---|
@@ -103,13 +103,13 @@ Enforced in Go, next to the state it protects — the JS layer stays a pure prox
 | list orders | your own (as funder or worker); supervisors see the desk |
 
 Supervisor = role `regulator` or `admin`, the same definition the rail already uses.
-A worker cannot accept their own work, and a funder cannot submit on the worker's behalf —
+A worker cannot accept their own work, and a funder cannot submit on the worker's behalf:
 that separation is the reason the escrow means anything.
 
 ## 7. The Rezoomex boundary
 
 Rezoomex publishes no public API documentation, so the integration is written as an
-adapter with an honest fallback — the same pattern the repo already uses for NPCI:
+adapter with an honest fallback, the same pattern the repo already uses for NPCI:
 
 ```
 WORK_PROVIDER_URL + WORK_PROVIDER_KEY set  ->  live calls to the partner
