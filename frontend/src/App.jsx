@@ -477,6 +477,12 @@ function AppContent({ user, setUser }) {
           // own owner, so it is worth keeping rather than guessing later.
           clerkEmail: me.email || aasthiUser.clerkEmail || '',
         }
+        // A demo identity chosen in an earlier session, on a deployment that
+        // will not honour it, has to go. Leaving it behind is what made the
+        // page keep asking for somebody else's records.
+        if (!me.canSwitchIdentity) {
+          try { localStorage.removeItem('aasthi_clerk_demo_identity') } catch { /* nothing to clear */ }
+        }
         localStorage.setItem('aasthi_user', JSON.stringify(resolved))
         setInternalUser(resolved)
         setUser(resolved)
@@ -560,6 +566,17 @@ function AppContent({ user, setUser }) {
   }
 
   const handleRoleSwitch = (roleData) => {
+    // Only when the server has said this session may wear a demo identity.
+    //
+    // Without this the switcher was a local lie: the browser recorded itself
+    // as regulator1, every request still resolved to the person's own
+    // identity, and the rail answered ERR_UMI_NOT_YOURS to each one. The
+    // notification bell then repeated that 403 on every block.
+    const current = internalUser || user
+    if (current && current.canSwitchIdentity === false) {
+      try { localStorage.removeItem('aasthi_clerk_demo_identity') } catch { /* nothing to clear */ }
+      return
+    }
     const updated = {
       ...(internalUser || {}),
       identityId: roleData.id,

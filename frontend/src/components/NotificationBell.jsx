@@ -38,16 +38,34 @@ export default function NotificationBell({ user, mut = '#6B7280', border = '#E5E
   const [unread, setUnread] = useState(0)
   const boxRef = useRef(null)
 
+  // An identity the rail will not serve must be asked for once, not forever.
+  //
+  // The bell refreshes on every committed block, so when the signed-in
+  // session and the identity in local storage disagree, this polled a feed
+  // that answered ERR_UMI_NOT_YOURS over and over and filled the rail's
+  // error log with 403s. The catch swallowed it, so nothing on screen ever
+  // said a word. A refusal that names the identity is final until the
+  // identity changes.
+  const deniedFor = useRef('')
+
   const load = useCallback(async () => {
-    if (!me) return
+    if (!me || deniedFor.current === me) return
     try {
       const d = await api.umiNotifications(me, 20)
       setItems(d.notifications || [])
       setUnread(d.unread || 0)
-    } catch {
+    } catch (e) {
+      if (e && (e.status === 403 || e.status === 401)) {
+        deniedFor.current = me
+        setItems([])
+        setUnread(0)
+      }
       // A rail that is down must not break the header.
     }
   }, [me])
+
+  // A new identity deserves a fresh attempt.
+  useEffect(() => { if (deniedFor.current !== me) deniedFor.current = '' }, [me])
 
   useEffect(() => { load() }, [load])
 
