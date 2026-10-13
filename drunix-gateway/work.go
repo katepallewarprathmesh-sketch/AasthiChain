@@ -15,10 +15,10 @@ package drunix
 // on the chain. There is no observable state where one happened and not the
 // other.
 //
-// Partner context: Rezoomex (Pune) is a tech gig-work platform built on the
-// idea that smart contracts link pay to task completion. This is that idea,
-// implemented against our ledger. The boundary to them is a thin adapter
-// (rezoomex.go) — escrow, state and evidence stay here.
+// The idea is the one gig-work marketplaces are built on: a contract links
+// pay to task completion. This is that idea implemented against our ledger.
+// The boundary to whoever supplies the worker is a thin adapter
+// (talentprovider.go), and escrow, state and evidence stay here.
 //
 // Design rules, same as the rail:
 //   - money is int64 PAISE, reserved-then-transferred, never minted
@@ -194,7 +194,7 @@ type WorkDesk struct {
 // NewWorkDesk builds a desk over an existing rail.
 func NewWorkDesk(rail *UMIRail, provider TalentProvider) *WorkDesk {
 	if provider == nil {
-		provider = NewRezoomexProvider()
+		provider = NewWorkProvider()
 	}
 	return &WorkDesk{
 		orders:   make(map[string]*WorkOrder),

@@ -122,7 +122,7 @@ const selfDeal = await post(`/api/umi/work/${ID}/assign`, FUNDER_T, { worker: FU
 t('the funder cannot pay themselves out of their own escrow',
   selfDeal.status === 409 && selfDeal.body?.error === 'ERR_WORK_SELF_DEAL', `got ${selfDeal.status}`);
 
-const assigned = await post(`/api/umi/work/${ID}/assign`, FUNDER_T, { worker: WORKER, providerRef: 'RZX-TEST' });
+const assigned = await post(`/api/umi/work/${ID}/assign`, FUNDER_T, { worker: WORKER, providerRef: 'WRK-TEST' });
 t('the funder can assign a worker', assigned.body?.order?.status === 'ASSIGNED', `got ${assigned.status}`);
 
 const funderSubmits = await post(`/api/umi/work/${ID}/submit`, FUNDER_T, { deliverableHash: HASH });

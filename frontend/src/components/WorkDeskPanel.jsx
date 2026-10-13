@@ -131,7 +131,7 @@ export default function WorkDeskPanel({ properties = [], participants = [], prop
           </p>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <Tag tone={live ? 'ok' : 'warn'}>{live ? 'Rezoomex live' : 'Rezoomex simulated'}</Tag>
+          <Tag tone={live ? 'ok' : 'warn'}>{live ? 'Talent provider live' : 'Talent provider simulated'}</Tag>
           <Tag>Go · work.go</Tag>
         </div>
       </div>

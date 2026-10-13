@@ -1,21 +1,23 @@
 package drunix
 
-// Rezoomex adapter — the boundary between our escrow and the partner's talent.
+// Talent provider adapter: the boundary between our escrow and whoever
+// supplies the people who do the work.
 //
-// Rezoomex (Pune) is a tech gig-work platform whose defining idea is that
-// smart contracts link pay to task completion. That is the same guarantee the
-// work desk enforces, so the integration is narrow by design: we publish an
+// A gig-work platform matches an order to a worker. We do not want to be one,
+// and we do not need to be: the only thing the work desk needs from outside is
+// somebody to do the job. So the integration is narrow by design. We publish an
 // order's spec and acceptance criteria, we get a worker reference back, and we
-// record it. Escrow, state and evidence never leave our ledger. We are not
-// asking them to hold money, and they are not asking us to host their talent
-// graph.
+// record it. Escrow, state and evidence never leave our ledger. No external
+// party is asked to hold money, and we are not asked to host a talent graph.
 //
-// There is no public Rezoomex API documentation, so this follows the pattern
-// the repo already uses for NPCI: a real HTTP call when the environment names
-// an endpoint, an honest local simulation otherwise. Mode is reported on every
-// payload, so a screenshot can never imply a partnership that is not wired up.
-// When a sandbox key arrives, one environment variable turns the same code
-// live and no logic moves.
+// No external provider is configured in this repository, and none is named.
+// This follows the pattern the repo already uses for NPCI: a real HTTP call
+// when the environment names an endpoint, an honest local simulation
+// otherwise. Mode is reported on every payload, so a screenshot can never
+// imply an integration that is not wired up. The wire format below is our own
+// shape, not any vendor's published contract: pointing this at a real service
+// would mean mapping the field names in this one file, which is exactly why
+// the seam is here and not in the desk.
 
 import (
 	"bytes"
@@ -27,7 +29,8 @@ import (
 	"time"
 )
 
-// TalentProvider is the seam (DIP): the desk depends on this, not on Rezoomex.
+// TalentProvider is the seam (DIP): the desk depends on this interface, never
+// on any particular provider.
 type TalentProvider interface {
 	Name() string
 	// Mode is "live" when the adapter is configured against a real endpoint,
@@ -54,16 +57,18 @@ type TalentProfile struct {
 	Source     string   `json:"source"`
 }
 
-// RezoomexProvider implements TalentProvider.
-type RezoomexProvider struct {
+// WorkProvider is the default TalentProvider: an HTTP adapter that degrades
+// to a local simulation when no endpoint is configured.
+type WorkProvider struct {
 	baseURL string
 	apiKey  string
 	client  *http.Client
 }
 
-// NewRezoomexProvider reads WORK_PROVIDER_URL / WORK_PROVIDER_KEY.
-func NewRezoomexProvider() *RezoomexProvider {
-	return &RezoomexProvider{
+// NewWorkProvider reads WORK_PROVIDER_URL / WORK_PROVIDER_KEY. With either
+// one missing the adapter stays in simulation and says so.
+func NewWorkProvider() *WorkProvider {
+	return &WorkProvider{
 		baseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("WORK_PROVIDER_URL")), "/"),
 		apiKey:  strings.TrimSpace(os.Getenv("WORK_PROVIDER_KEY")),
 		client:  &http.Client{Timeout: 8 * time.Second},
@@ -71,12 +76,12 @@ func NewRezoomexProvider() *RezoomexProvider {
 }
 
 // Name implements TalentProvider.
-func (p *RezoomexProvider) Name() string { return "rezoomex" }
+func (p *WorkProvider) Name() string { return "work-provider" }
 
-func (p *RezoomexProvider) configured() bool { return p.baseURL != "" && p.apiKey != "" }
+func (p *WorkProvider) configured() bool { return p.baseURL != "" && p.apiKey != "" }
 
 // Mode implements TalentProvider.
-func (p *RezoomexProvider) Mode() string {
+func (p *WorkProvider) Mode() string {
 	if p.configured() {
 		return "live"
 	}
@@ -84,11 +89,11 @@ func (p *RezoomexProvider) Mode() string {
 }
 
 // Publish implements TalentProvider.
-func (p *RezoomexProvider) Publish(o *WorkOrder) (string, error) {
+func (p *WorkProvider) Publish(o *WorkOrder) (string, error) {
 	if !p.configured() {
 		// Deterministic reference so the demo reads like the real thing
 		// without pretending a call happened.
-		return "RZX-SIM-" + strings.ToUpper(strings.TrimPrefix(o.OrderID, "WORK-")), nil
+		return "WRK-SIM-" + strings.ToUpper(strings.TrimPrefix(o.OrderID, "WORK-")), nil
 	}
 	payload := map[string]interface{}{
 		"externalId":         o.OrderID,
@@ -119,7 +124,7 @@ func (p *RezoomexProvider) Publish(o *WorkOrder) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("rezoomex responded %d", resp.StatusCode)
+		return "", fmt.Errorf("work provider responded %d", resp.StatusCode)
 	}
 	var out struct {
 		ID        string `json:"id"`
@@ -139,14 +144,14 @@ func (p *RezoomexProvider) Publish(o *WorkOrder) (string, error) {
 // labelled everywhere as a simulation, and replaced wholesale the moment a real
 // endpoint is configured.
 var simulatedRoster = []TalentProfile{
-	{WorkerID: "rzx-anita-s", Name: "Anita S.", Skills: []string{"INSPECTION", "PHOTOGRAPHY"}, City: "Pune", RatePerDay: 4500, Rating: 4.8},
-	{WorkerID: "rzx-vikram-j", Name: "Vikram J.", Skills: []string{"VALUATION", "LEGAL_REVIEW"}, City: "Pune", RatePerDay: 7200, Rating: 4.6},
-	{WorkerID: "rzx-fatima-q", Name: "Fatima Q.", Skills: []string{"TITLE_VERIFICATION", "LEGAL_REVIEW"}, City: "Mumbai", RatePerDay: 8000, Rating: 4.9},
-	{WorkerID: "rzx-deepak-r", Name: "Deepak R.", Skills: []string{"REPAIR", "INSPECTION"}, City: "Pune", RatePerDay: 3200, Rating: 4.4},
+	{WorkerID: "wrk-anita-s", Name: "Anita S.", Skills: []string{"INSPECTION", "PHOTOGRAPHY"}, City: "Pune", RatePerDay: 4500, Rating: 4.8},
+	{WorkerID: "wrk-vikram-j", Name: "Vikram J.", Skills: []string{"VALUATION", "LEGAL_REVIEW"}, City: "Pune", RatePerDay: 7200, Rating: 4.6},
+	{WorkerID: "wrk-fatima-q", Name: "Fatima Q.", Skills: []string{"TITLE_VERIFICATION", "LEGAL_REVIEW"}, City: "Mumbai", RatePerDay: 8000, Rating: 4.9},
+	{WorkerID: "wrk-deepak-r", Name: "Deepak R.", Skills: []string{"REPAIR", "INSPECTION"}, City: "Pune", RatePerDay: 3200, Rating: 4.4},
 }
 
 // Roster implements TalentProvider.
-func (p *RezoomexProvider) Roster(category string) []TalentProfile {
+func (p *WorkProvider) Roster(category string) []TalentProfile {
 	category = strings.ToUpper(strings.TrimSpace(category))
 	out := make([]TalentProfile, 0, len(simulatedRoster))
 	for _, t := range simulatedRoster {
@@ -166,10 +171,10 @@ func (p *RezoomexProvider) Roster(category string) []TalentProfile {
 }
 
 // Describe implements TalentProvider.
-func (p *RezoomexProvider) Describe() map[string]interface{} {
+func (p *WorkProvider) Describe() map[string]interface{} {
 	return map[string]interface{}{
 		"provider": p.Name(),
-		"partner":  "Rezoomex — tech gig-work platform (Pune), smart contracts linking pay to task completion",
+		"pattern":  "gig-work marketplace: pay released against verified task completion",
 		"mode":     p.Mode(),
 		"configured": map[string]bool{
 			"WORK_PROVIDER_URL": p.baseURL != "",
@@ -185,6 +190,6 @@ func (p *RezoomexProvider) Describe() map[string]interface{} {
 			"the deliverable hash and every block in the audit trail",
 		},
 		"toGoLive":   "set WORK_PROVIDER_URL and WORK_PROVIDER_KEY; no code changes",
-		"disclaimer": "Simulation unless both environment variables are set. This repository does not claim a live Rezoomex connection.",
+		"disclaimer": "Simulation unless both environment variables are set. No external talent provider is integrated, and the request shape this adapter sends is this project's own rather than a vendor contract.",
 	}
 }

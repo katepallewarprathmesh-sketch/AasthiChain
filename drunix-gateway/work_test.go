@@ -12,7 +12,7 @@ func newTestDesk(t *testing.T) (*WorkDesk, *UMIRail) {
 	if _, _, err := rail.FundWallet("originator1", 50000); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
-	return NewWorkDesk(rail, NewRezoomexProvider()), rail
+	return NewWorkDesk(rail, NewWorkProvider()), rail
 }
 
 func mustCreate(t *testing.T, d *WorkDesk, fee float64) *WorkOrder {
@@ -55,10 +55,10 @@ func TestWorkEscrowPaysOnAcceptance(t *testing.T) {
 		t.Fatalf("funding must not spend the balance, balance=%d", w.BalancePaise)
 	}
 
-	if _, err := d.Assign(o.OrderID, "rzx-anita-s", "RZX-1", "originator1"); err != nil {
+	if _, err := d.Assign(o.OrderID, "wrk-anita-s", "WRK-1", "originator1"); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
-	if _, err := d.Submit(o.OrderID, testHash, "ipfs://report", "done", "rzx-anita-s"); err != nil {
+	if _, err := d.Submit(o.OrderID, testHash, "ipfs://report", "done", "wrk-anita-s"); err != nil {
 		t.Fatalf("submit: %v", err)
 	}
 	done, err := d.Accept(o.OrderID, "looks right", "originator1")
@@ -70,7 +70,7 @@ func TestWorkEscrowPaysOnAcceptance(t *testing.T) {
 	}
 
 	funder, _ := rail.Wallet("originator1")
-	worker, _ := rail.Wallet("rzx-anita-s")
+	worker, _ := rail.Wallet("wrk-anita-s")
 	if funder.BalancePaise != 4100000 || funder.ReservedPaise != 0 {
 		t.Fatalf("funder should be down the fee with nothing reserved, got %d/%d", funder.BalancePaise, funder.ReservedPaise)
 	}
@@ -138,7 +138,7 @@ func TestWorkStateMachineRefusesJumps(t *testing.T) {
 	if _, err := d.Accept(o.OrderID, "", "originator1"); err == nil {
 		t.Fatal("a CREATED order must not be acceptable")
 	}
-	if _, err := d.Assign(o.OrderID, "rzx-anita-s", "", "originator1"); err == nil {
+	if _, err := d.Assign(o.OrderID, "wrk-anita-s", "", "originator1"); err == nil {
 		t.Fatal("an unfunded order must not be assignable")
 	}
 	if _, err := d.Fund(o.OrderID, "originator1"); err != nil {
@@ -157,8 +157,8 @@ func TestAcceptNeedsADeliverable(t *testing.T) {
 	d, _ := newTestDesk(t)
 	o := mustCreate(t, d, 9000)
 	_, _ = d.Fund(o.OrderID, "originator1")
-	_, _ = d.Assign(o.OrderID, "rzx-anita-s", "", "originator1")
-	if _, err := d.Submit(o.OrderID, "not-a-hash", "", "", "rzx-anita-s"); err == nil {
+	_, _ = d.Assign(o.OrderID, "wrk-anita-s", "", "originator1")
+	if _, err := d.Submit(o.OrderID, "not-a-hash", "", "", "wrk-anita-s"); err == nil {
 		t.Fatal("a malformed deliverable hash must be refused")
 	}
 	if _, err := d.Accept(o.OrderID, "", "originator1"); err == nil {
@@ -170,8 +170,8 @@ func TestDisputeFreezesThenResolves(t *testing.T) {
 	d, rail := newTestDesk(t)
 	o := mustCreate(t, d, 9000)
 	_, _ = d.Fund(o.OrderID, "originator1")
-	_, _ = d.Assign(o.OrderID, "rzx-anita-s", "", "originator1")
-	_, _ = d.Submit(o.OrderID, testHash, "", "", "rzx-anita-s")
+	_, _ = d.Assign(o.OrderID, "wrk-anita-s", "", "originator1")
+	_, _ = d.Submit(o.OrderID, testHash, "", "", "wrk-anita-s")
 	if _, err := d.Dispute(o.OrderID, "two floors were not photographed", "originator1"); err != nil {
 		t.Fatalf("dispute: %v", err)
 	}
@@ -193,15 +193,15 @@ func TestWorkRestoresFromChain(t *testing.T) {
 	chain := NewChain()
 	rail := NewUMIRail(NewMemorySecurities(), chain)
 	_, _, _ = rail.FundWallet("originator1", 50000)
-	d := NewWorkDesk(rail, NewRezoomexProvider())
+	d := NewWorkDesk(rail, NewWorkProvider())
 	o := mustCreate(t, d, 9000)
 	_, _ = d.Fund(o.OrderID, "originator1")
-	_, _ = d.Assign(o.OrderID, "rzx-anita-s", "RZX-7", "originator1")
+	_, _ = d.Assign(o.OrderID, "wrk-anita-s", "WRK-7", "originator1")
 
 	// Restart: same chain, fresh rail and desk.
 	rail2 := NewUMIRail(NewMemorySecurities(), chain)
 	_, _, _ = rail2.FundWallet("originator1", 50000)
-	d2 := NewWorkDesk(rail2, NewRezoomexProvider())
+	d2 := NewWorkDesk(rail2, NewWorkProvider())
 	if n := d2.RestoreWorkFromChain(); n != 1 {
 		t.Fatalf("expected one restored order, got %d", n)
 	}
@@ -209,7 +209,7 @@ func TestWorkRestoresFromChain(t *testing.T) {
 	if !ok {
 		t.Fatal("the order did not survive the restart")
 	}
-	if got.Status != WorkStatusAssigned || got.Worker != "rzx-anita-s" || got.FeeINR != 9000 {
+	if got.Status != WorkStatusAssigned || got.Worker != "wrk-anita-s" || got.FeeINR != 9000 {
 		t.Fatalf("restored order lost detail: %+v", got)
 	}
 	w, _ := rail2.Wallet("originator1")
@@ -222,7 +222,7 @@ func TestWorkRestoresFromChain(t *testing.T) {
 func TestProviderIsHonestAboutItsMode(t *testing.T) {
 	t.Setenv("WORK_PROVIDER_URL", "")
 	t.Setenv("WORK_PROVIDER_KEY", "")
-	p := NewRezoomexProvider()
+	p := NewWorkProvider()
 	if p.Mode() != "simulation" {
 		t.Fatalf("unconfigured adapter must say simulation, said %s", p.Mode())
 	}
@@ -236,7 +236,7 @@ func TestProviderIsHonestAboutItsMode(t *testing.T) {
 	}
 	t.Setenv("WORK_PROVIDER_URL", "https://example.invalid/api")
 	t.Setenv("WORK_PROVIDER_KEY", "k")
-	if NewRezoomexProvider().Mode() != "live" {
+	if NewWorkProvider().Mode() != "live" {
 		t.Fatal("both variables set should read as live")
 	}
 }

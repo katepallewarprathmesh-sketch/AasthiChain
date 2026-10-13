@@ -117,10 +117,10 @@ func main() {
 		}
 
 		// Work desk — escrowed property upkeep paid on accepted delivery
-		// (work.go), with the Rezoomex adapter at the talent boundary.
+		// (work.go), with a pluggable adapter at the talent boundary.
 		// WORK_ENABLED=false removes the routes and changes nothing else.
 		if os.Getenv("WORK_ENABLED") != "false" {
-			provider := drunix.NewRezoomexProvider()
+			provider := drunix.NewWorkProvider()
 			srv.Work = drunix.NewWorkDesk(srv.UMI, provider)
 			// The chain is the desk's durable store: replaying WORK_* blocks
 			// restores the orders and re-applies any escrow that was still

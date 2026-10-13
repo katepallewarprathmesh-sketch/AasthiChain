@@ -1,9 +1,9 @@
 # Work Orders: escrowed property work, settled on completion
 
 **Status:** design + implementation (this document ships with the code).
-**Partner context:** Rezoomex, a Pune tech gig-work platform whose defining idea is that
-*smart contracts link pay to task completion*. This module is where that idea lands inside
-AasthiChain.
+**Context:** gig-work marketplaces are built on one idea, that *a contract links pay to task
+completion*. This module is where that idea lands inside AasthiChain. No external provider is
+integrated or named: the talent boundary is an adapter, and it runs as a simulation.
 
 ---
 
@@ -106,23 +106,25 @@ Supervisor = role `regulator` or `admin`, the same definition the rail already u
 A worker cannot accept their own work, and a funder cannot submit on the worker's behalf:
 that separation is the reason the escrow means anything.
 
-## 7. The Rezoomex boundary
+## 7. The talent boundary
 
-Rezoomex publishes no public API documentation, so the integration is written as an
+No external talent provider is configured, so the integration is written as an
 adapter with an honest fallback, the same pattern the repo already uses for NPCI:
 
 ```
-WORK_PROVIDER_URL + WORK_PROVIDER_KEY set  ->  live calls to the partner
+WORK_PROVIDER_URL + WORK_PROVIDER_KEY set  ->  live calls to that endpoint
 neither set                                ->  mode "simulation", local roster
 ```
 
 `GET /umi/work/provider` reports which mode is active, and every work-order payload carries
-`providerMode`, so a screenshot can never imply a partnership that is not wired up. When a
-sandbox key arrives, one environment variable turns the same code live; no logic moves.
+`providerMode`, so a screenshot can never imply an integration that is not wired up. The request
+shape is this project's own, not a vendor's published contract, so pointing it at a real service
+means mapping field names inside the adapter. That one file is the only thing that changes, which
+is the point of putting the seam there.
 
 What crosses the boundary is deliberately small: publish an order's spec and acceptance
 criteria, receive a worker reference back, record it as `providerRef`. Escrow, state and
-evidence stay on our ledger. We are not asking the partner to hold money, and they are not
+evidence stay on our ledger. No external party is asked to hold money, and none is
 asking us to host their talent graph.
 
 ## 8. API
@@ -147,8 +149,8 @@ Reachable from the app as `/api/umi/work/...`.
 
 ## 9. What this is not
 
-- Not a connection to the live Rezoomex platform unless the two environment variables are
-  set; until then every response says `simulation`.
+- Not a connection to any real gig-work platform. No such integration exists here, and every
+  response says `simulation` until an endpoint is configured.
 - Not an employment or payroll system. It escrows a fee against one defined deliverable.
 - Not a dispute court. `DISPUTED` parks the escrow and names a reason; resolving it is a
   supervisor decision, recorded, not an algorithm pretending to judge.

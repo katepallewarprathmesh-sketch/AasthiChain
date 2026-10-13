@@ -197,7 +197,7 @@ Everything has a safe default; nothing below is required to boot except where ma
 | `UMI_PROXY_SECRET` | *(none)* | Shared secret binding identity headers to a trusted proxy. **Set on both hosts or neither.** |
 | `GROQ_API_KEY` | *(none)* | Enables the assistant. Absent, it is cleanly absent, not a button that fails. |
 | `UMI_SEED_DEMO` | on | Seeds demo wallets/ISINs on an empty rail. Set `false` for a bare ledger. |
-| `WORK_PROVIDER_URL` / `_KEY` | *(none)* | Rezoomex adapter. Absent, work orders are marked `simulation`. |
+| `WORK_PROVIDER_URL` / `_KEY` | *(none)* | Talent provider adapter. Absent, work orders are marked `simulation`. |
 
 Full table, deployment topology and failure modes: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
@@ -317,8 +317,8 @@ the deliverable's SHA-256 to the ledger. There is no state in which someone has 
 evidence exists.
 
 Only the funder pays out, only the assigned worker can deliver, and a dispute freezes the escrow
-rather than deciding anything. The talent boundary is an adapter for **Rezoomex**, the Pune gig-work
-platform whose own premise is that pay follows task completion. Design notes:
+rather than deciding anything. Whoever supplies the worker sits behind an adapter, which runs as a
+simulation: no external provider is integrated. Design notes:
 [`docs/WORK_ORDERS.md`](docs/WORK_ORDERS.md).
 
 ### Money leg: UPI Collect

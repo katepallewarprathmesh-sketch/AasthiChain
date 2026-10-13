@@ -75,7 +75,7 @@ Scroll to **Reconciliation** and read the two lines out:
 If someone asks for the audit trail, open an instruction and show the **ISO 20022 message families**:
 `sese.023 → sese.024 → pacs.009 → sese.025 → camt.054`. The trail a depository would recognise.
 
-### 5 · Work orders: the Rezoomex tie-in (60s)
+### 5 · Work orders: paying for upkeep on delivery (60s)
 
 Scroll to **section 7** on the same page.
 
@@ -84,11 +84,11 @@ Scroll to **section 7** on the same page.
 > reserved on the owner's wallet when the order is funded, and it only moves to the worker in the
 > same step that anchors the deliverable's hash to the chain."
 
-The line to land for the Rezoomex judges:
+The line to land:
 
-> "That's Rezoomex's own premise (pay follows task completion) implemented against our rail.
-> The adapter is written and marked `simulation` until the two environment variables are set.
-> Give us a sandbox key and it's live in one config change, no code."
+> "That's the premise gig-work platforms are built on, pay follows task completion, implemented
+> against our rail. The talent boundary is an adapter and it is marked `simulation`: we integrate
+> with nobody today, and the code says so on every payload rather than in a footnote."
 
 Open an order, fund it, show the available balance drop while the *balance* stays the same.
 *"Reserved money can't be spent on a settlement either; the DvP engine already reads availability,
