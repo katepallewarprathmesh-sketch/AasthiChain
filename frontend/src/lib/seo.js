@@ -26,6 +26,11 @@ export const ROUTE_SEO = {
     description:
       'Browse fractional property investments across Indian cities. Compare rental yield, token price and minimum investment on residential and commercial real estate. Free to browse.',
   },
+  '/trust': {
+    title: 'What Is Real and What Is Simulated | AasthiChain',
+    description:
+      'Every external boundary in AasthiChain, stated plainly: which connections are live, which are modelled locally, and what would make each one real. Read from the running deployment.',
+  },
   '/ledger': {
     title: 'Ownership Ledger Explorer — Verify Every Block | AasthiChain',
     description:

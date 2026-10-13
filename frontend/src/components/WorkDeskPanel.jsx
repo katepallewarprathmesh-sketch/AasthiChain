@@ -121,7 +121,7 @@ export default function WorkDeskPanel({ properties = [], participants = [], prop
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontSize: 18, color: C.navy }}>
-            7 · Work orders — upkeep paid on delivery
+            8 · Work orders: upkeep paid on delivery
           </h2>
           <p style={{ margin: '4px 0 0', fontSize: 12.5, color: C.mut, maxWidth: 760 }}>
             A tokenised building still has to be inspected, repaired and revalued. The fee is reserved on the

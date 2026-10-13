@@ -65,6 +65,7 @@ const VerifyDocument = lazy(() => import('./pages/VerifyDocument.jsx'))
 const LedgerExplorer = lazy(() => import('./pages/LedgerExplorer.jsx'))
 const InvestorDashboard = lazy(() => import('./pages/InvestorDashboard.jsx'))
 const Insights = lazy(() => import('./pages/Insights.jsx'))
+const Trust = lazy(() => import('./pages/Trust.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
 // Public free tools. No auth, no API calls - they exist to be found in search
 // and to be useful on their own.
@@ -215,7 +216,7 @@ function Footer() {
 
   const cols = [
     { h: 'Product', links: [['Marketplace', '/marketplace'], ['My Wallet', '/wallet'], ['List a Property', '/admin'], ['Regulator Audit', '/regulator']] },
-    { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Free calculators', '/tools'], ['Trust & Transparency', '/#trust'], ['Support the project', '/support']] },
+    { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Free calculators', '/tools'], ['What is real vs simulated', '/trust'], ['Support the project', '/support']] },
     { h: 'Learn', links: [['Demat 2.0 explained', '/learn/what-is-demat-2'], ['Atomic DvP explained', '/learn/what-is-atomic-dvp'], ['UMI explained', '/learn/what-is-umi']] },
     { h: 'Legal', links: [['About', '/about'], ['Privacy', '/privacy'], ['Terms of Use', '/terms']] },
   ]
@@ -641,6 +642,7 @@ function AppContent({ user, setUser }) {
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
+          <Route path="/trust" element={<Trust />} />
           <Route path="/support" element={<Support />} />
           <Route path="/verify" element={<VerifyDocument />} />
           <Route path="/learn" element={<LearnIndex />} />

@@ -180,6 +180,7 @@ welcome on the public ones.
 | `/admin` · `/admin/ops` | **session.** operator queues: what is waiting on a human |
 | `/regulator` | **session.** supervisory view: halts, cap tables, reconciliation |
 | `/learn` · `/tools` | index pages, plus three explainers and six calculators beneath them |
+| `/trust` | every external boundary, and whether it is live or modelled locally |
 | `/login` · `/about` · `/support` · `/privacy` · `/terms` | sign-in and the ordinary pages a real platform has |
 
 ---

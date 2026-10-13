@@ -77,7 +77,7 @@ If someone asks for the audit trail, open an instruction and show the **ISO 2002
 
 ### 5 · Work orders: paying for upkeep on delivery (60s)
 
-Scroll to **section 7** on the same page.
+Scroll to **section 8** on the same page.
 
 > "A tokenised building still has to be inspected, repaired and revalued. That cost normally sits
 > off-ledger on an invoice nobody can audit. So we applied the same discipline to it: the fee is

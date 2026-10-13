@@ -628,7 +628,45 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         <Notice flash={flash} where="servicing" onClose={() => setFlash(null)} />
       </Card>
 
-      <Card title="4 · Instructions & ISO 20022 trace" sub="Every instruction keeps the message family a real securities-settlement rail would emit — sese.023 → sese.024 → pacs.009 → sese.025 → camt.054.">
+      {/* The lifecycle named in post-trade terms.
+          The states were always a post-trade flow, but they were labelled in
+          our own words, so a settlement person had to translate before they
+          could judge whether it was right. Naming each one the way a CSD or a
+          custodian would is not decoration: it is the difference between
+          "some states" and a recognisable settlement cycle. */}
+      <Card
+        title="4 · Settlement lifecycle"
+        sub="The same cycle a central securities depository runs, on a T+1 basis. Our state names are on the left, the post-trade term for each on the right."
+      >
+        <div style={{ display: 'grid', gap: 8 }}>
+          {[
+            ['CREATED', 'Trade captured', 'A settlement instruction is generated from the trade and sent to the rail. Nothing is reserved yet.', 'sese.023'],
+            ['MATCHED', 'Matched and affirmed', 'The instruction is paired with its counterparty side and the economics agree. A mismatch stops here rather than settling wrongly.', 'sese.024'],
+            ['LOCKED', 'Pre-settlement reservation', 'Securities and cash are both reserved at once. Neither side can spend what is committed, which is what makes the next step atomic.', 'pacs.009'],
+            ['SETTLED', 'Final and irrevocable', 'Both legs deliver under one lock and the block commits. There is no observable state where one leg moved and the other did not.', 'sese.025 + camt.054'],
+            ['FAILED', 'Settlement fail, rolled back', 'A fail releases both reservations and records the reason. Nothing partial survives, and the instruction can be retried once the shortfall is cleared.', 'sese.024 (rejected)'],
+          ].map(([state, term, why, iso]) => (
+            <div key={state} style={{ display: 'grid', gridTemplateColumns: '112px 1fr', gap: 12, alignItems: 'start', border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+              <div>
+                <Pill tone={state === 'SETTLED' ? 'ok' : state === 'FAILED' ? 'bad' : 'warn'}>{state}</Pill>
+                <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10.5, color: C.mut, marginTop: 6 }}>{iso}</div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 650 }}>{term}</div>
+                <div style={{ fontSize: 12.5, color: C.mut, lineHeight: 1.55, marginTop: 2 }}>{why}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 12, color: C.mut, marginTop: 12, lineHeight: 1.6 }}>
+          Fails management is the part of post-trade that actually consumes people, so it is modelled
+          rather than skipped: a failed instruction keeps its reason, reports the exact shortfall, and
+          offers the one action that clears it. Settlement finality here means the block is committed;
+          the securities leg is this ledger and the cash leg is the e₹-W wallet ledger.
+        </p>
+      </Card>
+
+      <Card title="5 · Instructions & ISO 20022 trace" sub="Every instruction carries the message family a real securities-settlement rail would emit: sese.023 (instruction), sese.024 (status), pacs.009 (cash leg), sese.025 (confirmation), camt.054 (debit/credit advice).">
         {instructions.length === 0 ? <p style={{ fontSize: 13, color: C.mut }}>No instructions yet.</p> : instructions.map(si => (
           <div key={si.instructionId} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -679,7 +717,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         ))}
       </Card>
 
-      <Card title="5 · Reconciliation" sub="Conservation of central bank money, plus a full replay of the Drunix hash chain that carries every UMI block.">
+      <Card title="6 · Reconciliation" sub="Conservation of central bank money, plus a full replay of the Drunix hash chain that carries every UMI block.">
         {recon && (
           <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))')}>
             {[
@@ -714,7 +752,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       </Card>
 
       <Card
-        title="6 · Baskets — cross-property portfolio tokens"
+        title="7 · Baskets — cross-property portfolio tokens"
         sub="One unit is a fixed recipe of several properties. Subscribing moves the underlying tokens into custody, so a unit is redeemable rather than notional. Investors create, sell and redeem units from their dashboard; defining the instrument happens here.">
         <div style={fieldRow('repeat(auto-fit, minmax(190px, 1fr))')}>
           <Field label="Basket id"><input style={input} value={bId} onChange={e => setBId(e.target.value)} /></Field>

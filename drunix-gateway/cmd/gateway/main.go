@@ -139,7 +139,10 @@ func main() {
 	addr := ":" + envOr2(port, "21100")
 	// Router() late-binds the event hub to the chain, so the relay is started
 	// after it: the hub must exist before anything is delivered to it.
-	handler := srv.Router()
+	// Wrap the router so every failure is recorded against a request id and a
+	// panic in one handler can no longer take the whole rail down. See
+	// diagnostics.go; read it back with GET /diagnostics.
+	handler := drunix.WithDiagnostics(srv.Router())
 	if relay := srv.StartOutboxRelay(context.Background()); relay != nil {
 		defer relay.Stop()
 	}

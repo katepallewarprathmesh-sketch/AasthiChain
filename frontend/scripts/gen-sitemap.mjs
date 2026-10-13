@@ -41,12 +41,13 @@ const PRIORITY = {
   '/learn/what-is-atomic-dvp': '0.9',
   '/learn/what-is-umi': '0.9',
   '/learn': '0.8',
+  '/trust': '0.8',
   '/about': '0.7',
   '/support': '0.5',
   '/privacy': '0.3',
   '/terms': '0.3',
 }
-const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/support': 'monthly', '/tools': 'monthly', '/about': 'monthly', '/learn': 'monthly', '/privacy': 'yearly', '/terms': 'yearly' }
+const CHANGEFREQ = { '/': 'weekly', '/ledger': 'daily', '/umi': 'weekly', '/support': 'monthly', '/tools': 'monthly', '/about': 'monthly', '/trust': 'monthly', '/learn': 'monthly', '/privacy': 'yearly', '/terms': 'yearly' }
 
 const today = new Date().toISOString().slice(0, 10)
 

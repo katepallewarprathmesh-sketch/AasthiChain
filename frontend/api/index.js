@@ -2004,7 +2004,183 @@ function requiresAuth(method, path) {
   return false;
 }
 
+// ===================== DIAGNOSTICS =====================
+//
+// When something breaks in production the only evidence used to be a 500 with
+// a message, and whatever the browser happened to show. That is not enough to
+// debug from: there was no way to tie what a user saw to what the server did,
+// and nothing survived the request.
+//
+// So every request now carries an id, every response of 400 or worse is
+// recorded with that id, and the last 200 are readable from one endpoint. The
+// id goes back to the caller in the body and in the x-request-id header, so a
+// screenshot is now a lookup key rather than a description.
+//
+// Deliberately in-memory and capped. A lambda instance keeps its own ring and
+// loses it on recycle. That is a real limitation, which is why each entry is
+// ALSO written to stdout as one greppable line: the platform log is the
+// durable copy, this endpoint is the convenient one.
+
+const DIAG_MAX = 200;
+
+function diagStore() {
+  if (!globalThis._aasthi_diag) {
+    globalThis._aasthi_diag = { errors: [], counts: {}, total: 0, bootedAt: new Date().toISOString() };
+  }
+  return globalThis._aasthi_diag;
+}
+
+function newRequestId() {
+  return 'req_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// Never let diagnostics be the thing that breaks the request. Every call here
+// is wrapped, because a logger that can throw is worse than no logger.
+function recordDiag(entry) {
+  try {
+    const d = diagStore();
+    d.total += 1;
+    d.errors.unshift(entry);
+    if (d.errors.length > DIAG_MAX) d.errors.length = DIAG_MAX;
+    const key = entry.code || `HTTP_${entry.status}`;
+    d.counts[key] = (d.counts[key] || 0) + 1;
+    // One line, one JSON object, fixed prefix. Searching a Vercel or Render
+    // log for "aasthi-error" finds every one of these and nothing else.
+    console.error('[aasthi-error] ' + JSON.stringify(entry));
+  } catch { /* diagnostics must never throw */ }
+}
+
+// Secrets must not be the thing that leaks through the debugging tool. Only a
+// known-safe set of headers is kept, and the rest are dropped by omission
+// rather than by a denylist, so a header added later is private by default.
+const DIAG_SAFE_HEADERS = ['content-type', 'user-agent', 'referer', 'x-fabric-identity', 'x-idempotency-key'];
+
+function safeHeaders(req) {
+  const out = {};
+  try {
+    for (const h of DIAG_SAFE_HEADERS) {
+      const v = req.headers && req.headers[h];
+      if (v) out[h] = String(v).slice(0, 200);
+    }
+    // Presence is useful for debugging auth; the value never is.
+    if (req.headers && req.headers.authorization) out.authorization = 'present (redacted)';
+    if (req.headers && req.headers['x-admin-key']) out['x-admin-key'] = 'present (redacted)';
+  } catch { /* ignore */ }
+  return out;
+}
+
+// Wrap the response so that EVERY failing path is captured, including the
+// hundreds of handlers that return a 4xx directly. Instrumenting the response
+// rather than each call site is the only way to get complete coverage, and it
+// cannot drift as handlers are added.
+function instrumentResponse(req, res, requestId, user, startedAt) {
+  const origJson = res.json.bind(res);
+  const origSend = res.send.bind(res);
+  let recorded = false;
+
+  const capture = (payload) => {
+    if (recorded) return;
+    const status = res.statusCode || 200;
+    if (status < 400) return;
+    recorded = true;
+    let code = null, message = null;
+    try {
+      const body = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      if (body && typeof body === 'object') {
+        code = body.error || null;
+        message = body.message || body.detail || null;
+      }
+    } catch { /* a non-JSON body is fine, we just have no code */ }
+    recordDiag({
+      requestId,
+      at: new Date().toISOString(),
+      status,
+      code,
+      message: message ? String(message).slice(0, 500) : null,
+      method: req.method,
+      path: (() => { try { return new URL(req.url, 'http://x').pathname; } catch { return req.url; } })(),
+      identityId: (user && user.identityId) || null,
+      role: (user && user.role) || null,
+      ms: Date.now() - startedAt,
+      headers: safeHeaders(req),
+    });
+  };
+
+  res.json = (payload) => {
+    try { capture(payload); } catch { /* never block the response */ }
+    // The caller needs the id to quote it back to us, so it rides along in
+    // the body of anything that failed as well as in the header.
+    try {
+      const status = res.statusCode || 200;
+      if (status >= 400 && payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.requestId) {
+        payload.requestId = requestId;
+      }
+    } catch { /* ignore */ }
+    return origJson(payload);
+  };
+  res.send = (payload) => {
+    try { capture(payload); } catch { /* never block the response */ }
+    return origSend(payload);
+  };
+}
+
+// ===================== INTEGRATION HONESTY LEDGER =====================
+//
+// One place that states, for every external boundary, what is actually wired
+// up and what is a local model. Every other surface that makes a claim about
+// an integration reads it from here, so a claim cannot drift away from the
+// configuration that backs it.
+//
+// The rule applied throughout: "simulated" means the behaviour is modelled
+// locally and no third party is contacted. It does not mean "fake data in a
+// real integration", and it is never softened to "demo mode" or "sandbox" to
+// make it sound closer to live than it is.
+function integrationStatus() {
+  const pu = payuConfig();
+  const entry = (name, live, detail, realWhen) => ({
+    name, status: live ? 'live' : 'simulated', detail, liveWhen: live ? undefined : realWhen,
+  });
+  return [
+    entry('Drunix ledger', false,
+      'Our own execute-order-validate pipeline (LitePeer, Orderer with a RAFT simulation, ValidationService, CommittingPeer) over a hash-chained ledger. It is modelled on Hyperledger Fabric. It is NOT Fabric and runs no Fabric code.',
+      'DRUNIX_MODE=real plus a build tag, against an actual network'),
+    entry('e-rupee wholesale (e₹-W) cash leg', false,
+      'Wallet ledger and atomic DvP are fully implemented, but the money is an internal balance. No central bank system is contacted. There is no RBI pilot participation behind this.',
+      'a licensed participant connection, which is not something a project can self-serve'),
+    entry('UMI (Unified Market Interface)', false,
+      'Settlement lifecycle, ISIN assignment, asset servicing and ISO 20022 tracing follow the published SEBI Demat 2.0 pattern. The interface itself is our implementation of that pattern, not a connection to one.',
+      'a real UMI endpoint exists and admits participants'),
+    entry('NPCI / UPI', pu.active,
+      pu.active
+        ? `Live through PayU (${pu.test ? 'test' : 'production'} endpoint). PayU is a payment aggregator: this is a real payment rail, but it is NOT a direct NPCI connection and nothing here is endorsed by NPCI.`
+        : 'Simulated. UPI Collect, RRN and UTR formats are modelled correctly, but no payment is initiated. Not a direct NPCI connection in either mode.',
+      'PAYU_MERCHANT_KEY, PAYU_SALT and NPCI_MODE=payu are set'),
+    entry('DigiLocker identity verification', false,
+      'Not integrated. No DigiLocker API call is made in any mode and no credentials exist. The OAuth 2.0 shape is modelled and the documents returned are fabricated.',
+      'DigiLocker partner registration through Meripehchaan, then a real token exchange, which is not yet written'),
+    entry('Talent provider (work desk)', Boolean(process.env.WORK_PROVIDER_URL && process.env.WORK_PROVIDER_KEY),
+      'No external provider is integrated or named. The request shape the adapter sends is our own, not any vendor contract, so a real service would need field mapping inside the adapter.',
+      'WORK_PROVIDER_URL and WORK_PROVIDER_KEY are set AND the payload is mapped to that provider'),
+    entry('Public chain mirror (EVM)', Boolean(process.env.EVM_RPC_URL && process.env.EVM_REGISTRY_ADDRESS),
+      'Anchors digests to an EVM chain when configured. KYC evidence is excluded from the mirror by design.',
+      'EVM_RPC_URL and EVM_REGISTRY_ADDRESS are set'),
+    entry('Document storage (IPFS)', Boolean(process.env.IPFS_API_URL),
+      'In-process store unless an IPFS node is configured.',
+      'IPFS_API_URL is set'),
+    entry('Persistence', Boolean(process.env.DATABASE_URL),
+      'Rail state is in-memory and resets on restart unless a database is configured. The ledger itself is replayed from its blocks on boot.',
+      'DATABASE_URL is set'),
+    entry('KYC gate', false,
+      'The state machine, the payment gates and the digest-only ledger anchoring are real and enforced. The verification behind them is not: a newly created account is auto-marked VERIFIED.',
+      'a real KYC provider, and KRA or CKYC registration, replaces the mock verifier'),
+  ];
+}
+
 export default async function handler(req, res) {
+  const startedAt = Date.now();
+  const requestId = newRequestId();
+  try { res.setHeader('x-request-id', requestId); } catch { /* headers may be sent */ }
+
   try {
     await initState();
   } catch (e) {
@@ -2038,6 +2214,9 @@ export default async function handler(req, res) {
     const path = url.pathname;
     const method = req.method;
     const user = getUser(req);
+
+    // From here on every failing response is recorded against this request id.
+    instrumentResponse(req, res, requestId, user, startedAt);
 
     // A caller is anonymous only with no bearer and no identity header. The
     // header alone is enough here, unlike Express, because the serverless
@@ -4704,15 +4883,18 @@ export default async function handler(req, res) {
     // ============ DigiLocker KYC (Phase 2) ============
     if (path === '/api/kyc/digilocker/config' && method === 'GET') {
       return res.json({
-        provider: 'DigiLocker',
-        description: 'Government ID verification via digilocker.gov.in — Aadhaar, PAN, etc.',
-        realFlow: 'OAuth 2.0: app -> DigiLocker login -> user consent -> callback with code -> exchange for access_token -> pull document',
-        mockFlow: 'Same interface, mock data for hackathon — no real DigiLocker creds needed',
+        provider: 'DigiLocker (modelled, not integrated)',
+        integrated: false,
+        mode: 'simulation',
+        description: 'DigiLocker is the right real-world mechanism for Indian ID verification, so the flow here is modelled on it. No DigiLocker API is called, in any mode.',
+        honesty: 'There is no DigiLocker integration in this project and no credentials for one. API access requires partner registration through Meripehchaan. The documents this returns are fabricated.',
+        realFlow: 'What a real integration would do: OAuth 2.0, app -> DigiLocker login -> user consent -> callback with code -> exchange for access_token -> pull document.',
+        notYetWritten: 'The authorization-code-for-token exchange. Until it exists there is no mode in which this contacts DigiLocker.',
         env: {
           clientId: 'DIGILOCKER_CLIENT_ID',
           clientSecret: 'DIGILOCKER_CLIENT_SECRET',
           redirectUri: 'DIGILOCKER_REDIRECT_URI',
-          mode: process.env.DIGILOCKER_MODE || 'mock'
+          note: 'DIGILOCKER_MODE is no longer read. It used to switch only the authorize URL while the callback still fabricated the result.',
         },
         endpoints: {
           init: 'POST /api/kyc/digilocker/init { identityId } -> { authUrl, state }',
@@ -4731,9 +4913,17 @@ export default async function handler(req, res) {
         const clientId = process.env.DIGILOCKER_CLIENT_ID || 'mock-client-id';
         const redirectUri = process.env.DIGILOCKER_REDIRECT_URI || 'https://aasthi-chain.vercel.app/api/kyc/digilocker/callback';
         // Real: https://api.digitallocker.gov.in/public/oauth2/1/authorize?response_type=code&client_id=...&redirect_uri=...&state=...
-        const authUrl = process.env.DIGILOCKER_MODE === 'real'
-          ? `https://api.digitallocker.gov.in/public/oauth2/1/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
-          : `https://mock-digilocker.aasthichain.demo/oauth?client_id=${clientId}&state=${state}&identityId=${identityId}`;
+        // DIGILOCKER_MODE=real used to point this at the genuine DigiLocker
+        // authorize endpoint. The callback below never had a matching real
+        // branch: it ignores the authorization code, exchanges nothing, and
+        // fabricates an Aadhaar and a PAN. So "real" mode sent a person to a
+        // government consent screen and then invented the result, which is
+        // strictly worse than an obvious mock.
+        //
+        // There is no DigiLocker integration here and no credentials for one.
+        // Until a token exchange is actually written, the only honest
+        // destination is our own mock, whatever the environment says.
+        const authUrl = `https://mock-digilocker.aasthichain.demo/oauth?client_id=${clientId}&state=${state}&identityId=${identityId}`;
         
         // Store state for verification
         const digiKey = `digi_state_${state}`;
@@ -4745,7 +4935,8 @@ export default async function handler(req, res) {
           authUrl,
           state,
           identityId,
-          mode: process.env.DIGILOCKER_MODE || 'mock',
+          mode: 'simulation',
+          integrated: false,
           message: 'Redirect user to authUrl — in mock mode, call /callback directly with code',
           next: 'POST /api/kyc/digilocker/callback { identityId, code: mock-code, state }'
         });
@@ -4787,7 +4978,7 @@ export default async function handler(req, res) {
             accessToken: accessToken.slice(0,10) + '...',
             verifiedAt: new Date(),
             documents: mockDocs,
-            mode: process.env.DIGILOCKER_MODE || 'mock'
+            mode: 'simulation'
           }
         };
         globalThis._aasthi_kyc = kycRecords;
@@ -4888,7 +5079,8 @@ export default async function handler(req, res) {
           document: doc,
           pulledAt: new Date(),
           provider: 'digilocker',
-          mode: process.env.DIGILOCKER_MODE || 'mock'
+          mode: 'simulation',
+          integrated: false,
         });
       } catch (e) {
         return res.status(500).json({ error: e.message });
@@ -5595,12 +5787,114 @@ export default async function handler(req, res) {
     }
     // ===== END UMI RAIL PROXY =====
 
+    // The honesty ledger is public on purpose. Anything that has to be asked
+    // for privately is something a reader was not meant to find.
+    if (path === '/api/trust' && method === 'GET') {
+      const list = integrationStatus();
+      return res.json({
+        statement: 'AasthiChain is a working implementation of a settlement pattern, not a connected financial institution. This page lists every external boundary and says which side of the line it is on.',
+        liveCount: list.filter((i) => i.status === 'live').length,
+        simulatedCount: list.filter((i) => i.status === 'simulated').length,
+        integrations: list,
+        whatIsReal: [
+          'The ledger: blocks are hash-chained, append-only, and the rail rebuilds its state by replaying them.',
+          'Atomic DvP: the securities leg and the cash leg move under one lock, and a failure rolls both back.',
+          'Supply conservation: tokens cannot be created by settlement, and the invariant is enforced by tests.',
+          'Authorisation: every route is identity-scoped, and a read-only operator key cannot write.',
+          'Privacy: KYC evidence is anchored by digest only, and is excluded from the public-chain mirror.',
+        ],
+        knownGaps: [
+          'A newly created account is auto-marked KYC VERIFIED. The gate is real, the verification behind it is not.',
+          'The rail is a single-writer design, so there is no MVCC read-write conflict handling as a real Fabric network would need.',
+          'Rail state is in-memory without DATABASE_URL.',
+        ],
+      });
+    }
+
+    // ===================== DIAGNOSTICS ENDPOINTS =====================
+    //
+    // Readable by the deployment's operator or a supervisory session. The
+    // entries contain user identities and failure messages, so this is not
+    // public, but it is deliberately NOT a write surface either: there is
+    // nothing here to act on, only to read.
+    if (path === '/api/admin/diagnostics' || path.startsWith('/api/admin/diagnostics/')) {
+      const mayRead = DEMO_AUTH || operatorKeyOK(req) || (user && (user.entitled || user.operatorKey))
+        || ['regulator', 'registrar'].includes(String((user && user.role) || '').toLowerCase());
+      if (!mayRead) {
+        return res.status(403).json({
+          error: 'ERR_NOT_AUTHORISED',
+          message: 'Diagnostics are for the deployment operator. Send x-admin-key, or sign in as a supervisory identity.',
+        });
+      }
+      const d = diagStore();
+
+      if (path === '/api/admin/diagnostics/errors') {
+        const q = url.searchParams;
+        const wantId = (q.get('requestId') || '').trim();
+        const wantCode = (q.get('code') || '').trim();
+        const limit = Math.min(parseInt(q.get('limit') || '50', 10) || 50, DIAG_MAX);
+        let list = d.errors;
+        if (wantId) list = list.filter((e) => e.requestId === wantId);
+        if (wantCode) list = list.filter((e) => e.code === wantCode);
+        return res.json({
+          requestId,
+          matched: list.length,
+          returned: Math.min(list.length, limit),
+          errors: list.slice(0, limit),
+          note: wantId && list.length === 0
+            ? 'No entry with that id in this instance. Serverless instances keep separate rings and recycle, so search the platform log for "aasthi-error" and that id instead.'
+            : undefined,
+        });
+      }
+
+      return res.json({
+        requestId,
+        bootedAt: d.bootedAt,
+        instanceUptimeSec: Math.round((Date.now() - new Date(d.bootedAt).getTime()) / 1000),
+        totalFailures: d.total,
+        heldInRing: d.errors.length,
+        ringCapacity: DIAG_MAX,
+        byCode: d.counts,
+        recent: d.errors.slice(0, 25).map((e) => ({
+          requestId: e.requestId, at: e.at, status: e.status, code: e.code,
+          method: e.method, path: e.path, identityId: e.identityId, ms: e.ms,
+        })),
+        integrations: integrationStatus(),
+        howToUse: [
+          'Every response carries an x-request-id header; a failing one repeats it in the body.',
+          'GET /api/admin/diagnostics/errors?requestId=... for the full entry including a stack when there was one.',
+          'GET /api/admin/diagnostics/errors?code=ERR_METHOD to see every occurrence of one failure.',
+          'The durable copy is the platform log: search it for "aasthi-error".',
+        ],
+      });
+    }
+
     return res.status(404).json({ error: 'Not found', path });
 
   } catch (outerError) {
-    console.error('Outer handler error', outerError);
+    // An uncaught throw is the case worst served by the old logging: the
+    // stack existed only in a platform log nobody correlates with the report.
+    // Keep it, keyed by the same id the caller is shown.
+    recordDiag({
+      requestId,
+      at: new Date().toISOString(),
+      status: 500,
+      code: 'ERR_UNHANDLED',
+      message: String((outerError && outerError.message) || outerError).slice(0, 500),
+      stack: String((outerError && outerError.stack) || '').split('\n').slice(0, 12).join('\n'),
+      method: req.method,
+      path: (() => { try { return new URL(req.url, 'http://x').pathname; } catch { return req.url; } })(),
+      ms: Date.now() - startedAt,
+      headers: safeHeaders(req),
+    });
     try {
-      return res.status(500).json({ error: 'Internal server error', message: outerError.message, path: req.url });
+      return res.status(500).json({
+        error: 'ERR_UNHANDLED',
+        message: outerError.message,
+        path: req.url,
+        requestId,
+        hint: `Quote this requestId. Full detail: GET /api/admin/diagnostics/errors?requestId=${requestId}`,
+      });
     } catch {
       return res.status(500).end();
     }

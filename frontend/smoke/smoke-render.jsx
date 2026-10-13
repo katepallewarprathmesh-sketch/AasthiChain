@@ -21,6 +21,7 @@ import InvestorDashboard from '../src/pages/InvestorDashboard.jsx'
 import Insights from '../src/pages/Insights.jsx'
 import UMISettlement from '../src/pages/UMISettlement.jsx'
 import Support from '../src/pages/Support.jsx'
+import Trust from '../src/pages/Trust.jsx'
 import VerifyDocument from '../src/pages/VerifyDocument.jsx'
 import Admin from '../src/pages/Admin.jsx'
 import AdminOps from '../src/pages/AdminOps.jsx'
@@ -55,6 +56,7 @@ const ROUTES = [
   ['/ledger', <LedgerExplorer />],
   ['/umi', <UMISettlement />],
   ['/support', <Support />],
+  ['/trust', <Trust />],
   ['/verify', <VerifyDocument />],
   ['/admin', <Admin user={user} />],
   ['/admin/ops', <AdminOps user={{ ...user, role: 'Registrar' }} />],
