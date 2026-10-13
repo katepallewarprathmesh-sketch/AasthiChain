@@ -1081,6 +1081,27 @@ function railProxyAuth() {
   return process.env.UMI_PROXY_SECRET ? { 'X-Proxy-Auth': process.env.UMI_PROXY_SECRET } : {};
 }
 
+// The honesty page describes boundaries that live on the rail host, so it has
+// to ask the rail. A short timeout and a null on failure: an unreachable rail
+// must leave the page saying "unknown", never "not configured".
+async function railInteropState() {
+  const base = (process.env.UMI_GATEWAY_URL || '').replace(/\/$/, '');
+  if (!base) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const r = await fetch(base + '/umi/interop', {
+        headers: { Accept: 'application/json', ...railProxyAuth() },
+        signal: ctrl.signal,
+      });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return (d && Array.isArray(d.connectors)) ? d : null;
+    } finally { clearTimeout(timer); }
+  } catch { return null; }
+}
+
 // Headers for a rail GET the app makes on its own behalf rather than a
 // user's: the operator panels, the deployment banner, the verify report.
 // They used to go out bare, which was fine only while the rail believed
@@ -2198,7 +2219,17 @@ function instrumentResponse(req, res, requestId, user, startedAt) {
 // locally and no third party is contacted. It does not mean "fake data in a
 // real integration", and it is never softened to "demo mode" or "sandbox" to
 // make it sound closer to live than it is.
-function integrationStatus() {
+// `rail` is the connector state read from the gateway's own /umi/interop. The
+// EVM connector is configured on the rail host, not here, so asking our own
+// process.env about it produced a confident answer about somebody else's
+// machine. When the rail cannot be reached we say the configuration is
+// unknown rather than guessing either way.
+function integrationStatus(rail) {
+  const evm = (rail && Array.isArray(rail.connectors))
+    ? rail.connectors.find((c) => c && c.ledger === 'evm') : null;
+  const evmKnown = Boolean(evm);
+  const evmConfigured = Boolean(evm && evm.configured);
+  const evmWhere = (evm && typeof evm.status === 'string') ? evm.status : '';
   const pu = payuConfig();
   const entry = (name, live, detail, realWhen) => ({
     name, status: live ? 'live' : 'simulated', detail, liveWhen: live ? undefined : realWhen,
@@ -2234,11 +2265,20 @@ function integrationStatus() {
       'Every committed block is fanned out as CloudEvents-shaped messages carrying the ISO 20022 message name. It speaks the Kafka wire protocol, so it runs against Apache Kafka, Redpanda, WarpStream, MSK or Confluent without a code change. Publishing is post-commit and asynchronous: an unreachable broker drops events and can never delay or fail a settlement.',
       'EVENT_STREAM_BROKERS is set (plus EVENT_STREAM_USERNAME/PASSWORD and EVENT_STREAM_TLS for a hosted broker)'),
     entry('Cross-ledger transfer (Cacti pattern)', false,
-      'The lock is real: tokens move into a custody account in the securities ledger, so they cannot be settled here while they are represented elsewhere, and an abort returns them. The state machine, the double-close refusals and the blocks behind each step all run on the rail. The counterpart leg is only as real as the connector: with no EVM endpoint configured, a commit records a reference attested by a supervisor, and those are counted separately from transfers a connector actually observed. Nothing has been bridged to a public chain.',
-      'EVM_RPC_URL and EVM_REGISTRY_ADDRESS point at a chain such as Sepolia, so the gateway can check the remote leg itself'),
-    entry('Public chain mirror (EVM)', Boolean(process.env.EVM_RPC_URL && process.env.EVM_REGISTRY_ADDRESS),
-      'Anchors digests to an EVM chain when configured. KYC evidence is excluded from the mirror by design.',
-      'EVM_RPC_URL and EVM_REGISTRY_ADDRESS are set'),
+      'The lock is real: tokens move into a custody account in the securities ledger, so they cannot be settled here while they are represented elsewhere, and an abort returns them. The state machine, the double-close refusals and the blocks behind each step all run on the rail. The counterpart leg is only as real as the connector. '
+      + (!evmKnown
+        ? 'The rail could not be reached from here, so the connector state is unknown on this page rather than assumed.'
+        : evmConfigured
+          ? 'The EVM connector is configured against a public testnet registry and the check it runs is a real eth_call, so an unbacked commit is refused rather than recorded. Nothing has been anchored to that registry yet, which means every digest check currently comes back negative. A commit without a digest is still a supervisor attestation, counted separately from one a connector observed.'
+          : 'No EVM endpoint is configured on the rail, so a commit records a reference attested by a supervisor, counted separately from transfers a connector actually observed. Nothing has been bridged to a public chain.'),
+      'a transfer has been committed against a digest the public chain actually holds'),
+    entry('Public chain mirror (EVM)', false,
+      (!evmKnown
+        ? 'Anchors digests to an EVM chain when configured. The rail could not be reached from here, so whether it is configured is unknown on this page. KYC evidence is excluded from the mirror by design.'
+        : evmConfigured
+          ? 'Pointed at a real public testnet registry (' + evmWhere.replace(/^public-chain mirror: /, '') + '). Reads against it are genuine. Writes are not: anchoring calls eth_sendTransaction, which a hosted provider refuses because it holds no key for us, and local signing is not written, so the registry holds nothing we put there. KYC evidence is excluded from the mirror by design.'
+          : 'Anchors digests to an EVM chain when configured. Not configured on the rail. KYC evidence is excluded from the mirror by design.'),
+      'the rail can sign its own anchor transactions and a document digest is on the public chain'),
     entry('Document storage (IPFS)', Boolean(process.env.IPFS_API_URL),
       'In-process store unless an IPFS node is configured.',
       'IPFS_API_URL is set'),
@@ -5866,7 +5906,7 @@ export default async function handler(req, res) {
     // The honesty ledger is public on purpose. Anything that has to be asked
     // for privately is something a reader was not meant to find.
     if (path === '/api/trust' && method === 'GET') {
-      const list = integrationStatus();
+      const list = integrationStatus(await railInteropState());
       return res.json({
         statement: 'AasthiChain is a working implementation of a settlement pattern, not a connected financial institution. This page lists every external boundary and says which side of the line it is on.',
         liveCount: list.filter((i) => i.status === 'live').length,
@@ -5945,7 +5985,7 @@ export default async function handler(req, res) {
           requestId: e.requestId, at: e.at, status: e.status, code: e.code,
           method: e.method, path: e.path, identityId: e.identityId, ms: e.ms,
         })),
-        integrations: integrationStatus(),
+        integrations: integrationStatus(await railInteropState()),
         howToUse: [
           'Every response carries an x-request-id header; a failing one repeats it in the body.',
           'GET /api/admin/diagnostics/errors?requestId=... for the full entry including a stack when there was one.',
