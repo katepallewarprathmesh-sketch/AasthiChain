@@ -1,7 +1,9 @@
 package drunix
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -39,7 +41,40 @@ func (c umiCaller) is(participant string) bool {
 	return c.ID != "" && strings.EqualFold(c.ID, participant)
 }
 
+// UMIProxySecret is the shared secret the gateway in front of this rail must
+// present before its identity headers are believed.
+//
+// The authorisation rules below all assume identity arrives from a trusted
+// proxy that authenticated somebody. That assumption held only as long as the
+// rail was unreachable from outside — and it is not: the service answers on a
+// public URL, so anyone could send "X-Identity-Role: regulator" and be
+// believed. Reading a stranger's wallet, funding one out of nothing and
+// restating supply were all one curl away.
+//
+// When UMI_PROXY_SECRET is set, identity headers count only on a request that
+// also carries the matching X-Proxy-Auth, and anything else is treated as
+// anonymous — refused by the same guards that already refuse anonymity, so no
+// new failure mode. When it is unset the old behaviour is kept exactly, which
+// is what local development and CI rely on; /umi/config reports which of the
+// two is in force so an open deployment cannot look closed.
+func UMIProxySecret() string { return strings.TrimSpace(os.Getenv("UMI_PROXY_SECRET")) }
+
+// proxyTrusted reports whether this request may assert an identity.
+func proxyTrusted(r *http.Request) bool {
+	want := UMIProxySecret()
+	if want == "" {
+		return true // not configured: unchanged behaviour
+	}
+	got := firstHeader(r, "X-Proxy-Auth", "X-Umi-Proxy-Auth")
+	// Constant-time: the secret is a credential like any other.
+	return len(got) == len(want) && subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+}
+
 func callerOf(r *http.Request) umiCaller {
+	if !proxyTrusted(r) {
+		// Not from our gateway, so whatever it claims to be is just a claim.
+		return umiCaller{}
+	}
 	id := firstHeader(r, "X-Fabric-Identity", "X-Identity-Id", "X-Umi-Identity")
 	role := firstHeader(r, "X-Identity-Role", "X-Umi-Role")
 	return umiCaller{ID: strings.TrimSpace(id), Role: strings.TrimSpace(role)}

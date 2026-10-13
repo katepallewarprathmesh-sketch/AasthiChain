@@ -41,6 +41,7 @@ cd drunix-gateway && go test ./...      # settlement core unit and authorisation
 | `VITE_CLERK_PUBLISHABLE_KEY` | web app | Clerk auth. Use a `pk_live_` production key. |
 | `CLERK_ISSUER` | web app | Clerk Frontend API URL. **Set it** — without it, session signatures are not verified. |
 | `UMI_GATEWAY_URL` | web app | address of the settlement core; unset means the rail reports unreachable |
+| `UMI_PROXY_SECRET` | **both** | shared secret proving a request came from the web app. The settlement core is on a public URL, so without this it believes `X-Identity-Role: regulator` from anyone. Set the SAME value on the core and the web app — on the core alone, the app locks itself out; on the app alone, nothing changes. `GET /umi/config` reports `identityTrust.mode` as `open` or `shared-secret` |
 | `WORK_ENABLED` | settlement core | `false` removes the work-order desk (`/umi/work/*`) and changes nothing else |
 | `WORK_PROVIDER_URL` | settlement core | Rezoomex endpoint for publishing work orders; unset means the adapter runs in simulation and says so on every payload |
 | `WORK_PROVIDER_KEY` | settlement core | bearer token for the above; both must be set before the adapter reports `live` |

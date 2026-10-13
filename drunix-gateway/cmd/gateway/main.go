@@ -102,9 +102,14 @@ func main() {
 		// Seed the same positions/wallets the local demo uses (UMI_SEED_DEMO=false to skip).
 		// Seeding is skipped when state was restored from the database, so a
 		// restart never re-credits wallets (that would break conservation).
-		if os.Getenv("UMI_SEED_DEMO") != "false" && srv.UMI.IsEmpty() {
+		// IsEmpty() looks at wallets, instructions and funding — not at
+		// positions. An asset that already has a cap table must never be
+		// seeded again on top of it, so check that separately.
+		seedAsset := envOr("UMI_SEED_ASSET", "PROP-GREEN-VALLEY-PUNE-001")
+		_, seedOutstanding := srv.UMI.AuthorisedSupply(seedAsset)
+		if os.Getenv("UMI_SEED_DEMO") != "false" && srv.UMI.IsEmpty() && seedOutstanding == 0 {
 			// via the rail so the seeded position is mirrored to the store too
-			_, _ = srv.UMI.SeedPosition(envOr("UMI_SEED_ASSET", "PROP-GREEN-VALLEY-PUNE-001"), envOr("UMI_SEED_OWNER", "originator1"), 15000, 15000)
+			_, _ = srv.UMI.SeedPosition(seedAsset, envOr("UMI_SEED_OWNER", "originator1"), 15000, 15000)
 			_, _, _ = srv.UMI.FundWallet("investor1", 100000)
 			_, _, _ = srv.UMI.FundWallet("investor2", 50000)
 			log.Printf("UMI demo state seeded: 15000 tokens to %s, e₹-W wallets investor1 ₹1,00,000 / investor2 ₹50,000",

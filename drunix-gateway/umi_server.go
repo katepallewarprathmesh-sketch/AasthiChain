@@ -27,6 +27,7 @@ var umiEndpointList = []string{
 	"POST /umi/servicing                     {\"assetId\":\"...\",\"payer\":\"...\",\"amountINR\":6000}",
 	"GET  /umi/reconciliation",
 	"POST /umi/seed                          {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":15000}  (demo positions only)",
+	"POST /umi/supply/restate                {\"assetId\":\"...\",\"holder\":\"...\",\"authorisedTokens\":15000,\"reason\":\"...\"}  (supervisor; corrects an inflated book)",
 	// Dynamic ownership — cap table over a window, not just a current balance.
 	"GET  /umi/ownership/{assetId}?from=&to=  holders with pctNow, pctTimeWeighted, tokenDays",
 	// Cross-property portfolio tokens — one wrapped unit over several properties.
@@ -98,6 +99,7 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/income/", s.handleUMIIncome)
 	mux.HandleFunc("/umi/reconciliation", s.handleUMIReconciliation)
 	mux.HandleFunc("/umi/seed", s.durabilityGate(s.handleUMISeed))
+	mux.HandleFunc("/umi/supply/restate", s.durabilityGate(s.handleUMIRestateSupply))
 	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)
@@ -549,4 +551,64 @@ func (s *Server) handleUMISeed(w http.ResponseWriter, r *http.Request) {
 		"position": pos, "authorisedTokens": authorised, "outstandingTokens": outstanding,
 		"mode": UMIMode,
 	})
+}
+
+// POST /umi/supply/restate — correct an inflated book and pin the cap.
+//
+// Supervisor-only, and it has to be: it destroys tokens. The engine refuses
+// any restatement that would touch a holder other than the named one, so the
+// worst a supervisor can do here is remove phantom supply from the account
+// that was seeded with it.
+func (s *Server) handleUMIRestateSupply(w http.ResponseWriter, r *http.Request) {
+	if !requirePost(w, r) {
+		return
+	}
+	if !umiRequireSupervisor(w, callerOf(r), "Restating an asset's issued supply") {
+		return
+	}
+	var body struct {
+		AssetID          string `json:"assetId"`
+		Holder           string `json:"holder"`
+		AuthorisedTokens int64  `json:"authorisedTokens"`
+		Reason           string `json:"reason"`
+		DryRun           bool   `json:"dryRun"`
+	}
+	if err := umiDecode(r, &body); err != nil {
+		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
+		return
+	}
+	// Destroying tokens is not something to discover afterwards, so the call
+	// can be rehearsed first and reports exactly what it would change.
+	if body.DryRun {
+		authorised, outstanding := s.UMI.AuthorisedSupply(body.AssetID)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"dryRun":            true,
+			"assetId":           body.AssetID,
+			"authorisedNow":     authorised,
+			"outstandingNow":    outstanding,
+			"authorisedWouldBe": body.AuthorisedTokens,
+			"wouldRemove":       maxInt64(0, outstanding-body.AuthorisedTokens),
+			"holder":            body.Holder,
+			"mode":              UMIMode,
+			"disclaimer":        UMIDisclaimer,
+		})
+		return
+	}
+	out, _, err := s.UMI.RestateSupply(body.AssetID, body.Holder, body.AuthorisedTokens, body.Reason)
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, ErrUMIRestateNotPossible) {
+			code = http.StatusConflict
+		}
+		umiErr(w, code, "ERR_UMI_RESTATE_REFUSED", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }

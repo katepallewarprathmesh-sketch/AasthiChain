@@ -594,7 +594,7 @@ async function seedRailPosition(assetId, holder, tokens) {
   try {
     const r = await fetch(base + '/umi/seed', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}`, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': `seed-${assetId}-${tokens}`, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin', ...railProxyAuth() },
       body: JSON.stringify({ assetId, holder, tokens, authorisedTokens: tokens }),
     });
     const body = await r.json().catch(() => ({}));
@@ -677,7 +677,7 @@ async function commitSettlementToRail(pay, assetId, seller, buyer, tokens) {
   const post = async (path, body, idem) => {
     const r = await fetch(base + path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': idem, 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' , ...railProxyAuth() },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: await r.json().catch(() => ({})) };
@@ -843,7 +843,7 @@ async function certifyOnRail({ assetId, subject, docType, title, parties, visibi
     try {
       const r = await fetch(base + '/umi/documents', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
+        headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' , ...railProxyAuth() },
         body: JSON.stringify({
           assetId, subject, docType, title,
           issuer: 'AasthiChain registry',
@@ -874,7 +874,7 @@ async function anchorDigestOnRail({ assetId, subject, docType, title, issuer, su
     try {
       const r = await fetch(base + '/umi/documents/digest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
+        headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' , ...railProxyAuth() },
         body: JSON.stringify({ assetId, subject, docType, title, issuer, submittedBy, sha256 }),
         signal: ctrl.signal,
       });
@@ -1067,6 +1067,13 @@ function deletePropertyAuthorized(user, prop, assetId) {
   return { allowed: false, message: `Only the listing owner (${prop.originatorId}) or a Regulator can delete this listing.` };
 }
 
+// Internal rail calls identify as the gateway itself. Once UMI_PROXY_SECRET is
+// set the rail stops believing identity headers without it, so every outbound
+// call needs the same stamp — otherwise turning the secret on would lock the
+// app out of its own settlement core.
+function railProxyAuth() {
+  return process.env.UMI_PROXY_SECRET ? { 'X-Proxy-Auth': process.env.UMI_PROXY_SECRET } : {};
+}
 function payuConfig() {
   const key = process.env.PAYU_MERCHANT_KEY || '';
   const salt = process.env.PAYU_SALT || '';
@@ -4816,7 +4823,7 @@ export default async function handler(req, res) {
               try {
                 const r = await fetch(railBase + '/umi/documents/digest', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' },
+                  headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin' , ...railProxyAuth() },
                   body: JSON.stringify({
                     subject: identityId,
                     docType: 'KYC_EVIDENCE',
@@ -5301,6 +5308,11 @@ export default async function handler(req, res) {
           fwd['X-Fabric-Identity'] = user.identityId;
           fwd['X-Identity-Role'] = user.role || '';
         }
+        // The rail is on a public URL, so it cannot take an identity header on
+        // trust. When UMI_PROXY_SECRET is set on both sides this is what marks
+        // the request as coming from us; without it the rail reads every
+        // caller as anonymous.
+        if (process.env.UMI_PROXY_SECRET) fwd['X-Proxy-Auth'] = process.env.UMI_PROXY_SECRET;
         const upstream = await fetch(base.replace(/\/$/, '') + '/umi' + (suffix.startsWith('/') ? suffix : '/' + suffix) + (url.search || ''), {
           method,
           headers: fwd,

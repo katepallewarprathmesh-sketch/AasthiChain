@@ -1435,13 +1435,133 @@ func (r *UMIRail) Config() map[string]interface{} {
 			ErrUMINoWallet.Error(), ErrUMIInsufficientCBDC.Error(), ErrUMIInsufficientSecurities.Error(),
 			ErrUMINotPilotEligible.Error(), ErrUMISelfSettlement.Error(), ErrUMIInvalidAmount.Error(),
 		},
-		"counts":      map[string]int{"wallets": wallets, "pilotIsins": isins, "instructions": instr},
-		"persistence": r.PersistenceStatus(),
-		"endpoints":   umiEndpointList,
+		"counts":        map[string]int{"wallets": wallets, "pilotIsins": isins, "instructions": instr},
+		"persistence":   r.PersistenceStatus(),
+		"identityTrust": umiIdentityTrust(),
+		"endpoints":     umiEndpointList,
 		"notUMI": []string{
 			"Not a public blockchain, token standard or SDK — UMI is a settlement interface to central bank money.",
 			"Retail e₹ is out of scope: UMI settles WHOLESALE CBDC between institutions.",
 			"UPI remains AasthiChain's retail money leg; UMI is the institutional rail beside it.",
 		},
+	}
+}
+
+// ---------- supply restatement ----------
+
+// BlockUMISupplyRestated records a correction to an asset's issued supply.
+const BlockUMISupplyRestated = "UMI_SUPPLY_RESTATED"
+
+// ErrUMIRestateNotPossible is returned when the correction cannot be made
+// without touching holders other than the named one.
+var ErrUMIRestateNotPossible = errors.New("ERR_UMI_RESTATE_NOT_POSSIBLE")
+
+// RestateSupply corrects a book that was inflated before the cap meant
+// anything, and pins the authorised supply so it can never drift again.
+//
+// Why this exists: the authorised figure is DERIVED from restored positions at
+// boot (see the restore path), so a repeated demo seed both added tokens and
+// raised the ceiling to match. A cap derived from the thing it constrains can
+// never be breached, which is how an asset reached seven times its issued
+// supply while reconciliation still reported the securities leg conserved.
+//
+// The correction is deliberately narrow and deliberately loud:
+//   - it burns the excess from ONE named holder, so no real investor position
+//     is touched; if the excess is not all in that holder's hands it refuses
+//     rather than guessing whose tokens to destroy
+//   - it writes a block, because silently editing a cap table is exactly the
+//     thing this ledger exists to make impossible
+//   - it marks the cap as declared rather than derived, so the next restart
+//     cannot quietly raise it again
+func (r *UMIRail) RestateSupply(assetID, holder string, authorisedTokens int64, reason string) (map[string]interface{}, *DrunixBlock, error) {
+	mem, ok := r.securities.(*MemorySecurities)
+	if !ok {
+		return nil, nil, fmt.Errorf("ERR_UMI_LEDGER_NOT_SEEDABLE")
+	}
+	assetID, holder = strings.TrimSpace(assetID), strings.TrimSpace(holder)
+	if assetID == "" || holder == "" || authorisedTokens <= 0 {
+		return nil, nil, ErrUMIInvalidAmount
+	}
+
+	book := mem.Holders(assetID)
+	outstanding := int64(0)
+	for _, v := range book {
+		outstanding += v
+	}
+	held := book[holder]
+	excess := outstanding - authorisedTokens
+	if excess < 0 {
+		excess = 0
+	}
+	// Everyone else's position has to fit inside the restated supply, or the
+	// correction would mean destroying tokens somebody legitimately holds.
+	others := outstanding - held
+	if others > authorisedTokens {
+		return nil, nil, fmt.Errorf("%w: holders other than %s already hold %d tokens, which is more than the restated supply of %d",
+			ErrUMIRestateNotPossible, holder, others, authorisedTokens)
+	}
+	if excess > held {
+		return nil, nil, fmt.Errorf("%w: %d tokens must be removed but %s only holds %d",
+			ErrUMIRestateNotPossible, excess, holder, held)
+	}
+
+	newHeld := held - excess
+	if excess > 0 {
+		mem.Set(assetID, holder, newHeld)
+		r.RecordOwnership(assetID, holder, newHeld, "SUPPLY_RESTATED")
+	}
+
+	r.mu.Lock()
+	r.authorised[assetID] = authorisedTokens
+	r.derived[assetID] = false // declared from now on: no restart may raise it
+	snap := r.snapPositions(assetID, holder)
+	r.mu.Unlock()
+	r.pPosition(snap)
+
+	result := map[string]interface{}{
+		"assetId":            assetID,
+		"holder":             holder,
+		"authorisedTokens":   authorisedTokens,
+		"outstandingBefore":  outstanding,
+		"outstandingAfter":   outstanding - excess,
+		"tokensRemoved":      excess,
+		"holderTokensBefore": held,
+		"holderTokensAfter":  newHeld,
+		"otherHoldersTotal":  others,
+		"reason":             strings.TrimSpace(reason),
+		"mode":               UMIMode,
+		"disclaimer":         UMIDisclaimer,
+	}
+	blk := r.append(BlockUMISupplyRestated, map[string]interface{}{
+		"kind":              "umi-supply-restatement",
+		"assetId":           assetID,
+		"holder":            holder,
+		"authorisedTokens":  authorisedTokens,
+		"tokensRemoved":     excess,
+		"outstandingBefore": outstanding,
+		"outstandingAfter":  outstanding - excess,
+		"reason":            strings.TrimSpace(reason),
+		"note":              "Phantom tokens from repeated demo seeding removed; authorised supply pinned to the figure in the property register.",
+	})
+	if blk != nil {
+		result["blockHeight"] = blk.Height
+		result["blockHash"] = blk.Hash
+	}
+	return result, blk, nil
+}
+
+// umiIdentityTrust describes how the rail decides whether to believe the
+// identity on a request. Reported in /umi/config because a deployment that is
+// open to header spoofing must not be able to look closed.
+func umiIdentityTrust() map[string]interface{} {
+	if UMIProxySecret() == "" {
+		return map[string]interface{}{
+			"mode": "open",
+			"note": "Identity headers are believed from any caller. Safe only when this service is unreachable from outside. Set UMI_PROXY_SECRET here and on the web app to require a shared secret.",
+		}
+	}
+	return map[string]interface{}{
+		"mode": "shared-secret",
+		"note": "Identity headers count only on requests carrying the matching X-Proxy-Auth; everything else is treated as anonymous.",
 	}
 }
