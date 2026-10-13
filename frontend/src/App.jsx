@@ -506,17 +506,56 @@ function AppContent({ user, setUser }) {
   const handleOperatorUnlock = async () => {
     // Two ways in, and the easy one is named first. Nobody should have to go
     // hunting for a secret they set months ago to look at their own demo.
-    const who = (internalUser && internalUser.clerkEmail) || ''
+    //
+    // Which variable to name depends on what the session actually carries.
+    // SUPERVISOR_EMAILS is matched against an email claim inside the Clerk
+    // token, and a stock Clerk session token has no email in it: only sub,
+    // sid, iat and exp. Telling everyone to set SUPERVISOR_EMAILS therefore
+    // sent people to Vercel to set a variable that could never match, with
+    // nothing on screen to say why. So ask the server what it can see first,
+    // and name the variable that will actually work for this deployment.
+    let who = (internalUser && internalUser.clerkEmail) || ''
+    let subject = (internalUser && internalUser.clerkId) || ''
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}` },
+        cache: 'no-store',
+      })
+      if (res.ok) {
+        const me = await res.json()
+        who = me.email || ''
+        subject = me.clerkId || subject
+      }
+    } catch { /* fall back to what the session already told us */ }
+
+    // No email claim reaching the server means SUPERVISOR_EMAILS is a dead
+    // end here, and the Clerk subject is the one thing always present.
+    const byId = !who && subject
+    const permanent = byId
+      ? [
+          'Easiest, and it sticks on every device:',
+          `  add SUPERVISOR_CLERK_IDS = ${subject}`,
+          '  in Vercel, Settings, Environment Variables, then redeploy.',
+          '',
+          '  (SUPERVISOR_EMAILS will not work until Clerk is set up to put an',
+          '  email claim in the session token. Your sign-in email never',
+          '  reaches the server, so there is nothing for it to match.)',
+        ]
+      : [
+          'Easiest, and it sticks on every device:',
+          `  add SUPERVISOR_EMAILS = ${who || 'your sign-in email'}`,
+          '  in Vercel, Settings, Environment Variables, then redeploy.',
+        ]
+
     const entered = window.prompt(
       [
         'Switch between the demo roles.',
         '',
         who ? `You are signed in as ${who}.` : 'You are signed in.',
         '',
-        'Easiest, and it sticks on every device:',
-        `  add SUPERVISOR_EMAILS = ${who || 'your sign-in email'}`,
-        '  in Vercel → Settings → Environment Variables, then redeploy.',
+        ...permanent,
         '  The role dropdown then appears on its own, with nothing to type.',
+        '  A new variable only reaches the site after a redeploy.',
         '',
         'Just for this tab: paste the operator key (ADMIN_DASHBOARD_KEY) below.',
       ].join('\n'),
