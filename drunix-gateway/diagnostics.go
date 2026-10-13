@@ -229,15 +229,15 @@ func serveDiagnostics(w http.ResponseWriter, r *http.Request) {
 	entries, counts, total, booted := diag.snapshot(limit, q.Get("requestId"), q.Get("status"))
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"service":        "drunix-gateway",
-		"bootedAt":       booted.UTC().Format(time.RFC3339),
-		"uptimeSeconds":  int(time.Since(booted).Seconds()),
-		"totalFailures":  total,
-		"heldInRing":     len(entries),
-		"ringCapacity":   diagRingSize,
-		"byStatus":       counts,
-		"failures":       entries,
-		"note":           "In-memory and reset on restart. The durable copy is this process's log: search it for \"drunix-error\".",
+		"service":       "drunix-gateway",
+		"bootedAt":      booted.UTC().Format(time.RFC3339),
+		"uptimeSeconds": int(time.Since(booted).Seconds()),
+		"totalFailures": total,
+		"heldInRing":    len(entries),
+		"ringCapacity":  diagRingSize,
+		"byStatus":      counts,
+		"failures":      entries,
+		"note":          "In-memory and reset on restart. The durable copy is this process's log: search it for \"drunix-error\".",
 		"howToUse": []string{
 			"Every response carries X-Request-Id.",
 			"GET /diagnostics?requestId=... for one request, including a stack if it panicked.",
