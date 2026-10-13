@@ -120,6 +120,35 @@ t('the last message must be from the user',
   t('the assistant is told to refuse private questions',
     /holdings|KYC/i.test(prompt));
   t('the assistant is told not to invent figures', /[Nn]ever invent/.test(prompt));
+
+  // Three things the assistant got wrong in the wild, all caused by what it
+  // was not told. Asked about the rail it pointed at /dashboard — a private
+  // holdings page that explains none of it — because that was one of only
+  // three pages it had ever been given. Asked for a real-world example it
+  // said there was none to look at, though Demat 2.0 has been live for
+  // corporate bonds since September 2026. Asked for a reference it refused
+  // to give any link at all, including to pages on this very site.
+  t('the assistant knows the rail is called ASI', /Aasthi Settlement Interface/.test(prompt));
+  t('the assistant is told the rail here is a simulation',
+    /simulation/i.test(prompt) && /no real money|no RBI/i.test(prompt));
+  t('the assistant can name the real-world Demat 2.0 rollout',
+    /Demat 2\.0/.test(prompt) && /1,025 crore/.test(prompt) && /REC, L&T and IIFL/.test(prompt),
+    'asked for a real-world example it said to go and look elsewhere');
+  t('the assistant knows the explainer pages exist',
+    /\/learn\/what-is-umi/.test(prompt) && /\/learn\/what-is-demat-2/.test(prompt));
+  t('the assistant is steered away from /dashboard for rail questions',
+    /NOT \/dashboard/.test(prompt), 'this is the page it wrongly sent someone to');
+  t('the assistant is allowed to give internal links',
+    /[Ll]ink to these freely/.test(prompt), 'it refused to provide any reference at all');
+  t('every page the assistant may name is a real route', (() => {
+    const real = new Set(['/', '/about', '/admin', '/admin/ops', '/dashboard', '/insights',
+      '/learn', '/learn/what-is-atomic-dvp', '/learn/what-is-demat-2', '/learn/what-is-umi',
+      '/ledger', '/login', '/market', '/marketplace', '/privacy', '/regulator', '/support',
+      '/terms', '/tools', '/umi', '/verify', '/wallet']);
+    const named = prompt.match(/(?<![\w/])\/[a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*/g) || [];
+    const bogus = named.filter(x => !real.has(x) && !x.startsWith('/api/'));
+    return bogus.length === 0 ? true : (console.log('      invented:', [...new Set(bogus)]), false);
+  })(), 'the prompt names a page that does not exist');
 }
 
 // ---------------------------------------------------------------------------
