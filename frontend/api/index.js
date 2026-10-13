@@ -359,6 +359,12 @@ async function initState() {
       globalThis._aasthi_npci_idem = npciIdem;
       globalThis._aasthi_utr_index = utrIndex;
       globalThis._aasthi_webhooks = npciWebhooks;
+      // The five demo identities keep verified records on every path, not
+      // only on a cold init. They are fixtures with positions and payment
+      // history behind them, so a restored store that happens to carry no
+      // KYC rows must not leave them unverified now that UNVERIFIED is the
+      // default for everyone else.
+      seedDemoKyc(kycRecords);
       return;
     }
 
@@ -1337,7 +1343,10 @@ function payerHistory(payerId, excludePaymentId) {
     if (now - t <= 24 * 3600 * 1000) { c24++; total24 += parseFloat(p.amountINR) || 0; recent.push(parseFloat(p.amountINR) || 0); }
   });
   const kyc = kycRecords[payerId] || kycRecords[String(payerId).toLowerCase()];
-  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24, recentINR: recent.slice(0, 10), kycVerified: !kyc || kyc.kycStatus === 'VERIFIED' };
+  // No record is not the same as a clean record. This read used to treat a
+  // missing one as verified, which is the fail-open direction on the exact
+  // signal the fraud engine weights highest.
+  return { txnCount10m: c10, txnCount24h: c24, totalINR24h: total24, recentINR: recent.slice(0, 10), kycVerified: Boolean(kyc) && kyc.kycStatus === 'VERIFIED' };
 }
 
 function isValidVPA(vpa) {
@@ -1539,16 +1548,43 @@ const envList = (name) =>
 // pin particular people to an existing ledger identity — this is how the
 // holder of today's production positions keeps them — via IDENTITY_ALIASES,
 // a comma-separated list of email=identity or clerkSubject=identity.
-// A person signing in for the first time gets the same KYC standing they
-// had a moment ago as investor1, which is a mock VERIFIED record. This keeps
-// the buying flow working exactly as it did; it is not a KYC decision, and a
-// real provider should replace it before any of this is real money.
+// A person signing in for the first time starts UNVERIFIED and has to go
+// through the verification flow before they can pay for anything.
+//
+// It used to be the opposite: a new account was created already VERIFIED, on
+// the reasoning that it inherited the standing the shared investor1 identity
+// had. That made the gate decorative. Every check downstream reads this
+// record, so handing out a verified one on arrival meant nothing was ever
+// actually gated, and the trust page had to carry it as a known gap.
+//
+// The five seeded demo identities above keep their verified records, because
+// they are fixtures with positions and payment history behind them, not
+// accounts anybody signed up for. The verification itself is still simulated:
+// /api/kyc/digilocker/callback marks a record VERIFIED without talking to
+// DigiLocker. What changes here is that the state machine is now load
+// bearing, so the simulated step has to be taken rather than assumed.
+// The demo fixtures. Verified wherever they are missing, never overwritten:
+// a real decision recorded against one of these ids stays what it is.
+const DEMO_VERIFIED_IDS = ['originator1', 'investor1', 'investor2', 'registrar1', 'regulator1'];
+function seedDemoKyc(records) {
+  if (!records) return;
+  const now = new Date();
+  for (const id of DEMO_VERIFIED_IDS) {
+    if (records[id]) continue;
+    records[id] = { docType: 'kyc', identityId: id, kycStatus: 'VERIFIED', verifiedAt: now, provider: 'mock' };
+  }
+  if (!records['unverified_user']) {
+    records['unverified_user'] = { docType: 'kyc', identityId: 'unverified_user', kycStatus: 'UNVERIFIED', verifiedAt: now, provider: 'mock' };
+  }
+}
+
 function ensureKycRecord(identityId) {
   if (!identityId || identityId === 'ANONYMOUS_USER') return;
   if (kycRecords[identityId]) return;
   kycRecords[identityId] = {
-    docType: 'kyc', identityId, kycStatus: 'VERIFIED',
-    verifiedAt: new Date().toISOString(), provider: 'mock-inherited',
+    docType: 'kyc', identityId, kycStatus: 'UNVERIFIED',
+    verifiedAt: null, provider: 'none',
+    note: 'New account. Verify through /api/kyc/digilocker/init to transact.',
   };
 }
 
@@ -2190,7 +2226,7 @@ function integrationStatus() {
       'Rail state is in-memory and resets on restart unless a database is configured. The ledger itself is replayed from its blocks on boot.',
       'DATABASE_URL is set'),
     entry('KYC gate', false,
-      'The state machine, the payment gates and the digest-only ledger anchoring are real and enforced. The verification behind them is not: a newly created account is auto-marked VERIFIED.',
+      'The state machine, the payment gates and the digest-only ledger anchoring are real and enforced, and a new account starts UNVERIFIED and is refused at the payment gate until it is verified. What is simulated is the verification step itself: the DigiLocker callback marks the record VERIFIED without any document being checked by anyone.',
       'a real KYC provider, and KRA or CKYC registration, replaces the mock verifier'),
   ];
 }
@@ -2500,7 +2536,7 @@ export default async function handler(req, res) {
 
         const payeeKycId = payeeId || 'originator1';
         const payeeKyc = kycRecords[payeeKycId] || kycRecords[payeeKycId.toLowerCase()];
-        if (payeeKyc && payeeKyc.kycStatus !== 'VERIFIED') {
+        if (!payeeKyc || payeeKyc.kycStatus !== 'VERIFIED') {
           const paymentId = genPaymentID();
           const rrn = genRRN();
           const pay = {
@@ -2795,7 +2831,7 @@ export default async function handler(req, res) {
         }
         const payerId = req.body?.payerId || pay.payerId || 'investor1';
         const kyc = kycRecords[payerId] || kycRecords[payerId.toLowerCase()] || kycRecords[pay.payerId];
-        if (kyc && kyc.kycStatus !== 'VERIFIED') {
+        if (!kyc || kyc.kycStatus !== 'VERIFIED') {
           pay.status = 'FAILED_KYC_NOT_VERIFIED';
           pay.failureReason = `payer ${payerId} KYC not verified`;
           globalThis._aasthi_npcipayments = npciPayments;
@@ -5823,7 +5859,7 @@ export default async function handler(req, res) {
           'Privacy: KYC evidence is anchored by digest only, and is excluded from the public-chain mirror.',
         ],
         knownGaps: [
-          'A newly created account is auto-marked KYC VERIFIED. The gate is real, the verification behind it is not.',
+          'KYC verification is simulated. A new account starts UNVERIFIED and the gate refuses it, but the step that clears it checks no document.',
           'The rail is a single-writer design, so there is no MVCC read-write conflict handling as a real Fabric network would need.',
           'Rail state is in-memory without DATABASE_URL.',
         ],
