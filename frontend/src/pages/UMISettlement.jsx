@@ -19,6 +19,7 @@ import { umiFetch as umi } from '../lib/umiFetch'
 import WorkDeskPanel from '../components/WorkDeskPanel'
 import CarbonPanel from '../components/CarbonPanel'
 import ThroughputPanel from '../components/ThroughputPanel'
+import PrivateDataPanel from '../components/PrivateDataPanel'
 
 const C = {
   paper: '#F7F5F0', navy: '#1E3A5F', line: '#E5E7EB', mut: '#6B7280',
@@ -876,6 +877,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       <CarbonPanel participants={participants} />
 
       <ThroughputPanel />
+      <PrivateDataPanel />
       </>)}
     </div>
   )

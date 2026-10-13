@@ -108,6 +108,18 @@ func routeFor(path string) string {
 			return "/umi/documents/subject/{id}"
 		}
 		return "/umi/documents/{id}"
+	case p == "/umi/private/collections":
+		return "/umi/private/collections"
+	case strings.HasPrefix(p, "/umi/private/"):
+		// A collection name is a fixed label; a key is caller supplied and
+		// must never become one.
+		if strings.HasSuffix(p, "/verify") {
+			return "/umi/private/{collection}/{key}/verify"
+		}
+		if strings.Count(p, "/") >= 4 {
+			return "/umi/private/{collection}/{key}"
+		}
+		return "/umi/private/{collection}"
 	case strings.HasPrefix(p, "/umi/analytics/"):
 		return "/umi/analytics/{id}"
 	case strings.HasPrefix(p, "/umi/income/"):

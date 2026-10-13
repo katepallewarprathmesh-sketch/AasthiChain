@@ -31,6 +31,13 @@ var umiEndpointList = []string{
 	"POST /umi/carbon/retire                 {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":10}",
 	"GET  /umi/carbon/retirements",
 	"GET  /umi/throughput",
+	// Private data collections: the value stays with the members, the
+	// chain carries only the hashes.
+	"GET  /umi/private/collections",
+	"GET  /umi/private/{collection}",
+	"POST /umi/private/{collection}          {\"key\":\"...\",\"owner\":\"...\",\"value\":{...}}  (member roles only)",
+	"GET  /umi/private/{collection}/{key}",
+	"POST /umi/private/{collection}/{key}/verify  {\"value\":{...}}  check a copy you already hold",
 	"GET  /umi/reconciliation",
 	"POST /umi/seed                          {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":15000}  (demo positions only)",
 	"POST /umi/supply/restate                {\"assetId\":\"...\",\"holder\":\"...\",\"authorisedTokens\":15000,\"reason\":\"...\"}  (supervisor; corrects an inflated book)",
@@ -114,6 +121,9 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/carbon/retire", s.durabilityGate(s.handleUMICarbonRetire))
 	mux.HandleFunc("/umi/carbon/retirements", s.handleUMICarbonRetirements)
 	mux.HandleFunc("/umi/throughput", s.handleUMIThroughput)
+	// Private data collections (see privatedata.go): hashes on the chain,
+	// values behind a membership policy.
+	s.registerPrivateDataRoutes(mux)
 	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)

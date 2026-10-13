@@ -150,6 +150,35 @@ func main() {
 				log.Printf("carbon credits seeded: 5000 credits of %s to %s (asset class CARBON, registry simulated)",
 					carbonAsset, envOr("UMI_SEED_OWNER", "originator1"))
 			}
+			// One KYC record per demo investor, written into the private
+			// data collection by the registrar. Seeded so the collection
+			// is not an empty table in the demo, and so a reviewer can
+			// immediately try the thing worth trying: read it as the
+			// subject, be refused as anybody else, and verify it against
+			// the chain hash without being able to read it at all. The
+			// values are invented, like every other demo figure here.
+			if pdc := srv.UMI.Private(); pdc != nil {
+				for _, sub := range []struct{ id, name, last4 string }{
+					{"investor1", "Asha Kulkarni", "4417"},
+					{"investor2", "Rohit Deshmukh", "8820"},
+				} {
+					if _, err := pdc.Put(drunix.PrivateWrite{
+						Collection: drunix.CollectionKYC,
+						Key:        sub.id,
+						Owner:      sub.id,
+						Value: map[string]interface{}{
+							"documentType": "AADHAAR",
+							"holderName":   sub.name,
+							"idLastFour":   sub.last4,
+							"verifiedBy":   "registrar1",
+							"simulated":    true,
+						},
+					}, "registrar1", "registrar"); err != nil {
+						log.Printf("private data seed: %v", err)
+					}
+				}
+				log.Printf("Private data collections mounted at /umi/private/*: values held by member roles, hashes on the chain")
+			}
 		}
 
 		// Work desk — escrowed property upkeep paid on accepted delivery

@@ -335,6 +335,11 @@ type UMIRail struct {
 	// generated certificates into (see certificates.go). Optional.
 	docs *DocumentRegistry
 
+	// private holds the Fabric-style private data collections (see
+	// privatedata.go). It keeps its own lock and owns no balance, so a
+	// write to it can never delay a settlement.
+	private *PrivateStore
+
 	// book is the secondary marketplace order book (see marketplace.go). It
 	// keeps its own lock and owns no value — offers settle through SettleDvP
 	// like any other trade.
@@ -402,6 +407,7 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		securities:    sec,
 		chain:         chain,
 		book:          newOfferBook(),
+		private:       newPrivateStore(chain),
 		notifications: newNotifyStore(),
 	}
 }
@@ -435,6 +441,9 @@ func (r *UMIRail) PositionOf(assetID, holder string) int64 {
 	defer r.mu.Unlock()
 	return r.securities.Position(assetID, holder)
 }
+
+// Private exposes the private data collections (see privatedata.go).
+func (r *UMIRail) Private() *PrivateStore { return r.private }
 
 // Securities exposes the asset-leg ledger (used by the HTTP layer for seeding).
 func (r *UMIRail) Securities() SecuritiesLedger { return r.securities }
@@ -494,6 +503,11 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	// rest of restore does.
 	r.restoreCarbonFromChain()
 	r.mu.Unlock()
+
+	// Private data proofs come back from the chain; the values do not,
+	// because they were never on it. Outside the rail lock: the store has
+	// its own.
+	r.private.restorePrivateDataFromChain()
 
 	if mem, ok := r.securities.(*MemorySecurities); ok {
 		for _, p := range snap.Positions {
