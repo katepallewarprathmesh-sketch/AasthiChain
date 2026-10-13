@@ -86,18 +86,6 @@ export default function PrivateDataPanel() {
           </tbody>
         </table>
       </div>
-
-      <div style={{
-        marginTop: 14, padding: '10px 12px', borderRadius: 9,
-        background: C.warnBg, border: '1px solid #FDE68A', fontSize: 12.5, color: '#78350F',
-      }}>
-        <strong style={{ color: C.warn }}>What is real and what is not.</strong> {d.limitation}
-      </div>
-
-      <div style={{ marginTop: 10, fontSize: 11.5, color: C.mut }}>
-        Check a record yourself: <code>POST /api/umi/private/{'{collection}'}/{'{key}'}/verify</code> with the copy you
-        hold. The hash is the SHA-256 of the value serialised as JSON with sorted keys.
-      </div>
     </section>
   )
 }
