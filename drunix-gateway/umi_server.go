@@ -25,6 +25,11 @@ var umiEndpointList = []string{
 	"GET  /umi/instructions?limit=50",
 	"GET  /umi/instructions/{id}",
 	"POST /umi/servicing                     {\"assetId\":\"...\",\"payer\":\"...\",\"amountINR\":6000}",
+	"GET  /umi/assets",
+	"POST /umi/assets                        {\"assetId\":\"...\",\"assetClass\":\"CARBON\",\"vintage\":2024}",
+	"GET  /umi/assets/{assetId}",
+	"POST /umi/carbon/retire                 {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":10}",
+	"GET  /umi/carbon/retirements",
 	"GET  /umi/reconciliation",
 	"POST /umi/seed                          {\"assetId\":\"...\",\"holder\":\"...\",\"tokens\":15000}  (demo positions only)",
 	"POST /umi/supply/restate                {\"assetId\":\"...\",\"holder\":\"...\",\"authorisedTokens\":15000,\"reason\":\"...\"}  (supervisor; corrects an inflated book)",
@@ -100,6 +105,13 @@ func (s *Server) registerUMIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/umi/reconciliation", s.handleUMIReconciliation)
 	mux.HandleFunc("/umi/seed", s.durabilityGate(s.handleUMISeed))
 	mux.HandleFunc("/umi/supply/restate", s.durabilityGate(s.handleUMIRestateSupply))
+	// Asset classes and carbon retirement (see assetclass.go). Additive: an
+	// asset with no profile is a PROPERTY and nothing below is consulted by
+	// the settlement path.
+	mux.HandleFunc("/umi/assets", s.handleUMIAssets)
+	mux.HandleFunc("/umi/assets/", s.handleUMIAsset)
+	mux.HandleFunc("/umi/carbon/retire", s.durabilityGate(s.handleUMICarbonRetire))
+	mux.HandleFunc("/umi/carbon/retirements", s.handleUMICarbonRetirements)
 	s.registerAnalyticsRoutes(mux)
 	s.registerPortfolioRoutes(mux)
 	s.registerMarketRoutes(mux)

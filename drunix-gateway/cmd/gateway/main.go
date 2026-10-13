@@ -126,6 +126,30 @@ func main() {
 			_, _, _ = srv.UMI.FundWallet("investor2", 50000)
 			log.Printf("UMI demo state seeded: 15000 tokens to %s, e₹-W wallets investor1 ₹1,00,000 / investor2 ₹50,000",
 				envOr("UMI_SEED_OWNER", "originator1"))
+
+			// A second asset class, seeded end to end so the demo shows a
+			// real settlement and a real retirement rather than an empty
+			// table. The settlement core is not told it is carbon: the only
+			// thing that differs is the registry entry and the terminal
+			// state. Nothing here is backed by an external registry.
+			carbonAsset := envOr("UMI_SEED_CARBON_ASSET", "CARB-NSK-AGROFOREST-2024")
+			if _, err := srv.UMI.RegisterAsset(drunix.AssetProfile{
+				AssetID:      carbonAsset,
+				Class:        drunix.AssetClassCarbon,
+				Name:         "Nashik agroforestry carbon credits, vintage 2024",
+				ProjectID:    "AAS-CARB-0001",
+				Vintage:      2024,
+				Methodology:  "Afforestation and reforestation (pattern reference, not a certified methodology)",
+				Country:      "IN",
+				SerialPrefix: "AAS-CARB-0001-2024",
+			}); err != nil {
+				log.Printf("carbon seed: could not register asset class: %v", err)
+			} else {
+				_, _ = srv.UMI.SeedPosition(carbonAsset, envOr("UMI_SEED_OWNER", "originator1"), 5000, 5000)
+				_, _, _ = srv.UMI.AssignISIN(carbonAsset, envOr("UMI_SEED_OWNER", "originator1"), "")
+				log.Printf("carbon credits seeded: 5000 credits of %s to %s (asset class CARBON, registry simulated)",
+					carbonAsset, envOr("UMI_SEED_OWNER", "originator1"))
+			}
 		}
 
 		// Work desk — escrowed property upkeep paid on accepted delivery

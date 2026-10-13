@@ -85,6 +85,10 @@ var (
 	ErrUMIInvalidAmount          = errors.New("ERR_UMI_INVALID_AMOUNT")
 	ErrUMIInstructionNotFound    = errors.New("ERR_UMI_INSTRUCTION_NOT_FOUND")
 	ErrUMINoHolders              = errors.New("ERR_UMI_NO_HOLDERS")
+	ErrUMIUnknownAsset           = errors.New("ERR_UMI_UNKNOWN_ASSET")
+	ErrUMIUnknownAssetClass      = errors.New("ERR_UMI_UNKNOWN_ASSET_CLASS")
+	ErrUMIAssetClassLocked       = errors.New("ERR_UMI_ASSET_CLASS_LOCKED")
+	ErrUMINotRetirable           = errors.New("ERR_UMI_NOT_RETIRABLE")
 )
 
 // ---------- securities leg (DIP boundary) ----------
@@ -342,6 +346,17 @@ type UMIRail struct {
 	// number in and the breach would vanish - so a derived cap can be
 	// corrected once by an explicit declaration. A declared one cannot.
 	derived map[string]bool
+
+	// assets is the asset-class registry (see assetclass.go). An asset with no
+	// entry is a PROPERTY, which is what every asset was before classes
+	// existed, so the whole feature is additive by construction.
+	assets map[string]*AssetProfile
+	// retired counts tokens permanently consumed per asset, and retirements
+	// is the register behind them. Retired supply is NOT outstanding and NOT
+	// available, but it must stay counted against the cap or the same tonne
+	// could be issued twice.
+	retired     map[string]int64
+	retirements []Retirement
 }
 
 // ServicingRecord is one holder's share of one servicing run — the row an
@@ -372,6 +387,8 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		wallets:       make(map[string]*CBDCWallet),
 		authorised:    make(map[string]int64),
 		derived:       make(map[string]bool),
+		assets:        make(map[string]*AssetProfile),
+		retired:       make(map[string]int64),
 		isins:         make(map[string]*PilotISIN),
 		instructions:  make(map[string]*SettlementInstruction),
 		baskets:       make(map[string]*Basket),
@@ -463,6 +480,13 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	r.fundedPaise = snap.FundedPaise
 	r.settledCount = snap.Settled
 	r.failedCount = snap.Failed
+	// Asset classes and retired supply come from the chain rather than the
+	// store, because the chain already records both and is durable. Retired
+	// tokens are not positions, so the loop above cannot see them; without
+	// this the cap would shrink by the retired amount on every restart and
+	// that supply could be issued again. Runs while the lock is held, as the
+	// rest of restore does.
+	r.restoreCarbonFromChain()
 	r.mu.Unlock()
 
 	if mem, ok := r.securities.(*MemorySecurities); ok {
@@ -652,17 +676,32 @@ func (r *UMIRail) SupplyBreaches() []map[string]interface{} {
 		caps[k] = v
 	}
 	r.mu.Unlock()
+	r.mu.Lock()
+	retired := make(map[string]int64, len(r.retired))
+	for k, v := range r.retired {
+		retired[k] = v
+	}
+	r.mu.Unlock()
 	out := []map[string]interface{}{}
 	for assetID, cap0 := range caps {
 		outstanding := int64(0)
 		for _, v := range mem.Holders(assetID) {
 			outstanding += v
 		}
-		if outstanding > cap0 {
-			out = append(out, map[string]interface{}{
+		// Retired credits are gone from the book but were still issued, so
+		// they count against the cap. Without this term a retirement would
+		// free up headroom and the same tonne could be issued a second time,
+		// which is precisely the double count the class exists to prevent.
+		consumed := outstanding + retired[assetID]
+		if consumed > cap0 {
+			row := map[string]interface{}{
 				"assetId": assetID, "authorisedTokens": cap0,
-				"outstandingTokens": outstanding, "excessTokens": outstanding - cap0,
-			})
+				"outstandingTokens": outstanding, "excessTokens": consumed - cap0,
+			}
+			if retired[assetID] > 0 {
+				row["retiredTokens"] = retired[assetID]
+			}
+			out = append(out, row)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -1401,7 +1440,7 @@ func (r *UMIRail) Reconcile() Reconciliation {
 	rec.SupplyBreaches = breaches
 	rec.SupplyConserved = len(breaches) == 0
 	if rec.SupplyConserved {
-		rec.SupplyNote = "No asset has more tokens outstanding than were issued."
+		rec.SupplyNote = "No asset has more tokens outstanding plus retired than were issued."
 	} else {
 		rec.SupplyNote = "MISMATCH — tokens exist beyond the issued supply. Seeding inflated the book before the cap was enforced."
 	}

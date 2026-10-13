@@ -199,6 +199,7 @@ Everything has a safe default; nothing below is required to boot except where ma
 | `GROQ_API_KEY` | *(none)* | Enables the assistant. Absent, it is cleanly absent, not a button that fails. |
 | `UMI_SEED_DEMO` | on | Seeds demo wallets/ISINs on an empty rail. Set `false` for a bare ledger. |
 | `WORK_PROVIDER_URL` / `_KEY` | *(none)* | Talent provider adapter. Absent, work orders are marked `simulation`. |
+| `UMI_SEED_CARBON_ASSET` | `CARB-NSK-AGROFOREST-2024` | Asset id for the seeded carbon credits. Registered as asset class `CARBON`; the registry behind it is simulated. |
 | `EVENT_STREAM_BROKERS` | *(none)* | Kafka-protocol brokers for the settlement event stream (Kafka, Redpanda, WarpStream, MSK, Confluent). Absent, events are derived and counted locally. |
 | `EVENT_STREAM_USERNAME` / `_PASSWORD` / `_TLS` | *(none)* | SASL PLAIN credentials and TLS for a hosted broker. |
 
