@@ -622,7 +622,7 @@ async function railDeploymentStatus() {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 4000);
     try {
-      const r = await fetch(base + p, { signal: ctrl.signal });
+      const r = await fetch(base + p, { signal: ctrl.signal, headers: railReadHeaders() });
       return r.ok ? await r.json() : null;
     } finally { clearTimeout(timer); }
   };
@@ -657,7 +657,7 @@ async function railChainVerdict() {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 3000);
   try {
-    const r = await fetch(base + '/umi/reconciliation', { signal: ctrl.signal });
+    const r = await fetch(base + '/umi/reconciliation', { signal: ctrl.signal, headers: railReadHeaders() });
     if (!r.ok) return null;
     const body = await r.json();
     return (body && body.chain) || null;
@@ -897,7 +897,7 @@ async function documentsForAsset(assetId) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 4000);
     try {
-      const r = await fetch(base + '/umi/documents/' + encodeURIComponent(assetId), { signal: ctrl.signal });
+      const r = await fetch(base + '/umi/documents/' + encodeURIComponent(assetId), { signal: ctrl.signal, headers: railReadHeaders() });
       if (!r.ok) return null;
       const body = await r.json();
       return Array.isArray(body.documents) ? body.documents : null;
@@ -1073,6 +1073,16 @@ function deletePropertyAuthorized(user, prop, assetId) {
 // app out of its own settlement core.
 function railProxyAuth() {
   return process.env.UMI_PROXY_SECRET ? { 'X-Proxy-Auth': process.env.UMI_PROXY_SECRET } : {};
+}
+
+// Headers for a rail GET the app makes on its own behalf rather than a
+// user's: the operator panels, the deployment banner, the verify report.
+// They used to go out bare, which was fine only while the rail believed
+// anonymous callers. The moment UMI_PROXY_SECRET was set they started coming
+// back 401 and every panel quietly rendered zero, which looks exactly like a
+// dead rail. Zero from a refused read is not zero.
+function railReadHeaders() {
+  return { 'X-Fabric-Identity': 'aasthichain-gateway', 'X-Identity-Role': 'Admin', ...railProxyAuth() };
 }
 function payuConfig() {
   const key = process.env.PAYU_MERCHANT_KEY || '';
@@ -5645,7 +5655,7 @@ export default async function handler(req, res) {
           const timer = setTimeout(() => ctrl.abort(), 6000);
           let insts = [];
           try {
-            const r = await fetch(railBase + '/umi/instructions', { signal: ctrl.signal });
+            const r = await fetch(railBase + '/umi/instructions', { signal: ctrl.signal, headers: railReadHeaders() });
             if (r.ok) {
               const j = await r.json();
               insts = j.instructions || [];
@@ -5721,7 +5731,7 @@ export default async function handler(req, res) {
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 6000);
             try {
-              const r = await fetch(base + p, { signal: ctrl.signal });
+              const r = await fetch(base + p, { signal: ctrl.signal, headers: railReadHeaders() });
               return r.ok ? await r.json() : null;
             } finally { clearTimeout(timer); }
           };
