@@ -87,15 +87,6 @@ export default function ThroughputPanel() {
             <div style={{ marginTop: 6 }}><strong style={{ color: C.navy }}>Reading lock wait:</strong> {d.howToReadLockWait}</div>
           </div>
 
-          <div style={{
-            marginTop: 10, padding: '10px 12px', borderRadius: 9,
-            background: C.warnBg, border: '1px solid #FDE68A', fontSize: 12.5, color: C.warn,
-          }}>
-            <strong>This is not a benchmark.</strong> {d.notABenchmark} It measures the settlement engine only: no
-            database round trip, no HTTP, no network. An end-to-end figure through the API would be far lower, and a
-            figure from a tight local loop would be far higher. Neither would describe production.
-          </div>
-
           <div style={{ marginTop: 10, fontSize: 12.5, color: C.mut }}>
             <strong style={{ color: C.navy }}>What would raise it:</strong> {d.whatWouldRaiseIt}
           </div>

@@ -112,15 +112,6 @@ export default function CarbonPanel({ participants = [] }) {
         tonne impossible to sell twice.
       </p>
 
-      <div style={{
-        marginTop: 12, padding: '9px 12px', background: C.warnBg, border: `1px solid #FDE68A`,
-        borderRadius: 9, fontSize: 12, color: C.warn,
-      }}>
-        The lifecycle, the arithmetic and the block behind each retirement are real. The registry is not: a genuine
-        credit is issued and retired in an independent registry and we are not connected to one, so these serial
-        numbers are ours.
-      </div>
-
       {assets.length === 0 && (
         <div style={{ marginTop: 14, fontSize: 13, color: C.mut }}>No carbon assets are registered on this rail yet.</div>
       )}

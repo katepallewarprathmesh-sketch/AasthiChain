@@ -122,12 +122,6 @@ export default function InteropPanel() {
         </div>
       )}
 
-      <div style={{
-        marginTop: 14, padding: '10px 12px', borderRadius: 9,
-        background: C.warnBg, border: '1px solid #FDE68A', fontSize: 12.5, color: '#78350F',
-      }}>
-        <strong style={{ color: C.warn }}>What is real and what is not.</strong> {d.limitation}
-      </div>
     </section>
   )
 }
