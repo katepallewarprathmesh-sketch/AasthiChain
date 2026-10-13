@@ -97,7 +97,15 @@ function Pill({ tone = 'mut', children }) {
   return <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: .3, color: map.c, background: map.bg, border: `1px solid ${map.b}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{children}</span>
 }
 
-const input = { padding: '8px 10px', border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, minWidth: 0, width: '100%' }
+const CONTROL_H = 37
+// A select and a text input are drawn by the browser, not by us, and they do
+// not agree on height from padding alone. Stating the height makes a row of
+// mixed controls line up exactly.
+const input = {
+  height: CONTROL_H, boxSizing: 'border-box', padding: '8px 10px',
+  border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13,
+  minWidth: 0, width: '100%', background: 'white', color: C.navy,
+}
 const btn = (primary) => ({
   padding: '9px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer',
   border: primary ? 'none' : `1px solid ${C.line}`, background: primary ? C.navy : 'white', color: primary ? 'white' : C.navy,
@@ -314,13 +322,28 @@ export default function UMISettlement() {
     return `${num(pr.totalTokens || 0)} tokens${perToken ? ` · about ${money(perToken)} each` : ''} · ${id}`
   }
 
+  // A row of fields only looks tidy if the labels, the controls and the hints
+  // each sit on one shared line. They cannot, while every field is its own
+  // little stack: give one field a hint and it grows, and whichever way the
+  // row is aligned something ends up out of step — bottom-align and the
+  // hinted control rides up, top-align and the hints dangle at odd heights.
+  // So the field hands its three parts to the row's own grid (subgrid) and
+  // lets the row line them up. Fields with no hint simply leave that cell
+  // empty instead of closing the gap and dragging their control down.
   const Field = ({ label, hint, children }) => (
-    <label style={{ display: 'block', minWidth: 0 }}>
-      <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.navy, marginBottom: 4 }}>{label}</span>
-      {children}
-      {hint ? <span style={{ display: 'block', fontSize: 11, color: C.mut, marginTop: 3 }}>{hint}</span> : null}
+    <label style={{ display: 'grid', gridTemplateRows: 'subgrid', gridRow: 'span 3', minWidth: 0 }}>
+      <span style={{ alignSelf: 'end', paddingBottom: 5, fontSize: 11.5, fontWeight: 700, color: C.navy, letterSpacing: .1 }}>{label}</span>
+      <span style={{ display: 'block', minWidth: 0 }}>{children}</span>
+      <span style={{ paddingTop: 4, fontSize: 11, lineHeight: 1.4, color: C.mut }}>{hint || null}</span>
     </label>
   )
+
+  // Every form row on this page shares one shape, so a field dropped into any
+  // of them lands on the same three lines as its neighbours.
+  const fieldRow = (columns, extra) => ({
+    display: 'grid', gridTemplateColumns: columns, gridTemplateRows: 'auto auto auto',
+    columnGap: 10, rowGap: 0, alignItems: 'start', ...(extra || {}),
+  })
 
   const PropertyPicker = ({ value, onChange }) => (
     properties.length
@@ -355,7 +378,19 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
   }
 
   return (
-    <div className="container" style={{ padding: '24px 16px 60px', maxWidth: 1080 }}>
+    <div className="container umi-page" style={{ padding: '24px 16px 60px', maxWidth: 1080 }}>
+      <style>{`
+        .umi-page input, .umi-page select { font-family: inherit; transition: border-color .12s, box-shadow .12s; }
+        .umi-page input:focus-visible, .umi-page select:focus-visible {
+          outline: none; border-color: ${C.navy}; box-shadow: 0 0 0 3px ${C.navy}1F;
+        }
+        .umi-page input:disabled, .umi-page select:disabled { background: #F9FAFB; color: ${C.mut}; }
+        /* Spinners shove the caret about and nobody clicks them. */
+        .umi-page input[type=number] { -moz-appearance: textfield; }
+        .umi-page input[type=number]::-webkit-outer-spin-button,
+        .umi-page input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .umi-page button:focus-visible { outline: 2px solid ${C.navy}; outline-offset: 2px; }
+      `}</style>
       <header style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 28, color: C.navy, margin: 0 }}>Aasthi Settlement Interface</h1>
@@ -390,7 +425,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             Tokens and cash change hands in the same instant. If either side cannot deliver, nothing moves at all.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+          <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))')}>
             <Field label="Property" hint={assetId ? propRef(assetId) : null}>
               <PropertyPicker value={assetId} onChange={(v) => {
                 setAssetId(v)
@@ -508,7 +543,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         title="2 · Atomic DvP instruction"
         sub="Validate → match → lock BOTH legs → commit in one block. If either leg fails, nothing moves: there is no settlement-risk window."
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
+        <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))', { marginBottom: 12 })}>
           <Field label="Property" hint={assetId ? propRef(assetId) : null}>
             <PropertyPicker value={assetId} onChange={(v) => {
               setAssetId(v)
@@ -574,7 +609,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         title="3 · Programmable asset servicing"
         sub="Rent / coupon paid pro-rata straight into holders' CBDC wallets on the due date — no registrar file exchange, no reconciliation batch."
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
+        <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))', { marginBottom: 12 })}>
           <Field label="Property" hint={servAsset ? propRef(servAsset) : null}><PropertyPicker value={servAsset} onChange={(v) => {
             setServAsset(v)
             const pr = properties.find(x => x.assetId === v)
@@ -646,7 +681,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
 
       <Card title="5 · Reconciliation" sub="Conservation of central bank money, plus a full replay of the Drunix hash chain that carries every UMI block.">
         {recon && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+          <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))')}>
             {[
               ['Wallets', num(recon.wallets)],
               ['Total e₹-W held', money(recon.totalBalanceINR)],
@@ -681,7 +716,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       <Card
         title="6 · Baskets — cross-property portfolio tokens"
         sub="One unit is a fixed recipe of several properties. Subscribing moves the underlying tokens into custody, so a unit is redeemable rather than notional. Investors create, sell and redeem units from their dashboard; defining the instrument happens here.">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+        <div style={fieldRow('repeat(auto-fit, minmax(190px, 1fr))')}>
           <Field label="Basket id"><input style={input} value={bId} onChange={e => setBId(e.target.value)} /></Field>
           <Field label="Name"><input style={input} value={bName} onChange={e => setBName(e.target.value)} /></Field>
         </div>
@@ -691,7 +726,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             What one unit contains
           </div>
           {legs.map((l, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
+            <div key={i} style={fieldRow('minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', { marginBottom: 10 })}>
               <Field label={`Property ${i + 1}`} hint={l.assetId ? propRef(l.assetId) : 'Pick from the properties already tokenised on the rail'}>
                 <select
                   style={input}
@@ -728,7 +763,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                 onClick={() => setLegs(ls => ls.filter((_, n) => n !== i))}
                 disabled={legs.length <= 2}
                 title={legs.length <= 2 ? 'A basket needs at least two different properties' : 'Remove this leg'}
-                style={{ padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', color: C.mut, cursor: legs.length <= 2 ? 'not-allowed' : 'pointer', fontSize: 12 }}>
+                style={{ gridRow: 2, alignSelf: 'start', height: CONTROL_H, padding: '0 14px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', color: C.mut, cursor: legs.length <= 2 ? 'not-allowed' : 'pointer', fontSize: 12.5 }}>
                 remove
               </button>
             </div>
