@@ -529,7 +529,7 @@ func (dr *DocumentRegistry) ConfirmOnChain(sha256hex string, weSayAnchored bool)
 	out := &OnChainConfirmation{
 		Checked:  true,
 		Contract: dr.evm.contract,
-		Endpoint: dr.evm.rpcURL,
+		Endpoint: dr.evm.SafeEndpoint(),
 	}
 	anchored, status, err := dr.evm.VerifyDigestOnChain(sha256hex)
 	if err != nil {
@@ -537,7 +537,7 @@ func (dr *DocumentRegistry) ConfirmOnChain(sha256hex string, weSayAnchored bool)
 		// negative. An unreachable node must not make a genuine document
 		// look forged.
 		out.Checked = false
-		out.Error = err.Error()
+		out.Error = dr.evm.redactRPC(err.Error())
 		return out
 	}
 	out.Anchored = anchored

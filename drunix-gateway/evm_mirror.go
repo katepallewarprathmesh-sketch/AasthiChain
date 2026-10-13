@@ -24,6 +24,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -71,7 +72,32 @@ func (m *EVMMirror) Describe() string {
 	if m == nil {
 		return "public-chain mirror: off — set EVM_RPC_URL and EVM_REGISTRY_ADDRESS to also anchor on an EVM chain"
 	}
-	return fmt.Sprintf("public-chain mirror: %s at %s — document anchors are written to a chain we do not control", m.rpcURL, m.contract)
+	return fmt.Sprintf("public-chain mirror: %s at %s, document anchors are written to a chain we do not control", m.SafeEndpoint(), m.contract)
+}
+
+// SafeEndpoint is the RPC endpoint with everything secret removed: scheme and
+// host only. Hosted providers (Alchemy, Infura) carry the API key in the path
+// or the query string, and this string is served publicly by /umi/interop, so
+// the raw URL must never leave the process.
+func (m *EVMMirror) SafeEndpoint() string {
+	if m == nil {
+		return ""
+	}
+	u, err := url.Parse(m.rpcURL)
+	if err != nil || u.Host == "" {
+		return "configured endpoint"
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// redactRPC strips the endpoint out of anything we are about to show. Go's
+// http client puts the full URL into its error strings, so an unreachable
+// node would otherwise leak the key through an error message.
+func (m *EVMMirror) redactRPC(s string) string {
+	if m == nil || m.rpcURL == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, m.rpcURL, m.SafeEndpoint())
 }
 
 // ---------------------------------------------------------------- JSON-RPC

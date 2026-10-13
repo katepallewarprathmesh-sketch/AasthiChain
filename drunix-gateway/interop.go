@@ -148,7 +148,9 @@ func (e *evmConnector) VerifyRemote(digest string) (bool, string, error) {
 	}
 	anchored, status, err := e.mirror.VerifyDigestOnChain(digest)
 	if err != nil {
-		return false, "", err
+		// Never surface the raw RPC URL: a hosted provider carries its
+		// API key in it and this error reaches an HTTP response.
+		return false, "", errors.New(e.mirror.redactRPC(err.Error()))
 	}
 	return anchored, fmt.Sprintf("registry status %d", status), nil
 }
