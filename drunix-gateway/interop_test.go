@@ -1,6 +1,11 @@
 package drunix
 
 import (
+	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -267,5 +272,108 @@ func TestRestoreRebuildsTheTransferBook(t *testing.T) {
 	}
 	if next.TransferID == locked.TransferID || next.TransferID == committed.TransferID {
 		t.Fatalf("a restarted gateway reused the id %s", next.TransferID)
+	}
+}
+
+// Everything above exercises the unconfigured case, which is the deployment
+// we actually ship. The configured branch is the one that makes the claim
+// "the connector checks the remote chain" true or false, and it had no test
+// at all, so it gets one here against a stub JSON-RPC node rather than a
+// public testnet. The stub speaks the same eth_call the real contract
+// answers, so the ABI decoding is exercised too.
+func stubEVMNode(t *testing.T, anchored bool) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		// verifyDigest returns (bool anchored, Status status, Document doc).
+		// The first word is the bool, the second the status, the third an
+		// offset to the dynamic struct, which this check never reads.
+		word := func(last byte) string { return strings.Repeat("00", 31) + hex.EncodeToString([]byte{last}) }
+		flag := byte(0)
+		if anchored {
+			flag = 1
+		}
+		result := "0x" + word(flag) + word(1) + word(0x60)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":` + strconv.Itoa(req.ID) + `,"result":"` + result + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func withStubEVM(t *testing.T, g *InteropGateway, anchored bool) {
+	t.Helper()
+	node := stubEVMNode(t, anchored)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.register(&evmConnector{name: "evm", mirror: &EVMMirror{
+		rpcURL:   node.URL,
+		contract: "0x0000000000000000000000000000000000000001",
+		client:   &http.Client{Timeout: 5 * time.Second},
+	}})
+}
+
+func TestConfiguredConnectorVerifiesTheRemoteLeg(t *testing.T) {
+	r := interopRail(t, 100)
+	g := r.Interop()
+	withStubEVM(t, g, true)
+
+	tr, err := g.Lock(LockRequest{
+		AssetID: "PROP-XCHAIN", Holder: "originator1", Tokens: 20, RemoteLedger: "evm", ExpiresInSec: 600,
+	})
+	if err != nil {
+		t.Fatalf("lock: %v", err)
+	}
+	digest := strings.Repeat("ab", 32)
+	out, err := g.Commit(tr.TransferID, CommitRequest{RemoteTxRef: "0x1234", Digest: digest}, "regulator1")
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if !out.Verified {
+		t.Fatalf("a configured connector that found the digest must mark the leg verified: %q", out.Evidence)
+	}
+	if !strings.Contains(out.Evidence, "checked against evm") {
+		t.Fatalf("the evidence must name what did the checking, got %q", out.Evidence)
+	}
+	stats := g.Stats()
+	if stats["committedVerified"].(int64) != 1 || stats["committedAttestedOnly"].(int64) != 0 {
+		t.Fatalf("a verified commit must not be counted as attested: %v", stats)
+	}
+}
+
+// The refusal is the half that matters. A connector that cheerfully commits
+// whatever it is told, whether or not the remote chain agrees, is worse than
+// no connector: it launders an attestation into a confirmation.
+func TestConfiguredConnectorRefusesAnUnbackedCommit(t *testing.T) {
+	r := interopRail(t, 100)
+	g := r.Interop()
+	withStubEVM(t, g, false)
+
+	tr, _ := g.Lock(LockRequest{
+		AssetID: "PROP-XCHAIN", Holder: "originator1", Tokens: 20, RemoteLedger: "evm", ExpiresInSec: 600,
+	})
+	_, err := g.Commit(tr.TransferID, CommitRequest{
+		RemoteTxRef: "0x1234", Digest: strings.Repeat("cd", 32),
+	}, "regulator1")
+	if err == nil {
+		t.Fatal("a commit the remote chain has no record of must be refused")
+	}
+	after, _ := g.Transfer(tr.TransferID)
+	if after.Status != InteropLocked {
+		t.Fatalf("a refused commit must leave the transfer locked, got %s", after.Status)
+	}
+	if pos := r.PositionOf("PROP-XCHAIN", InteropCustody); pos != 20 {
+		t.Fatalf("a refused commit must not move anything, custody holds %d", pos)
+	}
+	// And the holder can still get their asset back.
+	if _, err := g.Abort(tr.TransferID, "originator1", false, "remote leg never landed"); err != nil {
+		t.Fatalf("abort after a refused commit: %v", err)
+	}
+	if pos := r.PositionOf("PROP-XCHAIN", "originator1"); pos != 100 {
+		t.Fatalf("holder must be whole again, got %d", pos)
 	}
 }
