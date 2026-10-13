@@ -22,11 +22,15 @@ export default function InteropPanel() {
 
   useEffect(() => {
     let live = true
+    // umiFetch answers {ok, status, data}. An older rail without these
+    // routes answers 404 with a JSON error, which must hide the panel
+    // rather than paint it with zeroes that look like real counts.
     Promise.all([umi('/interop'), umi('/interop/transfers?limit=8').catch(() => null)])
       .then(([cfg, list]) => {
         if (!live) return
-        setD(cfg)
-        setRows((list && list.transfers) || [])
+        if (cfg.ok && cfg.data && Array.isArray(cfg.data.connectors)) setD(cfg.data)
+        else { setErr(true); return }
+        setRows((list && list.ok && list.data.transfers) || [])
       })
       .catch(() => { if (live) setErr(true) })
     return () => { live = false }

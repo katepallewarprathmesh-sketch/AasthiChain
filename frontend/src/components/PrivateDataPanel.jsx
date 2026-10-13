@@ -19,8 +19,15 @@ export default function PrivateDataPanel() {
 
   useEffect(() => {
     let live = true
+    // umiFetch answers {ok, status, data}. A rail that does not have this
+    // route yet answers 404 with a JSON error, so the shape is checked too:
+    // rendering a table of nothing is worse than rendering nothing.
     umi('/private/collections')
-      .then((r) => { if (live) setD(r) })
+      .then((r) => {
+        if (!live) return
+        if (r.ok && r.data && Array.isArray(r.data.collections)) setD(r.data)
+        else setErr(true)
+      })
       .catch(() => { if (live) setErr(true) })
     return () => { live = false }
   }, [])

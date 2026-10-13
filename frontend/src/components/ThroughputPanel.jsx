@@ -35,7 +35,12 @@ export default function ThroughputPanel() {
   const [err, setErr] = useState(false)
 
   const load = async () => {
-    try { setD(await umi('/throughput')) } catch { setErr(true) }
+    // umiFetch answers {ok, status, data}: the payload is under .data.
+    try {
+      const r = await umi('/throughput')
+      if (r.ok && r.data && typeof r.data.measured === 'boolean') setD(r.data)
+      else setErr(true)
+    } catch { setErr(true) }
   }
   useEffect(() => {
     load()

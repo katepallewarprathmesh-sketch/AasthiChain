@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { umiFetch as umi, umiPost } from '../lib/umiFetch'
+import { umiFetch as umi, umiPost, explainRail } from '../lib/umiFetch'
 
 // Carbon credits: the same settlement core, one lifecycle it did not have.
 //
@@ -49,14 +49,17 @@ export default function CarbonPanel({ participants = [] }) {
 
   const load = async () => {
     try {
+      // umiFetch answers {ok, status, data}. Reading the payload straight
+      // off that envelope is how this panel spent a release showing an
+      // empty table against a rail that was answering perfectly.
       const a = await umi('/assets')
-      const carbon = (a.assets || []).filter((x) => x.profile && x.profile.assetClass === 'CARBON')
+      const carbon = (a.ok ? (a.data.assets || []) : []).filter((x) => x.profile && x.profile.assetClass === 'CARBON')
       setAssets(carbon)
       if (!assetId && carbon.length) {
         setAssetId(carbon[0].profile.assetId)
       }
       const r = await umi('/carbon/retirements')
-      setRetirements(r.retirements || [])
+      setRetirements(r.ok ? (r.data.retirements || []) : [])
     } catch {
       // The rail being unreachable is already reported by the page around
       // this panel; a second red box here would just be noise.
@@ -73,10 +76,18 @@ export default function CarbonPanel({ participants = [] }) {
       const res = await umiPost('/carbon/retire', {
         assetId, holder, tokens: Number(tokens), beneficiary, reason,
       })
+      // The rail reports a refusal as a status code, not an exception, so
+      // without this check a rejected retirement printed a cheerful
+      // confirmation about undefined credits.
+      if (!res.ok || !res.data || !res.data.retirement) {
+        setMsg({ ok: false, text: explainRail(res.data) })
+        return
+      }
+      const r = res.data.retirement
       setMsg({
         ok: true,
-        text: `Retired ${n(res.retirement.tokens)} credits for ${res.retirement.beneficiary}. `
-          + `Block ${res.retirement.blockHeight} is the certificate, and this cannot be undone.`,
+        text: `Retired ${n(r.tokens)} credits for ${r.beneficiary}. `
+          + `Block ${r.blockHeight} is the certificate, and this cannot be undone.`,
       })
       setTokens('')
       await load()

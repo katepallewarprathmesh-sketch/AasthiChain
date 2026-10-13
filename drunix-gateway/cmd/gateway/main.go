@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -127,41 +128,54 @@ func main() {
 			log.Printf("UMI demo state seeded: 15000 tokens to %s, e₹-W wallets investor1 ₹1,00,000 / investor2 ₹50,000",
 				envOr("UMI_SEED_OWNER", "originator1"))
 
-			// A second asset class, seeded end to end so the demo shows a
-			// real settlement and a real retirement rather than an empty
-			// table. The settlement core is not told it is carbon: the only
-			// thing that differs is the registry entry and the terminal
-			// state. Nothing here is backed by an external registry.
+		}
+
+		// Carbon and the private data collections seed on their own terms,
+		// not behind IsEmpty().
+		//
+		// IsEmpty() asks whether there are wallets, instructions or funding.
+		// Production restores all three from the database, so it is false
+		// from the first boot after go-live, and every later feature seeded
+		// inside that branch silently never ran: the carbon card and the
+		// collections table were empty on the deployed site while working
+		// perfectly in development. Each seed now checks for the thing it
+		// creates, which also makes it safe to run on every start.
+		if os.Getenv("UMI_SEED_DEMO") != "false" {
 			carbonAsset := envOr("UMI_SEED_CARBON_ASSET", "CARB-NSK-AGROFOREST-2024")
-			if _, err := srv.UMI.RegisterAsset(drunix.AssetProfile{
-				AssetID:      carbonAsset,
-				Class:        drunix.AssetClassCarbon,
-				Name:         "Nashik agroforestry carbon credits, vintage 2024",
-				ProjectID:    "AAS-CARB-0001",
-				Vintage:      2024,
-				Methodology:  "Afforestation and reforestation (pattern reference, not a certified methodology)",
-				Country:      "IN",
-				SerialPrefix: "AAS-CARB-0001-2024",
-			}); err != nil {
-				log.Printf("carbon seed: could not register asset class: %v", err)
-			} else {
-				_, _ = srv.UMI.SeedPosition(carbonAsset, envOr("UMI_SEED_OWNER", "originator1"), 5000, 5000)
-				_, _, _ = srv.UMI.AssignISIN(carbonAsset, envOr("UMI_SEED_OWNER", "originator1"), "")
-				log.Printf("carbon credits seeded: 5000 credits of %s to %s (asset class CARBON, registry simulated)",
-					carbonAsset, envOr("UMI_SEED_OWNER", "originator1"))
+			if _, outstanding := srv.UMI.AuthorisedSupply(carbonAsset); outstanding == 0 {
+				if _, err := srv.UMI.RegisterAsset(drunix.AssetProfile{
+					AssetID:      carbonAsset,
+					Class:        drunix.AssetClassCarbon,
+					Name:         "Nashik agroforestry carbon credits, vintage 2024",
+					ProjectID:    "AAS-CARB-0001",
+					Vintage:      2024,
+					Methodology:  "Afforestation and reforestation (pattern reference, not a certified methodology)",
+					Country:      "IN",
+					SerialPrefix: "AAS-CARB-0001-2024",
+				}); err != nil && !errors.Is(err, drunix.ErrUMIAssetClassLocked) {
+					log.Printf("carbon seed: could not register asset class: %v", err)
+				} else {
+					_, _ = srv.UMI.SeedPosition(carbonAsset, envOr("UMI_SEED_OWNER", "originator1"), 5000, 5000)
+					_, _, _ = srv.UMI.AssignISIN(carbonAsset, envOr("UMI_SEED_OWNER", "originator1"), "")
+					log.Printf("carbon credits seeded: 5000 credits of %s to %s (asset class CARBON, registry simulated)",
+						carbonAsset, envOr("UMI_SEED_OWNER", "originator1"))
+				}
 			}
+
 			// One KYC record per demo investor, written into the private
-			// data collection by the registrar. Seeded so the collection
-			// is not an empty table in the demo, and so a reviewer can
-			// immediately try the thing worth trying: read it as the
-			// subject, be refused as anybody else, and verify it against
-			// the chain hash without being able to read it at all. The
-			// values are invented, like every other demo figure here.
+			// data collection by the registrar, so a reviewer can try the
+			// thing worth trying: read it as the subject, be refused as
+			// anybody else, and verify it against the chain hash without
+			// being able to read it at all. The values are invented, like
+			// every other demo figure here.
 			if pdc := srv.UMI.Private(); pdc != nil {
 				for _, sub := range []struct{ id, name, last4 string }{
 					{"investor1", "Asha Kulkarni", "4417"},
 					{"investor2", "Rohit Deshmukh", "8820"},
 				} {
+					if _, _, err := pdc.Get(drunix.CollectionKYC, sub.id, "regulator1", "regulator"); err == nil {
+						continue // already there, leave it alone
+					}
 					if _, err := pdc.Put(drunix.PrivateWrite{
 						Collection: drunix.CollectionKYC,
 						Key:        sub.id,

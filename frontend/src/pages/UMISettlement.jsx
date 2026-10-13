@@ -768,7 +768,11 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             What one unit contains
           </div>
           {legs.map((l, i) => (
-            <div key={i} style={fieldRow('minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto', { marginBottom: 10 })}>
+            <div key={i} style={fieldRow(
+              // No trailing column on the first two legs: there is no remove
+              // button on them, and an empty track still costs a grid gap.
+              i >= 2 ? 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto' : 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)',
+              { marginBottom: 10 })}>
               <Field label={`Property ${i + 1}`} hint={l.assetId ? propRef(l.assetId) : 'Pick from the properties already tokenised on the rail'}>
                 <select
                   style={input}
@@ -801,13 +805,20 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
               <Field label="Indicative ₹/token">
                 <input style={input} type="number" min="0" value={l.indicativePriceINR} onChange={e => setLeg(i, 'indicativePriceINR', e.target.value)} />
               </Field>
-              <button
-                onClick={() => setLegs(ls => ls.filter((_, n) => n !== i))}
-                disabled={legs.length <= 2}
-                title={legs.length <= 2 ? 'A basket needs at least two different properties' : 'Remove this leg'}
-                style={{ gridRow: 2, alignSelf: 'start', height: CONTROL_H, padding: '0 14px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', color: C.mut, cursor: legs.length <= 2 ? 'not-allowed' : 'pointer', fontSize: 12.5 }}>
-                remove
-              </button>
+              {/* A basket needs at least two properties, so the first two
+                  legs can never be removed. The control used to sit there
+                  permanently disabled, taking a column of the grid on every
+                  row to offer something nobody could click. It now appears
+                  from the third leg onward, which is the only place it
+                  does anything. */}
+              {i >= 2 && (
+                <button
+                  onClick={() => setLegs(ls => ls.filter((_, n) => n !== i))}
+                  title="Remove this leg"
+                  style={{ gridRow: 2, alignSelf: 'start', height: CONTROL_H, padding: '0 14px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', color: C.mut, cursor: 'pointer', fontSize: 12.5 }}>
+                  remove
+                </button>
+              )}
             </div>
           ))}
           <button
