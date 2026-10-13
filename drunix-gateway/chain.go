@@ -103,6 +103,10 @@ type DrunixChain struct {
 	// hub, when set, receives a notification for every committed block so
 	// live subscribers can be told. Publishing never blocks a commit.
 	hub *eventHub
+	// stream, when set, receives every committed block's consequences for
+	// fan-out to an external log. Strictly post-commit and non-blocking: see
+	// eventstream.go for why a broker is never allowed on the settle path.
+	stream EventPublisher
 }
 
 // Watch attaches the live-event hub. Separate from NewChain so the chain
@@ -111,6 +115,14 @@ func (c *DrunixChain) Watch(h *eventHub) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.hub = h
+}
+
+// StreamTo attaches the settlement event stream. Like Watch, it is separate
+// from NewChain so the chain is unchanged when nothing is subscribed.
+func (c *DrunixChain) StreamTo(p EventPublisher) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stream = p
 }
 
 // NewChain seeds the genesis block (channel config, org MSPs).
@@ -214,6 +226,13 @@ func (c *DrunixChain) Append(blockType string, txns []map[string]interface{}) *D
 	// twice. Inline publish is for the in-memory case, which has no relay.
 	if c.hub != nil && (c.store == nil || !persisted) {
 		c.hub.publish(LedgerEvent{Height: b.Height, Type: b.Type, Hash: b.Hash, Timestamp: b.Timestamp})
+	}
+
+	// Fan-out to the external log, last and never conditionally. The block is
+	// already committed by this point, so nothing here can affect settlement;
+	// Publish is non-blocking by contract, so holding c.mu is safe.
+	if c.stream != nil {
+		PublishBlock(c.stream, b)
 	}
 	return b
 }

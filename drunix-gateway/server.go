@@ -21,6 +21,9 @@ type Server struct {
 	// HistoryLookup returns the payer's recent-activity summary (wired by main
 	// from the payments store; nil means zero-history).
 	HistoryLookup func(payerID string) HistorySummary
+	// Stream publishes each committed block's consequences to an external log
+	// (optional; nil means no fan-out). See eventstream.go.
+	Stream EventPublisher
 	// UMI is the RBI Unified Market Interface settlement rail (optional, additive;
 	// nil means the /umi/* routes are simply not mounted — see umi.go).
 	UMI *UMIRail
@@ -112,6 +115,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
+	mux.HandleFunc("/umi/stream", s.handleStream)
 	mux.HandleFunc("/drunix/chain", s.handleChain)
 	mux.HandleFunc("/drunix/events", s.handleEvents)
 	mux.HandleFunc("/metrics", s.handleMetrics)
@@ -589,4 +593,23 @@ func (s *Server) handleLedgerRecover(w http.ResponseWriter, r *http.Request) {
 		"chain":          after,
 		"note":           "the truncation is itself a block (LEDGER_TRUNCATED) naming every height and hash that was dropped",
 	})
+}
+
+// handleStream reports the settlement event stream: which broker (if any), the
+// topics, the counters, and in simulation the most recent envelopes. It is the
+// one place to confirm that events are being derived correctly before a broker
+// is ever attached.
+func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.Stream == nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"mode": "off",
+			"note": "No event publisher is attached to this server.",
+		})
+		return
+	}
+	out := s.Stream.Describe()
+	out["whyPostCommit"] = "A broker is a network dependency. Publishing happens after the block is appended and never blocks settlement, so an unreachable broker cannot stop a trade."
+	out["lineage"] = "Hyperledger Fabric's ordering service was Kafka-based through the 1.x line before Raft replaced it in 1.4.1. This ledger models the same execute-order-validate pipeline, and speaks the Kafka protocol on the way out."
+	_ = json.NewEncoder(w).Encode(out)
 }

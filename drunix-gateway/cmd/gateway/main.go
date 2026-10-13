@@ -74,6 +74,18 @@ func main() {
 	if blockStore != nil {
 		defer blockStore.Close()
 	}
+
+	// Settlement event stream. Post-commit fan-out of what each block meant,
+	// over the Kafka wire protocol so the deployment can point it at Kafka,
+	// Redpanda, WarpStream, MSK or Confluent without a code change. With no
+	// EVENT_STREAM_BROKERS this is a local counter that contacts nothing.
+	stream := drunix.NewEventPublisher()
+	chain.StreamTo(stream)
+	srv.Stream = stream
+	defer func() { _ = stream.Close() }()
+	if stream.Mode() == "simulation" {
+		log.Printf("event stream: off. Set EVENT_STREAM_BROKERS to publish settlement events over the Kafka protocol (Kafka, Redpanda, WarpStream, MSK, Confluent)")
+	}
 	// UMI rail — RBI Unified Market Interface pattern (atomic DvP in wholesale
 	// CBDC) mounted on the same service. Disable with UMI_ENABLED=false.
 	if os.Getenv("UMI_ENABLED") != "false" {
