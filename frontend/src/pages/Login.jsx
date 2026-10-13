@@ -72,7 +72,7 @@ function DemoPresets({ onLogin, title }) {
         <h3 style={{fontSize:13, fontWeight:700}}>{title || 'Quick Demo Access Instant, no verification'}</h3>
         <span style={{fontSize:9, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:20, fontWeight:600}}>LIVE + LOCAL</span>
       </div>
-      <p style={{fontSize:11, color:'#64748B', marginBottom:12}}>Works on LIVE https://aasthi-chain.vercel.app + local npm run dev mock JWT, no Clerk network, &lt;1s, no email verification</p>
+      <p style={{fontSize:11, color:'#64748B', marginBottom:12}}>Local development only. Signs you in against a mock token without Clerk, so there is no email verification step.</p>
       <div className="acx-r2x" style={{gap:10}}>
         {ROLES.map(r => (
           <button key={r.id} onClick={()=>handleDemo(r)} disabled={!!loadingId} style={{textAlign:'left', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:12, padding:12, cursor:'pointer'}}>
@@ -102,8 +102,15 @@ function LoadingSkeleton() {
 
 function ClerkLogin({ onLogin }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  // `next` used to be read from DemoPresets' scope, where it is declared, and
+  // not from here, where it is used. Every signed-in visitor therefore hit a
+  // ReferenceError on the last line of the sign-in handler, the catch below
+  // swallowed it into the console, and the page sat on "redirecting" forever.
+  const next = safeNext(location.search)
   const { isLoaded, isSignedIn, user } = useUser()
   const { getToken } = useAuth()
+  const [failed, setFailed] = React.useState('')
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return
@@ -126,7 +133,11 @@ function ClerkLogin({ onLogin }) {
         onLogin(aasthiUser)
         navigate(next)
       } catch (err) {
+        // Never leave a spinner running on a failure. A stuck "redirecting"
+        // is indistinguishable from a slow network, so say what happened and
+        // offer a way out.
         console.error('[Clerk] Login failed:', err)
+        setFailed(err && err.message ? err.message : 'Sign-in could not be completed.')
       }
     }
     doLogin()
@@ -168,8 +179,18 @@ function ClerkLogin({ onLogin }) {
               </Show>
               <Show when="signed-in">
                 <div style={{textAlign:'center', padding:24}}>
-                  <div style={{fontSize:14, fontWeight:600}}>Already signed in redirecting to marketplace...</div>
-                  <div style={{width:20, height:20, border:'2px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'16px auto 0'}}></div>
+                  {failed ? (
+                    <>
+                      <div style={{fontSize:14, fontWeight:600, color:'#B91C1C'}}>Signed in, but this page could not finish setting up your session.</div>
+                      <div style={{fontSize:12, color:'#6B7280', marginTop:8}}>{failed}</div>
+                      <Link to={next} style={{display:'inline-block', marginTop:14, fontSize:13, fontWeight:600, color:'#1E3A5F'}}>Continue to the marketplace</Link>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{fontSize:14, fontWeight:600}}>Already signed in, taking you to the marketplace...</div>
+                      <div style={{width:20, height:20, border:'2px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'16px auto 0'}}></div>
+                    </>
+                  )}
                 </div>
               </Show>
             </div>
@@ -182,7 +203,7 @@ function ClerkLogin({ onLogin }) {
           </div>
 
           <div style={{textAlign:'center', marginTop:16}}>
-            <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home https://aasthi-chain.vercel.app</Link>
+            <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home</Link>
           </div>
         </div>
       </ClerkLoaded>
@@ -208,12 +229,12 @@ function SimpleLogin({ onLogin }) {
         <p style={{fontSize:11, color:'#6B7280', marginBottom:8}}>Clerk is not configured in this environment (VITE_CLERK_PUBLISHABLE_KEY is missing), so local demo identities are shown instead. Production uses Clerk only.</p>
         <DemoPresets onLogin={onLogin} title="Quick Demo Access Click any role" />
         <div style={{marginTop:16, textAlign:'center'}}>
-          <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home https://aasthi-chain.vercel.app</Link>
+          <Link to="/" style={{fontSize:12, color:'#6B7280', textDecoration:'none'}}>← Back to home</Link>
         </div>
       </div>
 
       <div style={{marginTop:12, fontSize:11, color:'#9CA3AF', textAlign:'center'}}>
-        LIVE: https://aasthi-chain.vercel.app presets work live + local · No email verification · &lt;2s from page load
+        Clerk is not configured for this build, so these presets are the only way in.
       </div>
     </div>
   )

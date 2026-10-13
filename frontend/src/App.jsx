@@ -457,9 +457,9 @@ function AppContent({ user, setUser }) {
         const res = await fetch('/api/auth/me', {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}`,
-            // Whether this session may wear a demo identity is partly a
-            // question of whether it holds the deployment's own key.
-            ...(() => { try { const k = sessionStorage.getItem('aasthi_admin_key'); return k ? { 'x-admin-key': k } : {} } catch { return {} } })(),
+            // The browser no longer carries the deployment's key. Whether this
+            // session may wear a demo identity is decided server-side, from
+            // the signed token alone.
           },
           cache: 'no-store',
         })
@@ -505,17 +505,15 @@ function AppContent({ user, setUser }) {
   // here, the same key the insights page takes, and it lives in session
   // storage rather than on disk.
   const handleOperatorUnlock = async () => {
-    // Two ways in, and the easy one is named first. Nobody should have to go
-    // hunting for a secret they set months ago to look at their own demo.
+    // This used to prompt for the deployment's ADMIN_DASHBOARD_KEY and keep it
+    // in session storage. That was the wrong trade: it put a long-lived server
+    // secret into a browser prompt, in plain sight, on a shared screen, and
+    // then attached it to later requests. A demo convenience is not worth
+    // handling a production key that way.
     //
-    // Which variable to name depends on what the session actually carries.
-    // SUPERVISOR_EMAILS is matched against an email claim inside the Clerk
-    // token, and a stock Clerk session token has no email in it: only sub,
-    // sid, iat and exp. Telling everyone to set SUPERVISOR_EMAILS therefore
-    // sent people to Vercel to set a variable that could never match, with
-    // nothing on screen to say why. So ask the server what it can see first,
-    // and name the variable that will actually work for this deployment.
-    let who = (internalUser && internalUser.clerkEmail) || ''
+    // The supported path is the server-side allowlist, which needs no secret
+    // in the browser at all: name the person once and the role dropdown
+    // appears on its own.
     let subject = (internalUser && internalUser.clerkId) || ''
     try {
       const res = await fetch('/api/auth/me', {
@@ -524,67 +522,36 @@ function AppContent({ user, setUser }) {
       })
       if (res.ok) {
         const me = await res.json()
-        who = me.email || ''
         subject = me.clerkId || subject
       }
     } catch { /* fall back to what the session already told us */ }
 
-    // No email claim reaching the server means SUPERVISOR_EMAILS is a dead
-    // end here, and the Clerk subject is the one thing always present.
-    const byId = !who && subject
-    const permanent = byId
-      ? [
-          'Easiest, and it sticks on every device:',
-          `  add SUPERVISOR_CLERK_IDS = ${subject}`,
-          '  in Vercel, Settings, Environment Variables, then redeploy.',
-          '',
-          '  (SUPERVISOR_EMAILS will not work until Clerk is set up to put an',
-          '  email claim in the session token. Your sign-in email never',
-          '  reaches the server, so there is nothing for it to match.)',
-        ]
-      : [
-          'Easiest, and it sticks on every device:',
-          `  add SUPERVISOR_EMAILS = ${who || 'your sign-in email'}`,
-          '  in Vercel, Settings, Environment Variables, then redeploy.',
-        ]
-
-    const entered = window.prompt(
+    window.alert(
       [
         'Switch between the demo roles.',
         '',
-        who ? `You are signed in as ${who}.` : 'You are signed in.',
+        'Add this in Vercel, Settings, Environment Variables:',
         '',
-        ...permanent,
-        '  The role dropdown then appears on its own, with nothing to type.',
-        '  A new variable only reaches the site after a redeploy.',
+        `  SUPERVISOR_CLERK_IDS = ${subject || 'your Clerk user id'}`,
         '',
-        'Just for this tab: paste the operator key (ADMIN_DASHBOARD_KEY) below.',
+        'Then redeploy. A new variable only reaches the site after a',
+        'redeploy. The role dropdown appears on its own, with nothing to',
+        'type and no key to paste.',
+        '',
+        subject
+          ? 'That id is yours, read from your current session.'
+          : 'Your Clerk user id is in the Clerk dashboard under Users.',
       ].join('\n'),
     )
-    const k = String(entered || '').trim()
-    if (!k) return
-    try {
-      const res = await fetch('/api/auth/me', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('aasthi_token') || ''}`,
-          'x-admin-key': k,
-        },
-        cache: 'no-store',
-      })
-      const me = res.ok ? await res.json() : null
-      if (!me || !me.canSwitchIdentity) {
-        window.alert('That key was not accepted. Nothing has been changed.')
-        return
-      }
-      sessionStorage.setItem('aasthi_admin_key', k)
-      const resolved = { ...(internalUser || {}), identityId: me.identityId, role: me.role, mspId: me.mspId, canSwitchIdentity: true }
-      localStorage.setItem('aasthi_user', JSON.stringify(resolved))
-      setInternalUser(resolved)
-      setUser(resolved)
-    } catch {
-      window.alert('Could not reach the server to check that key.')
-    }
   }
+
+  // One-time cleanup. Browsers that used the old prompt still hold the
+  // deployment's key in session storage. Nothing reads it any more, but a
+  // server secret should not sit in a browser a moment longer than it must,
+  // so clear it on load rather than waiting for someone to press Lock.
+  useEffect(() => {
+    try { sessionStorage.removeItem('aasthi_admin_key') } catch { /* nothing to clear */ }
+  }, [])
 
   const handleOperatorLock = () => {
     try { sessionStorage.removeItem('aasthi_admin_key') } catch { /* nothing to clear */ }
