@@ -25,14 +25,24 @@ func main() {
 	var ledger drunix.DrunixClient = drunix.NewMockLedger()
 	mode := os.Getenv("DRUNIX_MODE")
 	if mode == "real" {
-		if g, err := newRealGateway(envOr("DRUNIX_MSP_ID", "InvestorMSP")); err == nil {
+		g, err := newRealGateway(envOr("DRUNIX_MSP_ID", "InvestorMSP"))
+		switch {
+		case err == nil:
 			ledger = g
-			log.Printf("Drunix mode: REAL (Fabric Gateway adapter, MSP %s)", envOr("DRUNIX_MSP_ID", "InvestorMSP"))
-		} else {
-			log.Printf("Drunix real init failed (%v) — using deterministic mock network", err)
+			log.Printf("Drunix mode: REAL, connected to %s as MSP %s",
+				envOr("DRUNIX_PEER_ENDPOINT", envOr("DRUNIX_API_HOST", "(unset)")), envOr("DRUNIX_MSP_ID", "InvestorMSP"))
+		case os.Getenv("DRUNIX_FALLBACK_MOCK") == "true":
+			// Opt-in only. A node that quietly serves simulated answers under
+			// the word "real" is the one defect this project cannot afford,
+			// so falling back has to be asked for and is said out loud.
+			log.Printf("Drunix real mode failed (%v); DRUNIX_FALLBACK_MOCK=true, so continuing on the SIMULATOR. Nothing in this process is on a real network.", err)
+		default:
+			log.Fatalf("Drunix real mode failed: %v\n"+
+				"Set DRUNIX_PEER_ENDPOINT, DRUNIX_MSP_ID, DRUNIX_CERT_FILE, DRUNIX_KEY_FILE and DRUNIX_TLS_CERT, "+
+				"or set DRUNIX_FALLBACK_MOCK=true to run on the simulator instead. See docs/DRUNIX.md.", err)
 		}
 	} else {
-		log.Printf("Drunix mode: mock — deterministic Fabric-fork simulator (set DRUNIX_MODE=real + build tag for live network)")
+		log.Printf("Drunix mode: mock, deterministic Fabric-fork simulator (set DRUNIX_MODE=real and build with -tags real for a live network)")
 	}
 
 	srv := drunix.NewServer(ledger)

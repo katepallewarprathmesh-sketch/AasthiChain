@@ -2345,8 +2345,8 @@ function integrationStatus(rail) {
   });
   return [
     entry('Drunix ledger', false,
-      'Our own execute-order-validate pipeline (LitePeer, Orderer with a RAFT simulation, ValidationService, CommittingPeer) over a hash-chained ledger. It is modelled on Hyperledger Fabric. It is NOT Fabric and runs no Fabric code.',
-      'DRUNIX_MODE=real plus a build tag, against an actual network'),
+      'Drunix is NPCI\'s Hyperledger Fabric fork. What runs here is our own Go implementation of that architecture: a LitePeer that endorses and produces a read-write set, an Orderer with a RAFT simulation, a stateless ValidationService, and a CommittingPeer doing MVCC validation before commit, over a hash-chained ledger. The chaincode in chaincode/ is written against the Fabric contract API and a real Fabric Gateway client exists behind a build tag, but this node is not connected to any Drunix network and runs no Fabric code. See docs/DRUNIX.md.',
+      'built with -tags real and given DRUNIX_PEER_ENDPOINT, an MSP enrolment and the channel TLS root, which the network operator issues'),
     entry('e-rupee wholesale (e₹-W) cash leg', false,
       'Wallet ledger and atomic DvP are fully implemented, but the money is an internal balance. No central bank system is contacted. There is no RBI pilot participation behind this.',
       'a licensed participant connection, which is not something a project can self-serve'),
