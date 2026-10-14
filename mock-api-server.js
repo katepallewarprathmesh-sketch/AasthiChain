@@ -837,6 +837,7 @@ if (documentHash && String(documentHash).trim().length !== 64) return res.status
 // their own.
 function listingIsPublic(p) {
   if (!p || !p.status) return false;
+  if (p.removed) return false;
   if (p.status !== 'DRAFT') return true;
   // Lifecycle status stays DRAFT until tokens are minted, so a registrar's
   // approval is the line that matters: a checked listing waiting to be
@@ -847,9 +848,9 @@ function listingIsPublic(p) {
 function visibleListings(all, user) {
   // SUPERVISORY here is a set of roles, not identities.
   const supervisor = !!(user && (SUPERVISORY.has(String(user.role || '').toLowerCase()) || user.operatorKey));
-  return all.filter((p) => listingIsPublic(p)
+  return all.filter((p) => !p.removed && (listingIsPublic(p)
     || supervisor
-    || (user && user.identityId && p.originatorId === user.identityId));
+    || (user && user.identityId && p.originatorId === user.identityId)));
 }
 
 // Marketplace economics are DERIVED from live balances, never stored, so a
@@ -2080,10 +2081,8 @@ function deletePropertyAuthorized(user, prop, assetId) {
     const others = Object.values(balances).filter(b =>
       b.assetId === (prop.assetId || assetId) && b.ownerId !== user.identityId && parseInt(b.balance) > 0);
     if (others.length === 0) return { allowed: true, reason: 'no-investors' };
-    const ownerBal = balances[(prop.assetId || assetId) + '~' + user.identityId] || Object.values(balances).find(b => b.assetId === (prop.assetId || assetId) && b.ownerId === user.identityId);
-    const have = ownerBal ? parseInt(ownerBal.balance) : 0;
-    if (have === 0) return { allowed: true, reason: 'fully-subscribed' };
-    return { allowed: false, message: `Investors already hold tokens on this listing (${others.length} holder${others.length > 1 ? 's' : ''}) — only a Regulator can remove it. Investors keep their tokens. NOTE: your ownership here came from the role at listing time; ask the Regulator to remove mistaken listings.` };
+    // Holders are refunded as part of the removal, so they no longer block it.
+    return { allowed: true, reason: 'refund-investors' };
   }
   return { allowed: false, message: `Only the listing owner (${prop.originatorId}) or a Regulator can delete this listing.` };
 }
@@ -2546,10 +2545,54 @@ app.delete('/api/properties/:id', authMiddleware, (req, res) => {
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND', assetId });
   const check = deletePropertyAuthorized(req.user, prop, assetId);
   if (!check.allowed) return res.status(403).json({ error: 'ERR_DELETE_NOT_ALLOWED', message: check.message });
-  delete properties[prop.assetId || assetId];
-  if (prop.assetId && prop.assetId !== assetId) delete properties[assetId];
-  console.log(`[DELETE] property ${assetId} removed by ${req.user.identityId} (${check.reason})`);
-  res.json({ deleted: true, assetId, deletedBy: req.user.identityId, reason: check.reason, note: 'Investors keep their tokens — only the marketplace listing is removed. Ledger history is preserved.' });
+  const id = prop.assetId || assetId;
+  const now = new Date();
+  // Buy out anyone holding tokens before the listing goes, at the listing's
+  // own token price, and return the tokens to its owner. Withdrawing a
+  // listing must not strand the people who funded it.
+  const total = Number(prop.totalTokens) || 0;
+  const price = Number(prop.pricePerTokenINR) || (total ? Number(prop.valuationINR || 0) / total : 0);
+  const refunds = [];
+  for (const [key, b] of Object.entries(balances)) {
+    if (!b || b.assetId !== id || b.ownerId === prop.originatorId) continue;
+    const tokens = parseInt(b.balance) || 0;
+    if (tokens <= 0) continue;
+    const amountINR = Math.round(tokens * price * 100) / 100;
+    const tid = 'TX-REFUND-' + require('crypto').randomUUID();
+    transfers[tid] = {
+      docType: 'transfer', transferId: tid, assetId: id, fromId: b.ownerId, toId: prop.originatorId,
+      amount: tokens, txTimestamp: now, status: 'COMPLETED', kind: 'LISTING_WITHDRAWN_REFUND',
+      refundINR: amountINR, refundedBy: req.user.identityId,
+    };
+    b.balance = 0; b.updatedAt = now; balances[key] = b;
+    refunds.push({ investorId: b.ownerId, tokens, amountINR, transferId: tid });
+  }
+  const returned = refunds.reduce((a, r) => a + r.tokens, 0);
+  if (returned > 0) {
+    const ownerKey = id + '~' + prop.originatorId;
+    const ob = balances[ownerKey] || { docType: 'balance', assetId: id, ownerId: prop.originatorId, balance: 0 };
+    ob.balance = (parseInt(ob.balance) || 0) + returned;
+    ob.updatedAt = now;
+    balances[ownerKey] = ob;
+  }
+  // Marked, not dropped: the persistent store is only ever written through
+  // saveProperty, which never deletes, so a dropped key came back on reload.
+  prop.removed = true;
+  prop.removedAt = now;
+  prop.removedBy = req.user.identityId;
+  prop.removedReason = check.reason;
+  prop.status = 'WITHDRAWN';
+  prop.updatedAt = now;
+  properties[id] = prop;
+  const refundedINR = Math.round(refunds.reduce((a, r) => a + r.amountINR, 0) * 100) / 100;
+  console.log(`[DELETE] property ${assetId} removed by ${req.user.identityId} (${check.reason}), ${refunds.length} refund(s)`);
+  res.json({
+    deleted: true, assetId: id, deletedBy: req.user.identityId, reason: check.reason,
+    refunds, refundedINR, tokensReturned: returned,
+    note: refunds.length
+      ? `${refunds.length} investor position(s) bought back at the listing price; tokens returned to ${prop.originatorId}.`
+      : 'Nobody held tokens in this listing, so it was withdrawn directly. Ledger history is preserved.',
+  });
 });
 
 // Drunix transaction flow for a payment (FAQ 14 demo: Drunix Transaction Flow)

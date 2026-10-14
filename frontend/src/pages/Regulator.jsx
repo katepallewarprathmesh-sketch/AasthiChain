@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { money } from '../lib/format.js'
 import api from '../lib/api.js'
+import { rememberRemoved } from '../hooks/useProperties'
 
 // SOLID: Single Responsibility Only regulator audit for layman
 
@@ -86,10 +87,14 @@ export default function Regulator({ user }) {
                 </button>
                 <button
                   onClick={async () => {
-                    if (!confirm(`Remove listing "${p.title}" from the marketplace? Investors keep their tokens; ledger history is preserved.`)) return
+                    if (!confirm(`Remove listing "${p.title}"? Anyone holding tokens in it is bought back at the listing price and the tokens return to the owner. Ledger history is preserved.`)) return
                     try {
-                      await api.deleteProperty(p.assetId)
+                      const out = await api.deleteProperty(p.assetId)
+                      rememberRemoved(p.assetId)
                       setProperties(props => props.filter(x => x.assetId !== p.assetId))
+                      if (out && out.refunds && out.refunds.length) {
+                        alert(`Removed. ${out.refunds.length} holder${out.refunds.length > 1 ? 's' : ''} refunded, ${out.refundedINR?.toLocaleString?.('en-IN') || out.refundedINR} rupees in total, ${out.tokensReturned} tokens returned to the owner.`)
+                      }
                     } catch (e) {
                       alert(e.data?.message || e.message || 'Delete failed')
                     }

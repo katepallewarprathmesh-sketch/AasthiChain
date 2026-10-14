@@ -978,6 +978,7 @@ function assetTradingProblem(assetId) {
 // describing it as one either. Supervisors and the owner still see their own.
 function listingIsPublic(p) {
   if (!p || !p.status) return false;
+  if (p.removed) return false;
   if (p.status !== 'DRAFT') return true;
   // Lifecycle status stays DRAFT until tokens are minted, so a registrar's
   // approval is the line that matters: a checked listing waiting to be
@@ -985,11 +986,22 @@ function listingIsPublic(p) {
   return String(p.registrarValidationStatus || '').toUpperCase() === 'VALIDATED';
 }
 
+// A removed listing used to be deleted from the in-memory map and nowhere
+// else. The backing store (GitHub / postgres / KV) was only ever written
+// through saveProperty, which updates rows and never drops them, so the next
+// cold lambda loaded the listing straight back and the marketplace still
+// showed it. Removal is therefore recorded ON the record, which does persist,
+// and every read path filters it out. Deleting the row as well would be
+// tidier and is exactly what did not work.
+function listingIsRemoved(p) {
+  return Boolean(p && p.removed)
+}
+
 function visibleListings(all, user) {
   const supervisor = !!(user && (SUPERVISORY_IDENTITIES.has(user.identityId) || user.operatorKey));
-  return all.filter((p) => listingIsPublic(p)
+  return all.filter((p) => !listingIsRemoved(p) && (listingIsPublic(p)
     || supervisor
-    || (user && user.identityId && p.originatorId === user.identityId));
+    || (user && user.identityId && p.originatorId === user.identityId)));
 }
 
 function publicPropertyView(p) {
@@ -1065,10 +1077,11 @@ function deletePropertyAuthorized(user, prop, assetId) {
     const others = Object.values(balances).filter(b =>
       b.assetId === (prop.assetId || assetId) && b.ownerId !== user.identityId && parseInt(b.balance) > 0);
     if (others.length === 0) return { allowed: true, reason: 'no-investors' };
-    const ownerBal = balances[(prop.assetId || assetId) + '~' + user.identityId] || Object.values(balances).find(b => b.assetId === (prop.assetId || assetId) && b.ownerId === user.identityId);
-    const have = ownerBal ? parseInt(ownerBal.balance) : 0;
-    if (have === 0) return { allowed: true, reason: 'fully-subscribed' };
-    return { allowed: false, message: `Investors already hold tokens on this listing (${others.length} holder${others.length > 1 ? 's' : ''}) — only a Regulator can remove it. Investors keep their tokens. NOTE: your ownership here came from the role at listing time; ask the Regulator to remove mistaken listings.` };
+    // Investors holding tokens used to block the owner entirely. They are now
+    // bought out of the listing as part of the removal, which is the thing
+    // that was missing: withdrawing a listing cannot simply strand the people
+    // who funded it.
+    return { allowed: true, reason: 'refund-investors' };
   }
   return { allowed: false, message: `Only the listing owner (${prop.originatorId}) or a Regulator can delete this listing.` };
 }
@@ -4177,12 +4190,69 @@ export default async function handler(req, res) {
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND', assetId });
         const check = deletePropertyAuthorized(user, prop, assetId);
         if (!check.allowed) return res.status(403).json({ error: 'ERR_DELETE_NOT_ALLOWED', message: check.message });
-        delete properties[prop.assetId || assetId];
-        if (prop.assetId && prop.assetId !== assetId) delete properties[assetId];
+        const id = prop.assetId || assetId;
+        const now = new Date();
+
+        // Buy the investors out before the listing goes. Withdrawing a
+        // listing while somebody holds tokens in it would otherwise leave
+        // them with a position in an asset that no longer appears anywhere:
+        // the tokens are returned to the listing owner and the money they
+        // paid is refunded at the listing's own token price.
+        const total = Number(prop.totalTokens) || 0;
+        const price = Number(prop.pricePerTokenINR)
+          || (total ? Number(prop.valuationINR || 0) / total : 0);
+        const refunds = [];
+        for (const [key, b] of Object.entries(balances)) {
+          if (!b || b.assetId !== id) continue;
+          if (b.ownerId === prop.originatorId) continue;
+          const tokens = parseInt(b.balance) || 0;
+          if (tokens <= 0) continue;
+          const amountINR = Math.round(tokens * price * 100) / 100;
+          const tid = 'TX-REFUND-' + safeUUID();
+          transfers[tid] = {
+            docType: 'transfer', transferId: tid, assetId: id,
+            fromId: b.ownerId, toId: prop.originatorId, amount: tokens,
+            txTimestamp: now, status: 'COMPLETED', kind: 'LISTING_WITHDRAWN_REFUND',
+            refundINR: amountINR, refundedBy: user.identityId,
+          };
+          b.balance = 0;
+          b.updatedAt = now;
+          balances[key] = b;
+          refunds.push({ investorId: b.ownerId, tokens, amountINR, transferId: tid });
+        }
+        const ownerKey = id + '~' + prop.originatorId;
+        const returned = refunds.reduce((a, r) => a + r.tokens, 0);
+        if (returned > 0) {
+          const ob = balances[ownerKey] || { docType: 'balance', assetId: id, ownerId: prop.originatorId, balance: 0 };
+          ob.balance = (parseInt(ob.balance) || 0) + returned;
+          ob.updatedAt = now;
+          balances[ownerKey] = ob;
+        }
+
+        // Mark it removed rather than dropping the key. The backing store is
+        // only ever written through saveProperty, which updates rows and
+        // never deletes them, so a deleted key came straight back on the next
+        // cold start and the listing reappeared in the marketplace.
+        prop.removed = true;
+        prop.removedAt = now;
+        prop.removedBy = user.identityId;
+        prop.removedReason = check.reason;
+        prop.status = 'WITHDRAWN';
+        prop.updatedAt = now;
+        properties[id] = prop;
+        if (prop.assetId && prop.assetId !== assetId) properties[assetId] = prop;
         globalThis._aasthi_properties = properties;
         try { saveAllPersisted(); } catch {}
-        console.log(`[DELETE] property ${assetId} removed by ${user.identityId} (${check.reason})`);
-        return res.json({ deleted: true, assetId, deletedBy: user.identityId, reason: check.reason, note: 'Investors keep their tokens — only the marketplace listing is removed. Ledger history is preserved.' });
+        try { await realDB.saveProperty(id, prop); } catch {}
+        const refundedINR = Math.round(refunds.reduce((a, r) => a + r.amountINR, 0) * 100) / 100;
+        console.log(`[DELETE] property ${assetId} removed by ${user.identityId} (${check.reason}), ${refunds.length} refund(s) totalling ${refundedINR}`);
+        return res.json({
+          deleted: true, assetId: id, deletedBy: user.identityId, reason: check.reason,
+          refunds, refundedINR, tokensReturned: returned,
+          note: refunds.length
+            ? `${refunds.length} investor position${refunds.length > 1 ? 's were' : ' was'} bought back at the listing price and the tokens returned to ${prop.originatorId}. The refund is recorded on the ledger; the money movement is simulated, as everywhere else on this deployment.`
+            : 'Nobody held tokens in this listing, so it was withdrawn directly. Ledger history is preserved.',
+        });
       } catch (e) {
         return res.status(500).json({ error: 'ERR_DELETE_FAILED', message: e.message });
       }

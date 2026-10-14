@@ -5,6 +5,26 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '../lib/api.js'
 
+// Ids the user has removed. Kept beside the created-properties cache, and
+// read by every merge, so a stale cached copy cannot outlive the deletion.
+export function loadRemovedIds() {
+  try {
+    return JSON.parse(localStorage.getItem('aasthi_removed_properties') || '[]')
+  } catch {
+    return []
+  }
+}
+
+export function rememberRemoved(assetId) {
+  if (!assetId) return
+  try {
+    const ids = loadRemovedIds()
+    if (!ids.includes(assetId)) localStorage.setItem('aasthi_removed_properties', JSON.stringify([...ids, assetId]))
+    const cached = JSON.parse(localStorage.getItem('aasthi_created_properties') || '[]')
+    localStorage.setItem('aasthi_created_properties', JSON.stringify(cached.filter((p) => p && p.assetId !== assetId)))
+  } catch { /* a cache that cannot be written is not worth failing a removal over */ }
+}
+
 function loadLocalCache() {
   try {
     return JSON.parse(localStorage.getItem('aasthi_created_properties') || '[]')
@@ -16,7 +36,13 @@ function loadLocalCache() {
 function mergeProperties(backendProps, cachedProps) {
   const mergedMap = new Map()
   backendProps.forEach(p => mergedMap.set(p.assetId, p))
+  // A listing removed on the server is absent from backendProps, and this
+  // merge used to read that absence as "the server has not caught up yet"
+  // and paint the cached copy back on screen. Removals are remembered
+  // locally so the cache can never resurrect one.
+  const removed = loadRemovedIds()
   cachedProps.forEach(cachedProp => {
+    if (removed.includes(cachedProp.assetId)) return
     if (!mergedMap.has(cachedProp.assetId)) {
       const enriched = {
         ...cachedProp,
@@ -65,7 +91,8 @@ export function useProperties(filterStatus = '') {
       setError(e.message)
       // Fallback to cache + demo
       try {
-        const cached = loadLocalCache()
+        const removedIds = loadRemovedIds()
+        const cached = loadLocalCache().filter((p) => !removedIds.includes(p.assetId))
         if (cached.length > 0) {
           setProperties(cached)
         } else {

@@ -3,6 +3,7 @@ import { money } from '../lib/format.js'
 import api from '../lib/api.js'
 import { useProperties } from '../hooks/useProperties.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
+import { rememberRemoved } from '../hooks/useProperties'
 
 // SOLID: Single Responsibility Admin flow for layman: Register → Review → Mint
 // Simple language, no jargon, clear steps
@@ -586,10 +587,13 @@ export default function Admin({ user }) {
                 </div>
                 <button
                   onClick={async () => {
-                    if (!confirm(`Delete listing "${pp.title}"? Investors keep their tokens only the marketplace listing is removed.`)) return
+                    if (!confirm(`Delete listing "${pp.title}"? Anyone holding tokens in it is bought back at the listing price and the tokens return to you.`)) return
                     try {
-                      await api.deleteProperty(pp.assetId)
-                      alert('Listing deleted. Marketplace no longer shows it.')
+                      const out = await api.deleteProperty(pp.assetId)
+                      rememberRemoved(pp.assetId)
+                      alert(out && out.refunds && out.refunds.length
+                        ? `Listing removed. ${out.refunds.length} holder${out.refunds.length > 1 ? 's' : ''} refunded ${out.refundedINR} and ${out.tokensReturned} tokens came back to you.`
+                        : 'Listing removed. Nobody held tokens in it.')
                       refresh()
                     } catch (e) {
                       alert(e.data?.message || e.message || 'Delete failed')
