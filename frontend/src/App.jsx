@@ -600,6 +600,21 @@ function AppContent({ user, setUser }) {
     setUser(updated)
   }
 
+  // Pages deep in a flow sometimes need to say "you must be a Registrar for
+  // this step". They used to link to /login, which for a signed-in person is
+  // not a role picker at all: it bounced them to the marketplace and lost the
+  // listing they were working on. They now ask for the switch where they
+  // stand, and the page they are on stays on screen.
+  useEffect(() => {
+    const onAsk = (e) => {
+      const wanted = String((e && e.detail) || '')
+      const target = ROLES.find((r) => r.role === wanted || r.id === wanted)
+      if (target) handleRoleSwitch(target)
+    }
+    window.addEventListener('aasthi:switch-role', onAsk)
+    return () => window.removeEventListener('aasthi:switch-role', onAsk)
+  })
+
   const effectiveUser = internalUser || user
 
   // Public pages must never wait on the auth SDK — they render immediately and

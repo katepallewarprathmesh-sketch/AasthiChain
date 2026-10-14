@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import { money } from '../lib/format.js'
 import api from '../lib/api.js'
 import { useProperties } from '../hooks/useProperties.js'
@@ -215,7 +214,15 @@ export default function Admin({ user }) {
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Manage Properties</h1>
       {!isOwner && (
         <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginTop: 12, fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
-          You are logged in as <strong>{user?.role || 'unknown'}</strong>. Listing a property makes you its owner only Property Owners should list. Switch to <strong>Property Owner</strong> on the login page first.
+          You are logged in as <strong>{user?.role || 'unknown'}</strong>. Listing a property makes you its owner only Property Owners should list. Switch to{' '}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('aasthi:switch-role', { detail: 'Originator' }))}
+            style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: '#92400E', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' }}
+          >
+            Property Owner
+          </button>{' '}
+          first.
         </div>
       )}
       <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '70ch' }}>
@@ -397,8 +404,17 @@ export default function Admin({ user }) {
                 Only a <strong>Registrar</strong> can approve a title, and never the owner of the
                 property — otherwise the check proves nothing. You are signed in as{' '}
                 <strong>{user?.role || 'unknown'}</strong>.{' '}
-                <Link to="/login" style={{ color: '#92400E', fontWeight: 600 }}>Switch to Registrar</Link>{' '}
-                to review this listing.
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('aasthi:switch-role', { detail: 'Registrar' }))}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, font: 'inherit',
+                    color: '#92400E', fontWeight: 600, textDecoration: 'underline', cursor: 'pointer',
+                  }}
+                >
+                  Switch to Registrar
+                </button>{' '}
+                to review this listing. You stay on this page and keep the listing you selected.
               </div>
             )}
 
