@@ -7,6 +7,24 @@ import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
 import { applySeo, propertySeo } from '../lib/seo.js'
 
+
+// Address check result, shown as it is. A listing whose pincode the India Post
+// directory does not recognise says so on the page rather than quietly passing.
+function locationCheckTone(status) {
+  if (status === 'VERIFIED') return '#047857'
+  if (status === 'MISMATCH' || status === 'NOT_FOUND' || status === 'MALFORMED') return '#B45309'
+  return '#6B7280'
+}
+
+function locationCheckLabel(c) {
+  const pin = c.pincode || ''
+  if (c.status === 'VERIFIED') return `Pincode ${pin} checked against the India Post directory: ${c.detail}`
+  if (c.status === 'MISMATCH') return `Pincode ${pin} exists, but the India Post directory places it in ${c.officialDistrict}, ${c.officialState}.`
+  if (c.status === 'NOT_FOUND') return `Pincode ${pin} is not in the India Post directory.`
+  if (c.status === 'MALFORMED') return `Pincode ${pin} is not a valid Indian pincode.`
+  return `Pincode ${pin} was not checked against the India Post directory.`
+}
+
 export default function PropertyDetail({ user }) {
   const { id } = useParams()
   const location = useLocation()
@@ -231,6 +249,11 @@ export default function PropertyDetail({ user }) {
           <p style={{ color: '#6B7280', fontSize: 13, marginTop: 6 }}>
             📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} • Owner & seller: <strong>{property.originatorId || 'Owner'}</strong>
           </p>
+          {property.locationCheck && (
+            <p style={{ fontSize: 12, marginTop: 6, color: locationCheckTone(property.locationCheck.status) }}>
+              {locationCheckLabel(property.locationCheck)}
+            </p>
+          )}
         </div>
         <span style={{
           fontSize: 12,

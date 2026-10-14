@@ -757,7 +757,7 @@ async function documentsForAsset(assetId) {
   } catch { return null; }
 }
 
-app.post('/api/properties', authMiddleware, (req, res) => {
+app.post('/api/properties', authMiddleware, async (req, res) => {
   let { title, state, city, pincode, valuationINR, documentHash } = req.body;
   const idemKey = req.headers['x-idempotency-key'];
   if (idemKey && idempotency[idemKey]) return res.json(idempotency[idemKey]);
@@ -792,10 +792,12 @@ if (documentHash && String(documentHash).trim().length !== 64) return res.status
       }
   const assetId = 'PROP-' + crypto.randomUUID();
   const now = new Date();
+  const locationCheck = await verifyPincode(pincode, { city, state });
   properties[assetId] = {
     assetId, docType: 'property', originatorId: req.user.identityId, title,
     location: { state, city, pincode }, valuationINR, totalTokens: 0,
     documentHash, registrarValidationStatus: 'PENDING', status: 'DRAFT',
+    locationCheck,
     createdAt: now, updatedAt: now, version: 1
   };
   // Provenance used to start at validation, so the chain could not show when a
@@ -835,6 +837,60 @@ if (documentHash && String(documentHash).trim().length !== 64) return res.status
 // been near a registrar yet — nobody outside the person who registered it
 // should be reading it as a listing. Supervisors and the owner still see
 // their own.
+
+// Postal address check against the India Post PIN directory (keyless). Same
+// contract as the serverless tier: fail-open, never block a listing on a
+// third party, never claim a pincode was verified when it was not.
+async function verifyPincode(pincode, claimed = {}) {
+  const pin = String(pincode || '').trim();
+  const out = {
+    checked: false, status: 'UNCHECKED', pincode: pin,
+    source: 'India Post PIN directory via api.postalpincode.in',
+    at: new Date().toISOString(),
+  };
+  if (!/^[1-9][0-9]{5}$/.test(pin)) {
+    out.status = 'MALFORMED';
+    out.detail = 'An Indian pincode is six digits and does not start with zero.';
+    return out;
+  }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const r = await fetch('https://api.postalpincode.in/pincode/' + encodeURIComponent(pin), {
+        headers: { Accept: 'application/json' }, signal: ctrl.signal,
+      });
+      if (!r.ok) { out.detail = `Directory answered HTTP ${r.status}.`; return out; }
+      const body = await r.json();
+      const first = Array.isArray(body) ? body[0] : null;
+      out.checked = true;
+      if (!first || first.Status !== 'Success' || !Array.isArray(first.PostOffice) || !first.PostOffice.length) {
+        out.status = 'NOT_FOUND';
+        out.detail = 'No post office uses this pincode.';
+        return out;
+      }
+      const po = first.PostOffice[0];
+      out.officialDistrict = po.District || '';
+      out.officialState = po.State || '';
+      out.officialOffice = po.Name || '';
+      const norm = (v) => String(v || '').trim().toLowerCase();
+      const cityOk = !claimed.city || [po.District, po.Division, po.Region, po.Block, po.Name]
+        .some((v) => norm(v) === norm(claimed.city));
+      const stateOk = !claimed.state || norm(po.State) === norm(claimed.state);
+      out.cityMatches = cityOk;
+      out.stateMatches = stateOk;
+      out.status = (cityOk && stateOk) ? 'VERIFIED' : 'MISMATCH';
+      out.detail = (cityOk && stateOk)
+        ? `${po.Name}, ${po.District}, ${po.State}.`
+        : `The directory places ${pin} in ${po.District}, ${po.State}, which is not what this listing claims.`;
+      return out;
+    } finally { clearTimeout(timer); }
+  } catch {
+    out.detail = 'The directory could not be reached, so the address was not checked.';
+    return out;
+  }
+}
+
 function listingIsPublic(p) {
   if (!p || !p.status) return false;
   if (p.removed) return false;

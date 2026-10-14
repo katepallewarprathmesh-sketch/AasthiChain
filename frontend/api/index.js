@@ -1086,6 +1086,69 @@ function deletePropertyAuthorized(user, prop, assetId) {
   return { allowed: false, message: `Only the listing owner (${prop.originatorId}) or a Regulator can delete this listing.` };
 }
 
+
+// ---- Postal address check (India Post PIN directory) ----
+//
+// The marketplace filled up with listings in places like "City115232" at a
+// pincode nobody could post a letter to, and nothing in the registration path
+// disagreed. A pincode is the one field in a property listing that can be
+// checked against an authority for free: api.postalpincode.in serves the
+// India Post PIN directory with no key and no registration.
+//
+// Deliberately FAIL-OPEN. A third party must never be able to block a
+// listing: if the lookup is slow, down or rate limited the listing proceeds
+// and the result is recorded as "unchecked". What it must never do is claim a
+// pincode was verified when it was not.
+async function verifyPincode(pincode, claimed = {}) {
+  const pin = String(pincode || '').trim();
+  const out = {
+    checked: false, status: 'UNCHECKED', pincode: pin,
+    source: 'India Post PIN directory via api.postalpincode.in',
+    at: new Date().toISOString(),
+  };
+  if (!/^[1-9][0-9]{5}$/.test(pin)) {
+    out.status = 'MALFORMED';
+    out.detail = 'An Indian pincode is six digits and does not start with zero.';
+    return out;
+  }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const r = await fetch('https://api.postalpincode.in/pincode/' + encodeURIComponent(pin), {
+        headers: { Accept: 'application/json' }, signal: ctrl.signal,
+      });
+      if (!r.ok) { out.detail = `Directory answered HTTP ${r.status}.`; return out; }
+      const body = await r.json();
+      const first = Array.isArray(body) ? body[0] : null;
+      out.checked = true;
+      if (!first || first.Status !== 'Success' || !Array.isArray(first.PostOffice) || !first.PostOffice.length) {
+        out.status = 'NOT_FOUND';
+        out.detail = 'No post office uses this pincode.';
+        return out;
+      }
+      const po = first.PostOffice[0];
+      out.officialDistrict = po.District || '';
+      out.officialState = po.State || '';
+      out.officialOffice = po.Name || '';
+      const norm = (v) => String(v || '').trim().toLowerCase();
+      const cityOk = !claimed.city || [po.District, po.Division, po.Region, po.Block, po.Name]
+        .some((v) => norm(v) === norm(claimed.city));
+      const stateOk = !claimed.state || norm(po.State) === norm(claimed.state);
+      out.cityMatches = cityOk;
+      out.stateMatches = stateOk;
+      out.status = (cityOk && stateOk) ? 'VERIFIED' : 'MISMATCH';
+      out.detail = (cityOk && stateOk)
+        ? `${po.Name}, ${po.District}, ${po.State}.`
+        : `The directory places ${pin} in ${po.District}, ${po.State}, which is not what this listing claims.`;
+      return out;
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    out.detail = 'The directory could not be reached, so the address was not checked.';
+    return out;
+  }
+}
+
 // Internal rail calls identify as the gateway itself. Once UMI_PROXY_SECRET is
 // set the rail stops believing identity headers without it, so every outbound
 // call needs the same stamp — otherwise turning the secret on would lock the
@@ -2282,6 +2345,9 @@ function integrationStatus(rail) {
         ? `Live through PayU (${pu.test ? 'test' : 'production'} endpoint). PayU is a payment aggregator: this is a real payment rail, but it is NOT a direct NPCI connection and nothing here is endorsed by NPCI.`
         : 'Simulated. UPI Collect, RRN and UTR formats are modelled correctly, but no payment is initiated. Not a direct NPCI connection in either mode.',
       'PAYU_MERCHANT_KEY, PAYU_SALT and NPCI_MODE=payu are set'),
+    entry('Postal address check (India Post PIN directory)', true,
+      'Live. Every new listing has its pincode looked up in the India Post PIN directory through the public api.postalpincode.in endpoint, and the answer is stored on the listing: verified, a mismatch against the claimed city or state, not found, or unchecked. It is deliberately fail-open, so an unreachable directory records "unchecked" and never blocks a listing, and it is an address check only: it says a pincode exists and where it is, not that anybody owns anything there.',
+      undefined),
     entry('DigiLocker identity verification', false,
       'Not integrated. No DigiLocker API call is made in any mode and no credentials exist. The OAuth 2.0 shape is modelled and the documents returned are fabricated.',
       'DigiLocker partner registration through Meripehchaan, then a real token exchange, which is not yet written'),
@@ -4295,10 +4361,14 @@ export default async function handler(req, res) {
         }
         const assetId = 'PROP-' + safeUUID();
         const now = new Date();
+        // Checked here rather than in the browser: a client-side check is a
+        // courtesy, and this one is recorded on the listing as evidence.
+        const locationCheck = await verifyPincode(pincode, { city, state });
         properties[assetId] = {
           assetId, docType: 'property', originatorId: user.identityId, title,
           location: { state, city, pincode }, valuationINR, totalTokens: 0,
           documentHash, registrarValidationStatus: 'PENDING', status: 'DRAFT',
+          locationCheck,
           createdAt: now, updatedAt: now, version: 1
         };
         // Mirror the deed fingerprint into the content-addressed register, so
