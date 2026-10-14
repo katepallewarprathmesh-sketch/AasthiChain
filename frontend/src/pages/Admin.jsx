@@ -55,6 +55,11 @@ export default function Admin({ user }) {
   const [result, setResult] = useState('')
   const [lastId, setLastId] = useState('')
   const [validationStatus, setValidationStatus] = useState('')
+  // Who owns the selected listing. Minting decides the supply, which decides
+  // the token price, so the rail allows it only for the owner or a Regulator.
+  // The button used to ignore that and let the refusal arrive as a failed
+  // POST, which reads like a broken feature rather than a rule.
+  const [ownerId, setOwnerId] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   
   const { properties, refresh } = useProperties('')
@@ -72,8 +77,10 @@ export default function Admin({ user }) {
         const data = await api.getProperty(lastId)
         const prop = data.property || data
         setValidationStatus(prop.registrarValidationStatus || prop.validationStatus || 'PENDING')
+        setOwnerId(prop.originatorId || '')
       } catch {
         setValidationStatus('NOT_FOUND')
+        setOwnerId('')
       }
     }
     fetchStatus()
@@ -175,6 +182,10 @@ export default function Admin({ user }) {
       setResult(`Cannot create tokens property status is ${validationStatus}, need VALIDATED. Please get it reviewed first.`)
       return
     }
+    if (!canMintThis) {
+      setResult(`This listing belongs to ${ownerId}. Switch to that identity, or to Regulator, to create its tokens.`)
+      return
+    }
     
     setResult('Creating tokens... Please wait')
     try {
@@ -193,6 +204,9 @@ export default function Admin({ user }) {
       setResult(`Failed to create tokens: ${err.message}`)
     }
   }
+
+  const canMintThis = !ownerId || ownerId === user?.identityId || (user?.role || '') === 'Regulator'
+  const mintable = validationStatus === 'VALIDATED' && canMintThis
 
   const tokenPrice = form.valuationINR ? Math.floor(parseInt(form.valuationINR) / 10000) : 0
 
@@ -441,27 +455,40 @@ export default function Admin({ user }) {
 
             <button
               onClick={handleMint}
-              disabled={validationStatus !== 'VALIDATED'}
+              disabled={!mintable}
               style={{
                 width: '100%',
                 marginTop: 16,
                 padding: '12px',
-                background: validationStatus === 'VALIDATED' ? '#059669' : '#9CA3AF',
+                background: mintable ? '#059669' : '#9CA3AF',
                 color: 'white',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: validationStatus === 'VALIDATED' ? 'pointer' : 'not-allowed',
-                opacity: validationStatus === 'VALIDATED' ? 1 : 0.6
+                cursor: mintable ? 'pointer' : 'not-allowed',
+                opacity: mintable ? 1 : 0.6
               }}
             >
-              {validationStatus === 'VALIDATED' ? '✓ Create Tokens' : `Need Verified Status (${validationStatus || 'none'})`}
+              {mintable
+                ? '✓ Create Tokens'
+                : validationStatus !== 'VALIDATED'
+                  ? `Need Verified Status (${validationStatus || 'none'})`
+                  : `Only ${ownerId} can create these tokens`}
             </button>
 
             {validationStatus !== 'VALIDATED' && lastId && (
               <div style={{ fontSize: 11, color: '#D97706', marginTop: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '8px 10px' }}>
                 {validationStatus === 'PENDING' ? 'Waiting for verification click Approve above' : `Status is ${validationStatus} need Verified to create tokens`}
+              </div>
+            )}
+
+            {validationStatus === 'VALIDATED' && !canMintThis && lastId && (
+              <div style={{ fontSize: 11.5, color: '#92400E', marginTop: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6 }}>
+                This listing was created by <strong>{ownerId}</strong>, and you are signed in as{' '}
+                <strong>{user?.identityId || 'unknown'}</strong>. Minting sets the supply, which sets the token
+                price, so only the owner or a Regulator may do it. Switch role to <strong>{ownerId}</strong> or to
+                a Regulator and the button turns on.
               </div>
             )}
           </div>

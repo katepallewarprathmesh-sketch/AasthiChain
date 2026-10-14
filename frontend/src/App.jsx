@@ -266,7 +266,31 @@ function Footer() {
 
 function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock }) {
   const location = useLocation()
-  const isActive = (p) => location.pathname === p || location.pathname.startsWith(p)
+  const navItems = user
+    ? [
+        { path: '/dashboard', label: 'Dashboard' },
+        { path: '/marketplace', label: 'Marketplace' },
+        { path: '/wallet', label: 'Wallet' },
+        { path: '/ledger', label: 'Ledger' },
+        { path: '/market', label: 'Resale' },
+        { path: '/umi', label: 'Settlement' },
+        ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
+        ...(user.role === 'Registrar' || user.role === 'Regulator' ? [{ path: '/admin/ops', label: 'Ops' }] : []),
+        ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
+      ]
+    : [{ path: '/', label: 'Home' }]
+  const navPaths = navItems.map((i) => i.path)
+  // '/marketplace'.startsWith('/market') is true, so the Resale tab lit up
+  // whenever Marketplace was open. Match whole path segments, and when two
+  // items both match (/admin and /admin/ops) only the longest one wins, so
+  // exactly one tab is ever highlighted.
+  const navMatches = (p) => p === '/'
+    ? location.pathname === '/'
+    : location.pathname === p || location.pathname.startsWith(p + '/')
+  const isActive = (p) => {
+    if (!navMatches(p)) return false
+    return !navPaths.some((other) => other !== p && other.length > p.length && navMatches(other))
+  }
   const isLanding = location.pathname === '/'
   const theme = useChromeTheme(isLanding)
   const dark = isLanding && theme === 'dark'
@@ -295,20 +319,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
             {!isMobile && <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>}
           </Link>
           <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0 }}>
-            {(user
-              ? [
-                  { path: '/dashboard', label: 'Dashboard' },
-                  { path: '/marketplace', label: 'Marketplace' },
-                  { path: '/wallet', label: 'Wallet' },
-                  { path: '/ledger', label: 'Ledger' },
-                  { path: '/market', label: 'Resale' },
-                  { path: '/umi', label: 'Settlement' },
-                  ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
-                  ...(user.role === 'Registrar' || user.role === 'Regulator' ? [{ path: '/admin/ops', label: 'Ops' }] : []),
-                  ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
-                ]
-              : [{ path: '/', label: 'Home' }]
-            ).map(item => (
+            {navItems.map(item => (
               <Link key={item.path} to={item.path} style={{
                 textDecoration: 'none', fontSize: isMobile ? 12.5 : 13, fontWeight: 500, padding: isMobile ? '6px 9px' : '8px 12px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
                 color: isActive(item.path) ? (dark ? '#EAEEF5' : '#1E3A5F') : mut,
