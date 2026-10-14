@@ -146,6 +146,15 @@ export default function PropertyDetail({ user }) {
   if (!property) return null
 
   const tokenPrice = property.totalTokens ? Math.floor(property.valuationINR / property.totalTokens) : 500
+  // Seeded listings carry a hash that was typed in at registration, and no
+  // document was ever issued against it. Inviting a reader to hash "the file
+  // you were sent" is then a dead end: there is no file, so every attempt
+  // reads as a mismatch and the feature looks broken instead of unused.
+  const SEEDED_DOC_HASHES = [
+    'a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1',
+    'a3f5c1e8b9d2f4a6c8e0b1d3f5a7c9e1b2d4f6a8c0e2b4d6f8a0c2e4d6f8a0c2e4d6f8a0c2e4b6d8f0a1',
+  ]
+  const docIsSeeded = SEEDED_DOC_HASHES.includes(String(property.documentHash || '').toLowerCase())
   const availableTokens = property.availableTokens ?? 0
   const ownerHeld = balances.find(b => b.ownerId === property.originatorId)?.balance || 0
   const soldShown = sub?.soldTokens ?? Math.max(0, (property.totalTokens || 0) - (property.availableTokens ?? ownerHeld))
@@ -278,7 +287,20 @@ export default function PropertyDetail({ user }) {
               Hash the file you were sent and paste the result. The document never leaves your machine.
               <br />
               <code style={{ fontSize: 11.5, background: '#F9FAFB', padding: '2px 6px', borderRadius: 4 }}>sha256sum deed.pdf</code>
+              {' '}on Linux,{' '}
+              <code style={{ fontSize: 11.5, background: '#F9FAFB', padding: '2px 6px', borderRadius: 4 }}>shasum -a 256 deed.pdf</code>
+              {' '}on macOS,{' '}
+              <code style={{ fontSize: 11.5, background: '#F9FAFB', padding: '2px 6px', borderRadius: 4 }}>certutil -hashfile deed.pdf SHA256</code>
+              {' '}on Windows.
             </p>
+
+            {docIsSeeded && (
+              <p style={{ fontSize: 12, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '9px 11px', lineHeight: 1.6 }}>
+                This listing was seeded for the demo, so no deed was ever issued against it and there is no file to
+                hash. Nothing you enter here can match. To see the check succeed, list a property of your own and
+                attach a real file: the browser hashes it, and only the digest is recorded.
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               <input
                 value={docHash}
