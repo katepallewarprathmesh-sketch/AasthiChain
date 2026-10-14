@@ -31,7 +31,7 @@ rail, and then every file matching `tests/*.test.mjs`.
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
 | Suite files | **76** in `tests/` |
-| Reported result | **121 passed, 0 failed** |
+| Reported result | **123 passed, 0 failed** |
 | Runtime | about 50 seconds |
 
 **Read the number carefully.** The 121 is the count of top-level checks the sweep reports: each
