@@ -24,6 +24,7 @@ package drunix
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 	"time"
@@ -627,4 +628,150 @@ func (r *UMIRail) SettleBasketDvP(basketID, seller, buyer string, units int64, p
 		"atomic": "units and e₹-W cash moved in one commit",
 	})
 	return trade, blk, nil
+}
+
+// blockTime reads a block's timestamp, falling back to the zero time rather
+// than inventing "now" for a basket that was created long ago.
+func blockTime(ts string) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
+}
+
+// restoreBasketsFromChain rebuilds the basket book by replaying the ledger.
+//
+// Baskets were the one piece of rail state with no restore path. Wallets,
+// positions, ISINs and instructions all came back from the snapshot store, and
+// asset classes, private-data proofs and interop records were replayed from the
+// chain, but r.baskets was rebuilt empty on every start. The effect in
+// production: a basket created before a restart kept its UMI_BASKET_CREATED
+// block on the durable chain while GET /umi/baskets answered with an empty
+// list, and every subscribe, redeem, transfer or DvP against it failed
+// ERR_BASKET_NOT_FOUND. The multi-property feature worked exactly until the
+// process restarted, and the custody tokens were left stranded in a custodian
+// account no surviving basket pointed at.
+//
+// The chain is the right source: every event that changes a basket is already
+// a block, so replaying them in height order reproduces the recipe and the
+// unit ledger exactly. The component tokens themselves are positions and come
+// back from the store as before, so nothing here touches the securities book.
+//
+// Caller must hold r.mu, matching restoreCarbonFromChain.
+func (r *UMIRail) restoreBasketsFromChain() {
+	if r.chain == nil {
+		return
+	}
+	if r.baskets == nil {
+		r.baskets = make(map[string]*Basket)
+	}
+	num := func(v interface{}) int64 {
+		switch n := v.(type) {
+		case float64:
+			return int64(n)
+		case int64:
+			return n
+		case int:
+			return int64(n)
+		}
+		return 0
+	}
+	// Units can go negative only if blocks were replayed out of order, which
+	// the chain's own ordering rules out; keep the map clean regardless.
+	credit := func(b *Basket, holder string, units int64) {
+		if holder == "" || units == 0 {
+			return
+		}
+		b.Units[holder] += units
+		if b.Units[holder] <= 0 {
+			delete(b.Units, holder)
+		}
+	}
+
+	for _, blk := range r.chain.Snapshot() {
+		for _, txn := range blk.Txns {
+			id, _ := txn["basketId"].(string)
+			if id == "" {
+				continue
+			}
+			switch blk.Type {
+			case BlockUMIBasketCreated:
+				b := &Basket{
+					BasketID:  id,
+					Units:     map[string]int64{},
+					CreatedAt: blockTime(blk.Timestamp),
+				}
+				if v, ok := txn["name"].(string); ok {
+					b.Name = v
+				}
+				if v, ok := txn["custodian"].(string); ok {
+					b.Custodian = v
+				}
+				if b.Custodian == "" {
+					b.Custodian = id + "-CUSTODY"
+				}
+				// Components round-trip through JSON, so they arrive as
+				// generic maps rather than the struct that was written.
+				if raw, ok := txn["components"].([]interface{}); ok {
+					for _, c := range raw {
+						m, ok := c.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						asset, _ := m["assetId"].(string)
+						if asset == "" {
+							continue
+						}
+						comp := BasketComponent{AssetID: asset, TokensPerUnit: num(m["tokensPerUnit"])}
+						if p, ok := m["indicativePriceINR"].(float64); ok {
+							comp.IndicativePriceINR = p
+						}
+						b.Components = append(b.Components, comp)
+					}
+				}
+				if len(b.Components) < 2 {
+					// Not a basket this build would have accepted. Skipping it
+					// is safer than serving a recipe we cannot honour.
+					continue
+				}
+				r.baskets[id] = b
+			case BlockUMIBasketSubscribed:
+				if b := r.baskets[id]; b != nil {
+					holder, _ := txn["holder"].(string)
+					units := num(txn["units"])
+					credit(b, holder, units)
+					b.UnitsOutstanding += units
+				}
+			case BlockUMIBasketRedeemed:
+				if b := r.baskets[id]; b != nil {
+					holder, _ := txn["holder"].(string)
+					units := num(txn["units"])
+					credit(b, holder, -units)
+					b.UnitsOutstanding -= units
+					if b.UnitsOutstanding < 0 {
+						b.UnitsOutstanding = 0
+					}
+				}
+			case BlockUMIBasketTransferred, BlockUMIBasketDvPSettled:
+				// Units change hands; the outstanding total does not move.
+				if b := r.baskets[id]; b != nil {
+					units := num(txn["units"])
+					from, _ := txn["from"].(string)
+					to, _ := txn["to"].(string)
+					if from == "" {
+						from, _ = txn["seller"].(string)
+					}
+					if to == "" {
+						to, _ = txn["buyer"].(string)
+					}
+					credit(b, from, -units)
+					credit(b, to, units)
+				}
+			}
+		}
+	}
+	if len(r.baskets) > 0 {
+		log.Printf("UMI rail restored %d basket(s) from the chain", len(r.baskets))
+	}
 }

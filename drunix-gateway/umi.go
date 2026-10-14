@@ -514,6 +514,9 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	// that supply could be issued again. Runs while the lock is held, as the
 	// rest of restore does.
 	r.restoreCarbonFromChain()
+	// Baskets are chain-derived too: nothing else restores them, and without
+	// this a restart silently emptied the basket book.
+	r.restoreBasketsFromChain()
 	r.mu.Unlock()
 
 	// Private data proofs come back from the chain; the values do not,

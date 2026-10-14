@@ -20,7 +20,50 @@ const TYPE_STYLES = {
   UMI_ISIN_ASSIGNED: { label: 'UMI · Pilot ISIN', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
   UMI_DVP_SETTLED: { label: 'UMI · Atomic DvP Settled', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
   UMI_DVP_FAILED: { label: 'UMI · DvP Failed (no partial)', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
-  UMI_SERVICING_PAID: { label: 'UMI · Servicing Paid', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' }
+  UMI_SERVICING_PAID: { label: 'UMI · Servicing Paid', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  // Basket (multi-property unit) lifecycle
+  UMI_BASKET_CREATED: { label: 'UMI · Basket Defined', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
+  UMI_BASKET_SUBSCRIBED: { label: 'UMI · Basket Units Issued', color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
+  UMI_BASKET_REDEEMED: { label: 'UMI · Basket Units Redeemed', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  UMI_BASKET_TRANSFERRED: { label: 'UMI · Basket Units Transferred', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_BASKET_DVP_SETTLED: { label: 'UMI · Basket DvP Settled', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  // Asset registry, evidence and private data
+  UMI_ASSET_REGISTERED: { label: 'UMI · Asset Registered', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  UMI_CARBON_RETIRED: { label: 'UMI · Carbon Retired', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_DOC_ANCHORED: { label: 'UMI · Document Anchored', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
+  UMI_DOC_STATUS: { label: 'UMI · Document Status', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
+  UMI_PDC_WRITE: { label: 'UMI · Private Data Write', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
+  UMI_PDC_PURGED: { label: 'UMI · Private Data Purged', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  UMI_SUPPLY_RESTATED: { label: 'UMI · Supply Restated', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  // Cross-chain interop (hash-locked)
+  UMI_INTEROP_LOCKED: { label: 'Interop · Locked', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  UMI_INTEROP_COMMITTED: { label: 'Interop · Committed', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_INTEROP_ABORTED: { label: 'Interop · Aborted', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  // Work orders (escrowed engagements)
+  WORK_CREATED: { label: 'Work · Created', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
+  WORK_FUNDED: { label: 'Work · Escrow Funded', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  WORK_ASSIGNED: { label: 'Work · Assigned', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  WORK_SUBMITTED: { label: 'Work · Submitted', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  WORK_ACCEPTED: { label: 'Work · Accepted and Paid', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  WORK_DISPUTED: { label: 'Work · Disputed', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  WORK_CANCELLED: { label: 'Work · Cancelled', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  WORK_REFUNDED: { label: 'Work · Refunded', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  // Administrative
+  LEDGER_TRUNCATED: { label: 'Ledger Truncated', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' }
+}
+
+// A block whose type this page has not been taught still has to read as what
+// it is. Falling back to the GENESIS style labelled every unknown type
+// "Genesis", so a 243-block chain with one real genesis block showed dozens of
+// them and the explorer misrepresented its own ledger. Show the type the rail
+// actually committed instead, tidied for reading.
+function styleFor(type) {
+  if (TYPE_STYLES[type]) return TYPE_STYLES[type]
+  const label = String(type || 'Unknown')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase())
+  return { label, color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' }
 }
 
 function shortHash(h) { return h ? `${h.slice(0, 10)}…${h.slice(-8)}` : '' }
@@ -34,6 +77,12 @@ function txnSummary(t) {
   if (t.kind === 'umi-funding') return `₹${Number(t.amountINR || 0).toLocaleString('en-IN')} funded into ${t.walletId} (wholesale CBDC)`
   if (t.kind === 'umi-isin') return `pilot ISIN ${t.isin} assigned to ${t.assetId}`
   if (t.kind === 'umi-servicing') return `₹${Number(t.distributedINR || 0).toLocaleString('en-IN')} servicing paid into ${t.holders} CBDC wallet(s)`
+  if (t.kind === 'private-data-write') return `${t.collection} · hash-only proof, value never written to this chain`
+  if (t.basketId && t.delivered) return `${t.units} unit(s) issued to ${t.holder} against ${t.delivered.length} delivered holding(s)`
+  if (t.basketId && t.returned) return `${t.units} unit(s) redeemed by ${t.holder}; backing returned`
+  if (t.basketId && t.components) return `basket ${t.basketId} defined over ${t.components.length} assets · custodian ${t.custodian || ''}`
+  if (t.basketId && t.considerationINR != null) return `${t.units} unit(s) ${t.seller} → ${t.buyer} · ₹${Number(t.considerationINR).toLocaleString('en-IN')} in e₹-W`
+  if (t.basketId && t.from && t.to) return `${t.units} unit(s) ${t.from} → ${t.to} (no cash leg)`
   if (t.config) return `channel ${t.channel} · ${(t.orgs || []).length} orgs · ${(t.consensus || '').toLowerCase()}`
   return Object.entries(t).slice(0, 3).map(([k, v]) => `${k}=${v}`).join(' · ')
 }
@@ -285,7 +334,7 @@ export default function LedgerExplorer() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(chain?.blocksList || []).map(b => {
-            const st = TYPE_STYLES[b.type] || TYPE_STYLES.GENESIS
+            const st = styleFor(b.type)
             const txHit = highlightTx && (b.txns || []).some(t => Object.values(t).includes(highlightTx))
             return (
               <div key={b.height} style={{
