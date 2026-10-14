@@ -123,18 +123,43 @@ Needs **Docker, Go, git and jq** on a machine you control. Every value below was
 Org1's lite peer `lp1.org1` is `peer0.org1.example.com:7051` and is published on host port 7051,
 and the default channel is `mychannel`.
 
+Steps 1 to 3 are scripted, with every correction from the run below already
+applied:
+
 ```bash
-# 1. Get Drunix and build its binaries (peer, orderer, cryptogen and friends)
+bash scripts/drunix-testnet.sh
+```
+
+It checks the prerequisites first and stops with the reason rather than
+half-starting. The same thing by hand:
+
+```bash
+# 1. Get Drunix. The binaries come out of the published images, not a source
+#    build: network.sh refuses to run when the local peer version and the
+#    image version differ, and the images are the ones that are 1.0.0.
 git clone https://github.com/npci/drunix.git
-cd drunix
-make peer orderer configtxgen configtxlator osnadmin cryptogen discover ledgerutil
+cd drunix/drunix-network
+mkdir -p bin
+cid=$(docker create npcioss/drunix-peer:1.0.0)    && docker cp $cid:/usr/local/bin/peer bin/peer       && docker rm $cid
+cid=$(docker create npcioss/drunix-orderer:1.0.0) && docker cp $cid:/usr/local/bin/orderer bin/orderer && docker rm $cid
+# cryptogen, configtxgen, configtxlator and osnadmin are not in the images:
+curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh
+chmod +x install-fabric.sh && ./install-fabric.sh binary
+export PATH=$PWD/bin:$PATH
 
-# 2. Bring the network up with a channel. YugabyteDB is the default state store.
-cd drunix-network/test-network
-./network.sh up createChannel
+# 2. Bring the network up, then create the channel. YugabyteDB is the default
+#    state store and takes 60 to 90 seconds to open YSQL. The peers connect at
+#    boot, panic when it is not ready and have no restart policy, so wait and
+#    start whatever exited before creating the channel.
+cd test-network
+./network.sh up
+docker ps -a            # any exited peer: docker start <name>
+./network.sh createChannel -c mychannel
 
-# 3. Deploy this repository's chaincode onto that channel
-./network.sh deployCC -ccn aasthichain -ccp /path/to/AasthiChain/chaincode -ccl go
+# 3. Deploy this repository's chaincode onto that channel. go must be on the
+#    PATH of whoever runs this, sudo included.
+(cd /path/to/AasthiChain/chaincode && go mod vendor)
+./network.sh deployCC -c mychannel -ccn aasthichain -ccp /path/to/AasthiChain/chaincode -ccl go
 
 # 4. Point the settlement rail at the peer
 cd /path/to/AasthiChain/drunix-gateway
