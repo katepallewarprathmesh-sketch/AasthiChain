@@ -9,7 +9,7 @@
 [![CI](https://github.com/katepallewarprathmesh-sketch/AasthiChain/actions/workflows/ci.yml/badge.svg)](https://github.com/katepallewarprathmesh-sketch/AasthiChain/actions/workflows/ci.yml)
 [![Live](https://img.shields.io/badge/live-aasthi--chain.vercel.app-1E3A5F?style=flat-square)](https://aasthi-chain.vercel.app)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square)](https://go.dev)
-[![License](https://img.shields.io/badge/license-MIT-555?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-555?style=flat-square)](LICENSE)
 
 [Live site](https://aasthi-chain.vercel.app) · [Ledger explorer](https://aasthi-chain.vercel.app/ledger) · [Settlement rail](https://aasthi-chain.vercel.app/umi) · [Calculators](https://aasthi-chain.vercel.app/tools) · [Learn](https://aasthi-chain.vercel.app/learn)
 
@@ -29,32 +29,36 @@ the money leg and the ownership leg as one atomic operation. Both move, or neith
 > ledger, the atomicity, the verification rules and the guardrails. The exact line between the two
 > is itemised at the end of this file.
 
-**Contents**: [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Pages](#pages) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](#contributing)
+**Contents**: [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Pages](#pages) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](CONTRIBUTING.md) · [Testing](docs/TESTING.md) · [Audit](docs/REPOSITORY_AUDIT.md)
 
 ---
 
 ## Quick start
 
 **Prerequisites:** Go 1.25+, Node 20+, and `python3` (the regression script uses it to parse JSON).
+Docker is needed only for the optional Fabric sandbox, not for the demo.
 
 ```bash
 git clone https://github.com/katepallewarprathmesh-sketch/AasthiChain.git
 cd AasthiChain
+make dev
+```
+
+That installs dependencies, builds the frontend, builds and starts the Go settlement rail on
+`:21100` (seeding demo wallets, ISINs and positions on first boot), and starts the app on `:8080`.
+`make stop` stops exactly what it started, and `make help` lists everything else.
+
+Prefer to drive it by hand, or on a machine without `make`:
+
+```bash
 npm install
 (cd frontend && npm install && npm run build)
+cd drunix-gateway && go run ./cmd/gateway            # terminal 1, :21100
+DEMO_AUTH=true UMI_GATEWAY_URL=http://localhost:21100 node server.js   # terminal 2, :8080
 ```
 
-Start the Go settlement rail on `:21100`, which seeds demo wallets, ISINs and positions on first boot:
-
-```bash
-cd drunix-gateway && go run ./cmd/gateway     # listens on :21100
-```
-
-In a second terminal, start the app on `:8080`:
-
-```bash
-DEMO_AUTH=true UMI_GATEWAY_URL=http://localhost:21100 node server.js
-```
+Configuration is optional: copy `.env.example` to `.env` if you want to change anything. The
+defaults run the full demo with no credentials of any kind.
 
 Open **http://localhost:8080** and sign in as `investor1` (role `Investor`). Other demo identities:
 `originator1` (Originator), `registrar1` (Registrar), `investor2`, `regulator1` (Regulator).
@@ -237,10 +241,16 @@ The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reco
 ## Testing
 
 ```bash
-npm test                  # regression.sh: 120 checks across 75 suites (needs both servers up)
-make umi-test             # go vet + go test -race ./... in the settlement core
-cd frontend && npm run smoke
+make dev          # the suites talk to a running stack, so start it first
+make test         # regression.sh: 121 checks across 76 suite files
+make test-go      # gofmt, go vet and race tests across all four Go modules
+make smoke        # every frontend route renders real content
+make secret-scan  # refuse tracked files that look like live credentials
 ```
+
+What each command covers, what it needs, and what is deliberately not covered:
+[`docs/TESTING.md`](docs/TESTING.md). A verified list of the repository's current weak points:
+[`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
 
 The full sweep expects the app started with `ADMIN_DASHBOARD_KEY` set, and starts the PayU rig on
 `:8099` itself, so several suites fail standalone because they depend on it:
@@ -416,11 +426,15 @@ Issues and pull requests are welcome.
 1. Fork, branch from `main`.
 2. Keep money rules in the Go core; see [the design rule](#the-design-rule). A rule added to the JS
    edge will be asked to move.
-3. Run `npm test` (104 checks) and `make umi-test` before opening a PR, and run `gofmt`, which CI enforces.
+3. Run `make test` (121 checks) and `make test-go` before opening a PR. `gofmt` is a hard gate in CI.
 4. If you touch `frontend/api/index.js`, check whether `mock-api-server.js` needs the same change.
 5. New behaviour ships with a test that fails without it.
 
 Commit messages are plain language describing the *why*, not a changelog of the diff.
+
+The full guide, including the design rule that gets pull requests sent back and a list of genuine
+starter tasks, is in [`CONTRIBUTING.md`](CONTRIBUTING.md). Participation is covered by
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 Found a security flaw? Please report it privately: see [`SECURITY.md`](SECURITY.md).
 
@@ -469,6 +483,6 @@ links. These are **donations to the project, not investments**. They buy no toke
 
 <div align="center">
 
-**[aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)** · [MIT licensed](LICENSE)
+**[aasthi-chain.vercel.app](https://aasthi-chain.vercel.app)** · [Apache 2.0 licensed](LICENSE)
 
 </div>

@@ -17,4 +17,5 @@ uploads/
 .env.payu
 .env*
 !.env.payu.example
+!.env.example
 chaincode/chaincode

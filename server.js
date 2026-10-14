@@ -48,12 +48,25 @@ const MIME = {
 // so we reproduce that: JSON and form bodies become objects, anything else
 // stays a string. The raw bytes are kept so the few spots that re-read the
 // stream themselves (parsePayUParams) still work after we have drained it.
+// Bounded on purpose. This used to read until the client stopped sending, so
+// one POST could grow the process until it died, and no route here has any use
+// for a body that large. Over the limit the request is refused with 413 rather
+// than buffered and then rejected.
+const MAX_BODY_BYTES = parseInt(process.env.MAX_BODY_BYTES || String(1024 * 1024), 10);
+
 function readBody(req) {
   return new Promise((resolve) => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', () => resolve(Buffer.alloc(0)));
+    let size = 0;
+    let over = false;
+    req.on('data', (c) => {
+      if (over) return;
+      size += c.length;
+      if (size > MAX_BODY_BYTES) { over = true; chunks.length = 0; return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(over ? { tooLarge: true, raw: Buffer.alloc(0) } : { tooLarge: false, raw: Buffer.concat(chunks) }));
+    req.on('error', () => resolve({ tooLarge: false, raw: Buffer.alloc(0) }));
   });
 }
 
@@ -205,7 +218,13 @@ async function main() {
       }
     }
 
-    const raw = await readBody(req);
+    const { raw, tooLarge } = await readBody(req);
+    if (tooLarge) {
+      return decorate(res).status(413).json({
+        error: 'ERR_BODY_TOO_LARGE',
+        message: `Request body exceeds ${MAX_BODY_BYTES} bytes.`,
+      });
+    }
     req.body = parseBody(raw, req.headers['content-type']);
     makeReplayable(req, raw);
     req.query = Object.fromEntries(parsed.searchParams.entries());

@@ -1,37 +1,100 @@
-.PHONY: network chaincode api frontend test clean umi umi-test
+.PHONY: help dev stop test test-go test-all smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
+
+# Default target: say what is available rather than doing something surprising.
+help:
+	@echo "AasthiChain"
+	@echo
+	@echo "  make dev          install, build and start the whole stack (app :8080, rail :21100)"
+	@echo "  make stop         stop whatever 'make dev' started"
+	@echo "  make test         integration sweep against a running stack (regression.sh)"
+	@echo "  make test-go      every Go module: gofmt, vet, race tests"
+	@echo "  make test-all     dev, then both of the above"
+	@echo "  make smoke        build the frontend and render every route"
+	@echo "  make secret-scan  refuse tracked files that look like live credentials"
+	@echo
+	@echo "  make umi          run the settlement rail alone, in the foreground"
+	@echo "  make frontend     run Vite with hot reload on :5173"
+	@echo "  make build        build the frontend bundle and the rail binary"
+	@echo
+	@echo "Prerequisites: Go 1.25+, Node 20+, python3. Docker is needed only for"
+	@echo "'make network', the optional Hyperledger Fabric sandbox."
+
+# ---------------------------------------------------------------------------
+# The one path a new contributor should need.
+# ---------------------------------------------------------------------------
+
+dev:
+	bash scripts/devup.sh
+	bash scripts/dev-stack.sh --no-evm
+
+stop:
+	bash scripts/dev-stack.sh --stop
+
+# ---------------------------------------------------------------------------
+# Verification. Each target says exactly what it covers, because a target
+# called "test" that quietly runs a quarter of the tests is worse than none.
+# ---------------------------------------------------------------------------
+
+# Needs a running stack: start it with `make dev` first.
+test:
+	bash regression.sh
+
+test-go:
+	bash scripts/go-tests.sh
+
+test-all: dev test test-go
+
+smoke:
+	cd frontend && npm run smoke
+
+secret-scan:
+	bash scripts/secret-scan.sh
+
+# ---------------------------------------------------------------------------
+# Individual pieces
+# ---------------------------------------------------------------------------
+
+build:
+	cd frontend && npm install && npm run build
+	cd drunix-gateway && go build ./...
+
+umi:
+	cd drunix-gateway && UMI_ENABLED=true UMI_SEED_DEMO=true DRUNIX_MODE=mock go run ./cmd/gateway
+
+frontend:
+	cd frontend && npm install && npm run dev
+
+api:
+	cd api-gateway && go mod tidy && go run main.go
+
+chaincode-test:
+	cd chaincode && go test -v ./...
+
+umi-test:
+	cd drunix-gateway && go vet ./... && go test -race -count=1 ./...
+
+# ---------------------------------------------------------------------------
+# Optional Hyperledger Fabric sandbox. Requires Docker and the Fabric
+# binaries, and is not needed for the demo or for any test above.
+# ---------------------------------------------------------------------------
 
 network:
-	cd network && docker-compose up -d
+	cd network && docker compose up -d
 	@echo "Network started. Waiting for postgres health..."
 	sleep 5
 	cd network && ./scripts/create-channel.sh
 	cd network && ./scripts/deploy-chaincode.sh
 
-chaincode-test:
-	cd chaincode && go test -v ./...
-
-api:
-	cd api-gateway && go mod tidy && go run main.go
-
-frontend:
-	cd frontend && npm install && npm run dev
-
-# UMI rail (RBI Unified Market Interface / SEBI Demat 2.0 pattern) — Go, :21100
-umi:
-	cd drunix-gateway && go run ./cmd/gateway
-
-umi-test:
-	cd drunix-gateway && go vet ./... && go test -race -count=1 ./...
-
-test: chaincode-test umi-test
-	@echo "All tests passed"
-
+# Destructive: removes the Fabric volumes and generated crypto material.
+# It does not touch demo data used by the Node stack.
 clean:
-	cd network && docker-compose down -v
+	cd network && docker compose down -v
 	rm -rf network/crypto-config network/channel-artifacts
 
-demo: chaincode-test
-	@echo "=== AasthiChain Demo Ready ==="
-	@echo "API Gateway: http://localhost:8080/health"
-	@echo "Frontend: http://localhost:5173"
-	@echo "Login presets: originator1, registrar1, investor1, investor2, regulator1"
+demo:
+	@echo "=== AasthiChain demo ==="
+	@echo "App       : http://localhost:8080"
+	@echo "Rail      : http://localhost:21100/health"
+	@echo "Vite dev  : http://localhost:5173  (make frontend)"
+	@echo "Identities: originator1, registrar1, investor1, investor2, regulator1"
+	@echo "Walkthrough: docs/DEMO.md"

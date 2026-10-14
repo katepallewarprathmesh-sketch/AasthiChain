@@ -7,12 +7,37 @@
     "doc": "docs"
   },
   "scripts": {
+    "dev": "bash scripts/devup.sh && bash scripts/dev-stack.sh",
     "test": "bash regression.sh",
-    "smoke": "cd frontend && npm run smoke"
+    "test:go": "bash scripts/go-tests.sh",
+    "smoke": "cd frontend && npm run smoke",
+    "secret-scan": "bash scripts/secret-scan.sh"
   },
-  "keywords": [],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/katepallewarprathmesh-sketch/AasthiChain.git"
+  },
+  "bugs": {
+    "url": "https://github.com/katepallewarprathmesh-sketch/AasthiChain/issues"
+  },
+  "homepage": "https://github.com/katepallewarprathmesh-sketch/AasthiChain#readme",
+  "keywords": [
+    "tokenization",
+    "real-estate",
+    "settlement",
+    "dvp",
+    "cbdc",
+    "ledger",
+    "fintech",
+    "india",
+    "go",
+    "react"
+  ],
   "author": "",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",

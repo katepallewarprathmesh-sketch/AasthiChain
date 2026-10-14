@@ -2429,7 +2429,21 @@ export default async function handler(req, res) {
   }
   
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // The read surface is public by design, so the default stays open and the
+    // demo keeps working from anywhere. A deployment that does not want that
+    // sets CORS_ALLOW_ORIGIN to a comma-separated allowlist, and an origin
+    // outside it gets no CORS header at all rather than a quiet wildcard.
+    const corsAllow = String(process.env.CORS_ALLOW_ORIGIN || '*').trim();
+    const reqOrigin = String(req.headers.origin || '');
+    if (corsAllow === '*') {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    } else {
+      const allowed = corsAllow.split(',').map((o) => o.trim()).filter(Boolean);
+      if (reqOrigin && allowed.includes(reqOrigin)) {
+        res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+        res.setHeader('Vary', 'Origin');
+      }
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Idempotency-Key, X-Fabric-Identity');
     
