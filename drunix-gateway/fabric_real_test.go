@@ -168,6 +168,20 @@ func TestQueriesAreNeverSubmitted(t *testing.T) {
 	}
 }
 
+// The client library has to be the one Drunix itself is built and sampled
+// against. Their application-gateway samples pin fabric-gateway v1.10.0, and
+// drifting off that is how a client starts failing against a protocol change
+// nobody here would see coming.
+func TestGatewaySDKMatchesDrunixSamples(t *testing.T) {
+	mod, err := os.ReadFile("go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(mod), "github.com/hyperledger/fabric-gateway v1.10.") {
+		t.Fatalf("fabric-gateway should be pinned to the v1.10.x line that npci/drunix samples use, go.mod says:\n%s", mod)
+	}
+}
+
 // Older deployments configured host and port separately. Accepting both keeps
 // a working configuration working.
 func TestLegacyHostAndPortAreStillAccepted(t *testing.T) {

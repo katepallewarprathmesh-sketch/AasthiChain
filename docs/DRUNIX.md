@@ -1,7 +1,13 @@
 # Running AasthiChain on Drunix
 
-Drunix is NPCI's enterprise fork of Hyperledger Fabric. This page says exactly what in this
-repository is Drunix, what runs on it today, and what is needed to point it at a real network.
+Drunix is NPCI's re-engineered Hyperledger Fabric, published at
+[github.com/npci/drunix](https://github.com/npci/drunix) (v1.0.0, Apache licensed). Its stated
+difference from stock Fabric is horizontal scaling: the peer is split, and the test network runs
+YugabyteDB as the state database.
+
+This page says exactly what in this repository is Drunix, what runs on it today, and what is needed
+to point it at a real network. Every version and interface below was checked against the upstream
+repository rather than assumed.
 
 Nothing on this page is aspirational. Where something is not connected, it says so.
 
@@ -22,6 +28,28 @@ hash linking and real MVCC conflict detection; the network underneath them is in
 
 `/api/trust` reports this as `simulated`, and the startup log says
 `Drunix mode: mock, deterministic Fabric-fork simulator`.
+
+## What was checked against upstream
+
+| Question | Answer, from the npci/drunix tree |
+|---|---|
+| How does an application talk to Drunix? | It ships `internal/pkg/gateway`, the Fabric Gateway service. So the Fabric Gateway client is the right client, which is what `fabric_real.go` uses. |
+| Which client library version? | Their `application-gateway-go` samples pin **`fabric-gateway v1.10.0`**. This repository is pinned to the same v1.10.x line, and `TestGatewaySDKMatchesDrunixSamples` fails if that drifts. |
+| Which chaincode API? | Their samples use **`fabric-contract-api-go/v2 v2.2.0`** and **`fabric-chaincode-go/v2 v2.0.0`**. `chaincode/` was on the v1 line and has been migrated to v2. |
+| What does an endpoint look like? | Their sample uses `dns:///localhost:7051` with a separate gateway-peer name for the TLS server name. Both forms work here: pass either `host:port` or `dns:///host:port` in `DRUNIX_PEER_ENDPOINT`, and set `DRUNIX_TLS_SERVER_NAME` to the peer's certificate name. |
+| Is there a network to test against? | Yes: `drunix-network/test-network` with `createChannel.sh` and `deployCC.sh`, plus cryptogen and fabric-ca material, a YugabyteDB state store and a Prometheus and Grafana stack. |
+
+One consequence worth stating: because Drunix keeps the Fabric Gateway interface, a correct Fabric
+client is a correct Drunix client. That is why the adapter is thin and why the compatibility risk
+sits in versions rather than in protocol.
+
+### The v2 chaincode migration
+
+`fabric-chaincode-go/v2` dropped `shimtest`, which the chaincode tests used for a mock stub. Rather
+than stay on an API Drunix does not use, the tests now carry a small stand-in that implements the
+composite-key functions to Fabric's wire format (`U+0000` namespace and separators) along with the
+creator and transaction boundaries. `contractapi.NewChaincode` is still constructed in the tests,
+because that is what rejects a contract whose method signatures a peer could not serve.
 
 ## Switching to a real Drunix network
 
@@ -86,10 +114,40 @@ the network's operator. Until this has been run against one, the honest statemen
 is implemented and tested up to the connection boundary", and `/api/trust` continues to report
 Drunix as simulated.
 
-## Running against the local Fabric network
+## Running against a network
 
-`network/` brings up a Fabric test network with docker-compose, creates the channel and deploys the
-chaincode. It needs Docker and the Fabric binaries, and it is not part of the demo path or of CI.
+### Against the Drunix test network (the one that proves the mandate)
+
+Clone the upstream repository and bring up `drunix-network/test-network` with its own scripts, then
+deploy this repository's `chaincode/` to the channel and point the gateway at the peer:
+
+```bash
+# in a clone of github.com/npci/drunix
+cd drunix-network/test-network
+./network.sh up createChannel -c property-channel
+./network.sh deployCC -ccn aasthichain -ccp /path/to/AasthiChain/chaincode -ccl go
+
+# back in this repository
+cd drunix-gateway && go build -tags real -o /tmp/umigw ./cmd/gateway
+DRUNIX_MODE=real \
+DRUNIX_PEER_ENDPOINT=dns:///localhost:7051 \
+DRUNIX_MSP_ID=Org1MSP \
+DRUNIX_CERT_FILE=<test-network>/organizations/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/cert.pem \
+DRUNIX_KEY_FILE=<test-network>/organizations/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore \
+DRUNIX_TLS_CERT=<test-network>/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+DRUNIX_TLS_SERVER_NAME=peer0.org1.example.com \
+DRUNIX_CHANNEL=property-channel DRUNIX_CHAINCODE=aasthichain \
+/tmp/umigw
+```
+
+This needs Docker and the Drunix binaries, so it has not been run from the environment this
+repository is developed in. It is the exact sequence to run, not a sequence that has been run: when
+someone completes it, the result belongs on `/api/trust` and nowhere else until then.
+
+### Against the bundled Fabric network
+
+`network/` brings up a stock Fabric test network with docker-compose, creates the channel and
+deploys the chaincode. Also Docker, also outside CI.
 
 ```bash
 make network      # compose up, create channel, deploy chaincode

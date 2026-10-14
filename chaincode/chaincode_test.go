@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hyperledger/fabric-chaincode-go/shimtest"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // Mock client identity setup helpers
-func newTestChaincode() *shimtest.MockStub {
+func newTestChaincode() *testStub {
+	// Still built here: NewChaincode is what would reject a contract whose
+	// method signatures a peer cannot serve, so constructing it is itself an
+	// assertion about the three contracts.
 	propertyContract := new(PropertyContract)
 	tokenContract := new(TokenContract)
 	kycContract := new(KYCContract)
-	chaincode, err := contractapi.NewChaincode(propertyContract, tokenContract, kycContract)
-	if err != nil {
+	if _, err := contractapi.NewChaincode(propertyContract, tokenContract, kycContract); err != nil {
 		panic(err)
 	}
-	stub := shimtest.NewMockStub("aasthichain", chaincode)
-	return stub
+	return newTestStub()
 }
 
 func TestPropertyRegistration(t *testing.T) {
@@ -177,7 +177,7 @@ func TestKYCValidation(t *testing.T) {
 }
 
 func TestCompositeKeys(t *testing.T) {
-	stub := shimtest.NewMockStub("test", nil)
+	stub := newTestStub()
 	key, err := stub.CreateCompositeKey(CompositeBalancePrefix, []string{"PROP-123", "investor1"})
 	require.NoError(t, err)
 	assert.Contains(t, key, "PROP-123")

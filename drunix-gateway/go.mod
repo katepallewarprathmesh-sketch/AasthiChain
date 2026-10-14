@@ -3,7 +3,7 @@ module github.com/katepallewarprathmesh-sketch/AasthiChain/drunix-gateway
 go 1.25.0
 
 require (
-	github.com/hyperledger/fabric-gateway v1.5.0
+	github.com/hyperledger/fabric-gateway v1.10.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/segmentio/kafka-go v0.4.51
 	golang.org/x/crypto v0.54.0
@@ -11,7 +11,7 @@ require (
 )
 
 require (
-	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.3 // indirect
+	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.7 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
