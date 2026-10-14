@@ -890,7 +890,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
 
       <ThroughputPanel />
       <PrivateDataPanel />
-      <InteropPanel />
+      <InteropPanel participants={participants} assetIds={properties.map((p) => p.assetId || p.id).filter(Boolean)} />
       </>)}
     </div>
   )
