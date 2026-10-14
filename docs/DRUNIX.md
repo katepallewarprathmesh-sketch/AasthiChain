@@ -118,31 +118,64 @@ Drunix as simulated.
 
 ### Against the Drunix test network (the one that proves the mandate)
 
-Clone the upstream repository and bring up `drunix-network/test-network` with its own scripts, then
-deploy this repository's `chaincode/` to the channel and point the gateway at the peer:
+Needs **Docker, Go, git and jq** on a machine you control. Every value below was read from
+`drunix-network/test-network/compose/compose-test-net.yaml` and that network's README, not guessed:
+Org1's lite peer `lp1.org1` is `peer0.org1.example.com:7051` and is published on host port 7051,
+and the default channel is `mychannel`.
 
 ```bash
-# in a clone of github.com/npci/drunix
+# 1. Get Drunix and build its binaries (peer, orderer, cryptogen and friends)
+git clone https://github.com/npci/drunix.git
+cd drunix
+make peer orderer configtxgen configtxlator osnadmin cryptogen discover ledgerutil
+
+# 2. Bring the network up with a channel. YugabyteDB is the default state store.
 cd drunix-network/test-network
-./network.sh up createChannel -c property-channel
+./network.sh up createChannel
+
+# 3. Deploy this repository's chaincode onto that channel
 ./network.sh deployCC -ccn aasthichain -ccp /path/to/AasthiChain/chaincode -ccl go
 
-# back in this repository
-cd drunix-gateway && go build -tags real -o /tmp/umigw ./cmd/gateway
+# 4. Point the settlement rail at the peer
+cd /path/to/AasthiChain/drunix-gateway
+go build -tags real -o /tmp/umigw ./cmd/gateway
+
+CRYPTO=/path/to/drunix/drunix-network/test-network/organizations/peerOrganizations/org1.example.com
 DRUNIX_MODE=real \
 DRUNIX_PEER_ENDPOINT=dns:///localhost:7051 \
 DRUNIX_MSP_ID=Org1MSP \
-DRUNIX_CERT_FILE=<test-network>/organizations/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/cert.pem \
-DRUNIX_KEY_FILE=<test-network>/organizations/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore \
-DRUNIX_TLS_CERT=<test-network>/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+DRUNIX_CERT_FILE=$CRYPTO/users/User1@org1.example.com/msp/signcerts/cert.pem \
+DRUNIX_KEY_FILE=$CRYPTO/users/User1@org1.example.com/msp/keystore \
+DRUNIX_TLS_CERT=$CRYPTO/peers/peer0.org1.example.com/tls/ca.crt \
 DRUNIX_TLS_SERVER_NAME=peer0.org1.example.com \
-DRUNIX_CHANNEL=property-channel DRUNIX_CHAINCODE=aasthichain \
-/tmp/umigw
+DRUNIX_CHANNEL=mychannel \
+DRUNIX_CHAINCODE=aasthichain \
+UMI_ENABLED=true PORT=21100 /tmp/umigw
 ```
 
-This needs Docker and the Drunix binaries, so it has not been run from the environment this
-repository is developed in. It is the exact sequence to run, not a sequence that has been run: when
-someone completes it, the result belongs on `/api/trust` and nowhere else until then.
+A successful start logs `Drunix mode: REAL, connected to dns:///localhost:7051 as MSP Org1MSP`. A
+failure names the setting that is wrong and exits, which is the intended behaviour.
+
+Then prove it from outside the process:
+
+```bash
+curl -s localhost:21100/drunix/ledger/status      # mode should read "real", with the channel name
+curl -s -X POST localhost:21100/drunix/submit -H 'Content-Type: application/json' \
+  -H 'X-Fabric-Identity: originator1' -H 'X-Identity-Role: Originator' \
+  -d '{"chaincode":"aasthichain","function":"RegisterProperty","args":["PROP-DRUNIX-001","Demo flat","Maharashtra","Pune","411045","5000000","0000000000000000000000000000000000000000000000000000000000000000"],"creatorMsp":"Org1MSP"}'
+```
+
+A committed response carries a real Fabric transaction id and block number from the peer, which is
+the artefact worth keeping: it is evidence this ran, and nothing in this repository can fabricate
+it.
+
+**Likely snag:** the chaincode builder may have no network access when it compiles the package. If
+`deployCC` fails while fetching modules, run `go mod vendor` inside `chaincode/` first and deploy
+again.
+
+**Not done yet.** This sequence has not been executed, because the environment this repository is
+developed in has no Docker. Until someone runs it and keeps the output, `/api/trust` continues to
+report Drunix as simulated.
 
 ### Against the bundled Fabric network
 
