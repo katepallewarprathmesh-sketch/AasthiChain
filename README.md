@@ -79,7 +79,7 @@ API to `:8080`. `make umi` and `make frontend` wrap the two long commands above.
 
 <div align="center">
 
-<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling and what they may touch; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to." width="100%">
+<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to." width="100%">
 
 </div>
 
@@ -100,7 +100,7 @@ KYC and the UPI payment lifecycle; it does not own balances, positions or the ch
 | Layer | Responsibility | Lives in |
 |---|---|---|
 | **Experience** | what each role can see and do, and the public pages anyone may read | `frontend/src` |
-| **Access** | establishes who is calling, and decides what that caller may touch | `frontend/api/index.js`, `server.js` |
+| **Access** | establishes who is calling, decides what that caller may touch, and keeps the listing register | `frontend/api/index.js`, `server.js` |
 | **Settlement** | holds the cash leg and the ownership leg, and moves them as one | `drunix-gateway/umi.go` |
 | **Work** | escrows a fee against a deliverable, releases it only against anchored evidence | `drunix-gateway/work*.go` |
 | **Record** | the append-only history every other layer answers to | `drunix-gateway/chain.go` |

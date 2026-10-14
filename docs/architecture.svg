@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" width="1200" height="820" role="img"
-     aria-label="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling and what they may touch; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 906" width="1200" height="906" role="img"
+     aria-label="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to.">
   <!-- Styling is set per element rather than in a <style> block: some renderers
        and sanitisers drop embedded CSS, and a diagram that loses its type is
        worse than no diagram. -->
@@ -12,7 +12,7 @@
     </marker>
   </defs>
 
-  <rect width="1200" height="820" fill="#F7F5F0"/>
+  <rect width="1200" height="906" fill="#F7F5F0"/>
 
   <!-- people -->
   <text x="60" y="52" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">PEOPLE</text>
@@ -22,7 +22,7 @@
 
   <rect x="336" y="66" width="252" height="58" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
   <text x="356" y="92"  font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1E3A5F">Registrar</text>
-  <text x="356" y="110" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">validates title — never the owner</text>
+  <text x="356" y="110" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">validates title, never the owner</text>
 
   <rect x="612" y="66" width="252" height="58" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
   <text x="632" y="92"  font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1E3A5F">Investor</text>
@@ -46,51 +46,65 @@
 
   <!-- access -->
   <text x="60" y="344" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">ACCESS</text>
-  <rect x="60" y="358" width="1080" height="112" rx="12" fill="#FFFFFF" stroke="#DED8CC"/>
+  <rect x="60" y="358" width="1080" height="198" rx="12" fill="#FFFFFF" stroke="#DED8CC"/>
 
   <rect x="80" y="376" width="516" height="76" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
   <text x="100" y="402" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Who is calling</text>
-  <text x="100" y="422" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">a session, verified — not a name the request chose</text>
-  <text x="100" y="440" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">for itself; no verifiable session means anonymous</text>
+  <text x="100" y="422" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">a session, verified, not a name</text>
+  <text x="100" y="440" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">the request chose for itself; no session means anonymous</text>
 
   <rect x="604" y="376" width="516" height="76" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
   <text x="624" y="402" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">What they may touch</text>
   <text x="624" y="422" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">decided centrally, so a new surface is covered the</text>
   <text x="624" y="440" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">day it ships; supervision is a role, not a loophole</text>
 
-  <line x1="600" y1="470" x2="600" y2="506" stroke="#1E3A5F" stroke-width="1.8" marker-end="url(#aCore)"/>
-  <text x="614" y="494" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#8A8375">an instruction from a caller already known</text>
+
+  <!-- listing register: what the edge owns, and the one outside check it makes -->
+  <rect x="80" y="464" width="686" height="76" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
+  <text x="100" y="490" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Listing register</text>
+  <text x="100" y="510" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">an address is checked against the postal directory before a listing goes up</text>
+  <text x="100" y="528" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">a withdrawal is recorded, and anyone still holding is bought out in the same step</text>
+
+  <rect x="786" y="464" width="334" height="76" rx="9" fill="#FFFFFF" stroke="#8A8375" stroke-dasharray="5 4"/>
+  <text x="806" y="490" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Postal directory</text>
+  <text x="806" y="510" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">outside the platform, and live</text>
+  <text x="806" y="528" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#8A8375">unreachable means unchecked, never a pass</text>
+
+  <line x1="766" y1="502" x2="784" y2="502" stroke="#9AA3AF" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <line x1="600" y1="556" x2="600" y2="592" stroke="#1E3A5F" stroke-width="1.8" marker-end="url(#aCore)"/>
+  <text x="614" y="580" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#8A8375">an instruction from a caller already known</text>
 
   <!-- settlement -->
-  <text x="60" y="534" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">SETTLEMENT CORE</text>
-  <rect x="60" y="548" width="1080" height="150" rx="12" fill="#FFFFFF" stroke="#1E3A5F" stroke-width="1.6"/>
+  <text x="60" y="620" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">SETTLEMENT CORE</text>
+  <rect x="60" y="634" width="1080" height="150" rx="12" fill="#FFFFFF" stroke="#1E3A5F" stroke-width="1.6"/>
 
-  <rect x="80" y="568" width="334" height="110" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
-  <text x="100" y="594" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Cash leg</text>
-  <text x="100" y="614" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">central-bank-money wallets</text>
-  <text x="100" y="634" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">money is conserved: balances always</text>
-  <text x="100" y="652" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">reconcile against lifetime funding</text>
-  <text x="100" y="670" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#8A8375">simulated — no live rail exists publicly</text>
+  <rect x="80" y="654" width="334" height="110" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
+  <text x="100" y="680" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Cash leg</text>
+  <text x="100" y="700" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">central-bank-money wallets</text>
+  <text x="100" y="720" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">money is conserved: balances always</text>
+  <text x="100" y="738" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">reconcile against lifetime funding</text>
+  <text x="100" y="756" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#8A8375">simulated: no live rail exists publicly</text>
 
-  <rect x="433" y="568" width="334" height="110" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
-  <text x="453" y="594" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Ownership leg</text>
-  <text x="453" y="614" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">positions, cap table, instrument codes</text>
-  <text x="453" y="634" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">baskets, servicing and income</text>
-  <text x="453" y="652" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">supply can never exceed what was</text>
-  <text x="453" y="670" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">authorised for the property</text>
+  <rect x="433" y="654" width="334" height="110" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
+  <text x="453" y="680" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Ownership leg</text>
+  <text x="453" y="700" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">positions, cap table, instrument codes</text>
+  <text x="453" y="720" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">baskets, servicing and income</text>
+  <text x="453" y="738" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">supply can never exceed what was</text>
+  <text x="453" y="756" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">authorised for the property</text>
 
-  <rect x="786" y="568" width="334" height="110" rx="9" fill="#1E3A5F"/>
-  <text x="806" y="594" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#FFFFFF">One atomic exchange</text>
-  <text x="806" y="614" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">both legs move, or neither does</text>
-  <text x="806" y="634" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">a retry returns the first outcome;</text>
-  <text x="806" y="652" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">a failure stays a failure</text>
-  <text x="806" y="670" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">a refusal says which side was short</text>
+  <rect x="786" y="654" width="334" height="110" rx="9" fill="#1E3A5F"/>
+  <text x="806" y="680" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#FFFFFF">One atomic exchange</text>
+  <text x="806" y="700" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">both legs move, or neither does</text>
+  <text x="806" y="720" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">a retry returns the first outcome;</text>
+  <text x="806" y="738" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">a failure stays a failure</text>
+  <text x="806" y="756" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#C9D6E6">a refusal says which side was short</text>
 
-  <line x1="600" y1="698" x2="600" y2="734" stroke="#1E3A5F" stroke-width="1.8" marker-end="url(#aCore)"/>
-  <text x="614" y="722" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#8A8375">written down before anything is considered done</text>
+  <line x1="600" y1="784" x2="600" y2="820" stroke="#1E3A5F" stroke-width="1.8" marker-end="url(#aCore)"/>
+  <text x="614" y="808" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#8A8375">written down before anything is considered done</text>
 
   <!-- record -->
-  <text x="60" y="762" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">RECORD</text>
-  <rect x="60" y="772" width="1080" height="36" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
-  <text x="84" y="796" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#1E3A5F">Append-only and tamper-evident · durable across restarts · a stopped rail is restarted only by a supervised, recorded repair</text>
+  <text x="60" y="848" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">RECORD</text>
+  <rect x="60" y="858" width="1080" height="36" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
+  <text x="84" y="882" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#1E3A5F">Append-only and tamper-evident · durable across restarts · a stopped rail is restarted only by a supervised, recorded repair</text>
 </svg>
