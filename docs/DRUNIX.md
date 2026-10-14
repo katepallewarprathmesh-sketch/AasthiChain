@@ -198,6 +198,74 @@ it.
 `deployCC` fails while fetching modules, run `go mod vendor` inside `chaincode/` first and deploy
 again.
 
+### On Windows: use WSL 2, not Git Bash
+
+The Drunix Makefile builds fine under Git Bash, which makes Git Bash look like
+the right place to run the rest. It is not. The test network is a set of shell
+scripts that drive Docker with absolute paths, and Git Bash rewrites those
+paths on the way through (MSYS path conversion), so volume mounts and
+certificate paths arrive mangled. `network.sh` also needs `jq`, which Git Bash
+does not ship, and it reads `docker-compose` as well as `docker compose`.
+
+Run the whole thing inside a WSL 2 Ubuntu shell instead. Docker Desktop already
+runs its engine there, so this removes the path translation, the missing tools
+and the daemon problem in one move.
+
+```powershell
+# PowerShell, once
+wsl --install -d Ubuntu
+```
+
+Then give the VM enough memory, because chaincode install compiles inside the
+peer and is killed at anything under about 8 GB. Create `C:\Users\<you>\.wslconfig`:
+
+```ini
+[wsl2]
+memory=8GB
+processors=4
+```
+
+and run `wsl --shutdown` for it to take effect.
+
+In **Docker Desktop**: Settings, Resources, WSL Integration, enable your Ubuntu
+distribution. Settings, General, confirm "Use the WSL 2 based engine".
+
+Then, in the Ubuntu shell:
+
+```bash
+sudo apt update && sudo apt install -y jq make curl git
+
+# Go 1.25 or newer: both go.mod files ask for it, and Ubuntu's packaged Go is
+# usually older, so take it from upstream.
+curl -sSL https://go.dev/dl/go1.25.1.linux-amd64.tar.gz -o /tmp/go.tgz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go.tgz
+echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc && export PATH=/usr/local/go/bin:$PATH
+go version
+
+docker info        # must print a Server section, not an error
+jq --version
+
+# network.sh calls both "docker compose" and "docker-compose". Docker Desktop
+# supplies the plugin; add the hyphenated name if it is missing:
+docker compose version
+command -v docker-compose || sudo ln -s ~/.docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+```
+
+Clone into the Linux home directory, not `/mnt/c`. Building a Go project
+across the Windows file system boundary is slow enough to look like a hang, and
+the permission bits the scripts expect do not survive the trip.
+
+```bash
+cd ~
+git clone https://github.com/katepallewarprathmesh-sketch/AasthiChain.git
+cd AasthiChain
+bash scripts/drunix-testnet.sh
+```
+
+One more Windows detail: if a script dies with `$'\r': command not found`, Git
+checked it out with CRLF line endings. Fix it with
+`git config --global core.autocrlf input` and clone again inside WSL.
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a
