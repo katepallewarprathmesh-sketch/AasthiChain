@@ -173,9 +173,51 @@ it.
 `deployCC` fails while fetching modules, run `go mod vendor` inside `chaincode/` first and deploy
 again.
 
-**Not done yet.** This sequence has not been executed, because the environment this repository is
-developed in has no Docker. Until someone runs it and keeps the output, `/api/trust` continues to
-report Drunix as simulated.
+### What happened when this was attempted (14 October 2026)
+
+Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a
+live Drunix network with a channel, and stopped on memory rather than on anything to do with this
+repository. Recorded here because the corrections below save the next person an afternoon.
+
+**Reached:**
+
+- Drunix v1.0.0 images pull straight from Docker Hub: `npcioss/drunix-peer`, `npcioss/drunix-orderer`,
+  `npcioss/drunix-vscc`. Nothing has to be built from source to run the network.
+- The network came up: 11 containers, the orderer, two lite peers, two committing peers, two
+  validation services, two YugabyteDB nodes and two KeyDB nodes.
+- `./network.sh createChannel -c mychannel` succeeded. Both organisations joined and both anchor
+  peers were set, against the real Drunix orderer.
+- This repository's chaincode packaged cleanly against their tooling:
+  `aasthichain_1.0:3e2783506deb8b489466ec0db5a339d6c51d3592f838ed7f6d9c24a61fc52a82`.
+
+**Stopped at:** `peer lifecycle chaincode install` was killed with exit 137, which is the kernel
+out-of-memory killer, and the Docker daemon was killed shortly after. Installing a chaincode
+compiles it inside the peer, and 2 GB with eleven containers already running is not enough.
+**Budget about 8 GB of RAM and 4 cores.** Nothing here suggests a problem with the chaincode: it
+packaged, and the package id above is the peer's own hash of it.
+
+**Corrections to the steps above, all learned the hard way:**
+
+1. `make peer orderer ...` is not needed. Copy the binaries out of the published images instead,
+   which also guarantees the version check in `network.sh` passes:
+   `docker create npcioss/drunix-peer:1.0.0` then `docker cp <id>:/usr/local/bin/peer bin/peer`,
+   and the same for the orderer. The images carry only those two.
+2. `cryptogen`, `configtxgen`, `configtxlator` and `osnadmin` are not in the images. Stock Fabric
+   v2.5 binaries work: `curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh && ./install-fabric.sh binary`.
+   Only `peer` and `orderer` have to be the Drunix builds, because only those are version-checked.
+3. `network.sh` calls both `docker-compose` and the compose plugin. Install Compose v2 and symlink
+   it to `/usr/local/bin/docker-compose`, or the network silently starts nothing.
+4. **The peers race YugabyteDB and lose.** Yugabyte takes 60 to 90 seconds to open YSQL on 5433,
+   the peers connect at start and panic with `connection refused` when it is not ready, and they
+   have no restart policy. Nothing in `network.sh` waits. If the peer containers are missing after
+   `./network.sh up`, this is why: `docker start` them once Yugabyte is listening.
+5. `go` has to be on the PATH of the user running the script, including under `sudo`, or packaging
+   fails with `failed to determine module root`.
+6. Run `go mod vendor` in `chaincode/` before deploying. Their `deployCC` vendors too, but doing it
+   first keeps the build off the network.
+
+**Still not done:** no transaction has been committed to a Drunix peer by this repository's rail.
+Until that happens and the output is kept, `/api/trust` continues to report Drunix as simulated.
 
 ### Against the bundled Fabric network
 
