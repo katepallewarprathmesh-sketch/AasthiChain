@@ -84,6 +84,22 @@ t('a malformed pincode is rejected locally', bc.status === 'MALFORMED', `${bc.st
 // ---- the listing still goes through: a third party cannot block listing
 t('the junk listing was still created, because the check is fail-open', !!(junk && junk.assetId))
 
+
+// ---- listings older than the check do not get a free pass
+const seeded = await call('/api/properties/PROP-GREEN-VALLEY-PUNE-001')
+const sp = seeded.data.property || seeded.data
+if (sp && sp.assetId) {
+  const sc = sp.locationCheck || {}
+  t('a listing that predates the check is checked when it is opened',
+    sc.status === 'VERIFIED' || sc.status === 'MISMATCH' || sc.status === 'NOT_FOUND' || sc.status === 'UNCHECKED',
+    JSON.stringify(sc).slice(0, 160))
+  const again = await call('/api/properties/PROP-GREEN-VALLEY-PUNE-001')
+  const sc2 = ((again.data.property || again.data).locationCheck) || {}
+  t('the answer is reused rather than asking the directory on every read',
+    sc.status === 'UNCHECKED' || sc2.at === sc.at, `${sc.at} vs ${sc2.at}`)
+}
+
+// ---- the trust page counts this as a live boundary
 // ---- declared on the trust page, as live
 const trust = await call('/api/trust')
 const row = (trust.data.integrations || []).find((i) => /India Post|Postal address/i.test(i.name || ''))
@@ -98,6 +114,7 @@ for (const f of ['frontend/api/index.js', 'mock-api-server.js']) {
   t(`${f} performs the lookup`, /api\.postalpincode\.in/.test(src))
   t(`${f} stores the result on the listing`, /locationCheck/.test(src))
   t(`${f} is fail-open`, /UNCHECKED/.test(src))
+  t(`${f} does not ask the directory once per page view`, /pincodeCache/.test(src) && /PINCODE_TTL_MS/.test(src))
 }
 
 // ---- the listing page shows the result

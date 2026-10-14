@@ -16,7 +16,11 @@ Two minutes of housekeeping that will save you a bad question:
 - **Open `/umi` once** so the chunk is warm. First paint after a cold Render start can take a few
   seconds while the core wakes.
 - **Know your current numbers** (check them again before you walk in, they move):
-  17 e₹-W wallets · 143 settlement instructions · 5 pilot ISINs · ledger height 210, verifying.
+  17 e₹-W wallets · ₹2,32,09,509 funded and conserved · 29 settled and 114 failed instructions ·
+  6 pilot ISINs · ledger height 238, verifying.
+- **The failed instructions are not a blemish, so do not hide them.** Most are probe traffic from
+  testing the refusal paths. If a judge spots the ratio, the answer is that a rail which never
+  records a failure is a rail that is hiding them, and you can open one and show the rollback.
 
 ---
 
@@ -75,6 +79,24 @@ Scroll to **Reconciliation** and read the two lines out:
 If someone asks for the audit trail, open an instruction and show the **ISO 20022 message families**:
 `sese.023 → sese.024 → pacs.009 → sese.025 → camt.054`. The trail a depository would recognise.
 
+### 4b · The two checks on a listing itself (45s, optional but strong)
+
+Open a property and point at the line under the address:
+
+> "When this was listed, the pincode was checked against the national postal directory, live. It
+> confirms the address exists and where it is. It is not proof of ownership, and the page does not
+> pretend otherwise: if the directory is unreachable the listing says the address was not checked
+> rather than showing a tick it did not earn."
+
+Then the deed check:
+
+> "Hash your own copy of the deed in your browser and compare it with the ledger. Only the digest
+> leaves your machine. A changed file is refused in those words."
+
+The point to land: *"This is the only boundary in the system that is genuinely live, and it is
+labelled as such on the trust page. Everything else is labelled simulation. We would rather have
+one honest live check than fourteen claimed ones."*
+
 ### 5 · Work orders: paying for upkeep on delivery (60s)
 
 Scroll to **section 8** on the same page.
@@ -96,8 +118,8 @@ so we didn't have to teach it anything new."*
 
 ### 6 · Close on verifiability (15s)
 
-> "Everything you just saw is in one public repository: the settlement core in Go, 58 integration
-> suites and 23 Go test files, green in CI on every commit. You can clone it and re-run the
+> "Everything you just saw is in one public repository: the settlement core in Go, 75 integration
+> suites and 36 Go test files, green in CI on every commit. You can clone it and re-run the
 > conservation proof yourself."
 
 ---
@@ -108,6 +130,11 @@ so we didn't have to teach it anything new."*
 No. UMI is a regulated rail reachable only through a bank partner or the SEBI sandbox. This
 implements the published pattern end to end and says `simulation` on every response. *Answer this
 one fast and without hedging; hesitation here costs more than the limitation does.*
+
+**"Is anything here actually connected to the outside world?"**
+One thing: the postal directory the address check calls, and the payment provider's test
+environment. The trust page counts them, names them and marks everything else as simulation. Give
+the small true number rather than a large vague one.
 
 **"Is the money real?"**
 No. The cash leg is simulated wholesale CBDC in integer paise. The UPI leg runs against a payment
@@ -142,8 +169,12 @@ app's identity headers, which is only safe behind a shared secret, so we added o
 
 ## Known blemishes to fix before judging
 
-- A test listing titled **"Mint Scope Probe"** (0 tokens, ₹10,00,000) is publicly visible in the
-  marketplace. It is validated, so the draft filter admits it. Delete it, or it is the first thing
-  a judge clicks.
+- A test listing titled **"Mint Scope Probe"** (0 tokens, no address) is still publicly visible in
+  the marketplace. It is validated, so the draft filter admits it, which is the right rule applied
+  to junk data. Remove it from the regulator or admin view; withdrawal now sticks, so one press is
+  enough. It is the first thing a judge clicks.
+- Three listings carry a city and a pincode that do not go together, **Lonavala and Panvel at
+  411045**, which is Pune. The address check flags these the moment the listing is opened, so
+  either fix the data or be ready to say, truthfully, that the check caught our own seed data.
 - `identityTrust` reads **`open`** until `UMI_PROXY_SECRET` is set on both hosts. Nobody will check
   this at a demo table, but "we found and closed it" is a far better story than "it's still open".

@@ -1099,6 +1099,14 @@ function deletePropertyAuthorized(user, prop, assetId) {
 // listing: if the lookup is slow, down or rate limited the listing proceeds
 // and the result is recorded as "unchecked". What it must never do is claim a
 // pincode was verified when it was not.
+
+// A read-only store (the dev and preview tiers are exactly that) cannot keep
+// the backfilled answer, so without this every page view would ask the
+// directory again. Hold answers in the process for a day: a pincode's district
+// does not move, and a public service should not be hit once per page view.
+const PINCODE_TTL_MS = 24 * 60 * 60 * 1000;
+const pincodeCache = new Map();
+
 async function verifyPincode(pincode, claimed = {}) {
   const pin = String(pincode || '').trim();
   const out = {
@@ -1111,6 +1119,9 @@ async function verifyPincode(pincode, claimed = {}) {
     out.detail = 'An Indian pincode is six digits and does not start with zero.';
     return out;
   }
+  const cacheKey = `${pin}|${claimed.city || ''}|${claimed.state || ''}`.toLowerCase();
+  const hit = pincodeCache.get(cacheKey);
+  if (hit && Date.now() - hit.storedAt < PINCODE_TTL_MS) return hit.result;
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 3000);
@@ -1125,6 +1136,7 @@ async function verifyPincode(pincode, claimed = {}) {
       if (!first || first.Status !== 'Success' || !Array.isArray(first.PostOffice) || !first.PostOffice.length) {
         out.status = 'NOT_FOUND';
         out.detail = 'No post office uses this pincode.';
+        pincodeCache.set(cacheKey, { storedAt: Date.now(), result: out });
         return out;
       }
       const po = first.PostOffice[0];
@@ -1141,6 +1153,7 @@ async function verifyPincode(pincode, claimed = {}) {
       out.detail = (cityOk && stateOk)
         ? `${po.Name}, ${po.District}, ${po.State}.`
         : `The directory places ${pin} in ${po.District}, ${po.State}, which is not what this listing claims.`;
+      pincodeCache.set(cacheKey, { storedAt: Date.now(), result: out });
       return out;
     } finally { clearTimeout(timer); }
   } catch (e) {
@@ -4412,6 +4425,18 @@ export default async function handler(req, res) {
             return res.json({ property: first, tokenPrice: Math.floor(first.valuationINR / first.totalTokens) });
           }
           return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
+        }
+        // Listings created before the address check existed carry no result at
+        // all, which would quietly exempt exactly the listings nobody has ever
+        // looked at. Fill it in the first time someone opens the property, keep
+        // the answer, and never let the lookup break the page.
+        if (!prop.locationCheck && prop.location && prop.location.pincode) {
+          try {
+            const back = await verifyPincode(prop.location.pincode, { city: prop.location.city, state: prop.location.state });
+            prop.locationCheck = back;
+            prop.updatedAt = new Date();
+            if (back.checked || back.status === 'MALFORMED') await realDB.saveProperty(prop);
+          } catch (e) { /* the listing matters more than the check */ }
         }
         const tokenPrice = prop.totalTokens ? Math.floor(prop.valuationINR / prop.totalTokens) : 0;
         // Supply visibility: how many tokens an investor can buy right now (owner's remaining holding)
