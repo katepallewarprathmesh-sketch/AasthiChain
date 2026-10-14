@@ -274,7 +274,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
         { path: '/ledger', label: 'Ledger' },
         { path: '/market', label: 'Resale' },
         { path: '/umi', label: 'Settlement' },
-        ...(user.role === 'Originator' || user.role === 'Registrar' ? [{ path: '/admin', label: 'Admin' }] : []),
+        ...(['Originator', 'Registrar', 'Regulator'].includes(user.role) ? [{ path: '/admin', label: 'Admin' }] : []),
         ...(user.role === 'Registrar' || user.role === 'Regulator' ? [{ path: '/admin/ops', label: 'Ops' }] : []),
         ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
       ]

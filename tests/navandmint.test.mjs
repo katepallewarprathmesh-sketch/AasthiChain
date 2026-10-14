@@ -67,8 +67,8 @@ check('the mint button is gated on ownership, not only on validation', () => {
   assert.match(admin, /disabled=\{!mintable\}/)
 })
 
-check('the rule matches the server: owner or Regulator', () => {
-  assert.match(admin, /ownerId === user\?\.identityId \|\| \(user\?\.role \|\| ''\) === 'Regulator'/)
+check('the rule matches the server: owner, Originator or Regulator', () => {
+  assert.match(admin, /ownerId === user\?\.identityId \|\| \['Originator', 'Regulator'\]\.includes/)
 })
 
 check('the owner of the selected listing is read and remembered', () => {
@@ -78,6 +78,26 @@ check('the owner of the selected listing is read and remembered', () => {
 check('the reason names the owner before the click', () => {
   assert.match(admin, /This listing was created by/)
   assert.match(admin, /\{ownerId\}/)
+})
+
+// Investors have no minting screen, so an investor-owned demo listing could
+// never be tokenised by anybody while the rule was owner-or-Regulator.
+check('both servers allow an Originator to mint a listing they do not own', () => {
+  for (const [name, src] of [
+    ['serverless', readFileSync(new URL('../frontend/api/index.js', import.meta.url), 'utf8')],
+    ['mock-api', readFileSync(new URL('../mock-api-server.js', import.meta.url), 'utf8')],
+  ]) {
+    assert.match(src, /minterRole !== 'regulator' && minterRole !== 'originator'/, name)
+  }
+})
+
+check('an Investor still cannot mint somebody else\'s listing', () => {
+  const src = readFileSync(new URL('../frontend/api/index.js', import.meta.url), 'utf8')
+  // The guard is a deny-list of two roles: anything else that is not the
+  // owner is still refused, which is what keeps this narrower than "any
+  // signed-in caller".
+  assert.ok(!/minterRole !== 'investor'/.test(src))
+  assert.match(src, /error: 'ERR_NOT_ALLOWED'/)
 })
 
 check('the handler refuses too, so a stale render cannot post it anyway', () => {

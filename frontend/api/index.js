@@ -4454,15 +4454,16 @@ export default async function handler(req, res) {
           }
         }
         if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND', message: `Property ${id} not found even after fallback. Try with seeded PROP-GREEN-VALLEY-PUNE-001 or re-register. If you switched role, page now auto-updates without refresh.` });
-        // The error message below has always told people to "switch to
-        // Originator to mint" — but nothing checked. Any signed-in user could
-        // tokenise another originator's listing and pick the supply, which
-        // sets the token price.
+        // Minting sets the supply, and supply divided into the valuation is
+        // the token price, so it stays a privileged write: the listing owner,
+        // an Originator, or a Regulator. Investor-owned demo listings could
+        // otherwise never be tokenised, since investors have no mint screen.
+        const minterRole = String(user.role || '').toLowerCase();
         if (prop.originatorId && prop.originatorId !== user.identityId
-            && String(user.role || '').toLowerCase() !== 'regulator') {
+            && minterRole !== 'regulator' && minterRole !== 'originator') {
           return res.status(403).json({
             error: 'ERR_NOT_ALLOWED',
-            message: `Only the listing owner (${prop.originatorId}) or a Regulator can mint this listing.`,
+            message: `Only the listing owner (${prop.originatorId}), an Originator or a Regulator can mint this listing.`,
           });
         }
         if (prop.registrarValidationStatus !== 'VALIDATED') {
@@ -5942,6 +5943,7 @@ export default async function handler(req, res) {
         knownGaps: [
           'KYC verification is simulated. A new account starts UNVERIFIED and the gate refuses it, but the step that clears it checks no document.',
           'Any signed-in person can act as one of the five demo roles, including the regulator, because walking through the market from each side is the point of the demo. It needs a verified session and is limited to those five named identities, never an arbitrary one, and an unidentified caller is still refused by the rail. Set DEMO_ROLE_SWITCH=false to close it.',
+          'Tokenising a listing is allowed for its owner, for anyone acting as Originator, and for a Regulator. Several demo listings belong to investor identities, which have no minting screen, so an owner-only rule left them impossible to tokenise from any role. While the demo role switcher is open, acting as Originator is a costume rather than a credential, and this is the write that sets token supply and therefore token price.',
           'The rail is a single-writer design, so there is no MVCC read-write conflict handling as a real Fabric network would need.',
           'Rail state is in-memory without DATABASE_URL.',
         ],

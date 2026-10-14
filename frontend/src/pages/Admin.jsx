@@ -183,7 +183,7 @@ export default function Admin({ user }) {
       return
     }
     if (!canMintThis) {
-      setResult(`This listing belongs to ${ownerId}. Switch to that identity, or to Regulator, to create its tokens.`)
+      setResult(`This listing belongs to ${ownerId}. Switch to Originator or Regulator to create its tokens.`)
       return
     }
     
@@ -205,7 +205,7 @@ export default function Admin({ user }) {
     }
   }
 
-  const canMintThis = !ownerId || ownerId === user?.identityId || (user?.role || '') === 'Regulator'
+  const canMintThis = !ownerId || ownerId === user?.identityId || ['Originator', 'Regulator'].includes(user?.role || '')
   const mintable = validationStatus === 'VALIDATED' && canMintThis
 
   const tokenPrice = form.valuationINR ? Math.floor(parseInt(form.valuationINR) / 10000) : 0
@@ -474,7 +474,7 @@ export default function Admin({ user }) {
                 ? '✓ Create Tokens'
                 : validationStatus !== 'VALIDATED'
                   ? `Need Verified Status (${validationStatus || 'none'})`
-                  : `Only ${ownerId} can create these tokens`}
+                  : 'Switch to Originator or Regulator to create tokens'}
             </button>
 
             {validationStatus !== 'VALIDATED' && lastId && (
@@ -486,9 +486,10 @@ export default function Admin({ user }) {
             {validationStatus === 'VALIDATED' && !canMintThis && lastId && (
               <div style={{ fontSize: 11.5, color: '#92400E', marginTop: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6 }}>
                 This listing was created by <strong>{ownerId}</strong>, and you are signed in as{' '}
-                <strong>{user?.identityId || 'unknown'}</strong>. Minting sets the supply, which sets the token
-                price, so only the owner or a Regulator may do it. Switch role to <strong>{ownerId}</strong> or to
-                a Regulator and the button turns on.
+                <strong>{user?.identityId || 'unknown'}</strong> ({user?.role || 'unknown'}). Minting sets the
+                supply, which sets the token price, so it is kept to the listing owner, an Originator or a
+                Regulator. Switch role to <strong>Originator</strong> or <strong>Regulator</strong> and the button
+                turns on.
               </div>
             )}
           </div>

@@ -1210,13 +1210,17 @@ app.post('/api/properties/:id/mint', authMiddleware, async (req, res) => {
   const prop = properties[req.params.id];
   if (!prop) return res.status(404).json({ error: 'ERR_ASSET_NOT_FOUND' });
   // Minting sets the entire supply, and supply divided into the valuation is
-  // the token price. Validate, freeze, delete, yield and governance were all
-  // owner-checked; this one, the most consequential write of the lot, was
-  // not — any signed-in user could tokenise someone else's listing.
-  if (prop.originatorId !== req.user.identityId && String(req.user.role || '').toLowerCase() !== 'regulator') {
+  // the token price, so it stays a privileged write. Who may do it: the
+  // listing owner, anyone acting as Originator, or a Regulator. Investor was
+  // the owner of several demo listings and investors have no minting screen,
+  // which left those listings impossible to tokenise from any role. The
+  // trade-off is deliberate and recorded on /trust: while the demo role
+  // switcher is open, "acting as Originator" is a costume, not a credential.
+  const minterRole = String(req.user.role || '').toLowerCase();
+  if (prop.originatorId !== req.user.identityId && minterRole !== 'regulator' && minterRole !== 'originator') {
     return res.status(403).json({
       error: 'ERR_NOT_ALLOWED',
-      message: `Only the listing owner (${prop.originatorId}) or a Regulator can mint this listing.`,
+      message: `Only the listing owner (${prop.originatorId}), an Originator or a Regulator can mint this listing.`,
     });
   }
   if (prop.registrarValidationStatus !== 'VALIDATED') return res.status(400).json({ error: 'ERR_NOT_VALIDATED' });
