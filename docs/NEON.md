@@ -64,7 +64,8 @@ DATABASE_URL='postgresql://...sslmode=require' node scripts/neon-check.mjs
 ```
 
 It is read-only. It lists every table the project writes, says whether it
-exists, counts the rows, and checks the chain for gaps in block height. Run it
+exists, counts the rows, checks the chain for gaps in block height, and shows
+any outbox rows the relay keeps failing to deliver, with the last error. Run it
 once with the rail's string and once with the app's: if both report tables,
 both services are writing to the same database, which is the thing people
 usually get wrong.

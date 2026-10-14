@@ -109,6 +109,27 @@ try {
       if (gaps) console.log('  A gap means blocks were deleted. The rail verifies linkage at boot and will refuse to extend a broken chain.')
     }
   } catch { /* table absent, already reported above */ }
+  // Rows the relay could not deliver. They are harmless to settlement, but a
+  // row stuck for days means a consumer is failing every attempt and nobody
+  // has looked. last_error says which one.
+  try {
+    const stuck = await client.query(`
+      SELECT topic, attempts, left(coalesce(last_error, ''), 120) AS err,
+             count(*)::int AS rows,
+             round(extract(epoch from now() - min(created_at)) / 3600)::int AS oldest_hours
+        FROM umi_outbox
+       WHERE delivered_at IS NULL AND attempts > 0
+    GROUP BY topic, attempts, left(coalesce(last_error, ''), 120)
+    ORDER BY oldest_hours DESC`)
+    if (stuck.rowCount) {
+      console.log('\nOutbox rows that keep failing:')
+      for (const r of stuck.rows) {
+        console.log(`  ${r.rows} row(s) on ${r.topic}, ${r.attempts} attempts, oldest ${r.oldest_hours}h`)
+        if (r.err) console.log(`    last error: ${r.err}`)
+      }
+      console.log('  Nothing here blocks settlement. The block is already committed; this is its follow-up.')
+    }
+  } catch { /* table absent or an older schema */ }
 } catch (e) {
   console.error(`\nCould not connect: ${e.message}`)
   console.error('Check the string is the POOLED Neon connection string and still ends with ?sslmode=require.')
