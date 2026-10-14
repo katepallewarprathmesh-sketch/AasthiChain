@@ -237,7 +237,7 @@ The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reco
 ## Testing
 
 ```bash
-npm test                  # regression.sh: 104 checks across 59 suites (needs both servers up)
+npm test                  # regression.sh: 120 checks across 75 suites (needs both servers up)
 make umi-test             # go vet + go test -race ./... in the settlement core
 cd frontend && npm run smoke
 ```
@@ -280,6 +280,19 @@ healthy.
 **Earn rent, split fairly.** Rent and coupons are paid straight into holders' wallets. The split can
 follow a snapshot of who holds what today, or **how long each holder actually held**, so someone who
 bought yesterday does not collect a full quarter's rent.
+
+**Know the address is a real one.** When a property is listed, its pincode is checked against the
+national postal directory and the answer is kept with the listing: confirmed, in a different place
+from the one claimed, or not a pincode anybody posts to. The check is a courtesy and not a
+gatekeeper, so an unreachable directory records that nothing was checked rather than inventing a
+pass, and it never pretends to be proof of ownership. This is one of the few boundaries the platform
+declares as genuinely live.
+
+**Withdraw a listing and have it stay withdrawn.** A withdrawal is recorded against the property
+rather than quietly dropped, so it survives a restart and holds across every view, and asking twice
+is not an error. Anyone still holding tokens is bought out at the listed price first: the tokens
+return to the owner and the payout is written to the ledger, because taking a listing off the market
+must not strand the people who funded it.
 
 **See the whole history.** Ownership is a journal of changes, not just a balance, so the register can
 be replayed for any window.
@@ -361,6 +374,10 @@ nothing about who else was involved.
 **A pause means paused.** A supervisor's halt is written down before the answer comes back, so it
 survives a restart and applies to every route that could move those tokens. A longer way round is
 not a way round. The same authority can lift it; both halt and lift are permanent record.
+
+**Withdrawal does not strand a holder.** A listing cannot leave the market while someone still holds
+it without that holder being bought out in the same step, and both the withdrawal and the payout are
+permanent record.
 
 **Nothing reaches the record around the rules.** Every ownership change passes the same approvals
 whichever way it is attempted.
