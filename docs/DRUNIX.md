@@ -466,7 +466,15 @@ because the output contains `Org1MSP`. Rename the orgs and the digit vanishes
 from the output, so the check can never pass.
 
 `scripts/drunix-business-msps.sh` changes that `shift 1` to `shift 2`, backs
-the file up like the rest, and restores it on `--revert`. The bug is upstream
+the file up like the rest, and restores it on `--revert`. If the orgs are
+already renamed and the network is up, apply just this part:
+
+```bash
+bash scripts/drunix-business-msps.sh --scripts-only
+```
+
+That skips the guard, because `ccutils.sh` is read afresh on every invocation
+and changing it does not touch the channel. The bug is upstream
 and is latent in the stock network too: a check for an org without a digit in
 its name would fail there as well.
 

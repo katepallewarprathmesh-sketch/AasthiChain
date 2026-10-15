@@ -34,16 +34,41 @@ TN="$NET/test-network"
 ORG1_MSP="${DRUNIX_ORG1_MSP:-OriginatorMSP}"
 ORG2_MSP="${DRUNIX_ORG2_MSP:-RegistrarMSP}"
 REVERT=false
-[ "${1:-}" = "--revert" ] && REVERT=true
+SCRIPTS_ONLY=false
+case "${1:-}" in
+  --revert) REVERT=true ;;
+  # The ccutils.sh fix is a helper-script change that the network reads afresh
+  # on every invocation, so it is safe with the network up. Renaming the orgs
+  # is not. This applies only the safe part.
+  --scripts-only) SCRIPTS_ONLY=true ;;
+esac
 
 say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+
+# checkCommitReadiness in ccutils.sh reads ORG from $1 and PEER from $2 and
+# then shifts by one, so PEER stays in "$@" and is grepped for alongside the
+# real expectations. With the sample names that stray pattern is "1", which
+# matches "Org1MSP" in the output by accident and hides the bug. Rename the
+# orgs and the digit disappears, so every readiness check fails and a correct
+# deploy reports INVALID after every retry.
+fix_ccutils() {
+  local f="$1/scripts/ccutils.sh"
+  [ -f "$f" ] || return 0
+  if grep -q "^  shift 1$" "$f"; then
+    [ -f "$f.sample-msp" ] || cp "$f" "$f.sample-msp"
+    sed -i "0,/^  shift 1$/{s/^  shift 1$/  shift 2/}" "$f"
+    echo "    ccutils.sh: checkCommitReadiness no longer greps for the peer number"
+  else
+    echo "    ccutils.sh: already fixed"
+  fi
+}
 die() { printf '\n\033[1;31mSTOP: %s\033[0m\n' "$*" >&2; exit 1; }
 
 [ -d "$TN" ] || die "no test network at $TN. Run scripts/drunix-testnet.sh first, or set DRUNIX_NETWORK_DIR."
 
 # A rename under a running channel is unrecoverable, so refuse rather than
 # explain afterwards.
-if command -v docker >/dev/null 2>&1 && [ -n "$(docker ps -q -f name='^lp1.org1$' 2>/dev/null)" ]; then
+if ! $SCRIPTS_ONLY && command -v docker >/dev/null 2>&1 && [ -n "$(docker ps -q -f name='^lp1.org1$' 2>/dev/null)" ]; then
   die "the network is running. The MSP IDs are baked into the channel genesis block, so tear it down first:
    cd $TN && ./network.sh down"
 fi
@@ -76,6 +101,15 @@ if $REVERT; then
   exit 0
 fi
 
+if $SCRIPTS_ONLY; then
+  say "Applying the ccutils.sh fix only, leaving the MSP names alone"
+  fix_ccutils "$TN"
+  echo
+  echo "Safe with the network up. Re-run the deploy with a new version:"
+  echo "  ./network.sh deployCC -c mychannel -ccn aasthichain -ccp \$HOME/AasthiChain/chaincode -ccl go -ccs 1 -ccv 1.3 -r 15 -d 5"
+  exit 0
+fi
+
 say "Renaming Org1MSP to $ORG1_MSP and Org2MSP to $ORG2_MSP"
 for f in "${FILES[@]}"; do
   [ -f "$f" ] || { echo "    skipped $(basename "$f") (not in this version)"; continue; }
@@ -87,18 +121,7 @@ for f in "${FILES[@]}"; do
   echo "    $(basename "$f"): $before reference(s)"
 done
 
-# checkCommitReadiness in ccutils.sh reads ORG from $1 and PEER from $2 and
-# then shifts by one, so PEER stays in "$@" and is grepped for alongside the
-# real expectations. With the sample names that stray pattern is "1", which
-# matches "Org1MSP" in the output by accident and hides the bug. Rename the
-# orgs and the digit disappears, so every readiness check fails and a correct
-# deploy reports INVALID after every retry. Shift by two instead.
-CCU="$TN/scripts/ccutils.sh"
-if [ -f "$CCU" ] && grep -q "^  shift 1$" "$CCU"; then
-  [ -f "$CCU.sample-msp" ] || cp "$CCU" "$CCU.sample-msp"
-  sed -i "0,/^  shift 1$/{s/^  shift 1$/  shift 2/}" "$CCU"
-  echo "    ccutils.sh: checkCommitReadiness no longer greps for the peer number"
-fi
+fix_ccutils "$TN"
 
 # The connection profiles are generated during `network.sh up` from a shared
 # template that interpolates the org number, so they cannot be renamed ahead of
