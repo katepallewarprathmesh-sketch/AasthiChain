@@ -59,6 +59,7 @@ FILES=(
   "$TN/scripts/deployCCAAS.sh"
   "$TN/setOrgEnv.sh"
   "$TN/organizations/ccp-generate.sh"
+  "$TN/scripts/ccutils.sh"
 )
 
 if $REVERT; then
@@ -85,6 +86,19 @@ for f in "${FILES[@]}"; do
   sed -i "s/Org1MSP/$ORG1_MSP/g; s/Org2MSP/$ORG2_MSP/g" "$f"
   echo "    $(basename "$f"): $before reference(s)"
 done
+
+# checkCommitReadiness in ccutils.sh reads ORG from $1 and PEER from $2 and
+# then shifts by one, so PEER stays in "$@" and is grepped for alongside the
+# real expectations. With the sample names that stray pattern is "1", which
+# matches "Org1MSP" in the output by accident and hides the bug. Rename the
+# orgs and the digit disappears, so every readiness check fails and a correct
+# deploy reports INVALID after every retry. Shift by two instead.
+CCU="$TN/scripts/ccutils.sh"
+if [ -f "$CCU" ] && grep -q "^  shift 1$" "$CCU"; then
+  [ -f "$CCU.sample-msp" ] || cp "$CCU" "$CCU.sample-msp"
+  sed -i "0,/^  shift 1$/{s/^  shift 1$/  shift 2/}" "$CCU"
+  echo "    ccutils.sh: checkCommitReadiness no longer greps for the peer number"
+fi
 
 # The connection profiles are generated during `network.sh up` from a shared
 # template that interpolates the org number, so they cannot be renamed ahead of

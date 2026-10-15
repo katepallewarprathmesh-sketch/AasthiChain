@@ -436,6 +436,40 @@ A harmless `scripts/envVar.sh: line 99: [: too many arguments` appears on the
 already installed path. It comes from `verifyResult` being handed an empty
 status, it is upstream, and it stops nothing.
 
+### Correction 10: the readiness check greps for the peer number
+
+With the orgs renamed, every commit readiness check failed, fifteen times out
+of fifteen, while printing the approvals the step was waiting for:
+
+```
+{"approvals": {"OriginatorMSP": true, "RegistrarMSP": false}}
+After 15 attempts, Check commit readiness result on peer0.org1 is INVALID!
+```
+
+This is not timing, and correction 8 does not help it. `checkCommitReadiness`
+in `scripts/ccutils.sh` reads the org from `$1` and the peer from `$2`, then
+shifts by **one**:
+
+```bash
+ORG=$1
+PEER=$2
+shift 1
+...
+for var in "$@"; do
+  grep "$var" log.txt &>/dev/null || let rc=1
+done
+```
+
+The peer number is still in `"$@"`, so the loop greps for `1` as well as for
+the two real expectations. With the sample names that accidentally matches,
+because the output contains `Org1MSP`. Rename the orgs and the digit vanishes
+from the output, so the check can never pass.
+
+`scripts/drunix-business-msps.sh` changes that `shift 1` to `shift 2`, backs
+the file up like the rest, and restores it on `--revert`. The bug is upstream
+and is latent in the stock network too: a check for an org without a digit in
+its name would fail there as well.
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a
