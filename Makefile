@@ -1,4 +1,4 @@
-.PHONY: help dev stop test test-go test-all smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
+.PHONY: help dev stop test test-fresh test-go test-all smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
 
 # Default target: say what is available rather than doing something surprising.
 help:
@@ -7,6 +7,7 @@ help:
 	@echo "  make dev          install, build and start the whole stack (app :8080, rail :21100)"
 	@echo "  make stop         stop whatever 'make dev' started"
 	@echo "  make test         integration sweep against a running stack (regression.sh)"
+	@echo "  make test-fresh   restart the stack first, then the sweep (use for a repeat run)"
 	@echo "  make test-go      every Go module: gofmt, vet, race tests"
 	@echo "  make test-all     dev, then both of the above"
 	@echo "  make smoke        build the frontend and render every route"
@@ -37,6 +38,19 @@ stop:
 
 # Needs a running stack: start it with `make dev` first.
 test:
+	bash regression.sh
+
+# The suite is not idempotent across runs on one stack, and that is the fraud
+# engine doing its job: the demo payer's earlier payments are real history and
+# a repeat burst inside ten minutes is blocked. Restarting the processes is not
+# enough, because the dev store is the file-backed one under /tmp, so the
+# payments outlive the server. This clears that store too, which is the reset
+# procedure the docs describe, in one command.
+test-fresh:
+	bash scripts/dev-stack.sh --stop
+	rm -f /tmp/aasthi_*.json
+	bash scripts/devup.sh
+	bash scripts/dev-stack.sh --no-evm
 	bash regression.sh
 
 test-go:

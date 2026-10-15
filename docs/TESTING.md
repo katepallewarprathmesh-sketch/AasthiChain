@@ -8,7 +8,8 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  121 checks, 0 failed
+make test       # integration sweep:  123 checks, 0 failed
+make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
 make secret-scan
@@ -125,8 +126,11 @@ Two rules that matter more than style:
    confirm it fails for the right reason. A sabotage that does not compile proves nothing. Several
    assertions in this repository were found to be vacuous exactly this way.
 2. **Cold-start the stack before believing a single failure.** The sweep is not idempotent across
-   runs on one long-lived stack: state accumulates. Restart the app and the rail, clear
-   `/tmp/aasthi_*.json`, then re-run.
+   runs on one long-lived stack, and `make test-fresh` is that restart in one command. The usual
+   cause is the fraud engine rather than drift: the velocity rule counts the demo payer's payments
+   over ten minutes, every run uses the same demo identity, so a second run inside that window is
+   blocked on purpose and three suites fail with `FAILED_FRAUD_BLOCKED`. The sweep now says so when
+   it sees that status, instead of leaving the reader to conclude the repository is broken.
 
 ---
 

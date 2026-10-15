@@ -147,8 +147,22 @@ for f in /home/user/repo/tests/*.test.mjs; do
   else
     FAIL=$((FAIL+1)); printf "  FAIL %-52s %s\n" "$name" "${tally:-exit $rc}"
     printf '%s\n' "$out" | grep -E '^\s+FAIL' | head -5 | sed 's/^/       /'
+    case "$out" in *FRAUD_BLOCKED*) FRAUD_SEEN="yes FRAUD_BLOCKED";; esac
   fi
 done
+
+# A second run inside ten minutes trips the fraud engine's velocity rule. The
+# payments the previous run made are real history, the demo payer is the same
+# identity every time, and the engine is right to block the burst. That is the
+# product working, but it reads as a broken repository to anyone running the
+# suite twice. Say so, rather than leaving them to guess.
+if [ "$FAIL" -gt 0 ] && printf '%s' "$FRAUD_SEEN" | grep -q FRAUD_BLOCKED; then
+  echo
+  echo "  NOTE: FAILED_FRAUD_BLOCKED appeared above. The velocity rule counts the"
+  echo "        demo payer's payments over ten minutes, so a repeat run on the same"
+  echo "        stack is blocked on purpose. Re-run on a fresh stack:"
+  echo "            make test-fresh"
+fi
 
 # Never pkill — only the instance this script started.
 if [ -n "$PAYU_PID" ]; then kill "$PAYU_PID" 2>/dev/null; wait "$PAYU_PID" 2>/dev/null; fi
