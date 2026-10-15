@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # End-to-end regression sweep: existing AasthiChain surface + new UMI rail.
+# Resolve the repository from this script's own location. These paths used to be
+# hardcoded to one developer's checkout, which made the sweep silently skip every
+# node suite on anyone else's machine and report a pass count of 44 instead of 123.
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API=http://localhost:8080
 GW=http://localhost:21100
 PASS=0; FAIL=0
@@ -121,7 +125,7 @@ if command -v node >/dev/null 2>&1; then
   NPCI_MODE=payu PAYU_MERCHANT_KEY=testkey PAYU_SALT=testsalt \
   PAYU_BASE_URL=https://test.payu.in/_payment \
   ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=$GW PORT=8099 \
-  node /home/user/repo/mock-api-server.js >/tmp/payu-rig.log 2>&1 &
+  node "$REPO/mock-api-server.js" >/tmp/payu-rig.log 2>&1 &
   PAYU_PID=$!
   for _ in $(seq 1 40); do
     curl -s -o /dev/null http://localhost:8099/api/health && break
@@ -131,16 +135,20 @@ fi
 
 echo
 echo "== secrets =="
-SCAN=$(bash /home/user/repo/scripts/secret-scan.sh 2>&1); SCANRC=$?
+SCAN=$(bash "$REPO/scripts/secret-scan.sh" 2>&1); SCANRC=$?
 printf '%s\n' "$SCAN"
 chk "no credentials in tracked files" 0 "$SCANRC"
 
 echo
 echo "== node suites (tests/*.test.mjs) =="
-for f in /home/user/repo/tests/*.test.mjs; do
+SUITES=("$REPO"/tests/*.test.mjs)
+if [ ! -e "${SUITES[0]}" ]; then
+  FAIL=$((FAIL+1)); echo "  FAIL no suites found under $REPO/tests"
+fi
+for f in "${SUITES[@]}"; do
   [ -e "$f" ] || continue
   name=$(basename "$f" .test.mjs)
-  out=$(cd /home/user/repo && node "$f" 2>&1); rc=$?
+  out=$(cd "$REPO" && node "$f" 2>&1); rc=$?
   tally=$(printf '%s' "$out" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1)
   if [ $rc -eq 0 ]; then
     PASS=$((PASS+1)); printf "  ok   %-52s %s\n" "$name" "$tally"

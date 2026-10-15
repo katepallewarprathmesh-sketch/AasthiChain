@@ -20,6 +20,11 @@
 // Reachability was not enough: /api/umi/metrics existed on both servers and
 // still answered wrongly on one. Compare what each actually returns.
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+// Resolve the repository from this file, not from one developer's home
+// directory: a hardcoded path makes the script unrunnable for everyone else.
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Express guards most routes with authMiddleware; without a bearer it answers
 // {error:...} and every route looks like a mismatch. Mint the demo token the
 // app itself issues.
@@ -28,9 +33,9 @@ const TOKEN = Buffer.from(JSON.stringify({
 })).toString('base64');
 const AUTH = { 'X-Fabric-Identity':'registrar1', Authorization: 'Bearer ' + TOKEN };
 process.env.UMI_GATEWAY_URL = 'http://localhost:21100';
-const { default: serverless } = await import('/home/user/repo/frontend/api/index.js');
+const { default: serverless } = await import(pathToFileURL(path.join(REPO, 'frontend/api/index.js')).href);
 
-const src = fs.readFileSync('/home/user/repo/mock-api-server.js', 'utf8');
+const src = fs.readFileSync(path.join(REPO, 'mock-api-server.js'), 'utf8');
 const SAMPLE = {
   ':id':'PROP-GREEN-VALLEY-PUNE-001', ':assetId':'PROP-GREEN-VALLEY-PUNE-001',
   ':ownerId':'investor1', ':identityId':'investor1', ':participant':'investor1',
