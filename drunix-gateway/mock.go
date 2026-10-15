@@ -32,7 +32,7 @@ func NewMockLedger() *MockLedger {
 	return &MockLedger{
 		txs:       make(map[string]*TxRecord),
 		blockSeed: 1,
-		network:   "NPCI Drunix (Hyperledger Fabric fork) — mock network, dev mode",
+		network:   "NPCI Drunix (Hyperledger Fabric fork): mock network, dev mode",
 	}
 }
 

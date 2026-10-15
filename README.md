@@ -244,7 +244,7 @@ The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reco
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # regression.sh: 121 checks across 76 suite files
+make test         # regression.sh: 124 checks across 79 suite files
 make test-go      # gofmt, go vet and race tests across all four Go modules
 make smoke        # every frontend route renders real content
 make secret-scan  # refuse tracked files that look like live credentials
@@ -263,6 +263,10 @@ DEMO_AUTH=true ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=http://localhost:21100
 
 A mass failure is almost always a dead rail rather than a bug, so check `curl localhost:21100/health`
 first. CI runs each Go module separately, builds the frontend, and enforces `gofmt`.
+
+Some classes of defect no test suite here can reach. Three were found only by deploying the
+chaincode to a real two-org network, and each now has a regression test:
+[`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md) A5 and A6.
 
 ---
 
@@ -357,6 +361,45 @@ an exact figure, so no rupee is lost to arithmetic. The round-trip runs against 
 test environment, so signed requests and callbacks are validated by the provider rather than graded
 by us. Each payment is risk-screened before approval, and the screen explains its reasoning rather
 than returning a score. No real money moves.
+
+---
+
+## Verified on a real Drunix network
+
+The settlement core runs in simulation by default, and the hosted demo is simulating. The
+chaincode, however, has been deployed to a real NPCI Drunix network and written to.
+
+On 15 October 2026, on a two-organisation Drunix test network with the MSPs renamed to
+`OriginatorMSP` and `RegistrarMSP`, single-node raft ordering and a YugabyteDB state database,
+`PropertyContract:RegisterProperty` was submitted through the gateway in `-tags real` mode:
+
+```json
+{"txId":"49b171c1ee6474482149a9c16e7a683bf956e62670bbd983aeb373cd5b32d4bd",
+ "status":"COMMITTED","blockNumber":7,"channel":"mychannel"}
+```
+
+Confirmed from the committing peer, which runs none of this repository's code:
+
+```
+Blockchain info: {"height":8,
+ "currentBlockHash":"8NFdeWCdvNac4NWyda+KprMaS5WZQzQHPkTCCe5BQnU="}
+```
+
+Getting there took three real fixes, all of them invisible to a single-peer test:
+
+| Defect | Symptom on a real network | Fix |
+|---|---|---|
+| `uuid.New()` and `time.Now()` in write paths | `ProposalResponsePayloads do not match`, nothing could ever commit | ids from the transaction id, times from the proposal timestamp (`chaincode/determinism.go`) |
+| Bare-string index values | committing peers panicked mid-block and panicked again replaying it, taking the channel with them | index entries written as JSON (`chaincode/statevalue.go`) |
+| `shift 1` in the network's `ccutils.sh` after an MSP rename | `checkCommitReadiness` never saw the second org approve | `scripts/drunix-business-msps.sh --scripts-only` |
+
+Both chaincode fixes are guarded by tests that read the source, because running the chaincode once
+cannot detect either problem. The runbook, including every failed attempt, is in
+[`docs/DRUNIX.md`](docs/DRUNIX.md).
+
+What this does and does not claim: the chaincode and the gateway work against Drunix. The hosted
+demo is not connected to a Drunix network, `/trust` says so, and nothing here is an NPCI
+endorsement or a pilot participation.
 
 ---
 
