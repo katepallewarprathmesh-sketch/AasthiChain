@@ -1,7 +1,7 @@
 // No tracked script may hardcode one developer's checkout path.
 //
-// Regression test for a real failure. regression.sh pointed at
-// /home/user/repo for the secret scan, the PayU rig and the node suite glob.
+// Regression test for a real failure. regression.sh pointed at one
+// contributor's own clone for the secret scan, the PayU rig and the suite glob.
 // On a fresh clone at any other path the glob matched nothing, the loop
 // skipped silently, and the sweep printed "44 passed" instead of running all
 // 123 checks. It did not look like a broken suite, it looked like a smaller
@@ -45,7 +45,10 @@ if (tracked.length === 0) {
 }
 
 const CODE = /\.(sh|mjs|js|cjs|go|yml|yaml)$|^Makefile$|\/Makefile$/
-const candidates = tracked.filter(f => CODE.test(f) && !f.startsWith('docs/'))
+// This file quotes the offending shape in its own assertions, so it is the one
+// file that cannot be scanned for it.
+const SELF = 'tests/portablepaths.test.mjs'
+const candidates = tracked.filter(f => CODE.test(f) && !f.startsWith('docs/') && f !== SELF)
 
 // A checkout path: a home directory followed by a directory segment, as
 // opposed to a dotfile probe such as /home/user/.goenv.
