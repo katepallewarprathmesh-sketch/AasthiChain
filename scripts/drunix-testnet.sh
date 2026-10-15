@@ -137,8 +137,19 @@ say "Creating channel $CHANNEL"
 say "Vendoring the chaincode dependencies"
 ( cd "$REPO/chaincode" && go mod vendor )
 
+# Correction 8: the commit readiness poll gives up too early. It retries
+# MAX_RETRY times with CLI_DELAY seconds between tries, 5 and 3 by default,
+# which is 12 seconds of patience. Drunix keeps channel state in YugabyteDB
+# rather than LevelDB, and on a laptop an approval can take longer than that
+# to be visible, at which point deployCC reports INVALID for a definition
+# that was approved correctly. Ask for more patience, not for a different
+# answer.
+CC_RETRY="${DRUNIX_CC_RETRY:-15}"
+CC_DELAY="${DRUNIX_CC_DELAY:-5}"
+
 say "Deploying $CC_NAME from $REPO/chaincode"
-./network.sh deployCC -c "$CHANNEL" -ccn "$CC_NAME" -ccp "$REPO/chaincode" -ccl go
+./network.sh deployCC -c "$CHANNEL" -ccn "$CC_NAME" -ccp "$REPO/chaincode" -ccl go \
+  -r "$CC_RETRY" -d "$CC_DELAY"
 
 cat <<DONE
 
@@ -152,8 +163,8 @@ Next, in another shell, point the settlement rail at the peer:
   CRYPTO=$NET/test-network/organizations/peerOrganizations/org1.example.com
   DRUNIX_MODE=real \\
   DRUNIX_PEER_ENDPOINT=dns:///localhost:7051 \\
-  DRUNIX_MSP_ID=Org1MSP \\
-  DRUNIX_CERT_FILE=\$CRYPTO/users/User1@org1.example.com/msp/signcerts/cert.pem \\
+  DRUNIX_MSP_ID=\${DRUNIX_MSP_ID:-Org1MSP} \\
+  DRUNIX_CERT_FILE=\$CRYPTO/users/User1@org1.example.com/msp/signcerts/User1@org1.example.com-cert.pem \\
   DRUNIX_KEY_FILE=\$CRYPTO/users/User1@org1.example.com/msp/keystore \\
   DRUNIX_TLS_CERT=\$CRYPTO/peers/peer0.org1.example.com/tls/ca.crt \\
   DRUNIX_TLS_SERVER_NAME=peer0.org1.example.com \\
@@ -167,8 +178,14 @@ Then prove it from outside the process:
 
   curl -s -X POST localhost:21100/drunix/submit \\
     -H 'Content-Type: application/json' \\
-    -H 'X-Fabric-Identity: originator1' -H 'X-Identity-Role: Originator' \\
-    -d '{"chaincode":"$CC_NAME","function":"RegisterProperty","args":["PROP-DRUNIX-001","Demo flat","Maharashtra","Pune","411045","5000000","0000000000000000000000000000000000000000000000000000000000000000"],"creatorMsp":"Org1MSP"}'
+    -H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator' \\
+    -d '{"chaincode":"$CC_NAME","function":"PropertyContract:RegisterProperty","args":["Demo flat","Maharashtra","Pune","411045","5000000","0000000000000000000000000000000000000000000000000000000000000000"],"creatorMsp":"Org1MSP"}'
+
+Two things that trip people up here. /drunix/submit writes straight to the
+ledger, so it is restricted to a Regulator or Admin caller. And the chaincode
+authorises on the org name in the certificate: the sample network signs as
+Org1MSP, while RegisterProperty requires OriginatorMSP, so the write above is
+refused until you run scripts/drunix-business-msps.sh and rebuild the channel.
 
 Keep that last response. The transaction id and block number in it come from
 the peer, and nothing in this repository can produce them.
