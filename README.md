@@ -21,7 +21,7 @@ A premium flat costs ₹75 lakh and you cannot buy 0.1% of it. AasthiChain conve
 property into a fixed number of tokens (a ₹75 L villa becomes **15,000 tokens at ₹500**) and settles
 the money leg and the ownership leg as one atomic operation. Both move, or neither does.
 
-**Stack:** Go settlement core (`drunix-gateway`) · Node/Express + Vercel serverless API edge · React 19 + Vite frontend · Hyperledger Fabric chaincode.
+**Stack:** a Go settlement core, a Node API edge, a React frontend, and Hyperledger Fabric chaincode.
 
 > **Honest scoping.** The settlement rail is a faithful **simulation**. There is no public UMI API and
 > no live NPCI credential outside a bank partnership; real access is the SEBI Regulatory Sandbox.
@@ -29,14 +29,15 @@ the money leg and the ownership leg as one atomic operation. Both move, or neith
 > ledger, the atomicity, the verification rules and the guardrails. The exact line between the two
 > is itemised at the end of this file.
 
-**Contents**: [Quick start](#quick-start) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Pages](#pages) · [Configuration](#configuration) · [API](#api) · [Testing](#testing) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [Guarantees](#guarantees) · [Contributing](CONTRIBUTING.md) · [Testing](docs/TESTING.md) · [Audit](docs/REPOSITORY_AUDIT.md)
+**Contents**: [Quick start](#quick-start) · [How it fits together](#how-it-fits-together) · [Pages](#pages) · [What you can do](#what-you-can-do) · [Settlement rails](#settlement-rails) · [On a real Drunix network](#on-a-real-drunix-network) · [Guarantees](#guarantees) · [Testing](#testing)
+
+Deeper reading: [Architecture and internals](docs/ARCHITECTURE.md) · [Testing](docs/TESTING.md) · [Audit](docs/REPOSITORY_AUDIT.md) · [Contributing](CONTRIBUTING.md)
 
 ---
 
 ## Quick start
 
-**Prerequisites:** Go 1.25+, Node 20+, and `python3` (the regression script uses it to parse JSON).
-Docker is needed only for the optional Fabric sandbox, not for the demo.
+**Prerequisites:** Go 1.25+, Node 20+, and `python3`. No credentials, no Docker, no database.
 
 ```bash
 git clone https://github.com/katepallewarprathmesh-sketch/AasthiChain.git
@@ -44,42 +45,24 @@ cd AasthiChain
 make dev
 ```
 
-That installs dependencies, builds the frontend, builds and starts the Go settlement rail on
-`:21100` (seeding demo wallets, ISINs and positions on first boot), and starts the app on `:8080`.
-`make stop` stops exactly what it started, and `make help` lists everything else.
+The app comes up on **http://localhost:8080**, the settlement core on `:21100`. Sign in as
+`investor1` and buy a fraction of something. `make stop` stops what it started, `make help` lists
+the rest.
 
-Prefer to drive it by hand, or on a machine without `make`:
-
-```bash
-npm install
-(cd frontend && npm install && npm run build)
-cd drunix-gateway && go run ./cmd/gateway            # terminal 1, :21100
-DEMO_AUTH=true UMI_GATEWAY_URL=http://localhost:21100 node server.js   # terminal 2, :8080
-```
-
-Configuration is optional: copy `.env.example` to `.env` if you want to change anything. The
-defaults run the full demo with no credentials of any kind.
-
-Open **http://localhost:8080** and sign in as `investor1` (role `Investor`). Other demo identities:
-`originator1` (Originator), `registrar1` (Registrar), `investor2`, `regulator1` (Regulator).
-
-Verify both halves are up:
+Other demo identities: `originator1`, `registrar1`, `regulator1`, `investor2`.
 
 ```bash
-curl localhost:21100/health          # rail: build, features, channel
-curl localhost:8080/api/health       # app
-curl localhost:8080/api/umi/config   # app → rail round-trip; lists UMI_* block types
+curl localhost:8080/api/health       # the app
+curl localhost:21100/health          # the settlement core
 ```
 
-> `UMI_GATEWAY_URL` is **required**, not optional. Without it the rail surface answers `503
-> ERR_UMI_RAIL_UNAVAILABLE` even though the rail is running locally.
-
-For frontend work, `cd frontend && npm run dev` gives Vite with hot reload on `:5173`, proxying the
-API to `:8080`. `make umi` and `make frontend` wrap the two long commands above.
+Running it another way, every configuration switch, and what each one does when absent:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Deployment topology and failure modes:
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ---
 
-## Architecture
+## How it fits together
 
 <div align="center">
 
@@ -89,81 +72,23 @@ API to `:8080`. `make umi` and `make frontend` wrap the two long commands above.
 
 <sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg). Edit the SVG, then re-export the PNG (command in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).</sub>
 
-### The design rule
+Four kinds of people use it: owners list property, registrars validate title, investors buy and
+trade fractions, regulators supervise. Behind them sit three things that matter.
 
-Every rule about money lives in one place: the settlement core, beside the ledger it protects. The
-layers in front of it carry requests and identity and nothing else. **If a rule about money can be
-found anywhere but the core, that is a bug.**
+**An access layer** decides who is calling and what they may touch, and keeps the property
+register. **A settlement core** holds the cash leg and the ownership leg and moves them as one.
+**An append-only record** sits underneath, and every other part answers to it.
 
-Concretely: the settlement core is Go, the web app and its API edge are JavaScript, and the edge
-forwards settlement calls without deciding anything about them. The edge owns the property register,
-KYC and the UPI payment lifecycle; it does not own balances, positions or the chain.
-
-### The five layers
-
-| Layer | Responsibility | Lives in |
-|---|---|---|
-| **Experience** | what each role can see and do, and the public pages anyone may read | `frontend/src` |
-| **Access** | establishes who is calling, decides what that caller may touch, and keeps the listing register | `frontend/api/index.js`, `server.js` |
-| **Settlement** | holds the cash leg and the ownership leg, and moves them as one | `drunix-gateway/umi.go` |
-| **Work** | escrows a fee against a deliverable, releases it only against anchored evidence | `drunix-gateway/work*.go` |
-| **Record** | the append-only history every other layer answers to | `drunix-gateway/chain.go` |
+One rule shapes the whole codebase: every rule about money lives in the settlement core, beside the
+ledger it protects. Everything in front of it carries requests and identity and nothing else. A
+money rule found anywhere else is a bug, and a pull request that adds one will be asked to move it.
 
 The experience and the settlement core deploy independently, so either can be replaced, or fail,
-without the other. When the core cannot be reached the app reports *unknown*; it never reports a
+without the other. When the core cannot be reached the app reports *unknown*. It never reports a
 settlement surface as healthy because it could not ask.
 
-### Authorisation
-
-Entitlement is decided in front of the router rather than route by route, so a new surface is covered
-the day it ships:
-
-- an unidentified caller is refused with 401, a stranger with 403;
-- a supervisor (regulator or admin) may act for someone else where that is the role's job;
-- attribution always comes from the authenticated caller, never from a field in the request body;
-- reads are scoped as tightly as writes, including diagnostics, receipts and reconciliation views.
-
-Each rule ships with a suite asserting the refused action changed no state.
-
-### The record
-
-Blocks are hash-linked and written to durable storage **before** in-memory state is updated, so
-nothing can be true in the app and missing from the history. A block's transactions are frozen at
-commit: contents can never drift from the merkle root they were hashed with, in memory or after a
-reload.
-
-If a stored chain fails verification on restore, the rail seals itself and serves read-only rather
-than extending history it cannot vouch for. The way back is a supervisor-only repair that records, on
-the chain, every height and hash it dropped and who authorised it.
-
-### Two API implementations
-
-`frontend/api/index.js` is the serverless handler production serves. `mock-api-server.js` is an
-Express rig used for local payment testing and as a fixture by several suites. **They implement the
-same surface and must be patched together**. A fix applied to one is live in exactly one
-environment.
-
----
-
-## Repository layout
-
-| Path | What it is |
-|---|---|
-| `drunix-gateway/` | **Go settlement core.** UMI/ASI rail, e₹-W wallets, DvP, work escrow, the chain. Port 21100. |
-| `frontend/src/` | React 19 + Vite app: marketplace, ledger explorer, dashboards, calculators, explainers. |
-| `frontend/api/index.js` | Vercel serverless API edge; property register, auth, KYC, payments, rail proxy. |
-| `server.js` | Local/Render Node server: same surface as the serverless edge, plus SSE and static `dist`. |
-| `mock-api-server.js` | Express rig for PayU round-trip testing; a fixture for several suites. |
-| `chaincode/` | Hyperledger Fabric chaincode (Go) for the Fabric deployment path. |
-| `api-gateway/`, `payment-gateway/` | Go services for the Fabric path and the payment leg. |
-| `contracts/` | Solidity escrow experiment (public-chain, simulated). |
-| `tests/` | 59 `.mjs` end-to-end suites, driven by `regression.sh`. |
-| `scripts/`, `Makefile`, `regression.sh` | Dev bootstrap, common tasks, the full sweep. |
-| `docs/` | [Deployment](docs/DEPLOYMENT.md) · [Work orders](docs/WORK_ORDERS.md) · [Demo walkthrough](docs/DEMO.md) |
-| `SECURITY.md` | What is in scope, what is openly simulated, and how to report a flaw privately. |
-
-This is **four independent Go modules** plus a Vite frontend and a Node API, so a root-level
-`go build ./...` cannot work. CI builds each module from its own directory.
+Where each rule lives, the repository layout and the full configuration table:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
@@ -186,87 +111,6 @@ welcome on the public ones.
 | `/learn` · `/tools` | index pages, plus three explainers and six calculators beneath them |
 | `/trust` | every external boundary, and whether it is live or modelled locally |
 | `/login` · `/about` · `/support` · `/privacy` · `/terms` | sign-in and the ordinary pages a real platform has |
-
----
-
-## Configuration
-
-Everything has a safe default; nothing below is required to boot except where marked.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `UMI_GATEWAY_URL` | *(none)* | **Required.** Where the app finds the Go rail. |
-| `DATABASE_URL` | *(none)* | Postgres (the project uses Neon) for the ledger and rail state. Absent, both run in memory and reset on restart. Setup: [`docs/NEON.md`](docs/NEON.md). |
-| `DEMO_AUTH` | off | Enables `/api/auth/login` with the demo identities. Without it, login is 404. |
-| `PORT` | `8080` / `21100` | App and rail ports. |
-| `ADMIN_DASHBOARD_KEY` | *(none)* | Unlocks admin insights and the role switcher. Needed by the full suite. |
-| `UMI_PROXY_SECRET` | *(none)* | Shared secret binding identity headers to a trusted proxy. **Set on both hosts or neither.** |
-| `GROQ_API_KEY` | *(none)* | Enables the assistant. Absent, it is cleanly absent, not a button that fails. |
-| `UMI_SEED_DEMO` | on | Seeds demo wallets/ISINs on an empty rail. Set `false` for a bare ledger. |
-| `WORK_PROVIDER_URL` / `_KEY` | *(none)* | Talent provider adapter. Absent, work orders are marked `simulation`. |
-| `UMI_SEED_CARBON_ASSET` | `CARB-NSK-AGROFOREST-2024` | Asset id for the seeded carbon credits. Registered as asset class `CARBON`; the registry behind it is simulated. |
-| `EVENT_STREAM_BROKERS` | *(none)* | Kafka-protocol brokers for the settlement event stream (Kafka, Redpanda, WarpStream, MSK, Confluent). Absent, events are derived and counted locally. |
-| `EVENT_STREAM_USERNAME` / `_PASSWORD` / `_TLS` | *(none)* | SASL PLAIN credentials and TLS for a hosted broker. |
-
-Full table, deployment topology and failure modes: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-Pointing the stack at your own Neon database, and exactly which data does and does not land there: [`docs/NEON.md`](docs/NEON.md).
-
----
-
-## API
-
-Public reads need no session. Anything touching money or a holding needs a bearer token.
-
-```bash
-TOKEN=$(curl -s -X POST localhost:8080/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"identityId":"investor1","role":"Investor"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
-
-curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/properties
-```
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /api/properties` · `/:id` | the register; `POST` to list, `/validate` as registrar, `/mint` as owner |
-| `POST /api/transfers` | move tokens between holders |
-| `GET /api/chain` · `/api/chain/verify` | the ledger, and whether it still replays cleanly |
-| `GET /api/umi/config` | rail capabilities and the `UMI_*` block types it commits |
-| `GET /api/umi/wallets` · `POST /api/umi/dvp` | e₹-W balances; atomic delivery-versus-payment |
-| `POST /api/npci/collect` → `/approve` → `/release` | the UPI payment lifecycle |
-| `POST /api/ai/chat` | the assistant: public listing data only, cannot act |
-
-The rail's own surface (`/umi/dvp`, `/umi/wallets`, `/umi/servicing`, `/umi/reconciliation`,
-`/umi/isin`, `/drunix/chain`) is reachable directly on `:21100` in development.
-
----
-
-## Testing
-
-```bash
-make dev          # the suites talk to a running stack, so start it first
-make test         # regression.sh: 124 checks across 79 suite files
-make test-go      # gofmt, go vet and race tests across all four Go modules
-make smoke        # every frontend route renders real content
-make secret-scan  # refuse tracked files that look like live credentials
-```
-
-What each command covers, what it needs, and what is deliberately not covered:
-[`docs/TESTING.md`](docs/TESTING.md). A verified list of the repository's current weak points:
-[`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
-
-The full sweep expects the app started with `ADMIN_DASHBOARD_KEY` set, and starts the PayU rig on
-`:8099` itself, so several suites fail standalone because they depend on it:
-
-```bash
-DEMO_AUTH=true ADMIN_DASHBOARD_KEY=devkey UMI_GATEWAY_URL=http://localhost:21100 node server.js
-```
-
-A mass failure is almost always a dead rail rather than a bug, so check `curl localhost:21100/health`
-first. CI runs each Go module separately, builds the frontend, and enforces `gofmt`.
-
-Some classes of defect no test suite here can reach. Three were found only by deploying the
-chaincode to a real two-org network, and each now has a regression test:
-[`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md) A5 and A6.
 
 ---
 
@@ -364,42 +208,33 @@ than returning a score. No real money moves.
 
 ---
 
-## Verified on a real Drunix network
+## On a real Drunix network
 
-The settlement core runs in simulation by default, and the hosted demo is simulating. The
-chaincode, however, has been deployed to a real NPCI Drunix network and written to.
+The settlement core runs in simulation by default, and the hosted demo is simulating. The chaincode,
+though, has been deployed to a real NPCI Drunix network, which is NPCI's Hyperledger Fabric fork,
+and written to.
 
-On 15 October 2026, on a two-organisation Drunix test network with the MSPs renamed to
-`OriginatorMSP` and `RegistrarMSP`, single-node raft ordering and a YugabyteDB state database,
-`PropertyContract:RegisterProperty` was submitted through the gateway in `-tags real` mode:
+On 15 October 2026, on a two-organisation Drunix test network, a property registration submitted
+through the gateway came back committed:
 
 ```json
 {"txId":"49b171c1ee6474482149a9c16e7a683bf956e62670bbd983aeb373cd5b32d4bd",
  "status":"COMMITTED","blockNumber":7,"channel":"mychannel"}
 ```
 
-Confirmed from the committing peer, which runs none of this repository's code:
+The committing peer, which runs none of this repository's code, reports the same chain: height 8,
+block 7 at its head.
 
-```
-Blockchain info: {"height":8,
- "currentBlockHash":"8NFdeWCdvNac4NWyda+KprMaS5WZQzQHPkTCCe5BQnU="}
-```
+Getting there took three fixes, and all three were invisible to a single-peer test. Two were real
+defects in this chaincode: values that differed between endorsing peers, so no write could ever
+agree with itself, and index entries in a format the network's state database rejects, which took
+the peers down rather than the transaction. The third was in the test network's own tooling. Each
+is now guarded by a test, and each is written up with its symptom, repro and fix in
+[`docs/DRUNIX.md`](docs/DRUNIX.md) and [`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
 
-Getting there took three real fixes, all of them invisible to a single-peer test:
-
-| Defect | Symptom on a real network | Fix |
-|---|---|---|
-| `uuid.New()` and `time.Now()` in write paths | `ProposalResponsePayloads do not match`, nothing could ever commit | ids from the transaction id, times from the proposal timestamp (`chaincode/determinism.go`) |
-| Bare-string index values | committing peers panicked mid-block and panicked again replaying it, taking the channel with them | index entries written as JSON (`chaincode/statevalue.go`) |
-| `shift 1` in the network's `ccutils.sh` after an MSP rename | `checkCommitReadiness` never saw the second org approve | `scripts/drunix-business-msps.sh --scripts-only` |
-
-Both chaincode fixes are guarded by tests that read the source, because running the chaincode once
-cannot detect either problem. The runbook, including every failed attempt, is in
-[`docs/DRUNIX.md`](docs/DRUNIX.md).
-
-What this does and does not claim: the chaincode and the gateway work against Drunix. The hosted
-demo is not connected to a Drunix network, `/trust` says so, and nothing here is an NPCI
-endorsement or a pilot participation.
+What this claims: the chaincode and the gateway work against Drunix. What it does not: the hosted
+demo is not connected to a Drunix network, `/trust` says so, and nothing here is an NPCI endorsement
+or a pilot participation.
 
 ---
 
@@ -444,6 +279,26 @@ there to read.
 
 ---
 
+## Testing
+
+```bash
+make dev          # the suites talk to a running stack, so start it first
+make test         # the full sweep: 124 checks across 79 suite files
+make test-go      # gofmt, vet and race tests across every Go module
+make smoke        # every page renders real content
+make secret-scan  # refuse tracked files that look like live credentials
+```
+
+A mass failure is almost always a dead rail rather than a bug, so check the core is up first. CI
+runs the Go modules separately, builds the frontend, and treats formatting as a hard gate.
+
+Some defects no suite here can reach: three were found only by deploying to a real two-org network,
+and each now has a regression test. Exact commands, prerequisites, expected output and the
+deliberate gaps: [`docs/TESTING.md`](docs/TESTING.md). A verified list of current weak points:
+[`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
+
+---
+
 ## Free tools and explainers
 
 Single-purpose calculators, each a public page that stands on its own. All INR, Indian tax and
@@ -469,10 +324,9 @@ Explainers: [Demat 2.0](https://aasthi-chain.vercel.app/learn/what-is-demat-2) �
 Issues and pull requests are welcome.
 
 1. Fork, branch from `main`.
-2. Keep money rules in the Go core; see [the design rule](#the-design-rule). A rule added to the JS
-   edge will be asked to move.
-3. Run `make test` (121 checks) and `make test-go` before opening a PR. `gofmt` is a hard gate in CI.
-4. If you touch `frontend/api/index.js`, check whether `mock-api-server.js` needs the same change.
+2. Keep money rules in the settlement core. A rule added to the edge will be asked to move.
+3. Run `make test` and `make test-go` before opening a PR. `gofmt` is a hard gate in CI.
+4. The API exists in two implementations that must stay in step; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 5. New behaviour ships with a test that fails without it.
 
 Commit messages are plain language describing the *why*, not a changelog of the diff.
