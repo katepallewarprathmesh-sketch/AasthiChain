@@ -303,6 +303,7 @@ func (f *FabricGateway) EvaluateTransaction(chaincode, fn string, args []string,
 		Status:     "EVALUATED",
 		Timestamp:  time.Now(),
 		Event:      resultEvent(fn, result),
+		Result:     string(result),
 	}, nil
 }
 

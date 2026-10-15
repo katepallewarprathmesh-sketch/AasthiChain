@@ -292,6 +292,47 @@ docker pull npcioss/drunix-baseos:1.0
 real run on WSL 2 with 8 GB, which got past the memory ceiling that stopped the
 14 October attempt.
 
+### The run that worked (15 October 2026, WSL 2, 8 GB)
+
+The full sequence completed on a developer laptop: network up, `mychannel`
+created and joined by both orgs with anchor peers, chaincode packaged,
+installed on both peers, approved by `Org1MSP` and `Org2MSP`, committed at
+sequence 1, and the settlement rail connected with `DRUNIX_MODE=real`.
+
+```
+{"channel":"mychannel","height":0,"txCount":0,"mode":"real",
+ "network":"NPCI Drunix (Hyperledger Fabric fork), peer dns:///localhost:7051"}
+```
+
+Two findings came out of it, and neither is a defect in this repository.
+
+**1. The sample network's org names do not match the chaincode's model.** A
+write was refused by the chaincode itself, during endorsement:
+
+```
+chaincode response 500, ERR_UNAUTHORIZED:
+MSP Org1MSP not authorized, requires one of [OriginatorMSP]
+```
+
+That message is `requireMSP` in `chaincode/property.go`, executed inside the
+peer against the caller's real certificate. The Drunix test network ships the
+Fabric sample orgs, `Org1MSP` and `Org2MSP`, while the chaincode's
+authorisation model uses `OriginatorMSP`, `RegistrarMSP` and `InvestorMSP`.
+`creatorMsp` in the request body cannot change this and is ignored in real
+mode: the MSP comes from the signing identity, which is the point of it.
+
+Writing through the chaincode on a real network therefore needs crypto
+material generated for the business org names, which is a `cryptogen` and
+`configtx.yaml` change in the test network. Loosening `requireMSP` to accept
+`Org1MSP` would make a demo pass by removing the control it demonstrates, so
+it has not been done.
+
+**2. Queries work, and the refusal above is itself the proof of integration.**
+`GetAllProperties` has no MSP gate and evaluated cleanly against the live
+peer. An unauthorised write and an authorised read, both answered by chaincode
+running in the peer, is end to end evidence that nothing in this repository
+can produce on its own.
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a

@@ -59,6 +59,10 @@ type TxRecord struct {
 	ReadSet        []KVRef         `json:"readSet"`
 	WriteSet       []KVRef         `json:"writeSet"`
 	Event          *ChaincodeEvent `json:"event,omitempty"`
+	// Result is what the chaincode returned, for queries. Without it an
+	// evaluate answers "EVALUATED" and nothing else, which proves the call
+	// reached the network but hides the one thing the caller asked for.
+	Result string `json:"result,omitempty"`
 }
 
 // LedgerStatus describes the current state of the Drunix ledger.
