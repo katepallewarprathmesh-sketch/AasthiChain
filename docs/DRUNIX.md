@@ -502,6 +502,32 @@ guard in `ccutils.sh`, non-deterministic chaincode, and bare-string index
 values. All three are fixed in this repository and all three are only
 reachable by running on a real network.
 
+### Why `/drunix/ledger/status` reports height 1 on a live channel
+
+Drunix splits the Fabric peer into roles. `lp1` is a lite peer: it endorses
+and serves the gateway, but it does not retain the chain. `cp` is the
+committing peer and holds the blocks. The rail connects to `lp1.org1` on
+7051, so the height it reads from `qscc` is the lite peer's own, which stays
+at the genesis block.
+
+That is why `peer channel getinfo` against 7051 answers
+`Invalid chain ID, mychannel` as well: there is no ledger there to report on.
+
+The number is real, it just means less than it looks like, so the response
+carries a `heightNote` saying which peer answered and why the value can sit
+at 1. The transaction id and block number in a submit response come from the
+commit itself and are not affected.
+
+To see the true chain height, ask a committing peer directly:
+
+```bash
+cd ~/drunix-lab/drunix/drunix-network/test-network
+export FABRIC_CFG_PATH=$PWD/../config
+source scripts/envVar.sh && setGlobals 1
+export CORE_PEER_ADDRESS=localhost:7061
+peer channel getinfo -c mychannel
+```
+
 ### The real find: the chaincode was not deterministic
 
 With the orgs renamed, authorisation passed and the write got one step

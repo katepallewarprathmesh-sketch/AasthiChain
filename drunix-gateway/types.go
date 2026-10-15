@@ -67,10 +67,13 @@ type TxRecord struct {
 
 // LedgerStatus describes the current state of the Drunix ledger.
 type LedgerStatus struct {
-	Channel string    `json:"channel"`
-	Height  uint64    `json:"height"`  // current block number (genesis = 1)
-	TxCount uint64    `json:"txCount"` // committed transactions
-	Mode    string    `json:"mode"`    // mock | real
-	Network string    `json:"network"` // e.g. "NPCI Drunix (Hyperledger Fabric fork)"
-	Time    time.Time `json:"time"`
+	Channel string `json:"channel"`
+	Height  uint64 `json:"height"`  // current block number (genesis = 1)
+	TxCount uint64 `json:"txCount"` // committed transactions
+	Mode    string `json:"mode"`    // mock | real
+	Network string `json:"network"` // e.g. "NPCI Drunix (Hyperledger Fabric fork)"
+	// HeightNote explains where Height came from when that needs saying.
+	// Empty in simulation, where the number is unambiguous.
+	HeightNote string    `json:"heightNote,omitempty"`
+	Time       time.Time `json:"time"`
 }

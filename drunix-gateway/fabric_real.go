@@ -371,6 +371,14 @@ func (f *FabricGateway) LedgerStatus() (*LedgerStatus, error) {
 		return status, nil
 	}
 	status.Height = height
+	// Drunix splits the peer role. This client talks to a lite peer, which
+	// endorses but does not retain the chain, so its height stays at the
+	// genesis block while the committing peer grows. Reporting that number
+	// bare would read as an empty ledger, which is not what it means.
+	status.HeightNote = "block height reported by the endorsing peer at " + f.endpoint +
+		". On Drunix the lite peer endorses without retaining the chain, so this can sit at 1 " +
+		"while the committing peer holds every block. Transaction ids and block numbers in submit " +
+		"responses come from the commit itself and are unaffected."
 	return status, nil
 }
 
