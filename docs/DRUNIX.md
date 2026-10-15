@@ -266,6 +266,32 @@ One more Windows detail: if a script dies with `$'\r': command not found`, Git
 checked it out with CRLF line endings. Fix it with
 `git config --global core.autocrlf input` and clone again inside WSL.
 
+### Correction 7: pull the chaincode builder images first (15 October 2026)
+
+Installing Go chaincode makes the peer shell out to Docker and build an image
+from `npcioss/drunix-ccenv`, with `npcioss/drunix-baseos` as the runtime base.
+The peer does not pull either one, and `network.sh up` does not bring them
+down, so a first run gets all the way through packaging and then stops with:
+
+```
+Error: chaincode install failed with status: 500 ... docker build failed:
+Error creating container: Error response from daemon:
+No such image: npcioss/drunix-ccenv:1.0
+```
+
+The tag matters. Everything else in the network runs at `1.0.0`, and the
+builder is requested as `1.0`. Both tags exist on Docker Hub and point at the
+same thing, but the peer asks for the short one.
+
+```bash
+docker pull npcioss/drunix-ccenv:1.0
+docker pull npcioss/drunix-baseos:1.0
+```
+
+`scripts/drunix-testnet.sh` now does this before `deployCC`. Reported from a
+real run on WSL 2 with 8 GB, which got past the memory ceiling that stopped the
+14 October attempt.
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a

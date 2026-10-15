@@ -116,6 +116,16 @@ done
 sleep 10
 docker ps --format '    {{.Names}}  {{.Status}}'
 
+# Correction 7: the peer builds Go chaincode by shelling out to Docker with
+# the ccenv builder image and the baseos runtime image, and it does not pull
+# them. They are absent after a plain `network.sh up`, so the install fails at
+# the last step with "No such image: npcioss/drunix-ccenv:1.0". Note the tag:
+# the peer asks for 1.0, not 1.0.0. Pull both before deploying.
+say "Pulling the chaincode builder and runtime images"
+for image in npcioss/drunix-ccenv:1.0 npcioss/drunix-baseos:1.0; do
+  docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image"
+done
+
 # ------------------------------------------------------------- 4. the channel
 say "Creating channel $CHANNEL"
 ./network.sh createChannel -c "$CHANNEL"
