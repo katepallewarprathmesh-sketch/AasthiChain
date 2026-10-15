@@ -214,16 +214,10 @@ The settlement core runs in simulation by default, and the hosted demo is simula
 though, has been deployed to a real NPCI Drunix network, which is NPCI's Hyperledger Fabric fork,
 and written to.
 
-On 15 October 2026, on a two-organisation Drunix test network, a property registration submitted
-through the gateway came back committed:
-
-```json
-{"txId":"49b171c1ee6474482149a9c16e7a683bf956e62670bbd983aeb373cd5b32d4bd",
- "status":"COMMITTED","blockNumber":7,"channel":"mychannel"}
-```
-
-The committing peer, which runs none of this repository's code, reports the same chain: height 8,
-block 7 at its head.
+On a two-organisation Drunix test network, a property registration submitted through the gateway
+was endorsed by both organisations, ordered, and committed. The gateway reported the peer-assigned
+transaction id and block number, and the committing peer, which runs none of this repository's
+code, reported the same chain head independently.
 
 Getting there took three fixes, and all three were invisible to a single-peer test. Two were real
 defects in this chaincode: values that differed between endorsing peers, so no write could ever
