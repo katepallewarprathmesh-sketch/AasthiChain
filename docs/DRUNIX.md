@@ -478,6 +478,30 @@ and changing it does not touch the channel. The bug is upstream
 and is latent in the stock network too: a check for an org without a digit in
 its name would fail there as well.
 
+### It works: a real write on a real network (15 October 2026)
+
+Rebuilt from scratch with both fixes in place, `aasthichain` v1.0 sequence 1
+committed with both approvals, and the write went through:
+
+```
+POST /drunix/submit  PropertyContract:RegisterProperty
+{"txId":"49b171c1ee6474482149a9c16e7a683bf956e62670bbd983aeb373cd5b32d4bd",
+ "status":"COMMITTED","blockNumber":7,"channel":"mychannel"}
+```
+
+`GetAllProperties` then returned the asset, with
+`assetId` `PROP-49b171c1...` derived from the transaction id and `createdAt`
+`2026-10-15T10:06:07Z` taken from the proposal timestamp. Both committing
+peers stayed up through the commit.
+
+Environment: WSL 2 on Windows, 8 GB, two orgs renamed to `OriginatorMSP` and
+`RegistrarMSP`, single-node raft ordering, YugabyteDB state database.
+
+Three defects stood between the first attempt and that block: the MSP rename
+guard in `ccutils.sh`, non-deterministic chaincode, and bare-string index
+values. All three are fixed in this repository and all three are only
+reachable by running on a real network.
+
 ### The real find: the chaincode was not deterministic
 
 With the orgs renamed, authorisation passed and the write got one step

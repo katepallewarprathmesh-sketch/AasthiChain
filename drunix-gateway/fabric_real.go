@@ -43,6 +43,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -52,9 +53,11 @@ import (
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
+	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 // FabricGateway is a DrunixClient backed by a real Drunix/Fabric network.
@@ -341,18 +344,48 @@ func (f *FabricGateway) GetTransaction(txID string) (*TxRecord, error) {
 // LedgerStatus reports the channel this node is actually joined to. It says
 // "real" only because every call above goes to the network: there is no
 // fallback path left in this file that could make that word untrue.
+//
+// Height is the peer's own block height, read from the system chaincode, not
+// a count of what this process happened to send. Reporting our own counter
+// there was wrong: a freshly started rail showed height 0 on a channel with
+// seven blocks on it, which understates the ledger and would be read as the
+// network being empty.
 func (f *FabricGateway) LedgerStatus() (*LedgerStatus, error) {
 	f.mu.RLock()
 	submitted := len(f.seen)
 	f.mu.RUnlock()
-	return &LedgerStatus{
+
+	status := &LedgerStatus{
 		Mode:    "real",
 		Channel: f.channel,
 		Network: "NPCI Drunix (Hyperledger Fabric fork), peer " + f.endpoint,
-		Height:  uint64(submitted),
 		TxCount: uint64(submitted),
 		Time:    time.Now(),
-	}, nil
+	}
+
+	height, err := f.chainHeight()
+	if err != nil {
+		// Say nothing rather than something false. The caller still learns
+		// the mode and the channel, and the error is recorded for diagnostics.
+		log.Printf("[drunix-error] reading chain height from qscc: %v", err)
+		return status, nil
+	}
+	status.Height = height
+	return status, nil
+}
+
+// chainHeight asks the qscc system chaincode for the channel's block height.
+func (f *FabricGateway) chainHeight() (uint64, error) {
+	network := f.gw.GetNetwork(f.channel)
+	result, err := network.GetContract("qscc").EvaluateTransaction("GetChainInfo", f.channel)
+	if err != nil {
+		return 0, err
+	}
+	info := &common.BlockchainInfo{}
+	if err := proto.Unmarshal(result, info); err != nil {
+		return 0, fmt.Errorf("decoding BlockchainInfo: %w", err)
+	}
+	return info.GetHeight(), nil
 }
 
 // Close releases the gRPC connection.
