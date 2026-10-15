@@ -264,7 +264,24 @@ func (f *FabricGateway) SubmitTransaction(chaincode, fn string, args []string, c
 	}
 	status, err := commit.Status()
 	if err != nil {
-		return f.failed(fn, args, creatorMSP, err), fmt.Errorf("drunix: commit status for %s: %w", fn, err)
+		// The transaction reached the orderer: only the stream that reports
+		// the outcome broke. Calling that FAILED would be a lie, because it
+		// may well be committed. Report the id and say the status is unknown
+		// so the caller can look it up on the ledger.
+		unknown := &TxRecord{
+			TxID:       commit.TransactionID(),
+			Chaincode:  nameOr(chaincode, f.chaincode),
+			Function:   fn,
+			Args:       args,
+			CreatorMSP: nameOr(creatorMSP, f.mspID),
+			Channel:    f.channel,
+			Status:     "UNKNOWN",
+			Timestamp:  time.Now(),
+			Event:      resultEvent("error", []byte(err.Error())),
+		}
+		f.remember(unknown)
+		return unknown, fmt.Errorf("drunix: submitted %s as %s but the commit status stream failed, so the outcome is unknown: %w",
+			fn, unknown.TxID, err)
 	}
 	if !status.Successful {
 		err := fmt.Errorf("drunix: transaction %s rejected with validation code %d", status.TransactionID, int32(status.Code))

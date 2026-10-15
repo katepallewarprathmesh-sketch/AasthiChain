@@ -290,7 +290,18 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	rec, err := s.Ledger.SubmitTransaction(body.Chaincode, body.Function, body.Args, body.CreatorMSP)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		// An unknown outcome is not a failure. Hand back the transaction id
+		// so the caller can settle the question against the ledger instead
+		// of guessing from an error string.
+		out := map[string]interface{}{"error": err.Error()}
+		if rec != nil && rec.Status == "UNKNOWN" {
+			out["txId"] = rec.TxID
+			out["status"] = rec.Status
+			out["hint"] = "query the ledger for this transaction id before assuming it did not commit"
+			writeJSON(w, http.StatusAccepted, out)
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, out)
 		return
 	}
 	writeJSON(w, http.StatusCreated, rec)
