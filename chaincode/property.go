@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
@@ -78,11 +76,13 @@ func (c *PropertyContract) RegisterProperty(ctx contractapi.TransactionContextIn
 		return "", NewError(ErrDuplicateProperty, "a property with this documentHash is already registered — each document can be tokenized only once")
 	}
 
-	assetID := "PROP-" + uuid.New().String()
-	now := time.Now().UTC()
-	// Use block timestamp if available (Fabric provides TxTimestamp)
-	if ts, err := ctx.GetStub().GetTxTimestamp(); err == nil && ts != nil {
-		now = time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	// Both of these must be identical on every endorsing peer, so they come
+	// from the proposal rather than from this peer's clock or entropy. See
+	// determinism.go.
+	assetID := txID(ctx, "PROP-")
+	now, err := txTime(ctx)
+	if err != nil {
+		return "", err
 	}
 
 	asset := PropertyAsset{
@@ -149,9 +149,9 @@ func (c *PropertyContract) ValidateProperty(ctx contractapi.TransactionContextIn
 		return NewError(ErrInvalidInput, fmt.Sprintf("asset status must be DRAFT to validate, current %s", asset.Status))
 	}
 
-	now := time.Now().UTC()
-	if ts, err := ctx.GetStub().GetTxTimestamp(); err == nil && ts != nil {
-		now = time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	now, err := txTime(ctx)
+	if err != nil {
+		return err
 	}
 
 	asset.RegistrarValidationStatus = decision
@@ -218,9 +218,9 @@ func (c *PropertyContract) MintPropertyTokens(ctx contractapi.TransactionContext
 		return NewError(ErrDuplicateMint, "tokens already minted for this asset")
 	}
 
-	now := time.Now().UTC()
-	if ts, err := ctx.GetStub().GetTxTimestamp(); err == nil && ts != nil {
-		now = time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	now, err := txTime(ctx)
+	if err != nil {
+		return err
 	}
 
 	asset.TotalTokens = totalTokens
@@ -290,9 +290,9 @@ func (c *PropertyContract) FreezeAsset(ctx contractapi.TransactionContextInterfa
 	var asset PropertyAsset
 	json.Unmarshal(assetBytes, &asset)
 
-	now := time.Now().UTC()
-	if ts, err := ctx.GetStub().GetTxTimestamp(); err == nil && ts != nil {
-		now = time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	now, err := txTime(ctx)
+	if err != nil {
+		return err
 	}
 
 	asset.Status = PropertyFrozen

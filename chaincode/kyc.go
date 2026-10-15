@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
@@ -46,9 +45,9 @@ func (c *KYCContract) UpdateKYCStatus(ctx contractapi.TransactionContextInterfac
 		return NewError(ErrInvalidInput, fmt.Sprintf("invalid KYC status %s", status))
 	}
 
-	now := time.Now().UTC()
-	if ts, err := ctx.GetStub().GetTxTimestamp(); err == nil && ts != nil {
-		now = time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	now, err := txTime(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Try composite key first

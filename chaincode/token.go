@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
@@ -158,9 +157,9 @@ func (c *TokenContract) TransferTokens(ctx contractapi.TransactionContextInterfa
 		return "", err
 	}
 
-	now := time.Now().UTC()
-	if ts, err := ctx.GetStub().GetTxTimestamp(); err == nil && ts != nil {
-		now = time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	now, err := txTime(ctx)
+	if err != nil {
+		return "", err
 	}
 
 	senderBal.Balance -= amount
@@ -188,7 +187,7 @@ func (c *TokenContract) TransferTokens(ctx contractapi.TransactionContextInterfa
 		return "", err
 	}
 
-	transferId := "TXN-" + uuid.New().String()
+	transferId := txID(ctx, "TXN-")
 	transfer := TransferRecord{
 		DocType:     DocTypeTransfer,
 		TransferID:  transferId,
@@ -443,6 +442,11 @@ func (c *TokenContract) RecordSettlement(ctx contractapi.TransactionContextInter
 		return "", NewError(ErrInvalidInput, "settlement already recorded for payment "+paymentId)
 	}
 
+	settledAt, err := txTime(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	settlement := SettlementRecord{
 		DocType:        "settlement",
 		SettlementID:   "STL-" + paymentId,
@@ -453,7 +457,7 @@ func (c *TokenContract) RecordSettlement(ctx contractapi.TransactionContextInter
 		ToID:           toId,
 		TokenAmount:    tokenAmount,
 		AmountINRPaise: amountINRPaise,
-		SettledAt:      time.Now().UTC(),
+		SettledAt:      settledAt,
 		Status:         SettlementSettled,
 	}
 	bytes, err := json.Marshal(settlement)
@@ -546,6 +550,11 @@ func (c *TokenContract) TransferTokensAs(ctx contractapi.TransactionContextInter
 		return "", NewError(ErrInvalidTransfer, fmt.Sprintf("asset status %s does not allow transfer", asset.Status))
 	}
 
+	movedAt, err := txTime(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	fromKey, err := ctx.GetStub().CreateCompositeKey(CompositeBalancePrefix, []string{assetId, fromId})
 	if err != nil {
 		return "", err
@@ -576,23 +585,23 @@ func (c *TokenContract) TransferTokensAs(ctx contractapi.TransactionContextInter
 			return "", err
 		}
 	} else {
-		toBal = TokenBalance{DocType: DocTypeBalance, AssetID: assetId, OwnerID: toId, Balance: 0, UpdatedAt: time.Now().UTC()}
+		toBal = TokenBalance{DocType: DocTypeBalance, AssetID: assetId, OwnerID: toId, Balance: 0, UpdatedAt: movedAt}
 	}
 
 	fromBal.Balance -= amount
-	fromBal.UpdatedAt = time.Now().UTC()
+	fromBal.UpdatedAt = movedAt
 	fromJSON, _ := json.Marshal(fromBal)
 	if err := ctx.GetStub().PutState(fromKey, fromJSON); err != nil {
 		return "", err
 	}
 	toBal.Balance += amount
-	toBal.UpdatedAt = time.Now().UTC()
+	toBal.UpdatedAt = movedAt
 	toJSON, _ := json.Marshal(toBal)
 	if err := ctx.GetStub().PutState(toKey, toJSON); err != nil {
 		return "", err
 	}
 
-	transferID := "TXN-" + uuid.New().String()
+	transferID := txID(ctx, "TXN-")
 	record := TransferRecord{
 		DocType:     DocTypeTransfer,
 		TransferID:  transferID,
@@ -600,7 +609,7 @@ func (c *TokenContract) TransferTokensAs(ctx contractapi.TransactionContextInter
 		FromID:      fromId,
 		ToID:        toId,
 		Amount:      amount,
-		TxTimestamp: time.Now().UTC(),
+		TxTimestamp: movedAt,
 		Status:      TransferCompleted,
 	}
 	tJSON, _ := json.Marshal(record)

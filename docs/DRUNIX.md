@@ -478,6 +478,41 @@ and changing it does not touch the channel. The bug is upstream
 and is latent in the stock network too: a check for an org without a digit in
 its name would fail there as well.
 
+### The real find: the chaincode was not deterministic
+
+With the orgs renamed, authorisation passed and the write got one step
+further, to this:
+
+```
+Address: peer0.org2.example.com:9051  MspId: RegistrarMSP
+Message: ProposalResponsePayloads do not match
+```
+
+Every endorsing peer runs the chaincode independently and the write sets must
+be identical, byte for byte, or the transaction is discarded before it ever
+reaches the orderer. `RegisterProperty` built its asset id with `uuid.New()`
+and stamped records with `time.Now()`. Both differ per peer, so org1 and org2
+produced two different proposals for one transaction.
+
+This is a genuine defect in this repository, not a network quirk, and it could
+only be found by running on more than one peer. A single-peer test executes
+the chaincode once, and any value is consistent with itself.
+
+The fix is `chaincode/determinism.go`: `txTime(ctx)` returns the transaction
+timestamp carried in the proposal, and `txID(ctx, prefix)` derives identifiers
+from the transaction id. Both are the same on every endorser. All fourteen
+call sites across `property.go`, `token.go` and `kyc.go` now use them, and
+`uuid` is no longer imported by the chaincode.
+
+`txTime` deliberately has no fallback to the local clock. An earlier version
+used the proposal timestamp "if available" and silently used `time.Now()`
+otherwise, which is the same bug wearing a hat.
+
+`chaincode/determinism_test.go` guards it by reading the source and rejecting
+`uuid.New()`, `time.Now()`, `rand.*` and `time.Since` outside the helper
+file. Non-determinism cannot be caught by running the chaincode once, so the
+test does not try. Verified against a sabotage that compiles.
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a
