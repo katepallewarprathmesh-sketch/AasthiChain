@@ -513,6 +513,57 @@ otherwise, which is the same bug wearing a hat.
 file. Non-determinism cannot be caught by running the chaincode once, so the
 test does not try. Verified against a sabotage that compiles.
 
+### Drunix keeps world state in SQL, so every value must be valid JSON
+
+With determinism fixed, the write was endorsed by both peers, ordered, and
+reached block 12. Then the committing peers died:
+
+```
+ERRO [sqldb] Error in batch sql write. err:ERROR: invalid input syntax for
+type json (SQLSTATE 22P02)
+panic: error during commit to txmgr
+```
+
+`RegisterProperty` writes a `hash~<documentHash>~<assetID>` index entry whose
+value is the asset id, and the transfer path writes three composite-key index
+entries whose value is the transfer id. Writing a bare string as an index
+value is standard Fabric practice, because LevelDB stores opaque bytes.
+Drunix stores world state in YugabyteDB in a JSON column, and `PROP-7e37...`
+is not valid JSON.
+
+Two things make this much worse than a rejected transaction:
+
+- The peer panics rather than returning an error, so the node goes down.
+- The block is already ordered. The peer replays it on restart and panics
+  again. The channel is permanently poisoned and the network has to be torn
+  down and rebuilt.
+
+That is why `cp.org1` and `cp.org2` were missing from `docker ps` while the
+lite peers were still up: endorsement kept working, commits were dead, and
+the gateway's commit status stream closed with `EOF`.
+
+The fix is `chaincode/statevalue.go`. `indexValue(target)` writes the target
+as a JSON string and `indexRef(raw)` reads it back, tolerating bare strings
+so older entries still resolve. `chaincode/statevalue_test.go` scans the
+source and rejects `PutState(key, []byte(...))`, verified against a sabotage
+that compiles.
+
+This is a real portability difference between Fabric and Drunix, and worth
+knowing if you port any other chaincode across: **on Drunix, every value you
+put to world state must be valid JSON, index entries included.**
+
+### Recovering from the poisoned channel
+
+A restart is not enough, since the bad block replays. Rebuild:
+
+```bash
+cd ~/drunix-lab/drunix/drunix-network/test-network
+./network.sh down
+cd ~/AasthiChain && git pull
+bash scripts/drunix-testnet.sh
+bash scripts/drunix-business-msps.sh --scripts-only
+```
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a

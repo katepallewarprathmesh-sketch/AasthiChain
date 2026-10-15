@@ -205,11 +205,11 @@ func (c *TokenContract) TransferTokens(ctx contractapi.TransactionContextInterfa
 
 	timeStr := now.Format(time.RFC3339Nano)
 	assetTimeKey, _ := ctx.GetStub().CreateCompositeKey("transfer", []string{assetId, timeStr, transferId})
-	ctx.GetStub().PutState(assetTimeKey, []byte(transferId))
+	ctx.GetStub().PutState(assetTimeKey, indexValue(transferId))
 	ownerTimeKey, _ := ctx.GetStub().CreateCompositeKey("transferByOwner", []string{fromId, timeStr, transferId})
-	ctx.GetStub().PutState(ownerTimeKey, []byte(transferId))
+	ctx.GetStub().PutState(ownerTimeKey, indexValue(transferId))
 	ownerTimeKey2, _ := ctx.GetStub().CreateCompositeKey("transferByOwner", []string{toId, timeStr, transferId})
-	ctx.GetStub().PutState(ownerTimeKey2, []byte(transferId))
+	ctx.GetStub().PutState(ownerTimeKey2, indexValue(transferId))
 
 	ctx.GetStub().SetEvent("TokensTransferred", transferBytes)
 	return transferId, nil
@@ -303,7 +303,7 @@ func (c *TokenContract) GetTransferHistory(ctx contractapi.TransactionContextInt
 			if err != nil {
 				continue
 			}
-			transferId := string(kv.Value)
+			transferId := indexRef(kv.Value)
 			trBytes, err := ctx.GetStub().GetState(transferId)
 			if err != nil || trBytes == nil {
 				continue
@@ -328,7 +328,7 @@ func (c *TokenContract) GetTransferHistory(ctx contractapi.TransactionContextInt
 			if err != nil {
 				continue
 			}
-			transferId := string(kv.Value)
+			transferId := indexRef(kv.Value)
 			trBytes, _ := ctx.GetStub().GetState(transferId)
 			if trBytes == nil {
 				continue

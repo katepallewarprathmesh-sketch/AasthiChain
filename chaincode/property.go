@@ -112,7 +112,7 @@ func (c *PropertyContract) RegisterProperty(ctx contractapi.TransactionContextIn
 
 	// Also create secondary index for hash -> assetID mapping (for dedup detection)
 	hashIndexKey := "hash~" + documentHash + "~" + assetID
-	if err := ctx.GetStub().PutState(hashIndexKey, []byte(assetID)); err != nil {
+	if err := ctx.GetStub().PutState(hashIndexKey, indexValue(assetID)); err != nil {
 		// non-fatal for demo, but log
 	}
 
