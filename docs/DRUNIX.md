@@ -494,6 +494,19 @@ POST /drunix/submit  PropertyContract:RegisterProperty
 `2026-10-15T10:06:07Z` taken from the proposal timestamp. Both committing
 peers stayed up through the commit.
 
+Confirmed from the committing peer, independently of this repository's code:
+
+```
+$ export CORE_PEER_ADDRESS=localhost:7061
+$ peer channel getinfo -c mychannel
+Blockchain info: {"height":8,
+ "currentBlockHash":"8NFdeWCdvNac4NWyda+KprMaS5WZQzQHPkTCCe5BQnU=",
+ "previousBlockHash":"4rl8XWf0tMg9+9oHF43NFqw+xENn6S6SUMalVtCmFhE="}
+```
+
+Height 8 means block 7 is the head of the chain, which is the block the
+gateway reported. Two sources agree and only one of them is ours.
+
 Environment: WSL 2 on Windows, 8 GB, two orgs renamed to `OriginatorMSP` and
 `RegistrarMSP`, single-node raft ordering, YugabyteDB state database.
 
