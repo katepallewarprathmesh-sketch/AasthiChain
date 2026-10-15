@@ -408,6 +408,34 @@ Ask for more patience rather than a different answer:
 already recorded. `scripts/drunix-testnet.sh` now passes `-r 15 -d 5` by
 default, tunable with `DRUNIX_CC_RETRY` and `DRUNIX_CC_DELAY`.
 
+### Correction 9: resuming a deploy that stopped half way
+
+A deploy that fails after one org has approved cannot simply be run again:
+
+```
+Error: proposal failed with status: 500 - failed to invoke backing
+implementation of 'ApproveChaincodeDefinitionForMyOrg': attempted to redefine
+uncommitted sequence (1) for namespace aasthichain with unchanged content
+```
+
+Fabric refuses to record the same approval twice. The sequence cannot be
+advanced either, because sequence 1 has not been committed and the next
+definition must always be committed sequence plus one. The way out is to
+change the content so the approval is a new one, which the version field does
+without touching the chaincode:
+
+```bash
+./network.sh deployCC -c mychannel -ccn aasthichain -ccp $HOME/AasthiChain/chaincode -ccl go \
+  -ccs 1 -ccv 1.1 -r 15 -d 5
+```
+
+Both orgs then approve version 1.1 at sequence 1 and the commit succeeds. The
+installed package is unchanged and is not rebuilt, so this is quick.
+
+A harmless `scripts/envVar.sh: line 99: [: too many arguments` appears on the
+already installed path. It comes from `verifyResult` being handed an empty
+status, it is upstream, and it stops nothing.
+
 ### What happened when this was attempted (14 October 2026)
 
 Most of the sequence above has now been run, in a 2 GB development sandbox. It got as far as a
