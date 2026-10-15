@@ -156,6 +156,78 @@ cover, and the known gaps stated plainly rather than omitted.
 
 ---
 
+## P0, found by running on the real two-org network (15 October 2026)
+
+Both of these were invisible to the test suite and to every single-peer run.
+They were found only by deploying to a live Drunix network with two
+endorsing organisations and a SQL state database.
+
+### A5. The chaincode was not deterministic, so no write could ever commit. **Fixed**
+
+**Severity:** critical. The write path did not work at all on a real network.
+**Files:** `chaincode/property.go`, `chaincode/token.go`, `chaincode/kyc.go`.
+
+`RegisterProperty` built its asset id with `uuid.New()` and every contract
+stamped records with `time.Now()`. Fabric and Drunix execute a transaction on
+one peer per endorsing organisation and compare the write sets. Random ids and
+local clocks differ per peer, so the two proposals never matched.
+
+**Repro:** submit `PropertyContract:RegisterProperty` through the gateway
+against a network with an endorsement policy spanning two organisations.
+
+```
+Address: peer0.org2.example.com:9051  MspId: RegistrarMSP
+Message: ProposalResponsePayloads do not match
+```
+
+**Fix:** `chaincode/determinism.go`. `txTime(ctx)` reads the transaction
+timestamp from the proposal and `txID(ctx, prefix)` derives identifiers from
+the transaction id, so every endorser computes the same bytes. Fourteen call
+sites converted; the chaincode no longer imports `uuid`. `txTime` returns an
+error rather than falling back to the local clock, because a conditional
+guarantee is not a guarantee.
+
+**Regression test:** `chaincode/determinism_test.go` reads the package source
+and rejects `uuid.New()`, `time.Now()`, `rand.*` and `time.Since` outside the
+helper, and asserts `txTime` has no local-clock fallback. Running the
+chaincode once cannot detect non-determinism, so the test does not try.
+Verified against a sabotage that compiles.
+
+### A6. Bare-string index values crashed the committing peers. **Fixed**
+
+**Severity:** critical. It took the network down permanently, not just the
+transaction. **Files:** `chaincode/property.go`, `chaincode/token.go`.
+
+Drunix keeps world state in YugabyteDB in a JSON column. This chaincode wrote
+four index entries whose value was a bare identifier string, which is normal
+Fabric practice on LevelDB and is not valid JSON.
+
+**Repro:** register a property on Drunix. The transaction is endorsed and
+ordered, then the committing peers die:
+
+```
+ERRO [sqldb] Error in batch sql write. err:ERROR: invalid input syntax for
+type json (SQLSTATE 22P02)
+panic: error during commit to txmgr
+```
+
+The peer panics instead of rejecting, and the block is already ordered, so it
+panics again on every restart while replaying it. Endorsement keeps working
+from the lite peers, which makes it look like a client problem: the gateway
+only sees its commit status stream close with `EOF`.
+
+**Fix:** `chaincode/statevalue.go`. `indexValue()` writes index targets as JSON
+strings and `indexRef()` reads them back, still accepting bare strings so
+pre-existing entries resolve.
+
+**Regression test:** `chaincode/statevalue_test.go` checks the encoding round
+trip and scans the source for `PutState(key, []byte(...))`. Verified against a
+sabotage that compiles.
+
+**Portability note for anyone reusing this chaincode:** on Drunix every value
+written to world state must be valid JSON, index entries included. That is a
+real difference from stock Fabric with LevelDB.
+
 ## Open findings, not fixed in this pass
 
 ### D1. `api-gateway` has no tests
