@@ -5865,7 +5865,13 @@ export default async function handler(req, res) {
             gateway: base,
           });
         }
-        return res.status(upstream.status).send(scrubEndpointSecrets(text));
+        // Never rewrite bytes that carry a signature. The scrubber shortens
+        // URLs to their origin, which silently broke verifiable credentials:
+        // the @context URLs are part of the signed document, so trimming
+        // them turned every credential into a forgery. A signed payload is
+        // checked byte for byte, so it has to pass through untouched.
+        const signedPayload = suffix.startsWith('/credentials');
+        return res.status(upstream.status).send(signedPayload ? text : scrubEndpointSecrets(text));
       } catch (e) {
         return res.status(503).json({
           error: 'ERR_UMI_RAIL_UNAVAILABLE',

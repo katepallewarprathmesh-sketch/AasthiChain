@@ -205,6 +205,15 @@ func main() {
 			}
 		}
 
+		// Verifiable credentials (credentials.go): a registrar signs a
+		// statement about a property, the hash is anchored here, and
+		// anyone can check both without trusting this service.
+		srv.Credentials = drunix.NewCredentialRegistry(chain)
+		if n := srv.Credentials.RestoreFromChain(); n > 0 {
+			log.Printf("Credential registry restored %d credential anchor(s) from the ledger", n)
+		}
+		log.Printf("Credentials mounted at /umi/credentials/*: Ed25519 signed, hash anchored on the chain")
+
 		// Work desk — escrowed property upkeep paid on accepted delivery
 		// (work.go), with a pluggable adapter at the talent boundary.
 		// WORK_ENABLED=false removes the routes and changes nothing else.

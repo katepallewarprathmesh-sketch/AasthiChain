@@ -36,6 +36,8 @@ const TYPE_STYLES = {
   UMI_PDC_PURGED: { label: 'UMI · Private Data Purged', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   UMI_SUPPLY_RESTATED: { label: 'UMI · Supply Restated', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   // Cross-chain interop (hash-locked)
+  UMI_CREDENTIAL_ISSUED: { label: 'Credential · Issued', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
+  UMI_CREDENTIAL_REVOKED: { label: 'Credential · Revoked', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_INTEROP_LOCKED: { label: 'Interop · Locked', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   UMI_INTEROP_COMMITTED: { label: 'Interop · Committed', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
   UMI_INTEROP_ABORTED: { label: 'Interop · Aborted', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },

@@ -38,6 +38,9 @@ type Server struct {
 	// Docs is the content-addressed document register (see documents.go).
 	// Nil disables the routes, exactly like the rest of the optional surface.
 	Docs *DocumentRegistry
+	// Credentials issues and verifies signed attestations (see credentials.go).
+	// Nil means the /umi/credentials/* routes are not mounted.
+	Credentials *CredentialRegistry
 	// Work is the escrowed work-order desk (see work.go). Nil means the
 	// /umi/work/* routes are not mounted and nothing else changes.
 	Work *WorkDesk
@@ -123,8 +126,9 @@ func (s *Server) Router() http.Handler {
 	// read it without exposing the rail directly.
 	mux.HandleFunc("/umi/metrics", s.handleMetrics)
 	s.registerDocumentRoutes(mux)
-	s.registerUMIRoutes(mux)  // UMI rail (/umi/*) — additive, no-op when s.UMI is nil
-	s.registerWorkRoutes(mux) // work desk (/umi/work/*) — additive, no-op when s.Work is nil
+	s.registerUMIRoutes(mux) // UMI rail (/umi/*): additive, no-op when s.UMI is nil
+	s.registerCredentialRoutes(mux)
+	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }
 

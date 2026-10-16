@@ -125,6 +125,20 @@ func umiRequireSupervisor(w http.ResponseWriter, c umiCaller, what string) bool 
 	return false
 }
 
+// umiRequireRegistrarOrSupervisor guards statements a registrar makes about
+// somebody else's property. Issuing a credential is an assertion of fact
+// under an identity, so it is restricted to the role whose job that is.
+func umiRequireRegistrarOrSupervisor(w http.ResponseWriter, c umiCaller, what string) bool {
+	if !umiRequireIdentity(w, c) {
+		return false
+	}
+	if c.supervisor() || strings.EqualFold(strings.TrimSpace(c.Role), "registrar") {
+		return true
+	}
+	umiErr(w, http.StatusForbidden, "ERR_UMI_NOT_REGISTRAR", what+" is a registrar action.")
+	return false
+}
+
 // umiRequireAssetStake decides who may anchor evidence against an asset.
 //
 // Anchoring was open to the world, including callers with no identity at

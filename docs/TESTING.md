@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  124 checks, 0 failed
+make test       # integration sweep:  125 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -32,7 +32,16 @@ rail, and then every file matching `tests/*.test.mjs`.
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
 | Suite files | **76** in `tests/` |
-| Reported result | **124 passed, 0 failed** |
+| Reported result | **125 passed, 0 failed** |
+
+`tests/credentials.test.mjs` is worth running on its own when touching the rail proxy. It
+verifies a credential's Ed25519 signature inside the test process, using only the issuer's
+published key, so it fails if anything between the rail and the client alters a single byte
+of a signed document.
+
+```bash
+node tests/credentials.test.mjs     # 18 checks, needs make dev
+```
 | Runtime | about 50 seconds |
 
 **Read the number carefully.** The 121 is the count of top-level checks the sweep reports: each
