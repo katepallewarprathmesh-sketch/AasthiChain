@@ -214,6 +214,15 @@ func main() {
 		}
 		log.Printf("Credentials mounted at /umi/credentials/*: Ed25519 signed, hash anchored on the chain")
 
+		// Delegated authority for software agents (mandates.go). Nothing
+		// autonomous runs here; this is the authority layer such an actor
+		// would act under, enforced on the settlement path.
+		srv.Mandates = drunix.NewMandateRegistry(chain, srv.Credentials)
+		if n := srv.Mandates.RestoreFromChain(); n > 0 {
+			log.Printf("Mandate registry restored %d delegated mandate(s) from the ledger", n)
+		}
+		log.Printf("Mandates mounted at /umi/mandates/*: bounded agent authority, spend counted on the ledger")
+
 		// Work desk — escrowed property upkeep paid on accepted delivery
 		// (work.go), with a pluggable adapter at the talent boundary.
 		// WORK_ENABLED=false removes the routes and changes nothing else.

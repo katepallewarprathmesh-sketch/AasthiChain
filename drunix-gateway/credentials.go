@@ -69,6 +69,9 @@ const (
 const (
 	CredentialTitleValidation = "TitleValidationCredential"
 	CredentialKYCStatus       = "KYCStatusCredential"
+	// CredentialDelegated mirrors a delegated authority grant (mandates.go)
+	// so an agent can present its authority as a signed document.
+	CredentialDelegated = "DelegatedAuthorityCredential"
 )
 
 // demoIssuerSeed is the seed used when CREDENTIAL_SIGNING_SEED is unset.
@@ -219,7 +222,7 @@ func (r *CredentialRegistry) IssueTitleCredential(issuer, subjectID, assetID str
 // Issue signs an arbitrary credential of a known type.
 func (r *CredentialRegistry) Issue(issuer, credType string, subject map[string]interface{}) (*credentialRecord, error) {
 	switch credType {
-	case CredentialTitleValidation, CredentialKYCStatus:
+	case CredentialTitleValidation, CredentialKYCStatus, CredentialDelegated:
 	default:
 		return nil, ErrCredUnknownTyp
 	}

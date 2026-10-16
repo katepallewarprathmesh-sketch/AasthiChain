@@ -341,12 +341,30 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
 		return
 	}
-	// The buyer's wallet pays. Naming someone else as the buyer spent their
-	// cash for them, so the caller has to be the buyer (or a supervisor
-	// settling on the rail's behalf).
-	if c := callerOf(r); !body.DryRun && !umiRequireSelfOrSupervisor(w, c, body.Buyer, "That settlement account") {
+	// An agent acting under a mandate is bounded before anything moves:
+	// right action, right asset, inside the budget, not expired, not
+	// revoked. A caller without the header is unaffected by any of this.
+	mandate, ok := s.agentMandateFor(w, r, ActionSettleDvP, body.AssetID, INRToPaise(float64(body.Tokens)*body.PricePerTokenINR))
+	if !ok {
 		return
 	}
+	// The buyer's wallet pays. Naming someone else as the buyer spends their
+	// cash for them, so the caller has to be the buyer (or a supervisor
+	// settling on the rail's behalf). A mandate is the third way in, and the
+	// only one an agent has: it is the buyer's own standing instruction, so
+	// it authorises the agent for that buyer and for nobody else.
+	actingFor := mandate != nil && strings.EqualFold(mandate.Principal, body.Buyer)
+	if !body.DryRun && !actingFor {
+		if mandate != nil {
+			umiErr(w, http.StatusForbidden, "ERR_UMI_MANDATE_PRINCIPAL",
+				"That mandate was granted by someone else, so it cannot spend this buyer's wallet.")
+			return
+		}
+		if c := callerOf(r); !umiRequireSelfOrSupervisor(w, c, body.Buyer, "That settlement account") {
+			return
+		}
+	}
+
 	si, err := s.UMI.SettleDvP(body)
 	if err != nil {
 		// Instruction object is still returned: it carries the full ISO 20022
@@ -357,9 +375,18 @@ func (s *Server) handleUMIDvP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	tx.finish(w, http.StatusOK, map[string]interface{}{
+	// Spend is counted from what actually settled, not from what the agent
+	// said it would spend, and the use is attributed on the chain.
+	resp := map[string]interface{}{
 		"ok": true, "instruction": si, "mode": UMIMode, "disclaimer": UMIDisclaimer,
-	})
+	}
+	if mandate != nil && !body.DryRun && s.Mandates != nil {
+		_ = s.Mandates.Consume(mandate.MandateID, ActionSettleDvP, si.AssetID, si.InstructionID, si.CashPaise)
+		if updated, err := s.Mandates.Get(mandate.MandateID); err == nil {
+			resp["mandate"] = updated
+		}
+	}
+	tx.finish(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleUMIInstructions(w http.ResponseWriter, r *http.Request) {
