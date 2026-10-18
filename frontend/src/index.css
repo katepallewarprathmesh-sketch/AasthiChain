@@ -765,3 +765,90 @@ pre, code, kbd, samp,
     font-size: 12px !important;
   }
 }
+
+/* ============================================================
+   Shared page frame (components/PageShell.jsx)
+
+   Inner pages each had their own container width, heading size and
+   vertical rhythm, so the product read as three different products
+   depending on where you landed. These classes are the one place that
+   decides it. They use the app's light registry palette, not the
+   landing's dark theme tokens, so a page adopting the shell keeps
+   working with the body styles it already has.
+   ============================================================ */
+.pg { max-width: 1160px; margin: 0 auto; padding: 0 20px 72px; }
+.pg-narrow { max-width: 880px; }
+
+.pg-head {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 18px; flex-wrap: wrap;
+  padding: 34px 0 20px; margin-bottom: 26px;
+  border-bottom: 1px solid var(--ink-8);
+}
+.pg-eyebrow {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.14em; color: var(--registry-navy); opacity: 0.72;
+}
+.pg-title {
+  font-family: 'Fraunces', Georgia, serif; font-weight: 640;
+  font-size: clamp(23px, 3vw, 33px); line-height: 1.12; letter-spacing: -0.02em;
+  margin: 9px 0 0; color: var(--ink); overflow-wrap: anywhere;
+}
+.pg-lede { margin: 10px 0 0; font-size: 14px; line-height: 1.65; color: var(--ink-60); max-width: 68ch; }
+.pg-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+.pg-card {
+  background: var(--surface); border: 1px solid var(--ink-8);
+  border-radius: 14px; padding: 20px;
+  box-shadow: 0 1px 2px rgba(26, 31, 43, 0.04);
+}
+.pg-card + .pg-card { margin-top: 16px; }
+.pg-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+.pg-card-title { font-family: 'Fraunces', Georgia, serif; font-size: 17px; font-weight: 620; margin: 0; color: var(--ink); }
+.pg-card-sub { margin: 5px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-60); max-width: 72ch; }
+.pg-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.pg-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 20px; white-space: nowrap; border: 1px solid;
+}
+.pg-tag-neutral { color: var(--ink-60); background: rgba(26,31,43,0.04); border-color: var(--ink-12); }
+.pg-tag-live { color: var(--verified-green); background: rgba(47,107,79,0.08); border-color: rgba(47,107,79,0.25); }
+.pg-tag-sim { color: var(--pending-amber); background: rgba(184,134,59,0.10); border-color: rgba(184,134,59,0.3); }
+.pg-tag-bad { color: var(--error-rust); background: rgba(161,61,46,0.08); border-color: rgba(161,61,46,0.25); }
+
+.pg-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.pg-tab {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 8px 14px; border-radius: 9px; border: 1px solid var(--ink-8);
+  background: var(--surface); color: var(--ink-60);
+}
+.pg-tab:hover { border-color: var(--ink-12); color: var(--ink); }
+.pg-tab[aria-selected='true'] { background: var(--registry-navy); border-color: var(--registry-navy); color: #fff; }
+
+.pg-field { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-40); margin-bottom: 5px; }
+.pg-input {
+  width: 100%; font: inherit; font-size: 13.5px; padding: 9px 11px;
+  border: 1px solid var(--ink-12); border-radius: 9px; background: var(--surface); color: var(--ink);
+}
+.pg-btn {
+  font: inherit; font-size: 13px; font-weight: 650; cursor: pointer;
+  padding: 9px 16px; border-radius: 9px; border: 1px solid var(--registry-navy);
+  background: var(--registry-navy); color: #fff;
+}
+.pg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pg-btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--ink-12); }
+.pg-btn-ghost:hover { border-color: var(--registry-navy); }
+
+.pg-kv { display: grid; grid-template-columns: minmax(120px, 170px) 1fr; gap: 8px 16px; font-size: 13px; }
+.pg-kv dt { color: var(--ink-40); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.pg-kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.pg-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.pg-empty { padding: 28px; text-align: center; color: var(--ink-40); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .pg-head { padding-top: 24px; }
+  .pg-kv { grid-template-columns: 1fr; gap: 2px 0; }
+  .pg-kv dd { margin-bottom: 10px; }
+}

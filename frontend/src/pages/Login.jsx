@@ -153,7 +153,7 @@ function ClerkLogin({ onLogin }) {
               <div style={{width:36, height:36, background:'#1E3A5F', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800}}>A</div>
               <span style={{fontFamily:'Fraunces', fontWeight:700, fontSize:20, color:'#111827'}}>AasthiChain</span>
             </Link>
-            <h1 style={{fontSize:24, fontWeight:700, color:'#111827'}}>Sign in to AasthiChain</h1>
+            <h1 className="pg-title">Sign in to AasthiChain</h1>
             <p style={{fontSize:13, color:'#6B7280', marginTop:6}}>Create an account or sign in to hold a wallet, invest and track a portfolio. Browsing the marketplace, tools and ledger needs no account.</p>
           </div>
 
@@ -221,7 +221,7 @@ function SimpleLogin({ onLogin }) {
           <div style={{width:40, height:40, background:'#1E3A5F', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:20}}>A</div>
           <span style={{fontFamily:'Fraunces', fontWeight:700, fontSize:22}}>AasthiChain</span>
         </div>
-        <h1 style={{fontSize:24, fontWeight:700}}>Sign in</h1>
+        <h1 className="pg-title">Sign in</h1>
         <p style={{fontSize:13, color:'#6B7280', marginTop:8}}>Sign in to hold a wallet, invest and track a portfolio.</p>
       </div>
       

@@ -44,8 +44,8 @@ export default function Trust() {
   }, [])
 
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 16px 64px', color: C.ink }}>
-      <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 30, fontWeight: 700, margin: 0 }}>
+    <div className="pg pg-narrow" style={{ color: C.ink }}>
+      <h1 className="pg-title">
         What is real here, and what is simulated
       </h1>
       <p style={{ fontSize: 14.5, color: C.mut, lineHeight: 1.65, marginTop: 12, maxWidth: 680 }}>

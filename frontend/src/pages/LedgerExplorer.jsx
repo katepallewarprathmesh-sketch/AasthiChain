@@ -203,13 +203,13 @@ export default function LedgerExplorer() {
 
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px 60px' }}>
+    <div className="pg pg-narrow">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>NPCI Drunix · permissioned network</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Ledger Explorer</h1>
+            <h1 className="pg-title">Ledger Explorer</h1>
             {/* Say which it is. Claiming "live" on a page that is really
                 polling is the kind of small lie that costs trust later. */}
             <span title={liveMode === 'live'

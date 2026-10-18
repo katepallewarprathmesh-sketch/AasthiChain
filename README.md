@@ -277,7 +277,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 127 checks across 82 suite files
+make test         # the full sweep: 128 checks across 83 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

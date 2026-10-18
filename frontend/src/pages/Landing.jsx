@@ -337,6 +337,63 @@ export default function Landing({ user }) {
         </div>
       </section>
 
+      {/* ================= WHAT IS INSIDE =================
+          The home page described the first six months of the project and
+          nothing after it. Everything built since (the settlement rail, the
+          attestation chain, agent authority, interop, private data) existed
+          only behind a URL somebody had to be told about. This section is
+          the index of what is actually in here, with the honest label on
+          each one and a link to the screen that shows it. */}
+      <section id="inside" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 20 }}>
+        <div style={{ maxWidth: 660 }}>
+          <div className="acx-eyebrow rv">What is inside</div>
+          <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(26px, 3.2vw, 38px)', marginTop: 12 }}>
+            The whole system, <em>not just the storefront.</em>
+          </h2>
+          <p className="rv rv-d2" style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 14, lineHeight: 1.75 }}>
+            Each of these is built and running, and each one says plainly what part of it is a simulation.
+            Nothing here is a roadmap item.
+          </p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 36 }}>
+          {[
+            { to: '/umi', t: 'Unified Market Interface rail', tag: 'Simulated rail, real logic',
+              d: 'Wholesale CBDC wallets, the settlement lifecycle and atomic delivery versus payment in integer paise, with an ISO 20022 trace on every instruction.' },
+            { to: '/proof', t: 'Attestation and credentials', tag: 'Real signatures',
+              d: 'Who vouched for an asset, what they vouched for, and a signature anyone can check without asking this service. Withdrawing an attestation names the holders exposed by it.' },
+            { to: '/proof', t: 'Authority for software agents', tag: 'No agent runs here',
+              d: 'An owner can delegate bounded authority: named actions, a spending limit the rail counts itself, a hard expiry and revocation that bites on the next request.' },
+            { to: '/ledger', t: 'Ledger explorer', tag: 'Open to anyone',
+              d: 'Every block, every settlement, every notice, hash-chained and readable without an account.' },
+            { to: '/market', t: 'Resale and price discovery', tag: 'Live in the demo',
+              d: 'A secondary market for tokens, settled on the same rail as the primary sale rather than beside it.' },
+            { to: '/umi', t: 'Asset servicing and income', tag: 'Live in the demo',
+              d: 'Rent and coupon distributions land pro rata in holders wallets on the due date, with no file exchange between registries.' },
+            { to: '/umi', t: 'Cross-chain settlement', tag: 'Pattern demonstration',
+              d: 'A hash-locked transfer between ledgers, framed the way interoperability frameworks do it, so the asset is not trapped on one chain.' },
+            { to: '/umi', t: 'Private data between parties', tag: 'Fabric-style',
+              d: 'Evidence shared only with the parties entitled to it, with the hash on the shared ledger and a time to live on the data.' },
+            { to: '/umi', t: 'Beyond property', tag: 'Same core',
+              d: 'Carbon credits, baskets and an escrowed work desk run on the identical issuance, settlement and reconciliation core. That is the argument for it being infrastructure rather than one product.' },
+            { to: '/trust', t: 'What is real and what is not', tag: 'Read this first',
+              d: 'One page listing every simulated edge of the system, kept honest on purpose, including the parts that make the demo easier.' },
+          ].map((f, i) => (
+            <Link key={f.t + i} to={f.to} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`}
+              style={{ padding: 24, textDecoration: 'none', display: 'block', color: 'inherit' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 17.5, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{f.t}</h3>
+                <span className="acx-chip" style={{ fontSize: 9.5, flexShrink: 0 }}>{f.tag}</span>
+              </div>
+              <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--muted)', marginTop: 10 }}>{f.d}</p>
+              <div style={{ fontSize: 11.5, color: 'var(--accent)', fontWeight: 600, marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                Open {I.arrow(12)}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       {/* ================= HOW IT WORKS ================= */}
       <section id="how-it-works" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 40 }}>
         <div style={{ maxWidth: 640 }}>
@@ -412,7 +469,7 @@ export default function Landing({ user }) {
               { t: 'Double-spend protection', d: 'MVCC versioning on the Fabric state DB plus composite-key balances the same token cannot be sold twice.' },
               { t: 'Idempotent everything', d: 'Payments, webhooks and settlements are idempotent retries and refreshes can never double-credit an investor.' },
               { t: 'Auditable cap table', d: 'Who owns what is a ledger query, not a spreadsheet. Regulators see the same truth investors see.' },
-              { t: 'Honest by labeling', d: 'The UPI rail is a clearly-labeled testnet simulation no live NPCI credentials exist for hackathons. Production swap is one config line.' },
+              { t: 'Honest by labeling', d: 'The payment and market-infrastructure rails are simulations, labelled as such in the interface and in every response they return. Nothing here is connected to a real institution.' },
               { t: 'Aligned with regulation', d: 'Designed around the Asset Tokenisation (Regulation) Bill 2026: KYC/AML gates, registrar validation, custodian pathway, regulator freeze.' },
             ].map((c, i) => (
               <div key={c.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 24 }}>
@@ -521,50 +578,55 @@ export default function Landing({ user }) {
           {showDev && (
             <div className="rv in" style={{ marginTop: 24 }}>
               <div className="acx-card" style={{ padding: 22, marginBottom: 16, borderColor: 'var(--accent-deep)' }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-2)' }}>NPCI Drunix Core Platform (Golang)</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-2)' }}>Settlement core in Go</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 1.75 }}>
-                  Built ON Drunix (NPCI's open-source Fabric fork for tokenization), not just integrated:
-                  Go chaincode (property.go / token.go / kyc.go RecordSettlement + SettleDvP atomic DvP with UTR proof),
-                  Go Drunix gateway (<code style={{ color: 'var(--accent-2)' }}>drunix-gateway/</code>: PROPOSED → ENDORSED → COMMITTED lifecycle, deterministic txIDs, read/write sets, SettlementRecorded events <code style={{ color: 'var(--accent-2)' }}>go test ./...</code> green),
-                  Go AI fraud engine (<code style={{ color: 'var(--accent-2)' }}>fraud.go</code> explainable weights, ML-pluggable).
-                  Demo flow: <code style={{ color: 'var(--accent-2)' }}>/api/drunix/ledger</code> shows the full Drunix transaction flow per payment.
-                  Themes: Real-Time Payments + Financial Inclusion (₹500 entry) + AI &amp; Fraud Detection + Open Finance APIs (<code style={{ color: 'var(--accent-2)' }}>/api/openfinance/capabilities</code>).
+                  The rail is a Go service: wallets and positions in integer paise, atomic delivery versus payment,
+                  idempotent settlement, an append-only hash-chained ledger that survives a restart, signed credentials
+                  with their anchors, bounded authority for agents, and reconciliation that proves supply is conserved.
+                  The web app is a thin proxy in front of it and holds no settlement logic of its own.
+                  Chaincode runs on a permissioned Fabric-derived network for the parts that are exercised against a real one.
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
                 <span className="acx-chip" style={{ borderColor: 'var(--warn)', color: 'var(--warn)', fontSize: 10 }}>SIMULATION</span>
-                <span style={{ fontSize: 11, color: 'var(--faint)' }}>NPCI UPI rail is a testnet simulation no live NPCI sandbox credentials available for hackathons. Honest labeling per Track A6.</span>
+                <span style={{ fontSize: 11, color: 'var(--faint)' }}>
+                  The payment and market-infrastructure rails are simulations with no live institutional connectivity.
+                  That is stated here, on the trust page, and in every response the rail returns.
+                </span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                 <div className="acx-card" style={{ padding: 22 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Primary Rail UPI Collect P2M + IMPS UTR (INR)</h4>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>What the ledger actually guarantees</h4>
                   <ul style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, paddingLeft: 18, lineHeight: 1.8 }}>
-                    <li>VPA: investor@aasthichain, originator@aasthichain regex validated</li>
-                    <li>IDs: PaymentID NPCI-XXXXXXXXXXXX, RRN 12-digit 418…, UTR IMPS+RRN</li>
-                    <li>Flow: PENDING (5 min) → CONFIRMED (KYC+balance) → RELEASED / REFUNDED atomic DvP</li>
-                    <li>INR in paise (int64), X-Idempotency-Key, webhook callbacks + UTR reconciliation</li>
-                    <li>Optional PayU test-mode bridge real PSP hash contract, simulated settlement</li>
-                    <li>8 payment tests: success→transfer, timeout→refund, idempotency, KYC, funds, VPA, zero, formats</li>
+                    <li>Append-only with tampering detectable by anyone reading the chain</li>
+                    <li>Both legs of a trade in one block, so there is no settlement-risk window</li>
+                    <li>Retries are idempotent: a repeated request replays its original answer</li>
+                    <li>Supply conservation and reconciliation are asserted by tests, not claimed in prose</li>
+                    <li>Credentials carry a signature checkable without this service, and an anchor on the chain</li>
+                    <li>Agent authority is bounded, counted by the rail and revocable in one request</li>
                   </ul>
                 </div>
                 <div className="acx-card" style={{ padding: 22 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Secondary Sepolia + Drunix + Regulatory</h4>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>What it does not</h4>
                   <ul style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, paddingLeft: 18, lineHeight: 1.8 }}>
-                    <li>Sepolia PaymentEscrow.sol experimental cross-chain pattern behind Advanced toggle</li>
-                    <li>Drunix: 4 orgs, Raft 3 orderers, Postgres state with 4 SQL indexes, MVCC double-spend protection</li>
-                    <li>Chaincode: 9 funcs, JWT+MSP auth, rate limit 100/min, persistent idempotency, 216+ tests</li>
-                    <li>Regulatory: Asset Tokenisation (Regulation) Bill 2026 registrar validation, regulator freeze, auditable cap table, KYC payment gate</li>
+                    <li>No connection to any central bank, regulator, depository or payment network</li>
+                    <li>Identity verification is a stub: nothing is checked against a real document source</li>
+                    <li>An attestor here carries no enforceable accountability, which is the honest gap</li>
+                    <li>Withdrawing an attestation is a notice. It reverses no settled trade and freezes nothing</li>
+                    <li>Legal finality is not claimed anywhere in this system</li>
                   </ul>
                 </div>
               </div>
 
               <div className="acx-card" style={{ marginTop: 16, padding: 20 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>LIVE vs MOCKED Honest Scoping (Track A6 Extended)</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>
-                  <div><strong style={{ color: 'var(--ok)' }}>LIVE:</strong> Chaincode 9 funcs, JWT+MSP, Raft 3, SQL 4 indexes, payment-gateway module, Drunix TransferTokens, atomic DvP, 216+ tests + 8 payment tests</div>
-                  <div><strong style={{ color: 'var(--warn)' }}>MOCKED (pluggable):</strong> KYC DigiLocker stub, DILRMP hash anchored, NPCI UPI testnet simulation (no live credentials), Sepolia secondary experimental</div>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>How to check any of this yourself</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.8 }}>
+                  Clone the repository, run the stack with one command and run the sweep. It brings up the rail and the
+                  app, seeds data and exercises settlement, failure paths, ledger consistency and the trust chain end to
+                  end. The exact commands, the prerequisites and the limitations are written down rather than summarised,
+                  and the counts in the documentation are asserted by a test so they cannot quietly go stale.
                 </div>
               </div>
             </div>

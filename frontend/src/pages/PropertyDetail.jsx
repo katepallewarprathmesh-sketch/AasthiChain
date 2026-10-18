@@ -245,7 +245,7 @@ export default function PropertyDetail({ user }) {
 
       <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>{property.title}</h1>
+          <h1 className="pg-title">{property.title}</h1>
           <p style={{ color: '#6B7280', fontSize: 13, marginTop: 6 }}>
             📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} • Owner & seller: <strong>{property.originatorId || 'Owner'}</strong>
           </p>

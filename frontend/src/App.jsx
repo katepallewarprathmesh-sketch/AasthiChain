@@ -67,6 +67,7 @@ const InvestorDashboard = lazy(() => import('./pages/InvestorDashboard.jsx'))
 const Insights = lazy(() => import('./pages/Insights.jsx'))
 const Trust = lazy(() => import('./pages/Trust.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
+const ProofChain = lazy(() => import('./pages/ProofChain.jsx')) // attestations, credentials, agent authority
 // Public free tools. No auth, no API calls - they exist to be found in search
 // and to be useful on their own.
 const ToolsIndex = lazy(() => import('./pages/tools/ToolsIndex.jsx'))
@@ -274,6 +275,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
         { path: '/ledger', label: 'Ledger' },
         { path: '/market', label: 'Resale' },
         { path: '/umi', label: 'Settlement' },
+        { path: '/proof', label: 'Proof' },
         ...(['Originator', 'Registrar', 'Regulator'].includes(user.role) ? [{ path: '/admin', label: 'Admin' }] : []),
         ...(user.role === 'Registrar' || user.role === 'Regulator' ? [{ path: '/admin/ops', label: 'Ops' }] : []),
         ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
@@ -652,6 +654,7 @@ function AppContent({ user, setUser }) {
           <Route path="/wallet" element={effectiveUser ? <Wallet user={effectiveUser} /> : <Navigate to="/login" />} />
           <Route path="/ledger" element={<LedgerExplorer />} />
           <Route path="/umi" element={<UMISettlement />} />
+          <Route path="/proof" element={<ProofChain />} />
           <Route path="/trust" element={<Trust />} />
           <Route path="/support" element={<Support />} />
           <Route path="/verify" element={<VerifyDocument />} />

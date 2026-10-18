@@ -87,11 +87,11 @@ export default function SecondaryMarket({ user }) {
     () => `Offer ${o.offerId} withdrawn.`)
 
   return (
-    <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 20px 60px' }}>
+    <div className="pg pg-narrow">
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>
         Secondary market · simulation
       </div>
-      <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Marketplace</h1>
+      <h1 className="pg-title">Marketplace</h1>
       <p style={{ fontSize: 13.5, color: C.mut, maxWidth: '68ch', lineHeight: 1.6 }}>
         Buy fractions from other holders rather than from the original owner. Every purchase
         settles as delivery-versus-payment: the tokens and the money move together, or neither

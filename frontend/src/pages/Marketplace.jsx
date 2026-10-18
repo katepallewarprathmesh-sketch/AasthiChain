@@ -46,9 +46,9 @@ export default function Marketplace({ user }) {
   const activeFilters = [cityFilter, typeFilter, minYield, maxPrice, search, filter].filter(Boolean).length
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 16px' }}>
+    <div className="pg">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Properties</h1>
+        <h1 className="pg-title">Properties</h1>
         <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '60ch' }}>
           Own a piece of premium properties from ₹500. Secure, instant, no paperwork.
         </p>

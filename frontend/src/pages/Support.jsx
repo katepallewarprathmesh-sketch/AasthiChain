@@ -70,9 +70,9 @@ export default function Support() {
     ['Testnet ledger nodes', 'Drunix simulation and future Fabric testnet'],
   ]
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '28px 16px 64px' }}>
+    <div className="pg pg-narrow">
       <Link to="/" style={{ fontSize: 13, color: '#1E3A5F', textDecoration: 'none', fontWeight: 500 }}>&larr; Back to AasthiChain</Link>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827', margin: '14px 0 6px' }}>Support this project</h1>
+      <h1 className="pg-title">Support this project</h1>
       <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, maxWidth: '70ch' }}>
         AasthiChain is open-source: a permissioned fractional-ownership platform on a hash-chained Drunix ledger,
         with honest, clearly-labeled payment rails. Donations fund infrastructure and continued development.

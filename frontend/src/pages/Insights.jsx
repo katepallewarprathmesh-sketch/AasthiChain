@@ -247,7 +247,7 @@ export default function Insights() {
       <div style={{ maxWidth: 420, margin: '0 auto', padding: '64px 16px' }}>
         <div style={card}>
           <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>Private</div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Operator insights</h1>
+          <h1 className="pg-title">Operator insights</h1>
           <p style={{ fontSize: 12.5, color: '#6B7280', lineHeight: 1.6 }}>
             {enabled
               ? 'Enter your admin key. It is kept in this tab only and sent as a header, never in the URL.'
@@ -281,11 +281,11 @@ export default function Insights() {
   const l = data.ledger || {}
 
   return (
-    <div style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 16px 60px' }}>
+    <div className="pg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>Private · operator only</div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>Insights</h1>
+          <h1 className="pg-title">Insights</h1>
           <p style={{ fontSize: 12.5, color: '#6B7280' }}>
             Generated {new Date(data.generatedAt).toLocaleString('en-IN')}
           </p>

@@ -120,13 +120,13 @@ export default function InvestorDashboard({ user }) {
   const portfolio = assetsValue + cash + basketValue
 
   return (
-    <div style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 16px 60px' }}>
+    <div className="pg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>
             Investor dashboard
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 4px' }}>
+          <h1 className="pg-title">
             {user?.name || identityId}
           </h1>
           <p style={{ fontSize: 13, color: '#6B7280', maxWidth: '62ch', lineHeight: 1.6 }}>

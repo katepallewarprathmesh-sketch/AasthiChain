@@ -211,8 +211,8 @@ export default function Admin({ user }) {
   const tokenPrice = form.valuationINR ? Math.floor(parseInt(form.valuationINR) / 10000) : 0
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Manage Properties</h1>
+    <div className="pg pg-narrow">
+      <h1 className="pg-title">Manage Properties</h1>
       {!isOwner && (
         <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginTop: 12, fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
           You are logged in as <strong>{user?.role || 'unknown'}</strong>. Listing a property makes you its owner only Property Owners should list. Switch to{' '}

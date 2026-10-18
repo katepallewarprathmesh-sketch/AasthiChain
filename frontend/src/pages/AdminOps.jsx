@@ -70,7 +70,7 @@ function NoAccess({ detail, howTo, role, onKey }) {
   }
   return (
     <div style={{ maxWidth: 760, margin: '40px auto', padding: '0 20px' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0 }}>Operations</h1>
+      <h1 className="pg-title">Operations</h1>
       <p style={{ fontSize: 14, color: C.mut, marginTop: 8, lineHeight: 1.6 }}>
         {detail || 'The operations queue is for registrars, regulators and operators.'}
         {role ? <> You are signed in as <strong>{role}</strong>.</> : null}
@@ -149,10 +149,10 @@ export default function AdminOps({ user }) {
   const rail = (data && data.rail) || {}
 
   return (
-    <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 20px 60px' }}>
+    <div className="pg pg-narrow">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0 }}>Operations</h1>
+          <h1 className="pg-title">Operations</h1>
           <p style={{ fontSize: 13.5, color: C.mut, margin: '4px 0 0' }}>
             {data
               ? data.actionable === 0

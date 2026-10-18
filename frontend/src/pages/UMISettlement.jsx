@@ -1,4 +1,4 @@
-// Aasthi Settlement Interface (ASI) — our settlement rail, built to the
+// Aasthi Settlement Interface (ASI): our settlement rail, built to the
 // pattern RBI's Unified Market Interface describes (SEBI Demat 2.0): a
 // securities leg and a wholesale-CBDC cash leg that move as one.
 //
@@ -8,7 +8,7 @@
 //
 // Securities leg: Drunix property-fraction tokens on the permissioned ledger.
 // Cash leg: wholesale CBDC (e₹-W) wallets.
-// Together: atomic DvP — both legs move in one block, or neither moves.
+// Together: atomic DvP: both legs move in one block, or neither moves.
 //
 // ALL logic lives in Go (drunix-gateway/umi.go). This page is a thin client over
 // /api/umi/*, which the Node server reverse-proxies to the Go rail. If the rail
@@ -34,9 +34,9 @@ const num = (n) => Number(n || 0).toLocaleString('en-IN')
 
 // The rail returns machine codes. Operators need a sentence that says what to do.
 const ERRORS = {
-  ERR_UMI_NO_IDENTITY: 'The rail could not tell who is asking. Sign in, then try again — this action is recorded against a named participant.',
+  ERR_UMI_NO_IDENTITY: 'The rail could not tell who is asking. Sign in, then try again: this action is recorded against a named participant.',
   ERR_UMI_NOT_YOURS: 'That record belongs to another participant. Switch to their role, or ask as a regulator.',
-  ERR_UMI_NOT_SUPERVISOR: 'Only a regulator or an operator can do this — it creates money rather than moving it.',
+  ERR_UMI_NOT_SUPERVISOR: 'Only a regulator or an operator can do this: it creates money rather than moving it.',
   ERR_UMI_NO_HOLDERS: 'Nobody holds this asset except the payer, so there is nobody to pay. Settle a DvP to a buyer first, then distribute.',
   ERR_UMI_INSUFFICIENT_CBDC: 'The buyer\u2019s e\u20B9-W wallet does not hold enough cash for this instruction. Use the top-up button shown above, or add cash in step 1, then retry.',
   ERR_UMI_INSUFFICIENT_TOKENS: 'The seller does not hold that many tokens. Open \u201CDemo setup\u201D to give them a starting position, or lower the token count.',
@@ -139,13 +139,13 @@ export default function UMISettlement() {
   const [servAsset, setServAsset] = useState('PROP-GREEN-VALLEY-PUNE-001')
   const [servPayer, setServPayer] = useState('originator1')
   const [properties, setProperties] = useState([])
-  // The page opened straight onto five operator cards — wallets, raw ids,
+  // The page opened straight onto five operator cards: wallets, raw ids,
   // ISO 20022 traces. That is the right screen for someone running a
   // settlement rail and the wrong one for everybody else, so the detail is
   // now opt-in and the default view is the one thing people come here to do.
   // The rail used to open folded into a single buy box, so the wallets,
-  // instructions and reconciliation — the part that shows it is a real
-  // settlement rail — were behind a link nobody clicked. Open it all.
+  // instructions and reconciliation: the part that shows it is a real
+  // settlement rail: were behind a link nobody clicked. Open it all.
   const [mode, setMode] = useState('advanced')
   // Result of a silent dry run against the current inputs. The rail can tell
   // us whether this trade would settle without moving anything, so there is
@@ -231,7 +231,7 @@ export default function UMISettlement() {
   const settle = (dryRun) => run(
     () => umi('/dvp', { body: { assetId, seller, buyer, tokens: Number(tokens), pricePerTokenINR: Number(price), dryRun } }),
     (d) => dryRun
-      ? `Pre-trade check: settleable — ${num(d.instruction.tokens)} tokens for ${money(d.instruction.cashINR)}. Nothing moved.`
+      ? `Pre-trade check: settleable: ${num(d.instruction.tokens)} tokens for ${money(d.instruction.cashINR)}. Nothing moved.`
       : `DvP SETTLED atomically · ${num(d.instruction.tokens)} tokens ⇄ ${money(d.instruction.cashINR)} in e₹-W · block #${d.instruction.blockHeight}`, 'dvp')
 
   // The rail rejected a lot of settlements for ERR_UMI_INSUFFICIENT_CBDC
@@ -246,7 +246,7 @@ export default function UMISettlement() {
 
   const fundShortfall = () => run(
     () => umi(`/wallets/${encodeURIComponent(buyer)}/fund`, { body: { amountINR: shortfall } }),
-    (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)} — the cash leg is now covered`, 'dvp')
+    (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)}: the cash leg is now covered`, 'dvp')
 
   // Fund-then-settle as a single action. Doing this by hand across two cards
   // is what produced most of the failed settlements on the live rail.
@@ -260,7 +260,7 @@ export default function UMISettlement() {
       const d = await umi('/dvp', { body: { assetId, seller, buyer, tokens: Number(tokens), pricePerTokenINR: Number(price) } })
       if (d.ok) {
         setFlash({ kind: 'ok', where: 'quick', instructionId: d.data.instruction.instructionId,
-          text: `Settled — ${num(d.data.instruction.tokens)} tokens to ${buyer} against ${money(d.data.instruction.cashINR)} in e₹-W, committed as block #${d.data.instruction.blockHeight}.` })
+          text: `Settled: ${num(d.data.instruction.tokens)} tokens to ${buyer} against ${money(d.data.instruction.cashINR)} in e₹-W, committed as block #${d.data.instruction.blockHeight}.` })
       } else setFlash({ kind: 'err', where: 'quick', text: explain(d.data) })
       await refresh()
     } catch (e) {
@@ -303,11 +303,11 @@ export default function UMISettlement() {
     if (!pr) return id
     const city = (pr.location && (pr.location.city || pr.location.state)) || ''
     // Most titles already carry the city ("Green Valley Villas - Pune"), and
-    // appending it again read as "Pune — Pune".
+    // appending it again read as "Pune: Pune".
     const title = String(pr.title || '').trim()
     if (!title) return `Untitled property · ${String(id).slice(0, 13)}…`
     const hasCity = city && title.toLowerCase().includes(city.toLowerCase())
-    return city && !hasCity ? `${title} — ${city}` : title
+    return city && !hasCity ? `${title}: ${city}` : title
   }
 
   // Price per token implied by the registered valuation, used to prefill the
@@ -329,7 +329,7 @@ export default function UMISettlement() {
   // A row of fields only looks tidy if the labels, the controls and the hints
   // each sit on one shared line. They cannot, while every field is its own
   // little stack: give one field a hint and it grows, and whichever way the
-  // row is aligned something ends up out of step — bottom-align and the
+  // row is aligned something ends up out of step: bottom-align and the
   // hinted control rides up, top-align and the hints dangle at odd heights.
   // So the field hands its three parts to the row's own grid (subgrid) and
   // lets the row line them up. Fields with no hint simply leave that cell
@@ -368,21 +368,21 @@ export default function UMISettlement() {
 
   if (railDown) {
     return (
-      <div className="container" style={{ padding: '28px 16px', maxWidth: 900 }}>
-        <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', color: C.navy }}>Aasthi Settlement Interface</h1>
+      <div className="container pg pg-narrow">
+        <h1 className="pg-title">Aasthi Settlement Interface</h1>
         <div style={{ background: C.warnBg, border: `1px solid ${C.warnLine}`, borderRadius: 12, padding: 18, color: C.warn }}>
           <strong>Rail offline.</strong>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#7C4A03' }}>{railDown.message || 'The Go UMI gateway is not reachable.'}</p>
           <pre style={{ marginTop: 12, background: 'white', border: `1px solid ${C.warnLine}`, borderRadius: 8, padding: 12, fontSize: 12.5, overflowX: 'auto' }}>
 cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_GATEWAY_URL=http://127.0.0.1:21100 node mock-api-server.js</pre>
-          <p style={{ margin: '10px 0 0', fontSize: 12.5 }}>All other AasthiChain features keep working — this rail is strictly additive.</p>
+          <p style={{ margin: '10px 0 0', fontSize: 12.5 }}>All other AasthiChain features keep working: this rail is additive.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container umi-page" style={{ padding: '24px 16px 60px', maxWidth: 1080 }}>
+    <div className="container umi-page pg" style={{ maxWidth: 1080 }}>
       <style>{`
         .umi-page input, .umi-page select { font-family: inherit; transition: border-color .12s, box-shadow .12s; }
         .umi-page input:focus-visible, .umi-page select:focus-visible {
@@ -397,15 +397,15 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       `}</style>
       <header style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 28, color: C.navy, margin: 0 }}>Aasthi Settlement Interface</h1>
+          <h1 className="pg-title">Aasthi Settlement Interface</h1>
           <Pill tone="warn">SIMULATION</Pill>
           <Pill>ASI · built to the UMI pattern</Pill>
           <Pill>Go · drunix-gateway</Pill>
         </div>
         <p style={{ color: C.mut, fontSize: 13.5, maxWidth: 820, marginTop: 8 }}>
           ASI is AasthiChain's own settlement rail. It follows the pattern RBI set out for the
-          Unified Market Interface — a securities leg and a wholesale central-bank-money leg that
-          settle as one — and implements it end to end here: wallets, atomic delivery-versus-payment,
+          Unified Market Interface: a securities leg and a wholesale central-bank-money leg that
+          settle as one: and implements it end to end here: wallets, atomic delivery-versus-payment,
           asset servicing, baskets and a full reconciliation of the books. It is not connected to
           RBI, NPCI or a depository, and does not claim to be.
         </p>
@@ -446,7 +446,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             <strong>{buyer}</strong> buys <strong>{num(tokens)} tokens</strong> of {propLabel(assetId)} from <strong>{seller}</strong> for <strong>{money(cashINR)}</strong>.
             {shortfall > 0 && (
               <div style={{ marginTop: 6, color: '#7C4A03' }}>
-                {buyer} is short {money(shortfall)} — that will be topped up automatically before settling.
+                {buyer} is short {money(shortfall)}: that will be topped up automatically before settling.
               </div>
             )}
           </div>
@@ -459,7 +459,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                 <>
                   <strong>{seller} has no tokens of this property on the settlement rail yet.</strong>
                   <div style={{ marginTop: 4 }}>
-                    This property was listed in the marketplace, but its opening position was never issued on the rail — so there is nothing for {buyer} to buy.
+                    This property was listed in the marketplace, but its opening position was never issued on the rail: so there is nothing for {buyer} to buy.
                   </div>
                   <div style={{ marginTop: 9 }}>
                     <button style={btn(false)} onClick={seed} disabled={!!busy}>
@@ -499,7 +499,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
 
           {mode !== 'advanced' && (
           <div style={{ marginTop: 14, fontSize: 12.5, color: C.mut }}>
-            Want the rail's own controls — wallets, dry runs, servicing, ISO 20022 traces, reconciliation?{' '}
+            Want the rail's own controls: wallets, dry runs, servicing, ISO 20022 traces, reconciliation?{' '}
             <button onClick={() => setMode('advanced')} style={{ background: 'none', border: 'none', color: C.navy, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 12.5 }}>
               Open the full rail
             </button>
@@ -510,7 +510,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
 
       {mode === 'advanced' && (<>
       <Card
-        title="1 · Cash leg — wholesale CBDC (e₹-W) wallets"
+        title="1 · Cash leg: wholesale CBDC (e₹-W) wallets"
         sub="Institutional central-bank-money wallets. Balances are held as integer paise, so the rail can prove it never creates or destroys money."
         right={<button style={btn(false)} onClick={refresh} disabled={!!busy}>Refresh</button>}
       >
@@ -522,7 +522,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           </button>
         </div>
         <Notice flash={flash} where="wallet" onClose={() => setFlash(null)} />
-        {wallets.length === 0 ? <p style={{ fontSize: 13, color: C.mut }}>No wallets yet — fund one to begin.</p> : (
+        {wallets.length === 0 ? <p style={{ fontSize: 13, color: C.mut }}>No wallets yet: fund one to begin.</p> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead><tr style={{ textAlign: 'left', color: C.mut, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: .4 }}>
@@ -564,7 +564,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         {/* Say the trade back in one plain sentence before anyone commits to it. */}
         <div style={{ background: '#F8FAFC', border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#334155', marginBottom: 12 }}>
           <strong>{buyer}</strong> pays <strong>{money(cashINR)}</strong> to <strong>{seller}</strong> for{' '}
-          <strong>{num(tokens)} tokens</strong> of {propLabel(assetId)} — {num(tokens)} × {money(price)}.
+          <strong>{num(tokens)} tokens</strong> of {propLabel(assetId)}: {num(tokens)} × {money(price)}.
           Both legs move together or neither does.
         </div>
 
@@ -593,7 +593,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: '#7C4A03' }}>
             <strong>{buyer} cannot cover this cash leg.</strong>{' '}
             {buyerWallet
-              ? <>Wallet holds {money(buyerAvailable)} available against {money(cashINR)} due — short {money(shortfall)}.</>
+              ? <>Wallet holds {money(buyerAvailable)} available against {money(cashINR)} due: short {money(shortfall)}.</>
               : <>{buyer} has no e₹-W wallet yet, so the whole {money(cashINR)} is unfunded.</>}
             <div style={{ marginTop: 8 }}>
               <button style={btn(false)} onClick={fundShortfall} disabled={!!busy}>
@@ -602,7 +602,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             </div>
             <div style={{ marginTop: 7, color: '#92602A' }}>
               Settling anyway would be rejected as <code>ERR_UMI_INSUFFICIENT_CBDC</code> and recorded as a
-              failed settlement — the rail refuses to move one leg without the other.
+              failed settlement: the rail refuses to move one leg without the other.
             </div>
           </div>
         )}
@@ -611,7 +611,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
 
       <Card
         title="3 · Programmable asset servicing"
-        sub="Rent / coupon paid pro-rata straight into holders' CBDC wallets on the due date — no registrar file exchange, no reconciliation batch."
+        sub="Rent / coupon paid pro-rata straight into holders' CBDC wallets on the due date: no registrar file exchange, no reconciliation batch."
       >
         <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))', { marginBottom: 12 })}>
           <Field label="Property" hint={servAsset ? propRef(servAsset) : null}><PropertyPicker value={servAsset} onChange={(v) => {
@@ -690,7 +690,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             </div>
             {si.failureReason && (
               <div style={{ marginTop: 6, fontSize: 12.5, color: C.bad }}>
-                {si.failureReason} — {si.failureDetail} <em>(neither leg moved)</em>
+                {si.failureReason}: {si.failureDetail} <em>(neither leg moved)</em>
                 {si.shortfallINR > 0 && (
                   // A past failure used to be a dead end: the reason was on
                   // screen but the fix was three fields away in another card.
@@ -701,7 +701,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                     disabled={!!busy}
                     onClick={() => run(
                       () => umi(`/wallets/${encodeURIComponent(si.buyer)}/fund`, { body: { amountINR: si.shortfallINR } }),
-                      (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)} — retry the instruction above`, 'dvp')}
+                      (d) => `e₹-W wallet ${d.wallet.walletId} topped up ${money(d.fundedINR)}: retry the instruction above`, 'dvp')}
                   >
                     Top up {money(si.shortfallINR)} for {si.buyer}
                   </button>
@@ -750,13 +750,13 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         {recon?.conservationNote && <p style={{ fontSize: 12.5, color: C.mut, marginTop: 10 }}>{recon.conservationNote}</p>}
         {isins.length > 0 && (
           <p style={{ fontSize: 12.5, color: C.mut, marginTop: 8 }}>
-            Pilot register: {isins.map(i => `${i.isin} — ${propLabel(i.assetId)}`).join(' · ')}
+            Pilot register: {isins.map(i => `${i.isin}: ${propLabel(i.assetId)}`).join(' · ')}
           </p>
         )}
       </Card>
 
       <Card
-        title="7 · Baskets — cross-property portfolio tokens"
+        title="7 · Baskets: cross-property portfolio tokens"
         sub="One unit is a fixed recipe of several properties. Subscribing moves the underlying tokens into custody, so a unit is redeemable rather than notional. Investors create, sell and redeem units from their dashboard; defining the instrument happens here.">
         <div style={fieldRow('repeat(auto-fit, minmax(190px, 1fr))')}>
           <Field label="Basket id"><input style={input} value={bId} onChange={e => setBId(e.target.value)} /></Field>
@@ -793,7 +793,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                     const usedElsewhere = legs.some((other, n) => n !== i && other.assetId === p.assetId)
                     return (
                       <option key={p.assetId} value={p.assetId} disabled={usedElsewhere}>
-                        {propLabel(p.assetId)}{usedElsewhere ? ' — already in this basket' : ''}
+                        {propLabel(p.assetId)}{usedElsewhere ? ': already in this basket' : ''}
                       </option>
                     )
                   })}
@@ -842,7 +842,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
                       {nav > 0 && <> · indicative NAV <strong>{money(nav)}</strong> per unit</>}</>
                   : <span style={{ color: C.mut }}>
                       {dupes
-                        ? 'Two legs point at the same property — a basket needs at least two different ones.'
+                        ? 'Two legs point at the same property: a basket needs at least two different ones.'
                         : 'Pick at least two different properties, each with tokens per unit above zero.'}
                     </span>}
               </div>

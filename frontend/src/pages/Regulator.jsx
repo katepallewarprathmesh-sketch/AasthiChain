@@ -40,8 +40,8 @@ export default function Regulator({ user }) {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 16px', minWidth: 0 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>Audit & Safety</h1>
+    <div className="pg" style={{ minWidth: 0 }}>
+      <h1 className="pg-title">Audit & Safety</h1>
       <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '70ch' }}>
         Monitor all properties and transfers. Freeze if fraud detected.
       </p>

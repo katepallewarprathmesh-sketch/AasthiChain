@@ -196,10 +196,7 @@ export default function VerifyDocument() {
   return (
     <div style={{ minHeight: '100vh', background: PAPER, padding: '40px 20px 80px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        <h1 style={{
-          fontFamily: 'Fraunces, Georgia, serif', fontSize: 34, color: NAVY,
-          margin: 0, lineHeight: 1.2,
-        }}>
+        <h1 className="pg-title">
           Verify a property document
         </h1>
         <p style={{ fontSize: 15, color: '#4B5563', lineHeight: 1.7, marginTop: 12 }}>
