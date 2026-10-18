@@ -41,6 +41,10 @@ type Server struct {
 	// Credentials issues and verifies signed attestations (see credentials.go).
 	// Nil means the /umi/credentials/* routes are not mounted.
 	Credentials *CredentialRegistry
+	// Attestations joins credentials to settled positions so the downstream
+	// exposure of an attestation is visible (see attestation.go). Nil means
+	// the /umi/attestations/* routes are not mounted.
+	Attestations *AttestationService
 	// Mandates holds delegated authority for software agents (see mandates.go).
 	// Nil means the /umi/mandates/* routes are not mounted and the settlement
 	// path ignores the agent header entirely.
@@ -133,6 +137,7 @@ func (s *Server) Router() http.Handler {
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*): additive, no-op when s.UMI is nil
 	s.registerCredentialRoutes(mux)
 	s.registerMandateRoutes(mux)
+	s.registerAttestationRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

@@ -14,6 +14,8 @@ would be hard to substantiate, that is stated rather than hidden.
 | --- | --- |
 | Decentralised identity: a claim that can be checked without trusting the issuer's API | Verifiable credentials, signed and anchored. See `docs/CREDENTIALS_PLAN.md`. |
 | Agentic transacting: an agent needs delegated authority, not a shared password | Mandates: bounded actions, a spending limit the rail counts itself, hard expiry, immediate revocation, every use attributed on the ledger. |
+| Attestation is where the risk sits, not minting | The attestation layer: who vouched, what for, which holders and trades rest on it, and a ledger notice naming the exposure when it is withdrawn. |
+| Consortium networks are decided by governance, not cryptography | `docs/GOVERNANCE.md`: eligibility, fees, conflict of interest, exit and representation, each answered as the code actually stands. |
 
 Both are simulations of the surrounding authority, not integrations. The signatures, the
 anchors and the refusals are real; the registrar and the agent are demo identities.

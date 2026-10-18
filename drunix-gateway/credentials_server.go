@@ -183,11 +183,21 @@ func (s *Server) handleCredentialPath(w http.ResponseWriter, r *http.Request) {
 			umiErr(w, code, sentinel, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		// Withdrawing an attestation leaves holders downstream of it. Who
+		// they are goes on the ledger at the moment of withdrawal, because
+		// deriving it afterwards answers a different question.
+		resp := map[string]interface{}{
 			"credential": rec,
 			"note": "The signature on the document is still valid. Revocation is a separate fact, recorded on " +
 				"the ledger, and verification reports the two separately.",
-		})
+		}
+		if s.Attestations != nil {
+			if impact, blk := s.Attestations.RecordWithdrawal(parts[0]); blk != nil {
+				resp["impact"] = impact
+				resp["noticeBlock"] = blk.Height
+			}
+		}
+		writeJSON(w, http.StatusOK, resp)
 
 	case len(parts) == 1 && r.Method == http.MethodGet:
 		rec, err := reg.Get(parts[0])

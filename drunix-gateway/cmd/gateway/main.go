@@ -214,6 +214,11 @@ func main() {
 		}
 		log.Printf("Credentials mounted at /umi/credentials/*: Ed25519 signed, hash anchored on the chain")
 
+		// Attestation accountability: who vouched for an asset, and who is
+		// exposed when that is withdrawn (attestation.go).
+		srv.Attestations = drunix.NewAttestationService(chain, srv.Credentials, srv.UMI)
+		log.Printf("Attestations mounted at /umi/attestations/*: downstream exposure of every attestation")
+
 		// Delegated authority for software agents (mandates.go). Nothing
 		// autonomous runs here; this is the authority layer such an actor
 		// would act under, enforced on the settlement path.
