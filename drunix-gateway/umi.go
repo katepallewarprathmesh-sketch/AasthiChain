@@ -1408,12 +1408,49 @@ func (r *UMIRail) ServicingByBasis(assetID, payer string, grossINR float64, basi
 func (r *UMIRail) Instructions(limit int) []SettlementInstruction {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]SettlementInstruction, 0, len(r.order))
+	// Sizing this by len(r.order) meant a request for the latest 50 rows
+	// allocated room for the entire book. On a rail that has been up for a
+	// while that is the single largest allocation on the read path.
+	capacity := len(r.order)
+	if limit > 0 && limit < capacity {
+		capacity = limit
+	}
+	out := make([]SettlementInstruction, 0, capacity)
 	for i := len(r.order) - 1; i >= 0; i-- {
 		if limit > 0 && len(out) >= limit {
 			break
 		}
 		if si, ok := r.instructions[r.order[i]]; ok {
+			out = append(out, *si)
+		}
+	}
+	return out
+}
+
+// SettledForAsset returns the settled instructions for one asset, oldest
+// first, skipping dry runs.
+//
+// The attestation view wanted exactly this and had to take Instructions(0),
+// which copies every instruction in the rail along with its full message
+// trace. Filtering under the lock copies only the rows that are wanted.
+func (r *UMIRail) SettledForAsset(assetID string) []SettlementInstruction {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// Two passes. Counting first costs a map lookup per instruction and
+	// saves the repeated regrowth of the output slice, which measured worse
+	// than copying the whole book when most rows did match.
+	match := func(si *SettlementInstruction) bool {
+		return si != nil && si.AssetID == assetID && si.Status == "SETTLED" && !si.DryRun && si.SettledAt != nil
+	}
+	n := 0
+	for _, id := range r.order {
+		if match(r.instructions[id]) {
+			n++
+		}
+	}
+	out := make([]SettlementInstruction, 0, n)
+	for _, id := range r.order {
+		if si := r.instructions[id]; match(si) {
 			out = append(out, *si)
 		}
 	}

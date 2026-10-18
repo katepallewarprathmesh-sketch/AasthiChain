@@ -209,10 +209,7 @@ func (a *AttestationService) Impact(credentialID string) (*AttestationImpact, er
 	// and before it was withdrawn if it ever was. A trade that settled
 	// before the attestation existed did not rely on it.
 	issued, issuedOK := parseAttestTime(rec.Credential.IssuanceDate)
-	for _, si := range a.rail.Instructions(0) {
-		if si.AssetID != out.AssetID || si.Status != "SETTLED" || si.SettledAt == nil || si.DryRun {
-			continue
-		}
+	for _, si := range a.rail.SettledForAsset(out.AssetID) {
 		if issuedOK && si.SettledAt.Before(issued) {
 			continue
 		}

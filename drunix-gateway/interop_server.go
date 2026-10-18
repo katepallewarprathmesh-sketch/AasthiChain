@@ -17,7 +17,6 @@ package drunix
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -72,8 +71,7 @@ func (s *Server) handleInteropPath(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case rest == "transfers" && r.Method == http.MethodGet:
-		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-		list := g.Transfers(limit)
+		list := g.Transfers(queryLimit(r, 50, 200))
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"transfers": list,
 			"count":     len(list),

@@ -491,10 +491,7 @@ func (s *Server) handleChain(w http.ResponseWriter, r *http.Request) {
 	v := c.Verify()
 	blocks := c.Snapshot()
 
-	limit := atoiDefault(r.URL.Query().Get("limit"), 50)
-	if limit <= 0 || limit > 500 {
-		limit = 50
-	}
+	limit := queryLimit(r, 50, 500)
 	// Without an explicit cursor, return the NEWEST blocks rather than the
 	// oldest. The ledger explorer asks for a fixed window and shows it as
 	// "latest first"; serving blocks[0:limit] meant that once the chain grew
@@ -525,6 +522,24 @@ func (s *Server) handleChain(w http.ResponseWriter, r *http.Request) {
 		"blocks":       blocks[from:end],
 		"note":         "Append-only. Blocks are never updated or deleted; verification replays SHA-512 linkage and merkle roots from genesis.",
 	})
+}
+
+// queryLimit reads ?limit= and keeps it inside a stated ceiling.
+//
+// Several list routes took the caller's number as given, so ?limit=1000000
+// walked and copied the whole collection into one response: slow for the
+// caller, and an easy way for anyone to make the rail allocate. A ceiling is
+// not a feature flag; it is the difference between a list endpoint and a
+// denial of service.
+func queryLimit(r *http.Request, def, max int) int {
+	n := atoiDefault(r.URL.Query().Get("limit"), def)
+	if n <= 0 {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
 }
 
 func atoiDefault(s string, def int) int {

@@ -15,7 +15,6 @@ package drunix
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -74,7 +73,7 @@ func (s *Server) handleMandatesRoot(w http.ResponseWriter, r *http.Request) {
 				principal = caller.ID
 			}
 		}
-		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		limit := queryLimit(r, 50, 200)
 		list := reg.List(principal, agent, limit)
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"mandates": list,

@@ -14,13 +14,21 @@
 // /api/umi/*, which the Node server reverse-proxies to the Go rail. If the rail
 // is not running the page says so plainly and nothing else in the app changes.
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { umiFetch as umi } from '../lib/umiFetch'
-import WorkDeskPanel from '../components/WorkDeskPanel'
-import CarbonPanel from '../components/CarbonPanel'
-import ThroughputPanel from '../components/ThroughputPanel'
-import PrivateDataPanel from '../components/PrivateDataPanel'
-import InteropPanel from '../components/InteropPanel'
+// These five panels sit below the settlement forms, which is the reason
+// anyone opens this page. Loading them up front made the first paint wait
+// for code most visitors scroll past, so they are split out and fetched
+// when the page renders them rather than when it is requested.
+const WorkDeskPanel = lazy(() => import('../components/WorkDeskPanel'))
+const CarbonPanel = lazy(() => import('../components/CarbonPanel'))
+const ThroughputPanel = lazy(() => import('../components/ThroughputPanel'))
+const PrivateDataPanel = lazy(() => import('../components/PrivateDataPanel'))
+const InteropPanel = lazy(() => import('../components/InteropPanel'))
+
+function PanelFallback() {
+  return <div className="pg-card pg-empty" style={{ marginTop: 16 }}>Loading…</div>
+}
 
 const C = {
   paper: '#F7F5F0', navy: '#1E3A5F', line: '#E5E7EB', mut: '#6B7280',
@@ -884,13 +892,13 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         )}
       </Card>
 
-      <WorkDeskPanel properties={properties} participants={participants} propLabel={propLabel} />
-
-      <CarbonPanel participants={participants} />
-
-      <ThroughputPanel />
-      <PrivateDataPanel />
-      <InteropPanel participants={participants} assetIds={properties.map((p) => p.assetId || p.id).filter(Boolean)} />
+      <Suspense fallback={<PanelFallback />}>
+        <WorkDeskPanel properties={properties} participants={participants} propLabel={propLabel} />
+        <CarbonPanel participants={participants} />
+        <ThroughputPanel />
+        <PrivateDataPanel />
+        <InteropPanel participants={participants} assetIds={properties.map((p) => p.assetId || p.id).filter(Boolean)} />
+      </Suspense>
       </>)}
     </div>
   )

@@ -2,7 +2,6 @@ package drunix
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -54,10 +53,7 @@ func (s *Server) handleNotifications(w http.ResponseWriter, r *http.Request) {
 			umiErr(w, http.StatusMethodNotAllowed, "ERR_UMI_METHOD", "Use GET to read notifications.")
 			return
 		}
-		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-		if limit <= 0 || limit > 200 {
-			limit = 50
-		}
+		limit := queryLimit(r, 50, 200)
 		unreadOnly := r.URL.Query().Get("unread") == "true"
 		list, unread := s.UMI.Notifications(participant, unreadOnly, limit)
 		writeJSON(w, http.StatusOK, map[string]interface{}{

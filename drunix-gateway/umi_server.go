@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -399,12 +398,7 @@ func (s *Server) handleUMIInstructions(w http.ResponseWriter, r *http.Request) {
 	if !umiRequireIdentity(w, caller) {
 		return
 	}
-	limit := 50
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
+	limit := queryLimit(r, 50, 500)
 	rows := s.UMI.Instructions(limit)
 	if !caller.supervisor() {
 		mine := make([]SettlementInstruction, 0, len(rows))
@@ -485,7 +479,7 @@ func (s *Server) handleUMIServicingHistory(w http.ResponseWriter, r *http.Reques
 	if !umiRequireIdentity(w, caller) {
 		return
 	}
-	rows := s.UMI.ServicingHistory(atoiDefault(r.URL.Query().Get("limit"), 100))
+	rows := s.UMI.ServicingHistory(queryLimit(r, 100, 500))
 	if !caller.supervisor() {
 		// Every row names who paid and who was paid how much. Yours only.
 		mine := make([]ServicingRecord, 0, len(rows))

@@ -16,7 +16,6 @@ package drunix
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -55,7 +54,7 @@ func (s *Server) handleCredentialsRoot(w http.ResponseWriter, r *http.Request) {
 	reg := s.Credentials
 	switch r.Method {
 	case http.MethodGet:
-		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		limit := queryLimit(r, 50, 200)
 		list := reg.List(r.URL.Query().Get("assetId"), r.URL.Query().Get("subject"), limit)
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"credentials": list,

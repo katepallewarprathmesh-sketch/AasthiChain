@@ -13,7 +13,7 @@ frontend/dist/
 # local reference material (not part of the app)
 uploads/
 
-# PayU / provider credentials — never commit
+# PayU and provider credentials: never commit
 .env.payu
 .env*
 !.env.payu.example
