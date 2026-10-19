@@ -83,6 +83,8 @@ var (
 	ErrWorkSelfDeal      = errors.New("ERR_WORK_SELF_DEAL")
 	ErrWorkBadCategory   = errors.New("ERR_WORK_BAD_CATEGORY")
 	ErrWorkBadHash       = errors.New("ERR_WORK_BAD_HASH")
+	ErrWorkNotVerifier   = errors.New("ERR_WORK_NOT_VERIFIER")
+	ErrWorkWindowOpen    = errors.New("ERR_WORK_WINDOW_OPEN")
 )
 
 // ---------- model ----------
@@ -114,6 +116,10 @@ type WorkOrder struct {
 
 	Status             string   `json:"status"`
 	AcceptanceCriteria []string `json:"acceptanceCriteria"`
+
+	// Outcome terms (outcome.go). Nil means this order settles the original
+	// way, on the funder's acceptance.
+	Outcome *OutcomeTerms `json:"outcome,omitempty"`
 
 	// Evidence. The hash is the reason this module is worth building: the
 	// report handed over today can be re-hashed in five years and checked
@@ -164,7 +170,8 @@ var legalWorkTransitions = map[string][]string{
 	WorkStatusCreated:   {WorkStatusFunded, WorkStatusCancelled},
 	WorkStatusFunded:    {WorkStatusAssigned, WorkStatusRefunded, WorkStatusCancelled},
 	WorkStatusAssigned:  {WorkStatusSubmitted, WorkStatusDisputed, WorkStatusRefunded},
-	WorkStatusSubmitted: {WorkStatusAccepted, WorkStatusDisputed},
+	WorkStatusSubmitted: {WorkStatusAccepted, WorkStatusVerified, WorkStatusDisputed},
+	WorkStatusVerified:  {WorkStatusAccepted, WorkStatusDisputed},
 	WorkStatusDisputed:  {WorkStatusAccepted, WorkStatusRefunded},
 }
 
@@ -250,6 +257,13 @@ func (d *WorkDesk) snap(o *WorkOrder) WorkOrder {
 	cp := *o
 	cp.AcceptanceCriteria = append([]string(nil), o.AcceptanceCriteria...)
 	cp.Events = append([]WorkEvent(nil), o.Events...)
+	if o.Outcome != nil {
+		// Copy the terms too. Handing a caller the live struct let a
+		// response mutate the order it was describing.
+		terms := *o.Outcome
+		terms.Checks = append([]OutcomeCheck(nil), o.Outcome.Checks...)
+		cp.Outcome = &terms
+	}
 	return cp
 }
 
@@ -340,6 +354,13 @@ type WorkRequest struct {
 	Funder             string   `json:"funder"`
 	FeeINR             float64  `json:"feeINR"`
 	AcceptanceCriteria []string `json:"acceptanceCriteria"`
+
+	// Outcome terms, all optional. Supplying checks and a verifier turns
+	// this into an order that pays on a verified result (see outcome.go).
+	Verifier      string         `json:"verifier"`
+	Checks        []OutcomeCheck `json:"checks"`
+	DeliverWithin string         `json:"deliverWithin"`
+	DisputeWindow string         `json:"disputeWindow"`
 }
 
 // Create opens a work order. No money moves yet — CREATED is a statement of
@@ -362,9 +383,14 @@ func (d *WorkDesk) Create(req WorkRequest, actor string) (*WorkOrder, error) {
 		return nil, fmt.Errorf("%w: the fee must be greater than zero", ErrWorkInvalidAmount)
 	}
 
+	now := time.Now().UTC()
+	terms, err := buildOutcomeTerms(req, funder, now)
+	if err != nil {
+		return nil, err
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	now := time.Now().UTC()
 	o := &WorkOrder{
 		OrderID:            d.nextID(),
 		AssetID:            strings.TrimSpace(req.AssetID),
@@ -374,6 +400,7 @@ func (d *WorkDesk) Create(req WorkRequest, actor string) (*WorkOrder, error) {
 		Funder:             funder,
 		FeePaise:           paise,
 		AcceptanceCriteria: trimmedList(req.AcceptanceCriteria),
+		Outcome:            terms,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -381,10 +408,21 @@ func (d *WorkDesk) Create(req WorkRequest, actor string) (*WorkOrder, error) {
 	o.event(WorkStatusCreated, actor, "Work order opened against "+o.AssetID+".")
 	d.orders[o.OrderID] = o
 	d.order = append(d.order, o.OrderID)
-	d.append(BlockWorkCreated, o, map[string]interface{}{
+	created := map[string]interface{}{
 		"spec":               o.Spec,
 		"acceptanceCriteria": o.AcceptanceCriteria,
-	})
+	}
+	if o.Outcome != nil {
+		// The terms go on the chain at the moment they are agreed, so
+		// neither side can produce a different set of criteria later.
+		created["verifier"] = o.Outcome.Verifier
+		created["checks"] = checkSummary(o.Outcome.Checks)
+		created["disputeWindow"] = o.Outcome.DisputeWindow
+		if o.Outcome.DeliverBy != nil {
+			created["deliverBy"] = o.Outcome.DeliverBy.Format(time.RFC3339)
+		}
+	}
+	d.append(BlockWorkCreated, o, created)
 	out := d.snap(o)
 	return &out, nil
 }
@@ -490,6 +528,12 @@ func (d *WorkDesk) Accept(orderID, note, actor string) (*WorkOrder, error) {
 	}
 	if o.DeliverableHash == "" {
 		return nil, fmt.Errorf("%w: nothing has been delivered to accept", ErrWorkBadState)
+	}
+	// An order with outcome terms is not accepted by hand. Allowing it would
+	// make the checks decorative, which is the failure this is here to stop.
+	if o.hasOutcomeTerms() && o.Status != WorkStatusVerified {
+		return nil, fmt.Errorf("%w: this order pays on verified checks; %d required check(s) are outstanding",
+			ErrWorkBadState, o.Outcome.requiredOutstanding())
 	}
 	if err := d.settleEscrow(o.Funder, o.Worker, o.FeePaise); err != nil {
 		return nil, err
@@ -732,9 +776,11 @@ func applyWorkTxn(o *WorkOrder, blockType string, txn map[string]interface{}) {
 	switch blockType {
 	case BlockWorkFunded:
 		o.Escrowed = true
-	case BlockWorkAccepted, BlockWorkRefunded, BlockWorkCancelled:
+	case BlockWorkAccepted, BlockWorkRefunded, BlockWorkCancelled,
+		BlockWorkFinalised, BlockWorkExpired:
 		o.Escrowed = false
 	}
+	applyOutcomeTxn(o, blockType, txn)
 	o.Events = append(o.Events, WorkEvent{
 		Seq:       len(o.Events) + 1,
 		Status:    o.Status,

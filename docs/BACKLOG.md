@@ -37,6 +37,12 @@ Done looks like: a `UMI_CONDITION_*` block family, an escrow state the reconcili
 check already in the suite can prove is conserved, a timeout path that cannot strand
 money, and a failure test for every way the condition can fail to arrive.
 
+Partly delivered. The work desk now settles this way: acceptance criteria are fixed when
+the engagement opens, the fee is escrowed, release needs every required check recorded as
+passed by a named verifier, and a dispute window with a clock decides the rest. What is
+still open is the same shape on the DvP cash leg itself, where the condition would be a
+presented credential rather than a recorded check.
+
 ### 2. Interoperability beyond a single hash-lock
 
 The interop module demonstrates one hash-locked transfer pattern. The repeated outside

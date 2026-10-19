@@ -65,9 +65,13 @@ const (
 // Actions a mandate can authorise. Deliberately a short list: an agent
 // cannot be granted authority the rail does not know how to bound.
 const (
-	ActionSettleDvP    = "SETTLE_DVP"
-	ActionPlaceOffer   = "PLACE_OFFER"
-	ActionAnchorDoc    = "ANCHOR_DOCUMENT"
+	ActionSettleDvP  = "SETTLE_DVP"
+	ActionPlaceOffer = "PLACE_OFFER"
+	ActionAnchorDoc  = "ANCHOR_DOCUMENT"
+	// ActionDeliverWork lets an agent hand in a deliverable on an escrowed
+	// work order. It moves no money by itself: the escrow still releases
+	// only through the agreed verification path.
+	ActionDeliverWork  = "DELIVER_WORK"
 	MandateCredential  = CredentialDelegated
 	MandateDisclaimer  = "No autonomous agent runs on this deployment. This is the authority a software agent would act under, enforced by the rail."
 	mandateMaxLifetime = 365 * 24 * time.Hour
@@ -135,7 +139,7 @@ func (r *MandateRegistry) now() time.Time { return r.nowFunc() }
 
 func knownAction(a string) bool {
 	switch strings.ToUpper(strings.TrimSpace(a)) {
-	case ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc:
+	case ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc, ActionDeliverWork:
 		return true
 	}
 	return false
@@ -502,7 +506,7 @@ func (r *MandateRegistry) Summary() map[string]interface{} {
 		"granted":    len(r.order),
 		"active":     active,
 		"revoked":    revoked,
-		"actions":    []string{ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc},
+		"actions":    []string{ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc, ActionDeliverWork},
 		"enforcedBy": "the settlement path, before anything moves",
 		"disclaimer": MandateDisclaimer,
 	}

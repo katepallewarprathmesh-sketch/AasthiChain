@@ -26,6 +26,8 @@ var workEndpointList = []string{
 	"POST /umi/work/{id}/dispute             {\"reason\":\"...\"}  freezes the escrow",
 	"POST /umi/work/{id}/refund              {\"reason\":\"...\"}  returns escrow to the funder",
 	"POST /umi/work/{id}/cancel              {\"reason\":\"...\"}",
+	"POST /umi/work/{id}/check               {\"check\":\"...\",\"passed\":true,\"evidence\":\"...\"}  verifier only",
+	"POST /umi/work/{id}/finalise            releases a verified order once its dispute window has closed",
 }
 
 // registerWorkRoutes mounts the desk. If Server.Work is nil the routes are
@@ -59,6 +61,10 @@ func workErrStatus(err error) (int, string) {
 		return http.StatusBadRequest, "ERR_WORK_INVALID_AMOUNT"
 	case errors.Is(err, ErrWorkMissingField):
 		return http.StatusBadRequest, "ERR_WORK_MISSING_FIELD"
+	case errors.Is(err, ErrWorkNotVerifier):
+		return http.StatusForbidden, "ERR_WORK_NOT_VERIFIER"
+	case errors.Is(err, ErrWorkWindowOpen):
+		return http.StatusConflict, "ERR_WORK_WINDOW_OPEN"
 	case errors.Is(err, ErrWorkNoEscrow):
 		return http.StatusServiceUnavailable, "ERR_WORK_NO_ESCROW"
 	default:
@@ -105,6 +111,7 @@ func (s *Server) handleWorkCollection(w http.ResponseWriter, r *http.Request) {
 			"summary":    s.Work.Summary(),
 			"scope":      scopeLabel(c),
 			"endpoints":  workEndpointList,
+			"outcome":    s.Work.OutcomeSummary(),
 			"mode":       UMIMode,
 			"disclaimer": UMIDisclaimer,
 		})
@@ -208,6 +215,12 @@ func (s *Server) handleWorkItem(w http.ResponseWriter, r *http.Request) {
 		DeliverableURI  string `json:"deliverableUri"`
 		Note            string `json:"note"`
 		Reason          string `json:"reason"`
+
+		// Verification (outcome.go)
+		Check    string `json:"check"`
+		Passed   bool   `json:"passed"`
+		Evidence string `json:"evidence"`
+		Detail   string `json:"detail"`
 	}
 	if err := umiDecode(r, &body); err != nil {
 		umiErr(w, http.StatusBadRequest, "ERR_BAD_JSON", err.Error())
@@ -248,7 +261,26 @@ func (s *Server) handleWorkItem(w http.ResponseWriter, r *http.Request) {
 		if !workRequireWorker(w, c, existing) {
 			return
 		}
+		// A software agent may deliver under a mandate that names the
+		// action. The bound is checked before the deliverable is recorded,
+		// so an agent outside its authority never gets into the evidence.
+		if _, ok := s.agentMandateFor(w, r, ActionDeliverWork, existing.AssetID, 0); !ok {
+			return
+		}
 		out, err = s.Work.Submit(orderID, body.DeliverableHash, body.DeliverableURI, body.Note, c.ID)
+
+	// The verifier's side: the whole reason outcome terms are worth
+	// anything. Neither party records its own checks.
+	case "check":
+		out, err = s.Work.RecordCheck(orderID, CheckRequest{
+			Name: body.Check, Passed: body.Passed, Evidence: body.Evidence, Detail: body.Detail,
+		}, c.ID, c.supervisor())
+
+	// Releasing a verified order: the funder may waive the rest of the
+	// window, and once it has closed anyone may trigger it, which is what
+	// stops silence being a free delay.
+	case "finalise", "finalize":
+		out, err = s.Work.Finalise(orderID, c.ID, c.supervisor())
 
 	default:
 		umiErr(w, http.StatusNotFound, "ERR_WORK_NO_ACTION", "No action "+action+" on a work order.")
