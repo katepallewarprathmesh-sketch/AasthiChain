@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import PageShell, { Card, Tag } from '../components/PageShell.jsx'
+import { umiFetch } from '../lib/umiFetch.js'
 
 /**
  * The chain above the token: attestation, credential, delegated authority.
@@ -11,12 +12,16 @@ import PageShell, { Card, Tag } from '../components/PageShell.jsx'
  * would be exactly the kind of claim the layer exists to prevent.
  */
 
-const j = async (path, init) => {
-  const r = await fetch(path, init)
-  const text = await r.text()
-  let body = null
-  try { body = JSON.parse(text) } catch { body = { raw: text } }
-  return { ok: r.ok, status: r.status, body }
+/**
+ * Every read on this page goes through umiFetch, which attaches who is
+ * asking. The first version called fetch directly with no headers at all, so
+ * participant-scoped routes answered ERR_UMI_NO_IDENTITY and the agent
+ * authority tab showed a permission error to everybody, signed in or not.
+ * Paths here are relative to /api/umi.
+ */
+const j = async (path) => {
+  const { ok, status, data } = await umiFetch(path)
+  return { ok, status, body: data || {} }
 }
 
 function Rupees({ paise }) {
@@ -34,7 +39,7 @@ function Credentials({ onInspect }) {
 
   useEffect(() => {
     let alive = true
-    j('/api/umi/credentials?limit=50').then(({ ok, body }) => {
+    j('/credentials?limit=50').then(({ ok, body }) => {
       if (!alive) return
       if (!ok) { setErr(body.message || 'The credential registry did not answer.'); return }
       setList(body.credentials || [])
@@ -44,7 +49,7 @@ function Credentials({ onInspect }) {
 
   const verify = async (id) => {
     setVerifying(id)
-    const { body } = await j('/api/umi/credentials/' + encodeURIComponent(id) + '/verify')
+    const { body } = await j('/credentials/' + encodeURIComponent(id) + '/verify')
     setResults(r => ({ ...r, [id]: body }))
     setVerifying('')
   }
@@ -121,11 +126,27 @@ function Impact({ credentialId, setCredentialId }) {
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  // Arriving here cold used to show an empty box and an instruction to paste
+  // an identifier nobody has memorised. The attested credentials are a short
+  // list the rail already serves, so offer them.
+  const [choices, setChoices] = useState([])
+
+  useEffect(() => {
+    let alive = true
+    j('/credentials?limit=50').then(({ ok, body }) => {
+      if (!alive || !ok) return
+      setChoices((body.credentials || [])
+        .map(rec => rec.credential || {})
+        .filter(c => (c.credentialSubject || {}).assetId)
+        .slice(0, 12))
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   const load = async (id) => {
     if (!id) return
     setBusy(true); setErr(''); setData(null)
-    const { ok, body, status } = await j('/api/umi/attestations/' + encodeURIComponent(id))
+    const { ok, body, status } = await j('/attestations/' + encodeURIComponent(id))
     setBusy(false)
     if (!ok) { setErr(status === 404 ? 'No attestation with that id.' : (body.message || 'That lookup failed.')); return }
     setData(body.impact)
@@ -154,6 +175,23 @@ function Impact({ credentialId, setCredentialId }) {
           </button>
         </div>
         {err && <p className="pg-card-sub" style={{ color: 'var(--error-rust)', marginTop: 10 }}>{err}</p>}
+
+        {!!choices.length && (
+          <>
+            <p className="pg-card-sub" style={{ marginTop: 14 }}>Or pick one that was issued against an asset:</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              {choices.map(c => (
+                <button
+                  key={c.id}
+                  className="pg-btn pg-btn-ghost"
+                  onClick={() => { setCredentialId(c.id); load(c.id) }}
+                >
+                  {(c.credentialSubject || {}).assetId}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </Card>
 
       {data && (
@@ -221,7 +259,7 @@ function Attestor() {
 
   const load = async () => {
     setBusy(true)
-    const { body } = await j('/api/umi/attestors/' + encodeURIComponent(id))
+    const { body } = await j('/attestors/' + encodeURIComponent(id))
     setRec(body.attestor || null)
     setBusy(false)
   }
@@ -258,7 +296,7 @@ function Mandates() {
 
   useEffect(() => {
     let alive = true
-    j('/api/umi/mandates?limit=50').then(({ ok, body, status }) => {
+    j('/mandates?limit=50').then(({ ok, body, status }) => {
       if (!alive) return
       if (!ok) {
         setErr(status === 401 || status === 403
@@ -316,6 +354,104 @@ function Mandates() {
   )
 }
 
+/* ---------------- verified delivery ---------------- */
+
+const CHECK_TONE = { PASSED: 'live', FAILED: 'bad', PENDING: 'neutral' }
+
+/**
+ * The newest link in the chain. An attestation says an asset is what it
+ * claims to be; this says a piece of work was delivered as agreed. Both are
+ * the same shape: somebody named stands behind a statement, the statement is
+ * checkable, and the money is conditional on it.
+ */
+function Delivery() {
+  const [orders, setOrders] = useState(null)
+  const [summary, setSummary] = useState(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    j('/work').then(({ ok, body, status }) => {
+      if (!alive) return
+      if (!ok) {
+        setErr(status === 401 || status === 403
+          ? 'Sign in to see engagements you fund, deliver or verify. A work order carries a fee and a brief, so the book is not public.'
+          : (body.message || 'The work desk did not answer.'))
+        return
+      }
+      setOrders((body.orders || []).filter(o => o.outcome))
+      setSummary(body.outcome || null)
+    }).catch(() => alive && setErr('The work desk is unreachable.'))
+    return () => { alive = false }
+  }, [])
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <Card
+        title="Payment conditional on a verified result"
+        sub="Acceptance criteria are fixed when the engagement opens, the fee is escrowed, and release needs every required check recorded as passed by a named verifier. A failed check freezes the escrow instead of paying it out."
+      >
+        <Tag tone="sim">The verifier is a demo identity, not an adjudicator with legal standing</Tag>
+        {summary && (
+          <dl className="pg-kv" style={{ marginTop: 14 }}>
+            <dt>Engagements with terms</dt><dd>{summary.ordersWithOutcomeTerms}</dd>
+            <dt>Verified, awaiting release</dt><dd>{summary.awaitingRelease}</dd>
+            <dt>Released on verification</dt><dd>{summary.released}</dd>
+            <dt>Returned undelivered</dt><dd>{summary.expiredUndelivered}</dd>
+            <dt>Default dispute window</dt><dd>{summary.defaultDisputeWindow}</dd>
+          </dl>
+        )}
+      </Card>
+
+      {err && <div className="pg-card pg-empty">{err}</div>}
+      {!err && !orders && <div className="pg-card pg-empty">Loading…</div>}
+      {!err && orders && !orders.length && (
+        <div className="pg-card pg-empty">
+          None of your engagements carry acceptance criteria yet. Open one on the work desk with a verifier and a
+          list of checks, and its verification trail appears here.
+        </div>
+      )}
+
+      {(orders || []).map(o => {
+        const t = o.outcome || {}
+        const checks = t.checks || []
+        const done = checks.filter(c => c.required && c.status === 'PASSED').length
+        const required = checks.filter(c => c.required).length
+        const tone = o.status === 'DISPUTED' ? 'bad' : o.status === 'VERIFIED' ? 'live' : 'neutral'
+        return (
+          <Card
+            key={o.orderId}
+            title={o.title || o.orderId}
+            sub={`${o.funder} pays, ${o.worker || 'nobody yet'} delivers, ${t.verifier} decides`}
+            right={<Tag tone={tone}>{o.status}</Tag>}
+          >
+            <dl className="pg-kv">
+              <dt>Fee held in escrow</dt>
+              <dd><Rupees paise={o.feePaise} /> {o.escrowed ? '(still held)' : '(released or returned)'}</dd>
+              <dt>Required checks</dt><dd>{done} of {required} passed</dd>
+              {t.deliverBy && (<><dt>Deliver by</dt><dd>{t.deliverBy}</dd></>)}
+              {t.releaseDueAt && (<><dt>Releasable after</dt><dd>{t.releaseDueAt}</dd></>)}
+              {t.releaseTrigger && (<><dt>Released because</dt><dd>{t.releaseTrigger}</dd></>)}
+            </dl>
+            <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
+              {checks.map(c => (
+                <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13.5 }}>
+                  <span>
+                    {c.name}
+                    {!c.required && <span className="pg-card-sub"> (optional)</span>}
+                    {c.detail && <span className="pg-card-sub"> {c.detail}</span>}
+                  </span>
+                  <Tag tone={CHECK_TONE[c.status] || 'neutral'}>{c.status}</Tag>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
 /* ---------------- page ---------------- */
 
 const TABS = [
@@ -323,6 +459,7 @@ const TABS = [
   { id: 'impact', label: 'What rests on it' },
   { id: 'attestor', label: 'Attestor record' },
   { id: 'mandates', label: 'Agent authority' },
+  { id: 'delivery', label: 'Verified delivery' },
 ]
 
 export default function ProofChain() {
@@ -356,6 +493,7 @@ export default function ProofChain() {
       {tab === 'impact' && <Impact credentialId={credentialId} setCredentialId={setCredentialId} />}
       {tab === 'attestor' && <Attestor />}
       {tab === 'mandates' && <Mandates />}
+      {tab === 'delivery' && <Delivery />}
     </PageShell>
   )
 }

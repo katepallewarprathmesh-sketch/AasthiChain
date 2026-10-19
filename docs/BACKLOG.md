@@ -21,6 +21,8 @@ would be hard to substantiate, that is stated rather than hidden.
 Both are simulations of the surrounding authority, not integrations. The signatures, the
 anchors and the refusals are real; the registrar and the agent are demo identities.
 
+See `docs/ROADMAP.md` for the ordered plan these items feed into.
+
 ## Next
 
 ### 1. Conditional release of a settled leg
