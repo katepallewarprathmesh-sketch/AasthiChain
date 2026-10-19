@@ -11,26 +11,19 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
 import BasketPanel from '../components/BasketPanel.jsx'
+import {
+  Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Separator, Stat,
+} from '../components/ui/index.jsx'
 
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
-const card = { background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 18, minWidth: 0 }
 
+// Status to badge tone. The wording is unchanged; only the chrome is.
 const STATUS = {
-  SETTLED: { bg: '#ECFDF5', border: '#A7F3D0', color: '#065F46', label: 'Settled' },
-  FAILED: { bg: '#FEF2F2', border: '#FECACA', color: '#991B1B', label: 'Failed' },
-  CREATED: { bg: '#F1F5F9', border: '#E2E8F0', color: '#475569', label: 'Created' },
-  MATCHED: { bg: '#EFF6FF', border: '#BFDBFE', color: '#1D4ED8', label: 'Matched' },
-  LOCKED: { bg: '#FFFBEB', border: '#FDE68A', color: '#92400E', label: 'Locked' }
-}
-
-function Metric({ label, value, sub, color }) {
-  return (
-    <div style={card}>
-      <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.08em' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#111827', marginTop: 5, overflowWrap: 'anywhere' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 3 }}>{sub}</div>}
-    </div>
-  )
+  SETTLED: { variant: 'success', label: 'Settled' },
+  FAILED: { variant: 'destructive', label: 'Failed' },
+  CREATED: { variant: 'outline', label: 'Created' },
+  MATCHED: { variant: 'secondary', label: 'Matched' },
+  LOCKED: { variant: 'warning', label: 'Locked' },
 }
 
 export default function InvestorDashboard({ user }) {
@@ -120,55 +113,51 @@ export default function InvestorDashboard({ user }) {
   const portfolio = assetsValue + cash + basketValue
 
   return (
-    <div className="pg">
+    <div className="pg ui">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Investor dashboard
           </div>
-          <h1 className="pg-title">
-            {user?.name || identityId}
-          </h1>
-          <p style={{ fontSize: 13, color: '#6B7280', maxWidth: '62ch', lineHeight: 1.6 }}>
+          <h1 className="pg-title">{user?.name || identityId}</h1>
+          <p className="max-w-[62ch] text-[13px] leading-relaxed text-muted-foreground">
             Everything you own, what it has paid you, and the ledger blocks that prove it.
           </p>
         </div>
-        <button onClick={load} disabled={loading} style={{
-          padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none',
-          borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1
-        }}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+        <Button onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</Button>
       </div>
 
       {/* Headline numbers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginTop: 18 }}>
-        <Metric label="Portfolio value" value={money(portfolio)}
-          sub={basketValue > 0 ? 'property + baskets + e₹-W cash' : 'property + e₹-W cash'} color="#1E3A5F" />
-        <Metric label="Property value" value={money(assetsValue)} sub={`${tokenCount.toLocaleString('en-IN')} tokens · ${holdings.length} ${holdings.length === 1 ? 'property' : 'properties'}`} />
-        <Metric label="e₹-W cash" value={railDown ? '—' : money(cash)} sub={wallet?.walletId || 'wholesale CBDC wallet'} color="#6D28D9" />
-        <Metric
+      <div className="mt-[18px] grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+        <Stat label="Portfolio value" value={money(portfolio)}
+          hint={basketValue > 0 ? 'property + baskets + e₹-W cash' : 'property + e₹-W cash'} />
+        <Stat label="Property value" value={money(assetsValue)}
+          hint={`${tokenCount.toLocaleString('en-IN')} tokens · ${holdings.length} ${holdings.length === 1 ? 'property' : 'properties'}`} />
+        <Stat label="e₹-W cash" value={railDown ? '—' : money(cash)} hint={wallet?.walletId || 'wholesale CBDC wallet'} />
+        <Stat
           label="Income received"
+          tone="success"
           value={railDown || incomeUnavailable ? '—' : money(totalIncome)}
-          sub={incomeUnavailable
+          hint={incomeUnavailable
             ? 'Income history needs a newer gateway build'
-            : `${income?.count || 0} rent / coupon payouts`}
-          color="#065F46" />
+            : `${income?.count || 0} rent / coupon payouts`} />
       </div>
 
       {/* Only claim a total outage when everything really failed. Otherwise
           list precisely what is missing, so the page never tells the user that
           cash is unavailable while the cash figure is sitting right above. */}
       {railDown ? (
-        <div style={{ ...card, marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12.5, lineHeight: 1.6 }}>
+        <Alert variant="warning" className="mt-3.5">
           The UMI settlement rail is not reachable, so cash, income and settlement history are unavailable.
           Your holdings and valuation above are unaffected.
-        </div>
+        </Alert>
       ) : railIssues.length > 0 ? (
-        <div style={{ ...card, marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12.5, lineHeight: 1.6 }}>
+        <Alert variant="warning" className="mt-3.5">
           <strong>The settlement rail is online.</strong> Everything below is live except:
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-            {railIssues.map(([what, why]) => <li key={what}>{what} — {why}</li>)}
+          <ul className="mt-1.5 list-disc pl-[18px]">
+            {railIssues.map(([what, why]) => <li key={what}>{what}: {why}</li>)}
           </ul>
-        </div>
+        </Alert>
       ) : null}
 
       <BasketPanel
@@ -180,107 +169,115 @@ export default function InvestorDashboard({ user }) {
       />
 
       {/* Holdings */}
-      <div style={{ ...card, marginTop: 16 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Holdings</h2>
-        {holdings.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-            Nothing yet. <Link to="/marketplace" style={{ color: '#1E3A5F', fontWeight: 600 }}>Browse properties →</Link>
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-            {holdings.map((h, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
-                border: '1px solid #F3F4F6', borderRadius: 9, padding: '10px 12px' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>
-                    {h.propertyTitle || h.balance?.assetId}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>
-                    {Number(h.balance?.balance || 0).toLocaleString('en-IN')} tokens
-                    {h.tokenPrice ? ` · ${money(h.tokenPrice)} each` : ''}
-                  </div>
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#1E3A5F' }}>{money(h.valueINR)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Income */}
-      {!railDown && (
-        <div style={{ ...card, marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Rent &amp; coupon income</h2>
-            <span style={{ fontSize: 11.5, color: '#6B7280' }}>paid straight into your e₹-W wallet by smart contract</span>
-          </div>
-          {!income || income.count === 0 ? (
-            <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-              No distributions yet. When an issuer runs a servicing payout, your share is credited automatically
-              and appears here with the block that recorded it.
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Holdings</CardTitle></CardHeader>
+        <CardContent>
+          {holdings.length === 0 ? (
+            <p className="text-muted-foreground">
+              Nothing yet. <Link to="/marketplace" className="font-semibold text-primary">Browse properties →</Link>
             </p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
-              {income.payouts.map(p => (
-                <div key={p.servicingId + p.holder} style={{ display: 'flex', justifyContent: 'space-between', gap: 10,
-                  flexWrap: 'wrap', alignItems: 'center', border: '1px solid #F3F4F6', borderRadius: 9, padding: '9px 12px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, color: '#111827', fontWeight: 600, overflowWrap: 'anywhere' }}>
-                      {p.assetId}{p.isin ? ` · ISIN ${p.isin}` : ''}
+            <div className="flex flex-col gap-2">
+              {holdings.map((h, i) => (
+                <div key={i}
+                  className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-border px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-bold break-words text-foreground">
+                      {h.propertyTitle || h.balance?.assetId}
                     </div>
-                    <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
-                      {new Date(p.settledAt).toLocaleString('en-IN')} · on {Number(p.tokens).toLocaleString('en-IN')} tokens
-                      {p.blockHeight ? ` · block #${p.blockHeight}` : ''}
+                    <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                      {Number(h.balance?.balance || 0).toLocaleString('en-IN')} tokens
+                      {h.tokenPrice ? ` · ${money(h.tokenPrice)} each` : ''}
                     </div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#065F46' }}>+{money(p.amountINR)}</div>
+                  <div className="text-[15px] font-extrabold text-primary">{money(h.valueINR)}</div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
+
+      {/* Income */}
+      {!railDown && (
+        <Card className="mt-4">
+          <CardHeader className="flex-row flex-wrap items-baseline justify-between gap-2.5">
+            <CardTitle>Rent &amp; coupon income</CardTitle>
+            <span className="text-[11.5px] text-muted-foreground">
+              paid straight into your e₹-W wallet by smart contract
+            </span>
+          </CardHeader>
+          <CardContent>
+            {!income || income.count === 0 ? (
+              <p className="text-muted-foreground">
+                No distributions yet. When an issuer runs a servicing payout, your share is credited automatically
+                and appears here with the block that recorded it.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {income.payouts.map(p => (
+                  <div key={p.servicingId + p.holder}
+                    className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-border px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="text-[12.5px] font-semibold break-words text-foreground">
+                        {p.assetId}{p.isin ? ` · ISIN ${p.isin}` : ''}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        {new Date(p.settledAt).toLocaleString('en-IN')} · on {Number(p.tokens).toLocaleString('en-IN')} tokens
+                        {p.blockHeight ? ` · block #${p.blockHeight}` : ''}
+                      </div>
+                    </div>
+                    <div className="text-[14px] font-extrabold text-[#065F46]">+{money(p.amountINR)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Settlements */}
       {!railDown && (
-        <div style={{ ...card, marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Settlement history</h2>
-            <Link to="/ledger" style={{ fontSize: 11.5, color: '#1E3A5F', fontWeight: 600, textDecoration: 'none' }}>
+        <Card className="mt-4">
+          <CardHeader className="flex-row flex-wrap items-baseline justify-between gap-2.5">
+            <CardTitle>Settlement history</CardTitle>
+            <Link to="/ledger" className="text-[11.5px] font-semibold text-primary no-underline">
               Open the ledger →
             </Link>
-          </div>
-          {settlements.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-              No settlements yet. Run one on the <Link to="/umi" style={{ color: '#1E3A5F', fontWeight: 600 }}>UMI page</Link>.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
-              {settlements.slice(0, 12).map(s => {
-                const st = STATUS[s.status] || STATUS.CREATED
-                const side = s.buyer === identityId ? 'Bought' : 'Sold'
-                return (
-                  <div key={s.instructionId} style={{ display: 'flex', justifyContent: 'space-between', gap: 10,
-                    flexWrap: 'wrap', alignItems: 'center', border: '1px solid #F3F4F6', borderRadius: 9, padding: '9px 12px' }}>
-                    <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-                        color: st.color, background: st.bg, border: `1px solid ${st.border}` }}>{st.label}</span>
-                      <span style={{ fontSize: 12.5, color: '#111827' }}>
-                        <b>{side}</b> {Number(s.tokens).toLocaleString('en-IN')} tokens for <b>{money(s.cashINR)}</b>
+          </CardHeader>
+          <CardContent>
+            {settlements.length === 0 ? (
+              <p className="text-muted-foreground">
+                No settlements yet. Run one on the <Link to="/umi" className="font-semibold text-primary">UMI page</Link>.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {settlements.slice(0, 12).map(s => {
+                  const st = STATUS[s.status] || STATUS.CREATED
+                  const side = s.buyer === identityId ? 'Bought' : 'Sold'
+                  return (
+                    <div key={s.instructionId}
+                      className="flex flex-wrap items-center justify-between gap-2.5 rounded-md border border-border px-3 py-2.5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                        <Badge variant={st.variant}>{st.label}</Badge>
+                        <span className="text-[12.5px] text-foreground">
+                          <b>{side}</b> {Number(s.tokens).toLocaleString('en-IN')} tokens for <b>{money(s.cashINR)}</b>
+                        </span>
+                      </div>
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {s.status === 'SETTLED' && s.blockHeight ? `block #${s.blockHeight}` : s.failureReason || ''}
                       </span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'monospace' }}>
-                      {s.status === 'SETTLED' && s.blockHeight ? `block #${s.blockHeight}` : s.failureReason || ''}
-                    </span>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
+            )}
+            <Separator className="my-3" />
+            <div className="text-[11px] leading-relaxed text-muted-foreground">
+              {settled.length} settled · every one moved tokens and cash together, or neither.
             </div>
-          )}
-          <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 10, lineHeight: 1.6 }}>
-            {settled.length} settled · every one moved tokens and cash together, or neither.
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

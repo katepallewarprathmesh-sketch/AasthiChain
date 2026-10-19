@@ -66,6 +66,23 @@ environment.
 
 ---
 
+## The interface layer
+
+The landing page has its own dark, hand written system and keeps it. Everything behind a login
+(dashboard, wallet, settlement rail and the panels they mount) is built from one small component
+set in `frontend/src/components/ui/`: the shadcn/ui primitives (button, card, badge, input, select,
+table, tabs, alert, skeleton, stat) written as plain JSX over Tailwind tokens, with the project's
+existing palette mapped onto the shadcn variable names in `frontend/src/ui.css`.
+
+Two deliberate constraints:
+
+- **No preflight.** Only Tailwind's theme and utilities are imported. The global reset would have
+  silently redrawn every page that still styles itself inline, so the handful of resets the
+  components need are scoped to a `.ui` subtree instead.
+- **Adoption is per page.** A page opts in by carrying `ui` on its root element and using the
+  components. Pages that have not been converted render exactly as before, which is what makes it
+  safe to move one screen at a time.
+
 ## Repository layout
 
 | Path | What it is |
