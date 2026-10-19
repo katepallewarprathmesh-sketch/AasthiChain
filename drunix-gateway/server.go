@@ -52,6 +52,10 @@ type Server struct {
 	// Work is the escrowed work-order desk (see work.go). Nil means the
 	// /umi/work/* routes are not mounted and nothing else changes.
 	Work *WorkDesk
+	// Backing holds attested proof of backing and gates issuance on it
+	// (see backing.go). Nil means the /umi/backing/* routes are not mounted
+	// and issuance is bounded only by the issuer's declared supply cap.
+	Backing *BackingRegistry
 }
 
 // NewServer wires dependencies (DIP).
@@ -138,6 +142,7 @@ func (s *Server) Router() http.Handler {
 	s.registerCredentialRoutes(mux)
 	s.registerMandateRoutes(mux)
 	s.registerAttestationRoutes(mux)
+	s.registerBackingRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

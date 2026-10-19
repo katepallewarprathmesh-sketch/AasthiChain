@@ -219,6 +219,16 @@ func main() {
 		srv.Attestations = drunix.NewAttestationService(chain, srv.Credentials, srv.UMI)
 		log.Printf("Attestations mounted at /umi/attestations/*: downstream exposure of every attestation")
 
+		// Proof of backing: tokens outstanding against units a named party
+		// has attested exist, refreshed on a stated cadence (backing.go).
+		// Assets nobody has attested are unaffected.
+		srv.Backing = drunix.NewBackingRegistry(srv.UMI, chain)
+		if n := srv.Backing.RestoreBackingFromChain(); n > 0 {
+			log.Printf("Backing registry restored %d statement(s) of backing from the ledger", n)
+		}
+		srv.UMI.SetIssuanceGate(srv.Backing)
+		log.Printf("Backing mounted at /umi/backing/*: issuance refused past the attested figure, or once it goes stale")
+
 		// Delegated authority for software agents (mandates.go). Nothing
 		// autonomous runs here; this is the authority layer such an actor
 		// would act under, enforced on the settlement path.

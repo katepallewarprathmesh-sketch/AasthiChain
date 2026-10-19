@@ -45,6 +45,10 @@ const TYPE_STYLES = {
   UMI_INTEROP_LOCKED: { label: 'Interop · Locked', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   UMI_INTEROP_COMMITTED: { label: 'Interop · Committed', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
   UMI_INTEROP_ABORTED: { label: 'Interop · Aborted', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  // Proof of backing (issuance against an attested figure)
+  UMI_BACKING_ATTESTED: { label: 'Backing · Attested', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
+  UMI_BACKING_WITHDRAWN: { label: 'Backing · Withdrawn', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_ISSUE_BLOCKED: { label: 'Issuance · Refused, Backing Short', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   // Work orders (escrowed engagements)
   WORK_CREATED: { label: 'Work · Created', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
   WORK_FUNDED: { label: 'Work · Escrow Funded', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },

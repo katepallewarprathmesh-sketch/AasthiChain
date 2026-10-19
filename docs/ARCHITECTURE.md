@@ -66,6 +66,29 @@ environment.
 
 ---
 
+### Proof of backing
+
+Tokenised assets fail when issuance outruns the thing behind it. A registrar (or a supervisor)
+records a statement for one asset: how many units exist, what they are valued at, the method used,
+a hash of the evidence, and how often the statement must be refreshed (90 days by default, one hour
+minimum, one year maximum). Issuance is then checked against that figure: anything that would push
+the book past the attested units is refused, and the refusal is committed as a block so the gate
+itself can be audited.
+
+Four points the layer is careful about:
+
+- An asset with no statement behaves exactly as it did before. The gate binds only where someone
+  has given it something to bind to.
+- Blocking is never reversing. Nothing is burned or unwound; an asset that is already over-issued
+  is reported as such rather than quietly corrected.
+- A statement that is past its refresh date stops authorising issuance. Stale evidence is evidence
+  about the past.
+- The attestor cannot be the beneficiary, and the rail says plainly that it checks arithmetic, not
+  reality. A false statement here produces a precise, well-evidenced, false number.
+
+Statements are replaced rather than edited, and both the statement and its withdrawal are replayed
+from the chain at startup.
+
 ## Repository layout
 
 | Path | What it is |

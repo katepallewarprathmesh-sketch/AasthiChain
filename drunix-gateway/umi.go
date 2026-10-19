@@ -356,6 +356,10 @@ type UMIRail struct {
 	// number in and the breach would vanish - so a derived cap can be
 	// corrected once by an explicit declaration. A declared one cannot.
 	derived map[string]bool
+	// gate, when set, refuses issuance that would outrun an attested
+	// statement of backing (backing.go). nil means no such statement layer
+	// is wired and only the declared cap applies.
+	gate IssuanceGate
 
 	// assets is the asset-class registry (see assetclass.go). An asset with no
 	// entry is a PROPERTY, which is what every asset was before classes
@@ -672,6 +676,15 @@ func (r *UMIRail) SeedPosition(assetID, holder string, tokens, authorisedTokens 
 	if outstanding+tokens > cap0 {
 		return 0, fmt.Errorf("%w: %s has %d of %d tokens issued to other holders, cannot seed %d more",
 			ErrUMISupplyExceeded, assetID, outstanding, cap0, tokens)
+	}
+
+	// Proof of backing (backing.go). The declared cap above is the issuer's
+	// own number; this is somebody else's. An asset with no statement of
+	// backing passes straight through, exactly as before.
+	if gate := r.issuanceGate(); gate != nil {
+		if err := gate.GateIssue(assetID, tokens-mem.Position(assetID, holder), holder, time.Now().UTC()); err != nil {
+			return 0, err
+		}
 	}
 
 	mem.Set(assetID, holder, tokens)
