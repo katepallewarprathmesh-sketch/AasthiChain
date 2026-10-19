@@ -1,7 +1,6 @@
 import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwind from '@tailwindcss/vite'
 
 // Stamp the build into the bundle so a tab can tell whether the code it is
 // running is the code the server is serving. Vercel exposes the commit as an
@@ -14,7 +13,7 @@ function buildStamp() {
 
 export default defineConfig({
   define: { __BUILD_STAMP__: JSON.stringify(buildStamp()) },
-  plugins: [react(), tailwind()],
+  plugins: [react()],
   build: {
     target: 'es2020',
     cssCodeSplit: true,

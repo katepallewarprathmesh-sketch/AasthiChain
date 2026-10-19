@@ -16,12 +16,6 @@
 
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { umiFetch as umi } from '../lib/umiFetch'
-// The page keeps its own layout and its own copy. Only the chrome (cards,
-// pills, notices, controls) now comes from the shared component set, so the
-// rail stops looking like a different product to the dashboard.
-import {
-  Alert, Badge, Card as UICard, CardContent, CardHeader, CardDescription, CardTitle, Skeleton,
-} from '../components/ui/index.jsx'
 // These five panels sit below the settlement forms, which is the reason
 // anyone opens this page. Loading them up front made the first paint wait
 // for code most visitors scroll past, so they are split out and fetched
@@ -33,7 +27,7 @@ const PrivateDataPanel = lazy(() => import('../components/PrivateDataPanel'))
 const InteropPanel = lazy(() => import('../components/InteropPanel'))
 
 function PanelFallback() {
-  return <Skeleton className="mt-4 h-[120px] w-full" />
+  return <div className="pg-card pg-empty" style={{ marginTop: 16 }}>Loading…</div>
 }
 
 const C = {
@@ -73,34 +67,46 @@ function Notice({ flash, where, onClose }) {
   if (!flash || flash.where !== where) return null
   const ok = flash.kind === 'ok'
   return (
-    <Alert variant={ok ? 'success' : 'destructive'} aria-live="polite"
-      className="mt-3 flex items-start gap-2.5">
-      <span aria-hidden="true" className="font-bold leading-snug">{ok ? '✓' : '!'}</span>
-      <span className="flex-1 leading-snug">{flash.text}</span>
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+        background: ok ? C.okBg : C.badBg,
+        border: `1px solid ${ok ? C.okLine : C.badLine}`,
+        color: ok ? C.ok : C.bad,
+      }}
+    >
+      <span aria-hidden="true" style={{ fontWeight: 700, lineHeight: 1.45 }}>{ok ? '✓' : '!'}</span>
+      <span style={{ flex: 1, lineHeight: 1.45 }}>{flash.text}</span>
       <button onClick={onClose} aria-label="Dismiss"
-        className="cursor-pointer border-0 bg-transparent p-0 text-[15px] leading-none text-inherit opacity-60">×</button>
-    </Alert>
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0, opacity: .6 }}>×</button>
+    </div>
   )
 }
 
 function Card({ title, sub, children, right }) {
   return (
-    <UICard className="mb-4">
-      <CardHeader className="flex-row flex-wrap items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <CardTitle className="font-display text-[18px] text-primary">{title}</CardTitle>
-          {sub && <CardDescription className="mt-1 max-w-[760px]">{sub}</CardDescription>}
+    <section style={{ background: 'white', border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontSize: 18, color: C.navy }}>{title}</h2>
+          {sub && <p style={{ margin: '4px 0 0', fontSize: 12.5, color: C.mut, maxWidth: 760 }}>{sub}</p>}
         </div>
         {right}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </UICard>
+      </div>
+      <div style={{ marginTop: 14 }}>{children}</div>
+    </section>
   )
 }
 
 function Pill({ tone = 'mut', children }) {
-  const variant = { ok: 'success', bad: 'destructive', warn: 'warning', mut: 'outline' }[tone] || 'outline'
-  return <Badge variant={variant}>{children}</Badge>
+  const map = {
+    ok: { c: C.ok, bg: C.okBg, b: C.okLine }, bad: { c: C.bad, bg: C.badBg, b: C.badLine },
+    warn: { c: C.warn, bg: C.warnBg, b: C.warnLine }, mut: { c: C.mut, bg: '#F9FAFB', b: C.line },
+  }[tone]
+  return <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: .3, color: map.c, background: map.bg, border: `1px solid ${map.b}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{children}</span>
 }
 
 const CONTROL_H = 37
@@ -370,7 +376,7 @@ export default function UMISettlement() {
 
   if (railDown) {
     return (
-      <div className="container pg pg-narrow ui">
+      <div className="container pg pg-narrow">
         <h1 className="pg-title">Aasthi Settlement Interface</h1>
         <div style={{ background: C.warnBg, border: `1px solid ${C.warnLine}`, borderRadius: 12, padding: 18, color: C.warn }}>
           <strong>Rail offline.</strong>
@@ -384,7 +390,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
   }
 
   return (
-    <div className="container umi-page pg ui" style={{ maxWidth: 1080 }}>
+    <div className="container umi-page pg" style={{ maxWidth: 1080 }}>
       <style>{`
         .umi-page input, .umi-page select { font-family: inherit; transition: border-color .12s, box-shadow .12s; }
         .umi-page input:focus-visible, .umi-page select:focus-visible {
