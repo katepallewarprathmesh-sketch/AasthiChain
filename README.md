@@ -241,6 +241,11 @@ one before it, so an altered history announces itself instead of passing quietly
 **Supply is scarce.** Tokens cannot exceed a property's authorised supply, and an owner's unsold
 stock is never counted as allocated.
 
+**Issuance cannot outrun stated backing.** Where somebody accountable has stated how much of an
+asset exists, with evidence and a date it must be refreshed by, issuing past that figure is refused
+and the refusal is written down. A statement past its refresh date stops authorising anything. The
+platform checks the arithmetic, not whether the statement is true, and says so.
+
 **Holder identity is private.** A visitor sees how many people hold a property and in what
 proportions, under anonymous labels. Real names need a session, so the marketplace stays open to
 browse without leaking a cap table.
@@ -277,7 +282,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 131 checks across 86 suite files
+make test         # the full sweep: 132 checks across 87 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

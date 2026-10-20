@@ -229,6 +229,12 @@ func main() {
 		srv.UMI.SetIssuanceGate(srv.Backing)
 		log.Printf("Backing mounted at /umi/backing/*: issuance refused past the attested figure, or once it goes stale")
 
+		// Agent passports (agentid.go): an automated actor acts under a
+		// pseudonym, and the principal behind it is split across custodians
+		// so that identifying them takes a threshold and leaves a record.
+		srv.Agents = drunix.NewAgentRegistry(chain)
+		log.Printf("Agent passports mounted at /umi/agents/*: pseudonymous actors, principal recoverable only by a threshold of custodians")
+
 		// Delegated authority for software agents (mandates.go). Nothing
 		// autonomous runs here; this is the authority layer such an actor
 		// would act under, enforced on the settlement path.

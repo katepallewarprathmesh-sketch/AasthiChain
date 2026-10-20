@@ -89,6 +89,23 @@ Four points the layer is careful about:
 Statements are replaced rather than edited, and both the statement and its withdrawal are replayed
 from the chain at startup.
 
+### Agent identity
+
+A software actor on the rail acts under a pseudonym rather than under its principal's name. The
+principal is split across named custodians with Shamir's secret sharing, and recovering it takes a
+threshold of them: a request with a stated trigger, then one approval per custodian, each of which
+is a block. Fewer than the threshold recover nothing, which is a property of the arithmetic rather
+than a promise.
+
+The limits are stated in the API responses, not only here. Every share lives in this one process,
+so the protocol is real and the distribution is simulated; real custody means one share per
+organisation. The pseudonym is re-identifiable by design, so it remains personal data. A revoked
+agent stops acting, but who was accountable for what it already did stays recoverable, and an
+identification request that nobody completes lapses and is recorded as an unanswered ask.
+
+Design note, including why the alternative architectures were not chosen:
+[`AGENT_IDENTITY.md`](AGENT_IDENTITY.md).
+
 ## Repository layout
 
 | Path | What it is |

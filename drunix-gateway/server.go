@@ -56,6 +56,11 @@ type Server struct {
 	// (see backing.go). Nil means the /umi/backing/* routes are not mounted
 	// and issuance is bounded only by the issuer's declared supply cap.
 	Backing *BackingRegistry
+
+	// Agents holds agent passports: a pseudonym per software actor with the
+	// principal behind it split across custodians (agentid.go). nil leaves
+	// the routes unmounted.
+	Agents *AgentRegistry
 }
 
 // NewServer wires dependencies (DIP).
@@ -143,6 +148,7 @@ func (s *Server) Router() http.Handler {
 	s.registerMandateRoutes(mux)
 	s.registerAttestationRoutes(mux)
 	s.registerBackingRoutes(mux)
+	s.registerAgentRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }
