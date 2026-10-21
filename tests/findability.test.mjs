@@ -59,6 +59,16 @@ async function main() {
   ok('the rest sits behind one menu', /MoreMenu/.test(app) && /Everything on AasthiChain/.test(app));
   ok('the menu can be closed with the keyboard', /key === 'Escape'/.test(app));
 
+  // The menu opened invisibly once: an absolutely positioned panel inside
+  // .site-nav-links, which is a horizontal scroll container, was clipped by
+  // it. Both halves of that fix are pinned here.
+  const linksRow = app.slice(app.indexOf('className="site-nav-links"'), app.indexOf('<MoreMenu'));
+  ok('the menu trigger sits outside the scrolling row of links',
+    !linksRow.includes('<MoreMenu') && app.indexOf('<MoreMenu') > app.indexOf('className="site-nav-links"'));
+  ok('the panel is positioned against the viewport, so nothing can clip it',
+    /position: 'fixed', top: rect\.top/.test(app));
+  ok('the trigger is measured before it opens', /getBoundingClientRect/.test(app));
+
   // 4. The directory itself is findable, and indexable.
   ok('the directory is in the footer', /\/explore/.test(app.slice(app.indexOf('const cols = ['), app.indexOf('const cols = [') + 900)));
   ok('the directory has its own title and description', /'\/explore':/.test(seo));

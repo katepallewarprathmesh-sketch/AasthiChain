@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react'
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react'
 import NotificationBell from './components/NotificationBell.jsx'
 const AasthiAI = lazy(() => import('./components/AasthiAI.jsx'))
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
@@ -271,50 +271,96 @@ function Footer() {
 // Everything that is not a daily screen lives behind one menu instead of
 // stretching the navbar until nothing in it stands out. The full directory,
 // with a sentence per page and a filter, is at /explore.
-function MoreMenu({ groups, mut, text, chipBg, chipBorder, isMobile }) {
+//
+// Two things this has to get right, both of which it got wrong first time.
+// The row of nav links is a horizontal scroll container (overflow-x: auto on
+// .site-nav-links), and an absolutely positioned panel inside a scroll
+// container is clipped by it: the menu opened and was invisible, which reads
+// as a dead button. So the trigger sits outside that row, and the panel is
+// positioned fixed against the trigger's measured rectangle, where no
+// ancestor's overflow can cut it off. The trigger also has to line up with
+// the links beside it, so it carries their exact font size, padding and line
+// height rather than a button's defaults.
+function MoreMenu({ groups, mut, text, dark, chipBg, chipBorder, isMobile }) {
   const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const btnRef = useRef(null)
   const close = () => setOpen(false)
+
+  const place = useCallback(() => {
+    const el = btnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setRect({ top: r.bottom + 8, left: r.left, right: r.right })
+  }, [])
+
+  const toggle = () => {
+    place()
+    setOpen((o) => !o)
+  }
+
   useEffect(() => {
     if (!open) return undefined
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, place])
+
+  // Right-align the panel when opening it on the left would run it off the
+  // screen, which is what happens on a phone.
+  const width = 264
+  const vw = typeof window === 'undefined' ? 1200 : window.innerWidth
+  const left = rect ? Math.max(8, Math.min(rect.left, vw - width - 8)) : 8
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
+    <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
       <button
+        ref={btnRef}
         type="button"
         aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        onClick={toggle}
         style={{
-          textDecoration: 'none', fontSize: isMobile ? 12.5 : 13, fontWeight: 500,
+          display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+          fontFamily: 'inherit', fontSize: isMobile ? 12.5 : 13, fontWeight: 500, lineHeight: 1.2,
           padding: isMobile ? '6px 9px' : '8px 12px', borderRadius: 8, whiteSpace: 'nowrap',
-          cursor: 'pointer', background: open ? chipBg : 'transparent', color: mut,
-          border: `1px solid ${open ? chipBorder : 'transparent'}`,
+          background: open ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent',
+          color: open ? (dark ? '#EAEEF5' : '#1E3A5F') : mut,
+          border: '1px solid transparent',
         }}
       >
         More
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>
+          <path d="M5 9l7 7 7-7" />
+        </svg>
       </button>
-      {open && (
+      {open && rect && (
         <>
-          <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 150 }} aria-hidden="true" />
+          <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 300 }} aria-hidden="true" />
           <div
+            role="menu"
             style={{
-              position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 200, minWidth: 260,
-              maxHeight: '70vh', overflowY: 'auto', background: chipBg === '#F9FAFB' ? '#FFFFFF' : '#101623',
+              position: 'fixed', top: rect.top, left, zIndex: 301, width,
+              maxHeight: '70vh', overflowY: 'auto',
+              background: dark ? '#101623' : '#FFFFFF',
               border: `1px solid ${chipBorder}`, borderRadius: 12, padding: 10,
               boxShadow: '0 24px 60px -24px rgba(15,23,42,0.45)',
             }}
           >
             {groups.map((g) => (
-              <div key={g.name} style={{ marginBottom: 8 }}>
+              <div key={g.name} style={{ marginBottom: 6 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: mut, padding: '6px 8px' }}>{g.name}</div>
                 {g.items.map((i) => (
                   <Link
                     key={i.path}
                     to={i.path}
+                    role="menuitem"
                     onClick={close}
                     style={{ display: 'block', textDecoration: 'none', fontSize: 13, fontWeight: 500, color: text, padding: '7px 8px', borderRadius: 8 }}
                   >
@@ -325,8 +371,9 @@ function MoreMenu({ groups, mut, text, chipBg, chipBorder, isMobile }) {
             ))}
             <Link
               to="/explore"
+              role="menuitem"
               onClick={close}
-              style={{ display: 'block', textDecoration: 'none', fontSize: 12.5, fontWeight: 700, color: text, padding: '8px', borderTop: `1px solid ${chipBorder}`, marginTop: 4 }}
+              style={{ display: 'block', textDecoration: 'none', fontSize: 12.5, fontWeight: 700, color: text, padding: '9px 8px', borderTop: `1px solid ${chipBorder}`, marginTop: 2 }}
             >
               Everything on AasthiChain
             </Link>
@@ -427,7 +474,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
             <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
             {!isMobile && <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>}
           </Link>
-          <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0 }}>
+          <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0, alignItems: 'center' }}>
             {navItems.map(item => (
               <Link key={item.path} to={item.path} style={{
                 textDecoration: 'none', fontSize: isMobile ? 12.5 : 13, fontWeight: 500, padding: isMobile ? '6px 9px' : '8px 12px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
@@ -435,8 +482,8 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
                 background: isActive(item.path) ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent',
               }}>{item.label}</Link>
             ))}
-            <MoreMenu groups={moreGroups} mut={mut} text={text} chipBg={chipBg} chipBorder={chipBorder} isMobile={isMobile} />
           </div>
+          <MoreMenu groups={moreGroups} mut={mut} text={text} dark={dark} chipBg={chipBg} chipBorder={chipBorder} isMobile={isMobile} />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexShrink: 0, flex: twoRow ? '1 1 100%' : undefined, justifyContent: twoRow ? 'space-between' : undefined, borderTop: twoRow ? `1px solid ${border}` : undefined, padding: twoRow ? '7px 0' : undefined }}>
