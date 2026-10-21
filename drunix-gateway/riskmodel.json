@@ -1,0 +1,101 @@
+{
+  "name": "aasthi-payment-risk",
+  "version": "v1",
+  "kind": "logistic regression, fitted by batch gradient descent with L2",
+  "trainedAt": "2026-10-21",
+  "seed": 20261021,
+  "epochs": 3000,
+  "learningRate": 0.12,
+  "l2": 0.001,
+  "bias": -1.880778,
+  "features": [
+    {
+      "name": "log_amount",
+      "description": "log of the payment amount in rupees",
+      "mean": 11.072077,
+      "stdDev": 1.161134,
+      "weight": -0.202869
+    },
+    {
+      "name": "amount_vs_recent_mean",
+      "description": "this amount divided by the payer's recent average, capped at 10",
+      "mean": 1.938201,
+      "stdDev": 2.588009,
+      "weight": 0.464677
+    },
+    {
+      "name": "txn_count_10m",
+      "description": "payments by this payer in the last ten minutes",
+      "mean": 1.268452,
+      "stdDev": 2.429473,
+      "weight": 0.288345
+    },
+    {
+      "name": "txn_count_24h",
+      "description": "payments by this payer in the last day",
+      "mean": 4.095595,
+      "stdDev": 5.867711,
+      "weight": 0.221999
+    },
+    {
+      "name": "log_total_24h",
+      "description": "log of the payer's rupee total over the last day",
+      "mean": 12.702224,
+      "stdDev": 1.148461,
+      "weight": 0.106889
+    },
+    {
+      "name": "log_account_age_min",
+      "description": "log of the account age in minutes",
+      "mean": 10.7997,
+      "stdDev": 2.866902,
+      "weight": -0.558142
+    },
+    {
+      "name": "kyc_verified",
+      "description": "1 when KYC is complete, 0 otherwise",
+      "mean": 0.785595,
+      "stdDev": 0.410409,
+      "weight": -0.108618
+    },
+    {
+      "name": "near_threshold",
+      "description": "how close the amount sits under a reporting threshold, 0 to 1",
+      "mean": 0.0684,
+      "stdDev": 0.195781,
+      "weight": 0.106322
+    },
+    {
+      "name": "repeat_amount_share",
+      "description": "share of recent payments within 5 percent of this amount",
+      "mean": 0.198218,
+      "stdDev": 0.319459,
+      "weight": 0.279268
+    },
+    {
+      "name": "odd_hour",
+      "description": "1 when the payment lands between midnight and five in the morning",
+      "mean": 0.161905,
+      "stdDev": 0.368363,
+      "weight": -0.013351
+    }
+  ],
+  "metrics": {
+    "auc": 0.8236,
+    "accuracy": 0.8603,
+    "precision": 0.6265,
+    "recall": 0.7193,
+    "f1": 0.6697,
+    "threshold": 0.33,
+    "trainRows": 8400,
+    "holdoutRows": 3600,
+    "positiveRate": 0.1969
+  },
+  "dataSource": "Synthetic. 12,000 payments from the seeded generator in cmd/trainrisk, 70/30 split. No real payment data was used, because none is available to this project.",
+  "limits": [
+    "Trained on synthetic data, so the metrics describe the generator and not the world.",
+    "Advisory only: the published rules in fraud.go make the decision.",
+    "Linear and small on purpose, so every coefficient and every contribution is readable.",
+    "Ten features from the payment and the payer's recent history. It sees nothing else."
+  ]
+}

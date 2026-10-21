@@ -138,6 +138,25 @@ is off until it has one. Supervisors only, because a fee is spent and publicatio
 
 Runbook and the limits of the claim: [`ANCHORING.md`](ANCHORING.md).
 
+### Payment risk: rules and a trained model
+
+`fraud.go` is the rule engine: `ScorePayment` is a pure function over the payment and the payer's
+recent history, returning a score, a band, a decision and the weighted factors behind it. It is
+hand-written and deterministic, and it is what gates settlement.
+
+`riskmodel.go` is the trained one. A logistic regression over ten features, fitted by
+`cmd/trainrisk` on a seeded synthetic dataset, with coefficients, feature standardisation and
+held-out metrics committed as `riskmodel.json` and embedded with `go:embed`. Inference is a dot
+product and returns the contributions that produced the score. `ExtractRiskFeatures` is shared by
+the trainer and the server so training and production cannot disagree about what a feature means.
+
+`AssessPayment` runs both and reports them side by side with an agreement label
+(`AGREE_CLEAN`, `AGREE_RISKY`, `RULES_ONLY`, `MODEL_ONLY`); the decision field is always the rules'
+decision. `POST /fraud/assess` serves it, `GET /fraud/model` publishes the card, and the existing
+`POST /fraud/score` is unchanged.
+
+Model card, generator description and measured numbers: [`RISK_MODEL.md`](RISK_MODEL.md).
+
 ## Repository layout
 
 | Path | What it is |

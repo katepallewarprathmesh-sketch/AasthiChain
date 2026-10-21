@@ -213,6 +213,23 @@ This part is not a simulation. The network calls are live, the transaction forma
 and verification works for anyone with no account and no funds. Publishing costs a fee, so it stays
 switched off, and says so, until a funded key is configured: [`docs/ANCHORING.md`](docs/ANCHORING.md).
 
+## A model that was trained, not a rule sheet called AI
+
+Payments are screened by hand-written rules: amount bands, velocity, a structuring window. Those
+rules are honest and they are not machine learning, so they are no longer described as if they
+were.
+
+Alongside them runs a classifier that was actually fitted in this repository, on a labelled
+dataset, with its coefficients committed and its accuracy measured on data it never saw rather
+than asserted in a sentence. It held an AUC of 0.824 and caught about seven in ten of the
+fraudulent payments in the held-out split, at roughly six in ten precision.
+
+Two things about it are stated everywhere it appears. The training data is synthetic, because no
+one hands a project like this real labelled fraud, so the score describes the generator and not
+the world. And it is advisory: the published rules make the decision, the model is reported beside
+them, and where the two disagree the disagreement is shown. Every score comes back with the
+features that moved it: [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md).
+
 ## Paying from outside India
 
 Tokens are easy to send across a border; the consideration for Indian property is not. The law
@@ -312,7 +329,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 135 checks across 90 suite files
+make test         # the full sweep: 136 checks across 91 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

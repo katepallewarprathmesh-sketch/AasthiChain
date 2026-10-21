@@ -141,6 +141,8 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/drunix/recent", s.handleRecent)
 	mux.HandleFunc("/fraud/score", s.handleFraudScore)
 	mux.HandleFunc("/fraud/config", s.handleFraudConfig)
+	mux.HandleFunc("/fraud/assess", s.handleFraudAssess)
+	mux.HandleFunc("/fraud/model", s.handleRiskModel)
 	mux.HandleFunc("/drunix/pipeline", s.handlePipeline)
 	mux.HandleFunc("/drunix/pipeline/stats", s.handlePipelineStats)
 	mux.HandleFunc("/umi/stream", s.handleStream)
@@ -234,7 +236,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"endpoints": map[string]interface{}{
 			"health":  []string{"GET /health", "GET /drunix/ledger/status"},
 			"drunix":  []string{"POST /drunix/submit", "POST /drunix/evaluate", "GET /drunix/tx/{txId}", "GET /drunix/recent", "POST /drunix/pipeline", "GET /drunix/pipeline/stats"},
-			"fraud":   []string{"POST /fraud/score", "GET /fraud/config"},
+			"fraud":   []string{"POST /fraud/score", "GET /fraud/config", "POST /fraud/assess", "GET /fraud/model"},
 			"umiRail": umiIndexEndpoints(s.UMI),
 		},
 		"note": "This is an API service, not a website. The AasthiChain UI lives on Vercel and proxies /api/umi/* here when UMI_GATEWAY_URL points at this host.",
@@ -402,12 +404,47 @@ func (s *Server) handleFraudScore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ScorePayment(body.Payment, h, s.Thresholds))
 }
 
+// handleFraudAssess runs the published rules and the trained model over the
+// same payment and returns both, including when they disagree. The rules keep
+// the decision: the model is advisory.
+func (s *Server) handleFraudAssess(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST required"})
+		return
+	}
+	var body struct {
+		Payment PaymentInput    `json:"payment"`
+		History *HistorySummary `json:"history,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+	h := HistorySummary{KYCVerified: true}
+	if body.History != nil {
+		h = *body.History
+	} else if s.HistoryLookup != nil {
+		h = s.HistoryLookup(body.Payment.PayerID)
+	}
+	if body.Payment.CreatedAt.IsZero() {
+		body.Payment.CreatedAt = time.Now()
+	}
+	writeJSON(w, http.StatusOK, AssessPayment(body.Payment, h, s.Thresholds))
+}
+
+// handleRiskModel publishes the model card: what it was trained on, what it
+// scored on data it never saw, and every coefficient.
+func (s *Server) handleRiskModel(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, RiskModelCard())
+}
+
 func (s *Server) handleFraudConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"model":       "aasthichain-rules-v1 (ML-pluggable — swap ScorePayment for a trained model)",
-		"thresholds":  s.Thresholds,
-		"explainable": "every factor carries its weight — regulator-auditable decisions",
-		"theme":       "AI & Fraud Detection (NPCI x Citi Drunix Hackathon)",
+		"model":        "aasthichain-rules-v1: hand-written rules, not machine learning",
+		"trainedModel": "aasthi-payment-risk v1 is a separate trained classifier. See /fraud/model and /fraud/assess.",
+		"thresholds":   s.Thresholds,
+		"explainable":  "every factor carries its weight, so a decision can be audited line by line",
+		"theme":        "AI & Fraud Detection (NPCI x Citi Drunix Hackathon)",
 	})
 }
 
