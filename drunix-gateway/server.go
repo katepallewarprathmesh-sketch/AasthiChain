@@ -56,6 +56,10 @@ type Server struct {
 	// (see backing.go). Nil means the /umi/backing/* routes are not mounted
 	// and issuance is bounded only by the issuer's declared supply cap.
 	Backing *BackingRegistry
+	// CrossBorder is the simulated cross-border funding leg: a stablecoin
+	// received and converted outside India, credited as rupees only against
+	// an off-ramp attestation (crossborder.go). Nil leaves it unmounted.
+	CrossBorder *CBXRegistry
 
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
@@ -148,6 +152,7 @@ func (s *Server) Router() http.Handler {
 	s.registerMandateRoutes(mux)
 	s.registerAttestationRoutes(mux)
 	s.registerBackingRoutes(mux)
+	s.registerCrossBorderRoutes(mux)
 	s.registerAgentRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))

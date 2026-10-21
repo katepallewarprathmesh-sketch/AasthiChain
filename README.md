@@ -198,6 +198,20 @@ rather than deciding anything. Whoever supplies the worker sits behind an adapte
 simulation: no external provider is integrated. Design notes:
 [`docs/WORK_ORDERS.md`](docs/WORK_ORDERS.md).
 
+## Paying from outside India
+
+Tokens are easy to send across a border; the consideration for Indian property is not. The law
+requires it to arrive in rupees through banking channels, and a foreign national of non-Indian
+origin resident outside India cannot buy here whatever they pay with. So the cross-border leg does
+the only thing that is lawful: the stablecoin is received and converted outside India, and the
+buyer's rupee wallet is credited only against an attestation that an inward remittance landed, with
+a bank advice reference and a purpose code behind it. Eligibility and the transfer-information
+rules are checked before a quote is given, and a refusal is recorded as plainly as an approval.
+
+It is a simulation, labelled as one: no chain is connected, no custody is held and no money moves.
+The reasoning, the sources and what it deliberately does not claim:
+[`docs/CROSS_BORDER.md`](docs/CROSS_BORDER.md).
+
 ### Money leg: UPI Collect
 
 A payment is a lifecycle, not a hop: requested, approved, released, reconciled, with every amount held as
@@ -282,7 +296,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 132 checks across 87 suite files
+make test         # the full sweep: 133 checks across 88 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

@@ -106,6 +106,24 @@ identification request that nobody completes lapses and is recorded as an unansw
 Design note, including why the alternative architectures were not chosen:
 [`AGENT_IDENTITY.md`](AGENT_IDENTITY.md).
 
+### Cross-border funding
+
+A buyer outside India cannot be let in by a payment rail alone. A foreign national of non-Indian
+origin resident outside India cannot acquire Indian immovable property at all, and for a buyer who
+can, the consideration has to arrive in rupees through banking channels: cryptocurrency and digital
+tokens are not a permitted method. This layer therefore models the one structure that survives both
+facts. A stablecoin is received and converted outside India, and the buyer's rupee wallet is
+credited only against a provider attestation carrying a bank advice reference and a purpose code.
+
+Eligibility is screened before a quote exists, Travel Rule records are mandatory above the
+threshold, the quote carries an expiry, and the destination of the transfer is the off-ramp rather
+than the seller. Refusals are committed as blocks for the same reason the other gates commit them.
+Nothing is connected to a chain: a transfer reference is recorded, not verified, and the rate is
+configured rather than quoted.
+
+Design note, including the research behind it and a separate assessment of token-sale fundraising:
+[`CROSS_BORDER.md`](CROSS_BORDER.md).
+
 ## Repository layout
 
 | Path | What it is |

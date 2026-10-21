@@ -229,6 +229,13 @@ func main() {
 		srv.UMI.SetIssuanceGate(srv.Backing)
 		log.Printf("Backing mounted at /umi/backing/*: issuance refused past the attested figure, or once it goes stale")
 
+		// Cross-border funding (crossborder.go): a buyer outside India funds
+		// a purchase with a stablecoin that is converted outside India, and
+		// the rupee wallet is credited only against an off-ramp attestation.
+		// Paying a seller in tokens for Indian property is not a route.
+		srv.CrossBorder = drunix.NewCBXRegistry(srv.UMI, chain, nil)
+		log.Printf("Cross-border funding mounted at /umi/crossborder/*: simulated, settles in INR through banking channels")
+
 		// Agent passports (agentid.go): an automated actor acts under a
 		// pseudonym, and the principal behind it is split across custodians
 		// so that identifying them takes a threshold and leaves a record.

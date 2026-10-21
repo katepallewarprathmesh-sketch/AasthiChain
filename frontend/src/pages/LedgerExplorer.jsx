@@ -53,6 +53,11 @@ const TYPE_STYLES = {
   AGENT_REVEALED: { label: 'Agent · Principal Identified', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   AGENT_REVEAL_EXPIRED: { label: 'Agent · Request Lapsed', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   // Proof of backing (issuance against an attested figure)
+  UMI_CBX_QUOTED: { label: 'Cross-border · Quoted', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
+  UMI_CBX_REFUSED: { label: 'Cross-border · Refused', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_CBX_PAYMENT_RECORDED: { label: 'Cross-border · Transfer Reported', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  UMI_CBX_OFFRAMPED: { label: 'Cross-border · Remitted in INR', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_CBX_EXPIRED: { label: 'Cross-border · Quote Lapsed', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   UMI_BACKING_ATTESTED: { label: 'Backing · Attested', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
   UMI_BACKING_WITHDRAWN: { label: 'Backing · Withdrawn', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_ISSUE_BLOCKED: { label: 'Issuance · Refused, Backing Short', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
