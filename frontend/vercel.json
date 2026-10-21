@@ -48,7 +48,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "api/lib/**"
+      "includeFiles": "api/lib/knowledge-index.json"
     }
   }
 }

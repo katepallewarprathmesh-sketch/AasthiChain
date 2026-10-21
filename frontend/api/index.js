@@ -10,6 +10,7 @@ import { realDB } from './lib/db_real.js';
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
 import { recordHit, trafficSummary } from './lib/traffic.mjs';
 import { validateChatRequest, rateLimit as aiRateLimit, buildPropertyContext, askGroq, isConfigured as aiConfigured, LIMITS as AI_LIMITS } from './lib/ai.mjs';
+import { buildKnowledgeContext, buildRailContext, readRail } from './lib/knowledge.mjs';
 import { authStore, verificationLockedOut } from './lib/authstore.js';
 import { ensureClerkKeys, verifyClerkJWT, clerkVerificationEnabled, hasUnknownKid } from './lib/clerkjwt.mjs';
 
@@ -3814,7 +3815,13 @@ export default async function handler(req, res) {
       const context = buildPropertyContext(
         Object.values(properties).filter(listingIsPublic).map(publicPropertyView),
       );
-      const answer = await askGroq({ messages: req.body.messages, propertyContext: context });
+      // Grounding: sections of this project's own documentation retrieved for
+      // the question, plus the rail's own current figures. Both are optional
+      // by design, so neither a missing index nor a slow rail can stop an
+      // answer; it simply goes out less grounded, and the prompt says so.
+      const knowledgeContext = buildKnowledgeContext(req.body.messages);
+      const railContext = buildRailContext(await readRail(process.env.UMI_GATEWAY_URL || ''));
+      const answer = await askGroq({ messages: req.body.messages, propertyContext: context, knowledgeContext, railContext });
       return res.status(answer.status).json(answer.body);
     }
 

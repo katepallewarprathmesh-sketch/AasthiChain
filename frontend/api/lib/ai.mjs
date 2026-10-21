@@ -224,7 +224,7 @@ export function buildPropertyContext(properties) {
   return `Properties currently listed (${visible.length}):\n${lines.join('\n')}${more}`;
 }
 
-export function systemPrompt(propertyContext) {
+export function systemPrompt(propertyContext, knowledgeContext = null, railContext = null) {
   return [
     'You are Aasthi AI, the assistant on AasthiChain — an Indian fractional real-estate',
     'tokenisation platform. Properties are registered, validated by a registrar, then',
@@ -298,6 +298,27 @@ export function systemPrompt(propertyContext) {
     '- Use bold only on a figure or a status word that matters, never on whole sentences.',
     '- Write amounts the Indian way: ₹500, ₹75 lakh, ₹1.2 crore.',
     '- Never end by offering to do something for the person; you cannot act.',
+    '',
+    // Grounding. The two blocks below are the difference between an
+    // assistant that remembers something about blockchains and one that can
+    // answer for this system: the first is quoted from the repository's own
+    // documents, the second is read from the running rail. Both are facts
+    // with a source, and the rules say what to do when they run out.
+    'Two sources of truth are given below, when they are available.',
+    '- DOCUMENTATION: sections of this project\'s own files, retrieved for this question.',
+    '  Prefer them over anything you remember. Name the document when you use one, like',
+    '  "the CBDC design doc says". Never cite a document that is not shown to you, never',
+    '  invent a file name, and never quote a figure from memory when a document is present.',
+    '- LIVE RAIL STATE: figures read from this deployment moments ago. Use them as given.',
+    '  Do not recompute, round or extrapolate them, and do not turn an unmeasured thing',
+    '  into an estimate.',
+    '- If neither source covers the question, say that this is not documented here and',
+    '  point at the page or document most likely to help. That is a complete answer. A',
+    '  plausible guess is not.',
+    '',
+    railContext || 'LIVE RAIL STATE: not available for this question.',
+    '',
+    knowledgeContext || 'DOCUMENTATION: nothing in the project documentation matched this question. Say so if the question needed it.',
     '',
     propertyContext,
   ].join('\n');
@@ -388,7 +409,7 @@ async function askOnce(client, model, wire) {
  * Asks Groq. Returns {status, body} ready to send either way — a failure
  * upstream is reported as a failure here, never as a confident answer.
  */
-export async function askGroq({ messages, propertyContext }) {
+export async function askGroq({ messages, propertyContext, knowledgeContext = null, railContext = null }) {
   if (!isConfigured()) {
     return {
       status: 503,
@@ -422,7 +443,7 @@ export async function askGroq({ messages, propertyContext }) {
   });
 
   const wire = [
-    { role: 'system', content: systemPrompt(propertyContext) },
+    { role: 'system', content: systemPrompt(propertyContext, knowledgeContext, railContext) },
     ...messages.map((m) => ({ role: m.role, content: String(m.content).trim() })),
   ];
 

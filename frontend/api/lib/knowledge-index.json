@@ -1,0 +1,1171 @@
+{
+  "builtBy": "scripts/build-knowledge.mjs",
+  "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
+  "sourceDigest": "e32923f77dffbd5045ff109fdabaa5d5ab52a60577fe1b51527d575c58939c94",
+  "sections": [
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "AasthiChain",
+      "text": "Own premium Indian real estate from ₹500\n\n Fractional property tokens on an append-only ledger · atomic delivery-versus-payment · UPI money leg \n\n \n \n \n \n\nLive site · Ledger explorer · Settlement rail · Calculators · Learn\n\n</div \n\n---\n\nA premium flat costs ₹75 lakh and you cannot buy 0.1% of it. AasthiChain converts a registrar-verified\nproperty into a fixed number of tokens (a ₹75 L villa becomes 15,000 tokens at ₹500 ) and settles\nthe money leg and the ownership leg as one atomic operation. Both move, or neither does.\n\n Stack: a Go settlement core, a Node API edge, a React frontend, and Hyperledger Fabric chaincode.\n\n Honest scoping. The settlement rail is a faithful simulation . There is no public UMI API and\n no live NPCI credential outside a bank partnership; real access is the SEBI Regulatory Sandbox.\n Every simulated surface is labelled as such in the UI and in API responses. What is real: the\n ledger, the atomicity, the verification rules and the guardrails. The exact line between the two\n is itemised at the end of this file.\n\n Contents : Quick start · How it fits together · Pages · What you can do · Settlement rails · On a real Drunix network · Guarantees · Testing\n\nDeeper reading: Architecture and internals · Testing · Audit · Contributing\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Quick start",
+      "text": "Prerequisites: Go 1.25+, Node 20+, and python3 . No credentials, no Docker, no database.\n\n \n\nThe app comes up on http://localhost:8080 , the settlement core on :21100 . Sign in as\n investor1 and buy a fraction of something. make stop stops what it started, make help lists\nthe rest.\n\nOther demo identities: originator1 , registrar1 , regulator1 , investor2 .\n\n \n\nRunning it another way, every configuration switch, and what each one does when absent:\n docs/ARCHITECTURE.md . Deployment topology and failure modes:\n docs/DEPLOYMENT.md .\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "How it fits together",
+      "text": "<div align=\"center\" \n\n<img src=\"docs/architecture.png\" alt=\"AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to.\" width=\"100%\" \n\n</div \n\n<sub Vector source: docs/architecture.svg . Edit the SVG, then re-export the PNG (command in docs/DEPLOYMENT.md ).</sub \n\nFour kinds of people use it: owners list property, registrars validate title, investors buy and\ntrade fractions, regulators supervise. Behind them sit three things that matter.\n\n An access layer decides who is calling and what they may touch, and keeps the property\nregister. A settlement core holds the cash leg and the ownership leg and moves them as one.\n An append-only record sits underneath, and every other part answers to it.\n\nOne rule shapes the whole codebase: every rule about money lives in the settlement core, beside the\nledger it protects. Everything in front of it carries requests and identity and nothing else. A\nmoney rule found anywhere else is a bug, and a pull request that adds one will be asked to move it."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "How it fits together (continued)",
+      "text": "The experience and the settlement core deploy independently, so either can be replaced, or fail,\nwithout the other. When the core cannot be reached the app reports unknown . It never reports a\nsettlement surface as healthy because it could not ask.\n\nWhere each rule lives, the repository layout and the full configuration table:\n docs/ARCHITECTURE.md .\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Pages",
+      "text": "Everything is public to read except the five marked session . Search engines are\nwelcome on the public ones.\n Route What it is \n --- --- \n / · /marketplace · /property/:id landing, the catalogue, and a single listing with its verification panel \n /market secondary market: holders trading tokens with each other \n /umi the settlement rail. DvP, e₹-W wallets, pilot ISINs, servicing, baskets, the work desk \n /ledger block explorer: every state change, replayable from the first block \n /verify hash your own copy of a deed and check it against the ledger, without uploading it \n /insights platform metrics; operator detail needs the key \n /dashboard · /wallet session. holdings, income, settlement history, e₹-W balance \n /admin · /admin/ops session. operator queues: what is waiting on a human \n /regulator session. supervisory view: halts, cap tables, reconciliation \n /learn · /tools index pages, plus three explainers and six calculators beneath them \n /trust every external boundary, and whether it is live or modelled locally \n /login · /about · /support · /privacy · /terms sign-in and the ordinary pages a real platform has \n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "What you can do",
+      "text": "Buy a fraction. Browse the marketplace, open a property, buy from ₹500. Payment and ownership\nsettle together: a buyer who cannot pay gets nothing and the seller keeps every token. Before money\nmoves, the app asks the rail whether the trade would settle, so a shortfall is a sentence rather\nthan a failure discovered afterwards.\n\n Check that a listing is real. Every property page answers, in plain language: was title validated\nby a registrar, and who (an owner validating their own listing is refused outright); is the deed\nfingerprinted, and does it collide with another listing; does the ledger still replay cleanly. You\ncan prove your own copy of a deed matches the ledger without uploading anything: hash it locally and\npaste the result.\n\n Ask the assistant. A question box answers how things work and what is listed. It gets the same\npublic listing data a visitor can already see and nothing else: asked who holds what, it refuses and\npoints at the public ledger. Asked about a property that does not exist, it says so. It has no way to\nmove a token, a rupee or a document.\n\n Hold many properties as one unit. A basket is a single tradeable unit backed by a fixed recipe\nof several properties. Creating one moves the underlying tokens into custody, which is what makes the\nunit redeemable rather than notional. A basket that is not fully backed is never allowed to look\nhealthy."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "What you can do (continued)",
+      "text": "Earn rent, split fairly. Rent and coupons are paid straight into holders' wallets. The split can\nfollow a snapshot of who holds what today, or how long each holder actually held , so someone who\nbought yesterday does not collect a full quarter's rent.\n\n Know the address is a real one. When a property is listed, its pincode is checked against the\nnational postal directory and the answer is kept with the listing: confirmed, in a different place\nfrom the one claimed, or not a pincode anybody posts to. The check is a courtesy and not a\ngatekeeper, so an unreachable directory records that nothing was checked rather than inventing a\npass, and it never pretends to be proof of ownership. This is one of the few boundaries the platform\ndeclares as genuinely live.\n\n Withdraw a listing and have it stay withdrawn. A withdrawal is recorded against the property\nrather than quietly dropped, so it survives a restart and holds across every view, and asking twice\nis not an error. Anyone still holding tokens is bought out at the listed price first: the tokens\nreturn to the owner and the payout is written to the ledger, because taking a listing off the market\nmust not strand the people who funded it.\n\n See the whole history. Ownership is a journal of changes, not just a balance, so the register can\nbe replayed for any window.\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Settlement rails",
+      "text": "ASI, the Aasthi Settlement Interface\n\nIn September 2026 SEBI and RBI launched Demat 2.0 : bonds issued as native tokens on the\ndepositories' permissioned DLT, with the cash leg settled in wholesale CBDC (e₹-W) through the\nUnified Market Interface, with ₹1,025 crore issued by REC, L&T and IIFL. AasthiChain already had both\nends. This is the middle.\n\n ASI is our own rail, built to that pattern , not a connection to the real UMI, which is reachable\nonly through a bank partnership or the SEBI sandbox. What follows is implemented here, end to end,\nand can be run and audited from this repository.\n\n- Atomic DvP. Both legs move or neither does; a failure leaves no half-settled state.\n- Central bank money is conserved. Balances always reconcile against lifetime funding, so the rail\n can neither create money nor destroy it.\n- Programmable servicing. Rent and coupons paid pro-rata on the due date, no registrar file\n exchange.\n- Safe retries. A repeated settlement request returns the original outcome instead of settling\n twice, and a failure stays a failure.\n- Standards trace. Every instruction carries the ISO 20022 message family a real\n securities-settlement rail would emit.\n\nRefusals are always specific: which side was short, and by how much. Never a generic error.\n\n Work orders: upkeep paid on delivery"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Settlement rails (continued)",
+      "text": "A tokenised building still has to be inspected, repaired and revalued, and that cost used to sit\noutside the model: off-ledger, on trust, against an invoice nobody could audit. The fee is\n reserved on the funder's e₹-W wallet when the order is funded (reserved money cannot be spent on\nanything else, including a settlement), and moves to the worker in the same locked step that anchors\nthe deliverable's SHA-256 to the ledger. There is no state in which someone has been paid and no\nevidence exists.\n\nOnly the funder pays out, only the assigned worker can deliver, and a dispute freezes the escrow\nrather than deciding anything. Whoever supplies the worker sits behind an adapter, which runs as a\nsimulation: no external provider is integrated. Design notes:\n docs/WORK ORDERS.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Anchored on a public blockchain",
+      "text": "The settlement ledger here is permissioned, which is the right shape for settlement and also the\nobvious objection: replaying it proves it agrees with itself, not that it is the history that\nexisted yesterday. So the head of the chain is published to a public blockchain as a digest, and\nafter that, rewriting history would mean rewriting a record on a network nobody here controls.\n\nWhat crosses over is one line: the chain id, the block height, the block hash and the transaction\nroot. No participant, no asset, no amount. An anchor proves a digest existed at a time; it does not\nclaim the contents behind it are true, and the settlement data never leaves the service.\n\nThis part is not a simulation. The network calls are live, the transaction format is the real one,\nand verification works for anyone with no account and no funds. Publishing costs a fee, so it stays\nswitched off, and says so, until a funded key is configured: docs/ANCHORING.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Central bank money on the ledger",
+      "text": "The settlement asset here is a simulated digital rupee, and it lives on the chain rather than in a\ntable beside it. Money is issued by the central bank role, moves between accounts, and is redeemed\nback; every paise issued is either in an account or has been destroyed, and that arithmetic is\npublished for anyone to check.\n\nThree behaviours follow the pilot rather than the brochure. Money can be bound to a purpose, with\nan expiry, a merchant category, named merchants and a geography, so a food subsidy can only be\nspent at a fair price shop and a spend outside the rule is refused on the rail instead of\nreconciled later. Value can be carried offline as a signed voucher for places connectivity does\nnot reach, with small limits and a double spend that is caught on reconnection rather than hoped\nagainst. And money can be locked against an event, so a cancelled flight pays its own refund the\nmoment the airline attests the cancellation: no claim, no form, no wait.\n\nEvery movement records two different things that are usually said as one. Technical finality is\nthe block being committed, which takes milliseconds and happens around the clock. Financial\nfinality is the payment being irrevocable, which in central bank money is the same moment, and\nover a commercial bank rail is not. Where the two differ this layer says so and names the window:\n docs/CBDC.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Cross-border, as five different things",
+      "text": "Sending money abroad is not one rail. A scheme-to-scheme link, an aggregator, a correspondent bank\nchain, a card network and two central bank ledgers settling against each other differ in who may\ncarry the payment, how much may move and how long somebody is exposed in the middle. Each is\nmodelled on its own terms here, and a payment is refused by the corridor that cannot carry it,\nwith the missing authorisation named rather than hidden behind a generic error.\n\nThe difference that matters is whether both legs sit on the same ledger. When they do, settlement\nis atomic: one movement, no interval in which one side has paid and the other has not. When they\ndo not, the gap is real, and it is closed either by a hash time-locked exchange where revealing\nthe secret completes both sides or by a confirmation from the institution on the far side. Until\nthat happens the payment is reported as provisional, with the window named:\n docs/CORRIDORS.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "A model that was trained, not a rule sheet called AI",
+      "text": "Payments are screened by hand-written rules: amount bands, velocity, a structuring window. Those\nrules are honest and they are not machine learning, so they are no longer described as if they\nwere.\n\nAlongside them runs a classifier that was actually fitted in this repository, on a labelled\ndataset, with its coefficients committed and its accuracy measured on data it never saw rather\nthan asserted in a sentence. It held an AUC of 0.824 and caught about seven in ten of the\nfraudulent payments in the held-out split, at roughly six in ten precision.\n\nTwo things about it are stated everywhere it appears. The training data is synthetic, because no\none hands a project like this real labelled fraud, so the score describes the generator and not\nthe world. And it is advisory: the published rules make the decision, the model is reported beside\nthem, and where the two disagree the disagreement is shown. Every score comes back with the\nfeatures that moved it: docs/RISK MODEL.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "An assistant that answers from this project, not from memory",
+      "text": "The assistant on the site is grounded in two things, and neither of them is what a language model\nhappens to recall about blockchains. The first is this project's own documentation: every design\ndocument is indexed and the sections that match a question are put in front of the model as\nwritten, with the document they came from, so an answer can be traced back to a file anyone can\nopen. The matching is plain word scoring rather than an embedding service, which means the same\nquestion retrieves the same passages on every deployment and costs nothing to run.\n\nThe second is the rail as it stands at the moment of asking: how much digital rupee is outstanding,\nwhether supply still conserves, which cross-border corridors refuse payments here and which\nauthorisation each one lacks, and the measured metrics of the trained model with the fact that its\ntraining data was synthetic attached. Those figures are used as given; the model is not allowed to\nrecompute or round them.\n\nWhen neither source covers a question the assistant says it is not documented and points somewhere\nuseful, which is the whole point: it still reads only, still cannot act, and is switched off\nentirely where no key is configured: docs/AI AGENT.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Paying from outside India",
+      "text": "Tokens are easy to send across a border; the consideration for Indian property is not. The law\nrequires it to arrive in rupees through banking channels, and a foreign national of non-Indian\norigin resident outside India cannot buy here whatever they pay with. So the cross-border leg does\nthe only thing that is lawful: the stablecoin is received and converted outside India, and the\nbuyer's rupee wallet is credited only against an attestation that an inward remittance landed, with\na bank advice reference and a purpose code behind it. Eligibility and the transfer-information\nrules are checked before a quote is given, and a refusal is recorded as plainly as an approval.\n\nIt is a simulation, labelled as one: no chain is connected, no custody is held and no money moves.\nThe screen for it is linked from the home page, and asking as a buyer who is not allowed to purchase\nshows the refusal rather than hiding the option. The reasoning, the sources and what it deliberately\ndoes not claim: docs/CROSS BORDER.md .\n\n Money leg: UPI Collect"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Paying from outside India (continued)",
+      "text": "A payment is a lifecycle, not a hop: requested, approved, released, reconciled, with every amount held as\nan exact figure, so no rupee is lost to arithmetic. The round-trip runs against a real provider's\ntest environment, so signed requests and callbacks are validated by the provider rather than graded\nby us. Each payment is risk-screened before approval, and the screen explains its reasoning rather\nthan returning a score. No real money moves.\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "On a real Drunix network",
+      "text": "The settlement core runs in simulation by default, and the hosted demo is simulating. The chaincode,\nthough, has been deployed to a real NPCI Drunix network, which is NPCI's Hyperledger Fabric fork,\nand written to.\n\nOn a two-organisation Drunix test network, a property registration submitted through the gateway\nwas endorsed by both organisations, ordered, and committed. The gateway reported the peer-assigned\ntransaction id and block number, and the committing peer, which runs none of this repository's\ncode, reported the same chain head independently.\n\nGetting there took three fixes, and all three were invisible to a single-peer test. Two were real\ndefects in this chaincode: values that differed between endorsing peers, so no write could ever\nagree with itself, and index entries in a format the network's state database rejects, which took\nthe peers down rather than the transaction. The third was in the test network's own tooling. Each\nis now guarded by a test, and each is written up with its symptom, repro and fix in\n docs/DRUNIX.md and docs/REPOSITORY AUDIT.md .\n\nWhat this claims: the chaincode and the gateway work against Drunix. What it does not: the hosted\ndemo is not connected to a Drunix network, /trust says so, and nothing here is an NPCI endorsement\nor a pilot participation.\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Guarantees",
+      "text": "The record is append-only and survives restart. An entry is written durably before the change it\ndescribes is treated as real. Once written it is never erased, and each entry is sealed against the\none before it, so an altered history announces itself instead of passing quietly.\n\n Supply is scarce. Tokens cannot exceed a property's authorised supply, and an owner's unsold\nstock is never counted as allocated.\n\n Issuance cannot outrun stated backing. Where somebody accountable has stated how much of an\nasset exists, with evidence and a date it must be refreshed by, issuing past that figure is refused\nand the refusal is written down. A statement past its refresh date stops authorising anything. The\nplatform checks the arithmetic, not whether the statement is true, and says so.\n\n Holder identity is private. A visitor sees how many people hold a property and in what\nproportions, under anonymous labels. Real names need a session, so the marketplace stays open to\nbrowse without leaking a cap table.\n\n Approval is independent. Title validation is restricted to a Registrar, and refused when the\nvalidating identity registered the property."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Guarantees (continued)",
+      "text": "Your things answer only to you. Being signed in is not being entitled: your wallet, payments,\nholdings, documents and notifications are yours, and a stranger is refused even knowing the\nreference. A regulator can look where that is genuinely the regulator's job, and nowhere else.\n\n A reference is not a key. A bank reference on a receipt proves the payment happened. It reveals\nnothing about who else was involved.\n\n A pause means paused. A supervisor's halt is written down before the answer comes back, so it\nsurvives a restart and applies to every route that could move those tokens. A longer way round is\nnot a way round. The same authority can lift it; both halt and lift are permanent record.\n\n Withdrawal does not strand a holder. A listing cannot leave the market while someone still holds\nit without that holder being bought out in the same step, and both the withdrawal and the payout are\npermanent record.\n\n Nothing reaches the record around the rules. Every ownership change passes the same approvals\nwhichever way it is attempted.\n\n A refusal is never a dead end. If the record stops verifying, the platform stops rather than\nbuilding on history it cannot vouch for, and there is a supervised way back that writes down what\nwas set aside, why, and on whose authority. It has been used once, and the record of it is still\nthere to read.\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Testing",
+      "text": "A mass failure is almost always a dead rail rather than a bug, so check the core is up first. CI\nruns the Go modules separately, builds the frontend, and treats formatting as a hard gate.\n\nSome defects no suite here can reach: three were found only by deploying to a real two-org network,\nand each now has a regression test. Exact commands, prerequisites, expected output and the\ndeliberate gaps: docs/TESTING.md . A verified list of current weak points:\n docs/REPOSITORY AUDIT.md .\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Free tools and explainers",
+      "text": "Single-purpose calculators, each a public page that stands on its own. All INR, Indian tax and\nstamp-duty rules, no sign-up.\n Tool What it answers \n --- --- \n Rental yield gross vs net yield after maintenance, tax and vacancy \n Fractional investment what ₹X buys, and what it returns \n Stamp duty & registration state-wise duty on max(price, circle rate) , 1% TDS above ₹50 L \n Home loan EMI EMI, amortisation, s.24(b) and 80C relief \n Rent vs buy the year the two curves cross \n Capital gains tax LTCG/STCG, the 23 Jul 2024 regime change, s.54 / 54EC / 54F \n\nExplainers: Demat 2.0 ·\nUnified Market Interface ·\nAtomic DvP\n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Contributing",
+      "text": "Issues and pull requests are welcome.\n\n1. Fork, branch from main .\n2. Keep money rules in the settlement core. A rule added to the edge will be asked to move.\n3. Run make test and make test-go before opening a PR. gofmt is a hard gate in CI.\n4. The API exists in two implementations that must stay in step; see docs/ARCHITECTURE.md .\n5. New behaviour ships with a test that fails without it.\n\nCommit messages are plain language describing the why , not a changelog of the diff.\n\nThe full guide, including the design rule that gets pull requests sent back and a list of genuine\nstarter tasks, is in CONTRIBUTING.md . Participation is covered by\n CODE OF CONDUCT.md .\n\nFound a security flaw? Please report it privately: see SECURITY.md .\n\n---\n\n<details \n<summary <b What is live vs simulated</b (click to expand)</summary \n\n Live and real: the ownership rules and their duplicate-deed guard, the append-only record, atomic\nsettlement and its rollback, safe retries under concurrency, conservation of money, independent title\nvalidation, verified sign-in, the supervisory halt and the way back from it, and durable storage. The\nassistant is live, and its limits (public data only, no ability to act) are enforced on the server\nrather than requested of the model."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Contributing (continued)",
+      "text": "Simulated, and labelled as such: the national payments rail (no live credentials exist outside a\nbank partnership), the wholesale CBDC wallets (e₹-W is an RBI pilot, not a public API), the UMI rail\nitself (real access is the SEBI Regulatory Sandbox), government-issued KYC, the land-record lookup,\nand the public-chain escrow experiment.\n\n The payment round-trip is genuinely real as far as it goes: the provider's test environment\naccepts our signed requests, and tampered amounts and bad signatures are rejected by them, not by us.\nOnly the settlement behind it is simulated.\n\n</details \n\n<details \n<summary <b Regulatory context</b (click to expand)</summary \n\nThe Asset Tokenisation (Regulation) Bill 2026 is a pending Private Member's Bill, not law. It\nproposes KYC/AML obligations, a registered custodian, registrar validation and a regulator freeze\npower. AasthiChain maps to all four: a Registrar org validates title, a Regulator org can freeze, the\ncap table is auditable end to end, and the payment path enforces a KYC gate.\n\n SPV structure. Real platforms wrap each property in a special-purpose vehicle, so a token is a\nbeneficial interest in the SPV holding legal title (Registration Act 1908 + the 2026 Bill). That is a\nlegal structure, not a code change, and is documented as Phase 2 rather than built.\n\n</details \n\n---"
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "Support",
+      "text": "The in-app Support page carries UPI and GitHub Sponsors\nlinks. These are donations to the project, not investments . They buy no tokens and no stake.\n\n<div align=\"center\" \n\n aasthi-chain.vercel.app · Apache 2.0 licensed\n\n</div"
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "The problem",
+      "text": "The mandate layer already answers \"what is this agent allowed to do, on whose behalf, under what\nlimit, until when\". That is the authority half, and it is the half most of the industry is still\nmissing: the EU wallet framework verifies the principal to the hilt and says almost nothing about a\npiece of software presenting a bounded grant of someone else's authority.\n\nWhat it does not answer is the accountability half. Today a mandate names its principal in the\nclear on a public ledger. That is one of three architectures a jurisdiction can pick:\n\n1. User-sovereign. The principal holds credentials and discloses selectively. Strong against\n overreach, but accountability depends on the principal cooperating, and per-transaction consent\n does not scale to software making thousands of decisions.\n2. State-escrow. Identity withheld from commercial counterparties and held by government,\n released by legal process. Accountability does not depend on cooperation, at the cost of\n concentrating a re-identification capability in one place.\n3. Cryptographic threshold. Opening the pseudonym requires several independent parties to\n cooperate, enforced mathematically rather than institutionally. Best abuse resistance, hardest\n to operate.\n\nNaming the principal in the clear is none of these. It is the counterparty-sees-everything default,\nwhich is the one option nobody is arguing for."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "What is built here",
+      "text": "The third architecture, with the trigger and the record borrowed from the second.\n\n- An agent acts under a pseudonym : agent:aasthi:<hash . Counterparties see the pseudonym, the\n agent's stated purpose, and the fact that a liable principal stands behind it. They do not see\n who.\n- The principal is split across named custodians with Shamir's secret sharing over GF(256). Any\n k of n custodians can reconstruct it; k - 1 learn nothing at all, which is a property of\n the scheme rather than a promise of good behaviour.\n- Opening the pseudonym is a governed event, not a lookup . Somebody opens a request with a\n stated trigger, custodians contribute shares one at a time, and the identity is reconstructed\n only when the threshold is reached.\n- Every step is a block : the request, each approval, and the reveal itself. A principal can\n never be un-masked quietly, and the record of who asked, who agreed and why outlives the people\n involved. A request that nobody completes expires and stays on the chain as an unanswered ask.\n- The passport binds to the agent's purpose and version label and to its mandate, so the\n question \"which exact software acted\" has an answer separate from \"who answers for it\"."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "What it is not",
+      "text": "- The custody is simulated. All shares live in one process on one host. The protocol is real\n (the arithmetic genuinely requires k shares) but the distribution is not: a host operator has\n every share. Real deployment means one share per organisation, held by that organisation. The\n API says this in the response rather than in a footnote.\n- It is not anonymity. The pseudonym is re-identifiable by design, so under the data-protection\n reading that applies here it remains personal data and must be treated as such. The claim is\n accountable pseudonymity, nothing stronger.\n- No zero-knowledge proof of principal attributes. The sponsorship fact is asserted by the rail\n from its own participant register, not proved to a third party cryptographically.\n- It does not make the agent legal. Which legal person answers for an agent is a question of\n law. This records an answer and makes it recoverable; it does not create one."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "Rules",
+      "text": "- Only the principal registers an agent, and a participant may not register itself as its own\n agent.\n- Custodians must be distinct, at least two, and the threshold must be at least two and no greater\n than the number of custodians. A threshold of one is refused: that is the state-escrow model with\n the safeguards removed.\n- Only a named custodian may contribute a share, and only once per request.\n- A revoked passport still reveals. Revocation stops the agent acting; it does not erase who was\n accountable for what it already did.\n- The reveal returns the principal to the requester and writes the principal into the block. An\n opened identity is opened in public, because a quiet reveal is a worse failure than no reveal."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "Surface",
+      "text": "Rail routes, all additive, under the existing identity headers:\n Route Who What \n --- --- --- \n GET /umi/agents anyone pseudonyms, purpose, custodian set, threshold, state \n POST /umi/agents the principal register an agent, seal the principal, get the pseudonym \n GET /umi/agents/{id} anyone one passport, plus any open or completed reveal \n POST /umi/agents/{id}/revoke principal or supervisor stop the agent acting \n POST /umi/agents/{id}/reveal supervisor or a custodian open a request with a stated trigger \n POST /umi/agents/{id}/reveal/approve a named custodian contribute one share \n\nBlocks: AGENT REGISTERED , AGENT REVOKED , AGENT REVEAL REQUESTED , AGENT REVEAL APPROVED ,\n AGENT REVEALED , AGENT REVEAL EXPIRED ."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "Why this matters beyond the demo",
+      "text": "Cross-border recognition is the stated endgame for agent identity, and it will favour whoever built\nto an open, inspectable pattern. The pattern here is deliberately boring: a pseudonym, a bounded\nmandate, a threshold escrow, and an append-only record of every time the escrow was opened. None of\nit is novel cryptography. The novelty, such as it is, is that all four are in one rail and every\none of them is checkable by somebody who does not trust the operator."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "The question",
+      "text": "Can Aasthi AI become an agent, or a \"perfect model\" for real estate?\n\nShort answer: an agent, yes, and this repository is unusually well placed to build one. A perfect\nmodel, no, and chasing one is the wrong spend. The two paths are different projects and only one\nof them pays off here."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Why not a model",
+      "text": "The evidence against training or fine-tuning a real estate model as the headline feature:\n\n- REAL (arXiv 2507.03477), the only serious benchmark for housing transactions and services, built\n from 5,316 expert-checked entries: the best public model averages about 50 percent on its\n multiple-choice topics, and every model tested scores below 50 percent on reasoning. When a query\n contains a fictional place name, hallucination runs 61 to 93 percent, against under 6 percent\n when the entity is real. A model asked about a property that does not exist invents it.\n- Where LLMs do measurably help valuation, they help as a feature extractor, not as the valuer. On\n 9,842 Oslo transactions, LLM-extracted features fed into XGBoost cut valuation RMSE from 10.53 to\n 7.97 percent. The gradient-boosted model stayed the model. Separate work finds LLMs systematically\n overconfident on price intervals and weak on spatial and temporal reasoning.\n- Retrieval beats training for this class of problem. Reported reductions in hallucination from\n grounding a model in retrieved source documents run 70 to 90 percent, and the 2026 enterprise\n default is retrieval first, prompting second, fine-tuning only for format or style."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Why not a model (continued)",
+      "text": "So: no fine-tune, no in-house valuation model, no \"Aasthi AI estimates this flat is worth X\". What\nis worth building is the retrieval and tool layer underneath, because that is where the accuracy\nactually comes from."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Why an agent, and why here",
+      "text": "The repeated finding across 2026 industry reporting is that agentic real estate fails on data, not\non intelligence. McKinsey's framing is the \"factual layer\": property, unit, lease and vendor records\nthat the agent treats as ground truth, which in practice live in spreadsheets, undigitised PDFs and\nsystems that do not talk to each other. When that layer is wrong, an agent does not make a small\nmistake, it executes a confident wrong action at speed. A second thread says the missing piece is\ninfrastructure rather than models: listing systems do not expose permissioned, machine-callable\ninterfaces, so an agent has nowhere safe to act.\n\nAasthiChain already is that missing layer, for its own scope:\n What an agent needs What the rail already has \n --- --- \n A factual layer that cannot be quietly edited An append-only chain, replayable and restart-durable \n Evidence that a claim was made by somebody accountable Signed credentials, attestation accountability, and now proof of backing \n Bounded authority to act Agent mandates: named actions, expiry, spend counted on the ledger \n A way to pay only on a verified result The outcome layer: acceptance criteria, escrow, verification, dispute window \n An audit trail of what the agent did Every consequential action commits a block"
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Why an agent, and why here (continued)",
+      "text": "That combination is exactly what the external agent-payment work is converging on: a signed,\nscoped authorisation from a human (Google's AP2 mandates, now with the FIDO Alliance) sitting above\nwhatever rail moves the money, with a hard rule that irreversible actions pause for a person. The\nmandate layer here predates that reading and matches its shape. The gap is not authority, it is\nthat nothing currently drives it except a human clicking."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "What Aasthi AI is today",
+      "text": "A read-only assistant. It is given public listing data, never session or holder data, it computes\nevery number in deterministic code and asks the model only to phrase it, it makes no tool calls and\nhas no write path, and it is off entirely when no key is configured. That is the correct starting\npoint and none of it should be relaxed.\n\nIts limitation is also exact: it cannot answer \"which of these assets is actually backed\", \"what\nhappened in settlement 4f2a\", or \"show me every attestation this registrar withdrew\", because it\ncannot look anything up. It only knows what was stuffed into its prompt."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Grounding: documents and live state, not recollection",
+      "text": "Shipped. The assistant now answers from two sources besides the listing view, and both carry a\nprovenance the reader can check.\n\n The project's own documentation. Every document in docs/ , plus the README, is split into\nsections by heading and committed as a retrieval index. A question is scored against those sections\nwith BM25: lexical, deterministic, no embedding call, no vector database and no network hop, so the\nsame question retrieves the same sections on every deployment and a wrong answer can be traced to\nthe section that produced it. The top sections go into the prompt as written, with the file they\ncame from, and the rules tell the model to prefer them over anything it remembers, to name the\ndocument when it uses one, and never to cite a document it was not given. Notes to ourselves are\nexcluded: a backlog, an open-problem audit and a deployment runbook are not statements of fact, and\nan assistant quoting a to-do list is worse than one that says it does not know."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Grounding: documents and live state, not recollection (continued)",
+      "text": "The rail as it stands right now. At question time the deployment reads its own rail: how much\ndigital rupee is issued and outstanding, whether the conservation check passes, how many corridors\nare configured, which ones refuse payments here and exactly which authorisation each one lacks, and\nthe measured metrics of the trained risk model together with the fact that its training data was\nsynthetic. These are the rail's own figures. The model is told to use them as given and forbidden to\nrecompute, round or extrapolate them.\n\n When neither covers the question , the prompt says so explicitly and instructs the assistant to\nanswer that it is not documented here and point at the likeliest page. A refusal with a direction is\na complete answer; a plausible guess is not. Retrieval returns nothing at all when the question\nshares too few words with anything written down, which is what keeps an unrelated question from\ndragging in the least irrelevant section available.\n\nNothing about the read-only promise changed: still no tool calls, still no write path, still off\nentirely when no key is set."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "The design: a proposing agent, not an acting one",
+      "text": "Three tiers, with the boundary between them enforced in code rather than in the prompt.\n\n Tier 1, grounded reads. Give the assistant a small set of read-only tools over the rail: asset\nand coverage lookup, ledger search, settlement status, attestation history, credential\nverification, portfolio summary for the caller's own identity. Every tool is scoped by the caller's\nidentity header, so the agent can never read more than the person asking could read. Answers cite\nthe block or the record they came from, and the agent is required to say \"not in the record\"\nrather than guess. This is the entire accuracy story, and it is most of the value.\n\n Tier 2, proposals. The agent may draft an action but never perform it: a settlement\ninstruction, a work order with acceptance criteria, a backing refresh reminder, a reconciliation\nquery. It returns a signed-off-by-nobody proposal object that the UI renders with its arguments\nvisible, and a person approves it. The MCP specification's own guidance is the rule to copy here:\nreads can run freely, anything irreversible, money-moving, permission-changing or outbound pauses\nfor a human who can see the exact arguments before dispatch."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "The design: a proposing agent, not an acting one (continued)",
+      "text": "Tier 3, mandated execution. Only once Tier 2 is boring. An approved proposal executes under an\nexisting agent mandate: named action, expiry, spend ceiling, every use counted on the ledger. No\nnew authority mechanism is needed, which is the point of having built the mandate layer first. An\nagent without a valid mandate gets the same refusal any other caller gets.\n\nA useful property of staging it this way: Tier 1 is independently valuable, and if Tier 2 never\nships, nothing is half-built."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Honest scope: what it must refuse",
+      "text": "- No price estimates, no yield projections, no \"good investment\" judgements. The platform does not\n publish an AVM and the agent must not become one by accident.\n- No statements about people or neighbourhoods. Describe the property, never the likely buyer.\n- No claim that an attestation is true. The rail checks arithmetic, not reality, and the agent\n inherits that limit word for word.\n- No reading of another participant's holdings, KYC, payment details or private collection values,\n enforced by the identity header rather than by instruction.\n- No invented record. If a lookup returns nothing, the answer is that nothing was found."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "India-specific constraints that shape the build",
+      "text": "- A listing card is an advertisement under RERA section 11(2), so any text the agent generates\n about a project has to carry the registration number and must not state possession dates, carpet\n area or amenities that differ from the filing. Practically: generated copy is drafted, never\n published, and anything factual comes from the record rather than the model.\n- The DPDP Act treats a chatbot operator as a data fiduciary. Rules were notified 13 Nov 2025,\n consent-manager obligations land 13 Nov 2026, the substantive duties 13 May 2027. What that means\n for this build: notice before the conversation, itemised description of what is processed, a\n retention and deletion path for transcripts and any embeddings, masked logs, and a named\n processor relationship with whatever model provider is called. The two highest-risk gaps named in\n the field guidance are prompt injection and unmasked personal data sent to the provider.\n- Prompt injection deserves its own line. The moment the agent reads attacker-influenced text, a\n listing description or an uploaded document, that text can try to steer a tool call. Tier 1 and\n the identity scoping contain the blast radius, which is a further argument for not giving the\n model write tools."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Evaluation, because \"it felt good\" is not a result",
+      "text": "Before any of this is called working, a fixed question set with known answers drawn from the seeded\ndemo data, run as a suite like everything else here:\n\n- grounded answer rate: every factual claim traceable to a record the tools returned\n- abstention: does it say \"not in the record\" when the record is empty, measured with deliberately\n fictional asset ids, which is the REAL benchmark's exact failure mode\n- scope: zero leakage of another identity's data across the whole set\n- refusal: valuation, advice and demographic prompts refused\n- proposal correctness: generated instructions validate against the rail's own schema\n\nA number from that suite is publishable. A demo transcript is not."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Order of work",
+      "text": "1. Tool layer plus identity scoping, read-only, with the evaluation suite written alongside it.\n2. Citations in the UI: each answer shows the blocks and records behind it.\n3. Proposals with human approval, arguments visible, nothing dispatched without a click.\n4. An MCP server exposing the same read tools, so external agents can use the rail as the factual\n layer. This is the piece the rest of the industry is missing and the cheapest differentiator\n available here.\n5. Mandated execution, only after 3 and 4 have been boring for a while."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "What this is not",
+      "text": "Not a deal-sourcing pipeline, not lead generation, not voice, not a CRM assistant. Those are real\nproducts and other people are building them. The thing only this repository can offer is an\nassistant whose every answer is backed by a record that a third party can verify independently."
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "AMA keywords: what is actually covered",
+      "text": "An audit against the keyword list, checked against the code rather than from\nmemory. Status is one of done , partial or not started , and\n\"partial\" always says what is missing. The keyword list splits into 25 rows\nbecause several keywords carry more than one item: 14 are done, 9 are\npartial, 1 has not been started, and 1 was a question rather than a feature.\n Keyword Status Where it lives What is missing \n --- --- --- --- --- \n 1 CBDC done cbdc.go , /umi/cbdc/ , docs/CBDC.md Retail and wholesale segments, issue, transfer, redeem, conserved supply. \n 2 eKYC partial KYC tiers in cbdc.go , verified-identity flags across the rail, credentials in credentials.go There is no identity verification flow: tiers are asserted at account opening, not earned by verifying a document or a one-time code. No Aadhaar-style or video path, and no re-KYC expiry. \n 3 Better offline protocol done IssueOffline / RedeemOffline , tests/cbdc.test.mjs Reserved value, signed voucher, bounded exposure, deterministic double-spend detection. Noted limit: symmetric signing, where production needs per-device keys. \n 4a Programmable CBDC done Grant / Spend , ProgramCondition Expiry, merchant category, named merchants, geography, all enforced on the rail with refusals committed. \n 4b Interoperability of CBDC with other systems not started - e₹ against UPI, against a tokenised deposit, against another CBDC. Planned"
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "AMA keywords: what is actually covered (continued)",
+      "text": "as phase 3 in docs/CBDC.md . \n 5 Anti money laundering partial screenLocked in cbdc.go , fraud.go , riskmodel.go Screening and a reporting threshold exist. No sanctions or PEP list, no counterparty network view, no suspicious transaction report artefact, no case management for a flagged payment. \n 6 Law of the land partial Disclaimers throughout, FEMA and nationality refusals in crossborder.go , PA-CB and finality notes in docs/CBDC.md The statutory basis is described in prose but not modelled: no designation state, no per-jurisdiction rule set that a transaction is actually tested against. \n 7 Risk management done fraud.go rules, the trained model, KYC caps, offline caps, supply conservation, backing gate Decisions stay with the published rules; the model is advisory. \n 8 Blockchain as the main hero partial cbdc.go puts the money itself on the ledger; grants, vouchers, conditions and refusals are all blocks Large parts of the system still treat the chain as a record: listings, documents, work orders and the marketplace keep their state in Go maps and write blocks about it. Making those state transitions chain-first is the real version of this item. \n 9 Speed of the transaction partial throughput.go measures settlements per second and latency percentiles on demand, with the serialising lock named The number is measured but not published anywhere a reader lands, and there is no"
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "AMA keywords: what is actually covered (continued)",
+      "text": "measurement of the CBDC paths specifically. \n 10 Smooth end-user experience (flight cancelled, insurer refunds) done OpenCondition , SubmitEvent , automatic refund with no claim, shown on the digital rupee page at /cbdc A person can now see money locked against a named event, who is trusted to attest it, the deadline, and the refund once it releases. The page also opens conditions, attests events, issues and spends purpose-bound money, carries value offline and sends across a corridor, so the behaviour can be tried rather than read about. \n 11 Contracts that release on time when rules are fulfilled done OpenCondition / SubmitEvent / SweepConditions , plus the escrow in work.go and outcome settlement Release is automatic on attestation and refund is automatic at the deadline. \n 12 Off chain to on chain partial Document and deed hashes anchored, the ledger head anchored to Solana, attested events bringing outside facts in No general oracle: each bridge is hand-wired, and there is no signed-feed abstraction with its own trust and staleness rules. \n 13 KYC plus ML together partial The AML check reports rules and model side by side on every movement KYC tier is not an input to the model, and the model was not trained on identity features at all. \n 14a Cross-border: bank to bank done corridors.go , corridor BANK-CORRESPONDENT Authorised dealer status required, purpose codes enforced,"
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "AMA keywords: what is actually covered (continued)",
+      "text": "provisional until the far leg confirms, three-to-five-day window named. \n 14b Cross-border: card network rails partial corridor CARD-SCHEME Modelled as its own rail with scheme membership and the authorise-now-settle-later window. Interchange economics and the chargeback flow are described, not implemented. \n 14c Cross-border: PA-CB licensing done corridor PACB-ECOM , licence gate in corridors.go The authorisation and intelligence unit registration are required, the ₹25 lakh ceiling is enforced, and a refusal names what is missing. \n 14d Both legs on the same chain, or not done corridors MULTI-CBDC-PVP and HTLC-LINKED Atomic in one block where both legs are here; hash time-locked with a verified preimage and a working refund path where they are not. \n 15 NPCI NIPL peer-to-peer done corridor NIPL-P2P-NP Direct scheme-to-scheme person-to-person link with the published ₹15,000 per transfer and ₹1,00,000 monthly ceilings, and merchant purposes refused. \n 16 Retail to merchant done Grant spending pays a merchant account directly; offline redemption pays a shop Merchant category and identity are first-class in the spend path. \n 17 China, Canada, Singapore precedents done docs/CORRIDORS.md , the two on-ledger corridors mBridge (one platform, atomic PvP, seconds instead of days) and Jasper-Ubin (two platforms joined by hash time-locked contracts) were read, and each produced a corridor"
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "AMA keywords: what is actually covered (continued)",
+      "text": "rather than a citation. \n 18 Blockchain has no time constraints, an FMI does done Finality.SettlementWindow , the finality section of docs/CBDC.md A provisional leg names the window that closes it instead of reporting the ledger entry as settled. \n 19 Technical and financial finality done Finality on every movement, tested in cbdc test.go Recorded as two separate fields that are never collapsed into one. \n 20 Put as many functions as possible on the blockchain partial The CBDC layer moved money, conditions, grants and refusals on-chain Same gap as item 8: the older modules still write about their state rather than keeping it on the chain. \n 21 Any suitable language, not only Go answered See below No change needed yet; the reasoning is recorded so it can be revisited per component."
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "The honest summary",
+      "text": "The CBDC half and the cross-border half are both built now. What is left is\nmostly what a person would see or verify rather than the mechanics. CBDC\ninteroperability with other systems is the one item with no code at all, and\nthe open partials are eKYC with no verification flow, AML without a sanctions\nlist or a report artefact, a speed number that is measured but published\nnowhere, and the older modules that still keep state in Go maps while writing\nblocks about it."
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "Why not Solidity, and why not Python",
+      "text": "A fair question, and the answer is different for each.\n\n Solidity. Solidity is the language of the EVM, and the EVM is only worth\npaying for when the thing being built needs a public permissionless chain with\nuntrusted participants. The system here is a market infrastructure: the\nparticipants are a registrar, an issuer, a regulator and identified investors,\nsettlement is in central bank money, and the rules are regulatory rather than\neconomic. Putting that on an EVM would mean paying gas per settlement, holding\na key for each participant, exposing an order book to the public mempool, and\naccepting an execution environment where reversing a mistake needs a migration.\nThe regulator's own wholesale pilots do not run on public EVMs either.\n\nWhere a public chain genuinely helps, the project already uses one rather than\npretending a private ledger is the same thing: the head of the chain is\nanchored to Solana, with the transaction encoding written by hand and\nverification open to anyone. That buys the one property a permissioned ledger\ncannot give itself, which is proof it was not rewritten. There is also a\nread-only EVM mirror on Sepolia for document anchors."
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "Why not Solidity, and why not Python (continued)",
+      "text": "So the honest position is: Solidity is the right tool when the trust model is\n\"nobody\", and the wrong tool when the trust model is \"a regulator and named\ninstitutions\". Writing a contract in it to look blockchain-native would be the\nsame mistake as calling a rule sheet AI.\n\nIf you want it anyway, the defensible version is narrow: a small Solidity\ncontract on a testnet that holds the anchor digests and the condition rules,\nso an outside party can verify a release without trusting this rail. That is a\nday of work and I can do it, but it should be built because it adds\nverifiability, not because the word is expected.\n\n Python. Python is the right language for training and nothing in this\nrepository argues otherwise. The reason the trainer is in Go is narrower than\na preference: training and inference must compute features identically, and\nthe cheapest guarantee of that is one function called by both. A Python\ntrainer would need the feature extractor reimplemented, which is the single\nmost common way a model silently stops working in production."
+    },
+    {
+      "doc": "AMA_COVERAGE",
+      "file": "docs/AMA_COVERAGE.md",
+      "heading": "Why not Solidity, and why not Python (continued)",
+      "text": "That reasoning stops holding the moment the model stops being a logistic\nregression. Gradient boosting, sequence models over payment history, or\nanything needing scikit-learn, PyTorch or pandas should be trained in Python,\nexported (ONNX or plain weights), and run in Go behind the same interface,\nwith a conformance test asserting the two implementations of the feature\nvector agree row for row. That is the point at which the language should\nchange, and it is a real one, not a concession."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "The problem it solves",
+      "text": "The settlement ledger is permissioned and this process controls it. Replaying it from genesis\nproves the history is internally consistent: every hash links, every merkle root recomputes. It\ndoes not prove that this is the history that existed yesterday, because whoever runs the node\ncould have rebuilt the whole chain this morning and the replay would still pass.\n\nThe standard answer is to publish the head somewhere nobody involved controls. After that,\nrewriting history means rewriting a record on a public network, which is not a thing the operator\nof this ledger can do."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "What is published, and what is not",
+      "text": "One memo, six fields, pipe separated:\n\n \n\nThat is the whole payload. No participant, no asset, no amount, no counterparty. A digest and the\nposition it sits at. The transactions themselves never leave this process, which matters because\na public chain is permanent and personal data on one cannot be withdrawn.\n\nAn anchor proves a digest existed at a point in time. It does not prove the contents behind the\ndigest are true. Nothing can do that from the outside, and claiming otherwise would be the same\nmistake the rest of this repository avoids."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "How it works",
+      "text": "Solana, because the fee is a fraction of a cent, confirmation is seconds, and the memo program\nexists for exactly this. There is no SDK underneath it. drunix-gateway/solana.go implements:\n\n- base58, Bitcoin alphabet, for addresses and signatures,\n- the compact-u16 (shortvec) length prefix Solana uses in its wire format,\n- the legacy message layout: header, account list, recent blockhash, one memo instruction,\n- ed25519 signing from the standard library, and the transaction envelope,\n- JSON-RPC against the cluster: getSlot , getBalance , getLatestBlockhash , sendTransaction ,\n getSignatureStatuses , getTransaction .\n\nWriting it by hand rather than pulling a dependency has one practical benefit beyond the obvious:\nthe encodings are unit tested against known vectors with no network and no key, so a wire-format\nregression is caught by go test rather than by a cluster silently rejecting a transaction."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "Verifying an anchor, as an outsider",
+      "text": "Verification reads the transaction off the cluster, pulls the memo out of the logs, finds the block\nthis ledger holds at that height, and compares the hashes. If they differ it says so: that is the\nentire point of the mechanism, so the mismatch path is a reported result and not an error to be\nswallowed.\n\nReads need no account, no key and no funds. Any public RPC endpoint works."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "fund the address with devnet SOL at https://faucet.solana.com",
+      "text": "export SOLANA SECRET B58=<secret \nmake dev\ncurl -s -X POST localhost:21100/umi/anchors \\\n -H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator'\n \n\nEnvironment: SOLANA RPC URL (default the public devnet endpoint), SOLANA CLUSTER (default\n devnet ), SOLANA SECRET B58 (no default, and no key means no writing).\n\nPublishing is restricted to a supervisor because it spends a fee and cannot be undone. A successful\nanchor commits a UMI CHAIN ANCHORED block locally carrying the signature and the explorer link, so\nthe local ledger records its own publication."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "Current status",
+      "text": "Writing is off in every environment of this project right now: no funded key is configured. The\nstatus endpoint says so in those words rather than implying an anchor exists. Reads and verification\nagainst the public cluster are live today, which is why the integration checks can run against the\nreal network without a wallet.\n\nDevnet, not mainnet. Devnet SOL has no value, which is the right risk profile for a demonstration.\nMoving to mainnet is a change of two environment variables and a funded key; the code does not\nchange, and neither does anything written above."
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide",
+      "text": "The design rule\n\nEvery rule about money lives in one place: the settlement core, beside the ledger it protects. The\nlayers in front of it carry requests and identity and nothing else. If a rule about money can be\nfound anywhere but the core, that is a bug. \n\nConcretely: the settlement core is Go, the web app and its API edge are JavaScript, and the edge\nforwards settlement calls without deciding anything about them. The edge owns the property register,\nKYC and the UPI payment lifecycle; it does not own balances, positions or the chain.\n\n The five layers\n Layer Responsibility Lives in \n --- --- --- \n Experience what each role can see and do, and the public pages anyone may read frontend/src \n Access establishes who is calling, decides what that caller may touch, and keeps the listing register frontend/api/index.js , server.js \n Settlement holds the cash leg and the ownership leg, and moves them as one drunix-gateway/umi.go \n Work escrows a fee against a deliverable, releases it only against anchored evidence drunix-gateway/work .go \n Record the append-only history every other layer answers to drunix-gateway/chain.go \n\nThe experience and the settlement core deploy independently, so either can be replaced, or fail,\nwithout the other. When the core cannot be reached the app reports unknown ; it never reports a\nsettlement surface as healthy because it could not ask.\n\n Authorisation"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "Entitlement is decided in front of the router rather than route by route, so a new surface is covered\nthe day it ships:\n\n- an unidentified caller is refused with 401, a stranger with 403;\n- a supervisor (regulator or admin) may act for someone else where that is the role's job;\n- attribution always comes from the authenticated caller, never from a field in the request body;\n- reads are scoped as tightly as writes, including diagnostics, receipts and reconciliation views.\n\nEach rule ships with a suite asserting the refused action changed no state.\n\n The record\n\nBlocks are hash-linked and written to durable storage before in-memory state is updated, so\nnothing can be true in the app and missing from the history. A block's transactions are frozen at\ncommit: contents can never drift from the merkle root they were hashed with, in memory or after a\nreload.\n\nIf a stored chain fails verification on restore, the rail seals itself and serves read-only rather\nthan extending history it cannot vouch for. The way back is a supervisor-only repair that records, on\nthe chain, every height and hash it dropped and who authorised it.\n\n Two API implementations"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "frontend/api/index.js is the serverless handler production serves. mock-api-server.js is an\nExpress rig used for local payment testing and as a fixture by several suites. They implement the\nsame surface and must be patched together . A fix applied to one is live in exactly one\nenvironment.\n\n---\n\n---\n\n Proof of backing\n\nTokenised assets fail when issuance outruns the thing behind it. A registrar (or a supervisor)\nrecords a statement for one asset: how many units exist, what they are valued at, the method used,\na hash of the evidence, and how often the statement must be refreshed (90 days by default, one hour\nminimum, one year maximum). Issuance is then checked against that figure: anything that would push\nthe book past the attested units is refused, and the refusal is committed as a block so the gate\nitself can be audited.\n\nFour points the layer is careful about:"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "- An asset with no statement behaves exactly as it did before. The gate binds only where someone\n has given it something to bind to.\n- Blocking is never reversing. Nothing is burned or unwound; an asset that is already over-issued\n is reported as such rather than quietly corrected.\n- A statement that is past its refresh date stops authorising issuance. Stale evidence is evidence\n about the past.\n- The attestor cannot be the beneficiary, and the rail says plainly that it checks arithmetic, not\n reality. A false statement here produces a precise, well-evidenced, false number.\n\nStatements are replaced rather than edited, and both the statement and its withdrawal are replayed\nfrom the chain at startup.\n\n Agent identity\n\nA software actor on the rail acts under a pseudonym rather than under its principal's name. The\nprincipal is split across named custodians with Shamir's secret sharing, and recovering it takes a\nthreshold of them: a request with a stated trigger, then one approval per custodian, each of which\nis a block. Fewer than the threshold recover nothing, which is a property of the arithmetic rather\nthan a promise."
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "The limits are stated in the API responses, not only here. Every share lives in this one process,\nso the protocol is real and the distribution is simulated; real custody means one share per\norganisation. The pseudonym is re-identifiable by design, so it remains personal data. A revoked\nagent stops acting, but who was accountable for what it already did stays recoverable, and an\nidentification request that nobody completes lapses and is recorded as an unanswered ask.\n\nDesign note, including why the alternative architectures were not chosen:\n AGENT IDENTITY.md .\n\n Cross-border funding\n\nA buyer outside India cannot be let in by a payment rail alone. A foreign national of non-Indian\norigin resident outside India cannot acquire Indian immovable property at all, and for a buyer who\ncan, the consideration has to arrive in rupees through banking channels: cryptocurrency and digital\ntokens are not a permitted method. This layer therefore models the one structure that survives both\nfacts. A stablecoin is received and converted outside India, and the buyer's rupee wallet is\ncredited only against a provider attestation carrying a bank advice reference and a purpose code."
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "Eligibility is screened before a quote exists, Travel Rule records are mandatory above the\nthreshold, the quote carries an expiry, and the destination of the transfer is the off-ramp rather\nthan the seller. Refusals are committed as blocks for the same reason the other gates commit them.\nNothing is connected to a chain: a transfer reference is recorded, not verified, and the rate is\nconfigured rather than quoted.\n\nDesign note, including the research behind it and a separate assessment of token-sale fundraising:\n CROSS BORDER.md .\n\n Public-chain anchoring\n\nThe head of the permissioned ledger is published to a public Solana cluster as a memo carrying the\nchain id, block height, block hash and transaction root, and nothing else. Verification reads the\ntransaction back, finds the local block at that height and compares the hashes, reporting a\nmismatch rather than swallowing it.\n\nThere is no SDK underneath this: base58, the compact-u16 wire prefix, the legacy message layout and\ned25519 signing are implemented in the module, which means the encodings are unit tested against\nknown vectors without a network or a key. Reads are live and free; writing needs a funded key and\nis off until it has one. Supervisors only, because a fee is spent and publication cannot be undone.\n\nRunbook and the limits of the claim: ANCHORING.md .\n\n CBDC settlement layer"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "cbdc.go holds the money itself: accounts in integer paise across a retail and a wholesale\nsegment, issuance and redemption restricted to the central bank role, and KYC tiers that cap\nbalances and payment sizes on the retail side. Conservation() proves issued equals held plus\nredeemed and is served publicly.\n\nThree mechanisms sit on top. Grant and Spend implement purpose-bound money against the\nparameters the regulator lists (expiry, merchant category, named merchants, geography), and a\nfailed condition commits a UMI CBDC REFUSED block rather than returning quietly.\n IssueOffline and RedeemOffline implement the offline path: value is reserved out of the online\nbalance, the voucher carries an HMAC the accepting device can check without connectivity, and the\nnonce index turns a double spend into a deterministic refusal. OpenCondition , SubmitEvent and\n SweepConditions hold money against an attested event, release it to the payee when the named\nattestor reports the event, and return it to the payer at the deadline.\n\nEvery movement carries a Finality record with the technical and financial parts kept separate,\nand an AMLCheck built from the rules and the trained model in the risk layer. Routes live under\n /umi/cbdc/ ; the layer is additive and unmounts cleanly when the rail or chain is absent."
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "Design note, the regulator's published pilot behaviour and the phases still to come:\n CBDC.md .\n\n Cross-border corridors\n\n corridors.go carries five rails as separate corridors, each with its own licence requirement,\nceilings, purpose codes and settlement model. Check runs the gate without moving anything;\n Send applies it and then branches on the settlement model.\n\nAtomic corridors move money in a single CBDC transfer and are financially final immediately.\nHash time-locked corridors move it into a per-corridor suspense account, record the hash and the\ntimeout, and release only against a preimage that is verified rather than trusted; Sweep refunds\nan expired lock. Deferred corridors also park the money in suspense and stay provisional until\n ConfirmLeg records the far institution's confirmation. Suspense is an ordinary account on this\nledger, so the CBDC conservation invariant still holds at every step.\n\nRoutes live under /umi/corridors/ . Corridor parameters, the precedents they follow and the\nlimits of the claim: CORRIDORS.md .\n\n Payment risk: rules and a trained model\n\n fraud.go is the rule engine: ScorePayment is a pure function over the payment and the payer's\nrecent history, returning a score, a band, a decision and the weighted factors behind it. It is\nhand-written and deterministic, and it is what gates settlement."
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "How the layers divide (continued)",
+      "text": "riskmodel.go is the trained one. A logistic regression over ten features, fitted by\n cmd/trainrisk on a seeded synthetic dataset, with coefficients, feature standardisation and\nheld-out metrics committed as riskmodel.json and embedded with go:embed . Inference is a dot\nproduct and returns the contributions that produced the score. ExtractRiskFeatures is shared by\nthe trainer and the server so training and production cannot disagree about what a feature means.\n\n AssessPayment runs both and reports them side by side with an agreement label\n( AGREE CLEAN , AGREE RISKY , RULES ONLY , MODEL ONLY ); the decision field is always the rules'\ndecision. POST /fraud/assess serves it, GET /fraud/model publishes the card, and the existing\n POST /fraud/score is unchanged.\n\nModel card, generator description and measured numbers: RISK MODEL.md ."
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "Repository layout",
+      "text": "Path What it is \n --- --- \n drunix-gateway/ Go settlement core. UMI/ASI rail, e₹-W wallets, DvP, work escrow, the chain. Port 21100. \n frontend/src/ React 19 + Vite app: marketplace, ledger explorer, dashboards, calculators, explainers. \n frontend/api/index.js Vercel serverless API edge; property register, auth, KYC, payments, rail proxy. \n server.js Local/Render Node server: same surface as the serverless edge, plus SSE and static dist . \n mock-api-server.js Express rig for PayU round-trip testing; a fixture for several suites. \n chaincode/ Hyperledger Fabric chaincode (Go) for the Fabric deployment path. \n api-gateway/ , payment-gateway/ Go services for the Fabric path and the payment leg. \n contracts/ Solidity escrow experiment (public-chain, simulated). \n tests/ 79 .mjs end-to-end suites, driven by regression.sh . \n scripts/ , Makefile , regression.sh Dev bootstrap, common tasks, the full sweep. \n docs/ Deployment · Work orders · Demo walkthrough \n SECURITY.md What is in scope, what is openly simulated, and how to report a flaw privately. \n\nThis is four independent Go modules plus a Vite frontend and a Node API, so a root-level\n go build ./... cannot work. CI builds each module from its own directory.\n\n---"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "Configuration",
+      "text": "Everything has a safe default; nothing below is required to boot except where marked.\n Variable Default Purpose \n --- --- --- \n UMI GATEWAY URL (none) Required. Where the app finds the Go rail. \n DATABASE URL (none) Postgres (the project uses Neon) for the ledger and rail state. Absent, both run in memory and reset on restart. Setup: docs/NEON.md . \n DEMO AUTH off Enables /api/auth/login with the demo identities. Without it, login is 404. \n PORT 8080 / 21100 App and rail ports. \n ADMIN DASHBOARD KEY (none) Unlocks admin insights and the role switcher. Needed by the full suite. \n UMI PROXY SECRET (none) Shared secret binding identity headers to a trusted proxy. Set on both hosts or neither. \n GROQ API KEY (none) Enables the assistant. Absent, it is cleanly absent, not a button that fails. \n UMI SEED DEMO on Seeds demo wallets/ISINs on an empty rail. Set false for a bare ledger. \n WORK PROVIDER URL / KEY (none) Talent provider adapter. Absent, work orders are marked simulation . \n UMI SEED CARBON ASSET CARB-NSK-AGROFOREST-2024 Asset id for the seeded carbon credits. Registered as asset class CARBON ; the registry behind it is simulated. \n EVENT STREAM BROKERS (none) Kafka-protocol brokers for the settlement event stream (Kafka, Redpanda, WarpStream, MSK, Confluent). Absent, events are derived and counted locally. \n EVENT STREAM USERNAME / PASSWORD / TLS (none) SASL PLAIN credenti"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "Configuration (continued)",
+      "text": "als and TLS for a hosted broker. \n\nFull table, deployment topology and failure modes: docs/DEPLOYMENT.md .\nPointing the stack at your own Neon database, and exactly which data does and does not land there: docs/NEON.md .\n\n---"
+    },
+    {
+      "doc": "ARCHITECTURE",
+      "file": "docs/ARCHITECTURE.md",
+      "heading": "API",
+      "text": "Public reads need no session. Anything touching money or a holding needs a bearer token.\n Endpoint Purpose \n --- --- \n GET /api/properties · /:id the register; POST to list, /validate as registrar, /mint as owner \n POST /api/transfers move tokens between holders \n GET /api/chain · /api/chain/verify the ledger, and whether it still replays cleanly \n GET /api/umi/config rail capabilities and the UMI block types it commits \n GET /api/umi/wallets · POST /api/umi/dvp e₹-W balances; atomic delivery-versus-payment \n POST /api/npci/collect → /approve → /release the UPI payment lifecycle \n POST /api/ai/chat the assistant: public listing data only, cannot act \n\nThe rail's own surface ( /umi/dvp , /umi/wallets , /umi/servicing , /umi/reconciliation ,\n /umi/isin , /drunix/chain ) is reachable directly on :21100 in development."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "The claim this is built to support",
+      "text": "The settlement core never knew what a property was.\n\nThat is not a slogan, it is a property of the code as written. assetId is an\nopaque string everywhere in the rail. There is no assetClass field. DvP moves\n tokens between holders and paise between wallets; the atomic swap has no\nopinion about what the tokens represent. pilotISINFor(assetID) is\n sha256(\"aasthi-pilot-isin \" + assetID) , which works on any string.\n\nSo adding a second asset class should be a registry entry, not a rewrite. This\ndocument is the plan for proving that, and for being honest about the one place\nwhere carbon genuinely does need new code."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "Why carbon, and why not five asset classes",
+      "text": "Tokenised real estate settled in central-bank money is the core bet. A second\nclass is worth adding only if it tests something the first one does not.\n\nCarbon does. Property tokens live forever and change hands. A carbon credit has\na terminal state: it is retired , permanently consumed against someone's\nemissions, and must never trade again. That is a lifecycle the rail has never\nhad to model, and getting it wrong is the single best-known failure mode in\ncarbon markets: double counting , where the same tonne is claimed twice.\n\nFive shallow asset classes would demonstrate nothing except a dropdown. One\nclass with a real terminal state and a real conservation invariant is worth\nmore."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "What is additive and what is new",
+      "text": "Additive, no behaviour change: \n\n- assetClass defaults to PROPERTY . An asset with no profile registered is a\n property, exactly as today. Every existing test, seed and settlement path is\n untouched.\n- The DvP path, the cash leg, ISIN assignment, reconciliation and the ISO 20022\n trace are not modified. Carbon settles through the same atomic swap.\n\n Genuinely new: \n\n- An asset profile registry: class plus the metadata a credit needs (project,\n vintage, methodology, serial range).\n- Retirement, which is the only operation property does not have.\n- A conservation invariant extended to cover retired supply."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "The invariant",
+      "text": "Today the securities leg is conserved when:\n\n outstanding <= authorised\n\nwhere outstanding is the sum of all positive holder positions.\n\nRetirement removes tokens from circulation without destroying the record of\nthem. A retired credit is debited from its holder and credited to nobody. So\noutstanding falls, and the check above would still pass while quietly losing\ntrack of where the tokens went.\n\nThe invariant therefore becomes:\n\n outstanding + retired <= authorised\n\nThis is the part worth looking at closely. It is what makes double counting\ndetectable rather than merely discouraged: the retired tally is permanent, the\ntokens are gone from the book, and the sum cannot exceed what was ever issued.\nA credit that was retired cannot be settled again because there is no position\nleft to move, and cannot be quietly re-issued because authorised is pinned."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "Retirement semantics",
+      "text": "- Only an asset whose class is CARBON can be retired. Retiring a property is\n refused; it is not a meaningful operation and silently allowing it would make\n the invariant meaningless.\n- Retirement is irreversible. There is no un-retire route, by design.\n- Each retirement commits a UMI CARBON RETIRED block carrying the holder, the\n quantity, the beneficiary the retirement is claimed for, and the reason.\n- The block is the certificate. \"Prove this tonne was retired\" is answered by a\n block height, not by our word."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "Honesty",
+      "text": "A real carbon credit is issued and retired in an independent registry, and the\nregistry is the authority on whether a serial is live or retired. We are not\nconnected to one. Nothing in this feature talks to an external registry, and\nthe serial numbers are ours.\n\nSo the carbon registry appears on /trust as an eleventh simulated boundary,\nin the same words as every other one, and the UI says the same. Specifically we\ndo not claim conformance with any particular standard's methodology, and we do\nnot name a registry operator as a partner, because none of them is one.\n\nWhat is real: the lifecycle, the conservation arithmetic, the irreversibility,\nand the block that proves it."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "Surface",
+      "text": "Go, in the rail, as with everything else:\n\n POST /umi/assets register a profile (class + metadata)\n GET /umi/assets list profiles\n GET /umi/assets/{assetId} one profile\n POST /umi/carbon/retire retire credits, commits a block\n GET /umi/carbon/retirements the retirement register\n\nThe JS tier stays a pure proxy with no carbon logic, as with UMI."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "Seed",
+      "text": "One carbon asset end to end, so the demo shows a real settlement and a real\nretirement rather than an empty table:\n\n- A project asset with a vintage and a serial range, issued to the originator.\n- A DvP of credits to an investor through the existing atomic swap, proving the\n core did not need to change.\n- A retirement by that investor, proving the terminal state and the invariant."
+    },
+    {
+      "doc": "CARBON",
+      "file": "docs/CARBON.md",
+      "heading": "Test plan",
+      "text": "Each of these must be watched failing before it is trusted.\n\n1. An asset with no profile is PROPERTY , and every existing path behaves\n identically. This is the additive guarantee.\n2. Carbon settles through the unmodified DvP path.\n3. Retiring more than a holder owns is refused.\n4. Retiring a PROPERTY asset is refused.\n5. After retirement the holder's position is reduced and the tokens cannot be\n settled again.\n6. outstanding + retired never exceeds authorised , including after a\n settlement followed by a retirement.\n7. Retirement is recorded in a block, and the block is retrievable.\n8. Restart durability: retired totals survive a restore, otherwise a restart\n would silently re-authorise retired supply. This is the double-count hole\n that matters most."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "The premise shift",
+      "text": "Until now the chain in this repository was a settlement record sitting beside\nthe money: tokens moved on the ledger, rupees moved in a wallet table. The AMA\ndirection reverses that. The chain becomes the place the money itself lives, in\nthe form the regulator is actually piloting: central bank digital currency,\nwith the programmability, the offline path and the finality guarantees that go\nwith it.\n\nSo the hero is the chain, and the test of every feature below is simple: does\nthis function run on the ledger, or is the ledger only taking notes about it."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "What the regulator is actually doing (October 2026)",
+      "text": "Design against the real pilot, not an imagined one.\n\n- e₹ runs in two segments: e₹-R retail (about 10 million users, roughly\n ₹772 crore in circulation at 31 March 2026, down from ₹1,016 crore the year\n before) and e₹-W wholesale (16 participants, used for government\n securities, call money and tokenised certificates of deposit).\n- Programmability is live and is the direction of travel: the sponsor binds\n funds by purpose, with parameters the RBI names explicitly as expiry date,\n geo-location, merchant category code and merchant VPA. Through 2025-26 food\n subsidy was credited as programmable e₹ in Gujarat, Puducherry and\n Chandigarh, spendable only at fair price shops.\n- Offline is being tested over NFC and Bluetooth for small values, to work\n where UPI cannot.\n- Cross-border CBDC pilots, bilateral and multilateral, are committed for\n 2026-27, along with a CBDC and Asset Tokenisation sandbox. There is a digital\n assets pact with the Monetary Authority of Singapore.\n- UMI, this project's subject, is the RBI's tokenisation platform and settles\n in wholesale CBDC. That is the join: tokenised asset on one side, central\n bank money on the other, both on the ledger."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "What the regulator is actually doing (October 2026) (continued)",
+      "text": "On the cross-border side the rules are equally concrete. UPI acceptance is live\nin nine countries, and the India-Nepal UPI to NPI link went live on 6 June 2026\nas a genuine peer-to-peer corridor, with a per-transaction cap of ₹15,000 and\n₹1 lakh a month. Aggregating cross-border payments needs a PA-CB authorisation\nunder the Payment Aggregator Directions of 15 September 2025: ₹15 crore net\nworth at application rising to ₹25 crore, FIU-India registration, a per\ntransaction ceiling of ₹25 lakh, and an import collection account at an AD\nbank. Nineteen entities held the licence at January 2026. Card networks run\ntheir own rails and their own licences, which is a different corridor with\ndifferent economics, and NIPL provides scheme rules and interoperability but\nreplaces none of FEMA, the PA-CB obligations, AD bank reporting, sanctions\nscreening or the partner country's licensing."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "The two finalities",
+      "text": "This distinction drives much of the design and is the one most often blurred.\n\n Technical finality is a property of the ledger: the block is committed, the\nhash chain extends past it, and no participant can replace it. On this chain\nthat happens in milliseconds, continuously, with no cut-off time.\n\n Financial finality is a property of the law: the moment a transfer becomes\nirrevocable and unconditional against third parties, including an insolvency\nadministrator. In India that comes from the Payment and Settlement Systems Act\nand the designation of the system, not from the hash.\n\nThe two are not the same thing, and the gap between them is where most\nsettlement risk lives. A payment can be technically final and financially\nprovisional (anything settled over a commercial bank rail before its clearing\nwindow closes), and the reverse is possible as well.\n\nCentral bank money closes the gap, which is the actual argument for CBDC in a\nsettlement system: a leg paid in e₹ is final when the block commits, because\nthe money is a claim on the central bank and there is no further settlement\nstep to wait for. A leg paid over a bank rail is not, and must say so.\n\nSo every transfer in this layer carries both, separately, and never reports one\nas the other. Where the gap exists, the layer names the window that closes it."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "The two finalities (continued)",
+      "text": "The related point from the AMA: a financial market infrastructure has time\nconstraints (operating hours, clearing windows, cut-offs, value dates) and a\nblockchain does not. A 24x7 ledger settling against a rail that closes at 18:00\nis a 24x7 ledger with an 18:00 settlement. The layer models the window\nexplicitly rather than pretending it is gone."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "Phases",
+      "text": "Phase 1 (built now): the CBDC core. \n- e₹-R and e₹-W wallets, issued by the central bank role, redeemed back to it.\n Supply is conserved on issue, transfer, spend and redemption.\n- Programmable grants with the RBI's own parameters: expiry, merchant category,\n named merchants, geography, purpose. A spend that violates one is refused and\n the refusal is committed to the chain.\n- An offline protocol: value reserved online, signed vouchers spendable without\n connectivity, double spend caught deterministically on reconnection, and a\n small-value cap, because offline money that cannot be checked in real time\n has to be bounded.\n- Conditional transfers: money locked by a rule and released automatically when\n an attested event satisfies it (the flight-cancellation refund), or returned\n when the deadline passes with no event.\n- Both finalities recorded on every movement, with the bank-rail window named\n where financial finality is still pending.\n- AML and KYC tiers enforced at the point of movement, reusing the published\n rules and the trained model from the risk layer."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "Phases (continued)",
+      "text": "Phase 2: cross-border corridors. The existing cross-border module gets the\ncorridor cases the AMA listed: bank to bank, card network rails, PA-CB\naggregation, a NIPL-style peer-to-peer link, and the case that matters most for\na ledger, whether both legs sit on the same chain or on two chains that must be\nreconciled. Each corridor carries its own licence requirement, caps and\nreporting, and refuses what the law of the land does not allow.\n\n Phase 3: interoperability. e₹ against UPI, against a tokenised deposit, and\nagainst another CBDC, with atomic exchange where both legs are on the ledger\nand an explicit settlement window where one is not.\n\n Phase 4: speed and experience. Published latency measurements on the real\npath rather than adjectives, and the consumer surfaces where this is visible:\na refund that arrives before the passenger has left the airport."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "Phases (continued)",
+      "text": "The experience half of phase 4 is shipped. The digital rupee screen shows the\nconservation check, both kinds of finality, purpose-bound money and every\ncondition with the party trusted to release it, and it can act as well as\nreport: issue and redeem, transfer, lock money against an event, attest one,\nbind money to a purpose and try a spend that breaks the rule, carry value\noffline and redeem it, check a corridor before sending and then send across\nit, claim a hash-locked transfer or confirm a foreign leg. Reading needs no\naccount; every action is recorded against a named participant, and a refusal\nis shown exactly as the rail worded it, including which authorisation was\nmissing. The latency half is still unpublished.\n\nEvery page on the site, this one included, is listed with a sentence of\nexplanation in the directory at /explore , so nothing is reachable only by\nknowing its URL and the navigation bar can stay short."
+    },
+    {
+      "doc": "CBDC",
+      "file": "docs/CBDC.md",
+      "heading": "What this is not",
+      "text": "This is a simulation of the regulator's design, built in the open against\npublished pilot behaviour. It issues no central bank money, holds no settlement\naccount, is designated under no statute, and nothing in it is a legal opinion.\nIt is a demonstration of how the mechanics can work, with the limits written\ndown where they bind."
+    },
+    {
+      "doc": "CORRIDORS",
+      "file": "docs/CORRIDORS.md",
+      "heading": "The corridors",
+      "text": "Corridor Settlement Needs Ceiling Window \n --- --- --- --- --- \n Scheme to scheme, person to person (India to Nepal) deferred scheme membership, sponsorship by an authorised dealer bank ₹15,000 per transfer, ₹1,00,000 a month the two schemes settle on their own cycles \n Payment aggregator, cross border deferred a cross-border aggregator authorisation, intelligence unit registration ₹25,00,000 per transaction funds pass through a collection account at an authorised dealer bank \n Bank to bank through correspondents deferred authorised dealer bank status none fixed three to five business days through the chain \n Card network rail scheme window scheme membership, card data security certification none fixed authorised instantly, cleared later, reversible by chargeback \n Multi-CBDC, both legs here atomic nothing beyond participation none fixed none \n Two ledgers, hash time-locked atomic across two chains nothing beyond participation none fixed until the secret appears or the lock times out \n\nThe numbers come from the public rules: the India to Nepal link that went live\nin June 2026 carries ₹15,000 per transfer and ₹1 lakh a month; the Payment\nAggregator Directions of September 2025 set the aggregator's authorisation,\nits net worth test and a ₹25 lakh per-transaction ceiling."
+    },
+    {
+      "doc": "CORRIDORS",
+      "file": "docs/CORRIDORS.md",
+      "heading": "The question that actually matters",
+      "text": "Whether both legs sit on the same ledger.\n\n They do. Then settlement is atomic: one movement, one block, and no\ninterval in which one side has paid and the other has not. This is what\nmBridge demonstrated by putting several central banks' money on one platform\nand settling foreign exchange in seconds rather than the three to five days a\ncorrespondent chain takes. Here that is the multi-CBDC corridor, and it is the\nonly one where the ledger removes the risk instead of recording it.\n\n They do not. Then there is a real gap and it has to be closed by something.\nTwo honest ways exist and both are implemented:\n\n- A hash time-locked transfer , after Jasper-Ubin, which joined a Corda\n network in Canada and a Quorum network in Singapore with no shared platform\n and no trusted intermediary. The payer locks value against the hash of a\n secret. Revealing the secret to claim on one ledger reveals it on the other,\n so either both legs complete or neither does. If the secret never appears,\n the timeout returns the money. The refund path is implemented and tested,\n because it is the half that demonstrations skip.\n- A confirmation from the far institution. The money leaves the payer into\n corridor suspense, the transfer is reported as provisional with the window\n named, and only a confirmation of the far leg makes it final. Nobody is\n credited in between."
+    },
+    {
+      "doc": "CORRIDORS",
+      "file": "docs/CORRIDORS.md",
+      "heading": "What is enforced before anything moves",
+      "text": "- Licence. A corridor whose authorisation this deployment does not hold\n refuses and names it. Declared licences come from CORRIDOR LICENCES , and\n declaring one here grants nothing anywhere else.\n- Ceilings. Per transaction and, where the corridor has one, per payer per\n thirty days.\n- Purpose. Each corridor carries a specific set of purposes, so a merchant\n payment cannot ride a person-to-person link.\n- Travel Rule. Above roughly USD 1,000 the originator and the beneficiary\n must both be named, or the payment does not travel.\n- Reporting. Above ₹10,00,000 a transfer is flagged reportable regardless\n of how it scored.\n\nEvery refusal is committed to the chain with the rule that caused it. A gate\nwhose operation cannot be audited is indistinguishable from no gate."
+    },
+    {
+      "doc": "CORRIDORS",
+      "file": "docs/CORRIDORS.md",
+      "heading": "Limits",
+      "text": "This holds no authorisation, no correspondent relationship and no scheme\nmembership, and it moves simulated central bank money only. Nothing here is a\nlegal opinion, and a corridor working in this repository says nothing about\nwhether it would be permitted in practice."
+    },
+    {
+      "doc": "CREDENTIALS_PLAN",
+      "file": "docs/CREDENTIALS_PLAN.md",
+      "heading": "Why this and not the other ideas",
+      "text": "Four themes came out of the public writing of the people most likely to review this\nproject: tokenisation as horizontal infrastructure rather than a vertical, self-sovereign\nidentity, outcome-based programmable settlement, and agentic actors. Ranked by what this\nrepository can honestly build:\n Idea Decision \n --- --- \n Verifiable credentials for registrar attestation Build now. Closes the weakest real gap. \n Outcome-based framing of the work desk Do now, documentation only. The behaviour already exists. \n Platform framing rather than real estate framing Do now, documentation only. The code is already asset-class agnostic. \n Agent identity with bounded authority Not now. Large, and easy to overclaim. \n Deeper Cacti interop Not now. A shallow version is worse than the honest simulation already shipped. \n Conditional settlement release After credentials. It composes with them."
+    },
+    {
+      "doc": "CREDENTIALS_PLAN",
+      "file": "docs/CREDENTIALS_PLAN.md",
+      "heading": "The gap being closed",
+      "text": "Today a property page says title was validated by a registrar. The evidence for that is a\nrow in our database and a role check in our code. A reader has to trust the operator.\n\nWith a credential, the registrar signs a statement about a property, and anyone can check\nthat signature without trusting us, including after the platform is gone. That is the\ndifference between \"our server says so\" and \"here is a signed statement you can verify\"."
+    },
+    {
+      "doc": "CREDENTIALS_PLAN",
+      "file": "docs/CREDENTIALS_PLAN.md",
+      "heading": "Design",
+      "text": "Where it lives. The Go settlement core, next to the ledger. The credential is anchored\non the chain and verification reads the chain, so it belongs beside it. The Node edge gets\na pure proxy with no logic, per the standing rule.\n\n Format. A W3C Verifiable Credential shaped document: @context , type , issuer ,\n credentialSubject , issuanceDate , plus a proof object carrying an Ed25519 signature\nover the canonical bytes of the unsigned credential.\n\n Keys. One Ed25519 issuer key per issuing participant, generated on first use and\npersisted with the rest of the rail's durable state. The public key is served from the\nrail so a verifier never needs our database for anything but the key, and the key's\nfingerprint is written into the anchoring block, so a swapped key is detectable.\n\n Canonical bytes. The credential is serialised with sorted keys and no wall-clock\nfield beyond issuanceDate , which is taken from the block the anchor lands in rather\nthan from the local clock. Re-serialising a stored credential must reproduce the same\nbytes, or the signature check is meaningless.\n\n Anchoring. Issuing commits UMI CREDENTIAL ISSUED with the credential id, subject,\nissuer, key fingerprint and the SHA-256 of the signed credential. The credential body\nitself is not written to the chain: it may name a person, and the chain is append-only\nand public. Revocation commits UMI CREDENTIAL REVOKED ."
+    },
+    {
+      "doc": "CREDENTIALS_PLAN",
+      "file": "docs/CREDENTIALS_PLAN.md",
+      "heading": "Design (continued)",
+      "text": "Verification answers four separate questions and never collapses them into one\nboolean:\n\n1. Does the signature verify against the issuer's public key?\n2. Does the hash of the presented credential match the hash anchored on the chain?\n3. Is the credential revoked?\n4. Was the issuer authorised to make this statement at issue time?\n\nA credential can be cryptographically valid and still revoked, and a verifier must be able\nto see which.\n\n Authorisation. Only a Registrar or a supervisor may issue a title credential. Only the\nissuer or a supervisor may revoke. Reads are public, because the point of a credential is\nthat a stranger can check it."
+    },
+    {
+      "doc": "CREDENTIALS_PLAN",
+      "file": "docs/CREDENTIALS_PLAN.md",
+      "heading": "What this does not claim",
+      "text": "The issuer is a demo registrar identity, not a state land-records authority. The\n mechanism is real cryptography and a real anchor; the authority behind the statement is\nsimulated, exactly like every other regulated surface here. /trust and the API response\nboth say so, and the credential itself carries the disclaimer in its subject."
+    },
+    {
+      "doc": "CREDENTIALS_PLAN",
+      "file": "docs/CREDENTIALS_PLAN.md",
+      "heading": "Acceptance",
+      "text": "- Issue, fetch, verify and revoke over HTTP, with authorisation enforced.\n- Tampering with any field of a stored credential fails verification.\n- A credential survives a restart, rebuilt from the chain.\n- Verification of a revoked credential reports valid signature and revoked status.\n- Go tests covering each of the above, plus an integration suite through the proxy.\n- No new money rule in JavaScript."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "The premise, corrected",
+      "text": "The starting thought was reasonable: UPI is domestic and the demo uses fixed test identifiers, so\nnobody outside India can fund a purchase. Add crypto, and anybody with a wallet can pay. The second\nhalf does not follow, for two independent reasons, and both have to be said plainly before any code\nis written.\n\n 1. The buyer restriction is not a payments restriction. A foreign national of non-Indian origin\nwho is resident outside India cannot purchase immovable property in India at all. Not through UPI,\nnot through a wire, not through a stablecoin. The route open to them is a lease of up to five years\nor inheritance. Citizens of eleven named countries (including Pakistan, Bangladesh, China, Iran,\nNepal, Bhutan, Hong Kong, Macau and the DPRK) need prior RBI permission whatever their residence.\nSo the addressable cross-border buyer is an NRI, an OCI or a PIO, not \"anyone with a wallet\".\n\n 2. For the buyers who are eligible, the payment channel is prescribed. Under FEMA the\nconsideration must come through banking channels: inward remittance, or a debit to an NRE, FCNR(B)\nor NRO account, in rupees. Travellers' cheques and foreign currency notes are excluded by name, and\npractitioner guidance lists cryptocurrency and digital tokens among the prohibited methods. A\nsingle non-compliant payment leg taints the whole purchase."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "The premise, corrected (continued)",
+      "text": "Behind that sits the status of crypto in India: legal to buy, hold and sell, not legal tender,\ntaxed at a flat 30% on transfer with 1% TDS and no loss set-off, and with no recognised FEMA\nchannel for a resident-to-non-resident transfer of a virtual digital asset. The Enforcement\nDirectorate pursues exactly this pattern."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "What does work, and is what the industry actually does",
+      "text": "Accept the stablecoin offshore , off-ramp it there, and remit fiat into India through a\nregulated provider against the invoice, with the correct purpose code and the bank's advice. The\nstablecoin never touches an Indian wallet, and the money that reaches the seller arrives by the one\nroute FEMA recognises. This is the standard structure for Indian businesses taking stablecoin\npayments in 2026, and it is the only shape worth modelling.\n\nThe economics are why anybody bothers: a cross-border wire costs roughly 25 to 50 dollars plus half\na percent to two percent in FX, against well under a cent in network fees on an L2, and settles in\nminutes rather than days. Compliance does not disappear: the FATF Travel Rule is live in most\njurisdictions, full originator and beneficiary data above about USD 1,000, and the EU applies it\nwith no threshold at all. In the EU the stablecoin itself must be a MiCA-authorised one, which in\npractice means USDC rather than USDT."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "What this repository implements",
+      "text": "A cross-border funding leg , additive, simulated to exactly the same standard as the rest of the\nrail, and deliberately shaped so that the compliant structure is the only path through it:\n\n1. Quote. An eligible buyer asks to fund a purchase with a stablecoin. The rail returns an\n indicative rate with an expiry, the amount in stablecoin, and the destination: the off-ramp, not\n the seller.\n2. Eligibility gate, before anything else. A foreign national of non-Indian origin is refused\n with the reason stated. A restricted nationality is refused. Missing KYC is refused. These are\n refusals, not warnings, and each is committed to the chain.\n3. Travel Rule. Above the threshold the originator and beneficiary fields are mandatory and the\n quote cannot progress without them.\n4. Payment proof. The buyer records the transfer reference. The rail records it; it does not\n claim to have verified a chain it is not connected to.\n5. Off-ramp attestation. A regulated provider attests that the stablecoin was converted outside\n India and INR was remitted through banking channels, carrying the bank advice reference and the\n purpose code. Only this step credits the buyer's rupee wallet.\n6. Settlement then runs through the existing DvP path, unchanged, in rupees."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "What this repository implements (continued)",
+      "text": "The point of the design: no path exists where a token moves against a crypto payment made\ndirectly to the seller. The rail refuses to be the thing that breaks FEMA."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "What it does not claim",
+      "text": "- No live chain connection, no RPC, no wallet, no custody, no real money. The transfer reference is\n recorded, not verified, and every response says so.\n- The exchange rate is indicative and configured, not an oracle. Nothing here is a price feed.\n- The off-ramp provider is an interface with a simulated implementation. No provider is integrated\n and none is named.\n- The eligibility gate is a model of the rule, not legal advice, and it is coarse: it asks what the\n buyer declares and records the declaration.\n- Tax is shown for information (30% on gains, 1% TDS on transfer) and is not computed, withheld or\n filed."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "On MetaDAO, separately",
+      "text": "MetaDAO is a Solana launchpad with futarchy governance: a four-day USDC sale at one price for\neveryone, ten million tokens to buyers, all proceeds into a treasury that decision markets control,\na monthly founder budget capped at one sixth of the minimum raise, and team tokens that unlock only\nat 2x through 32x of the launch price, no sooner than eighteen months out. Its permissionless\nsibling, Backable, takes goals from 10,000 to 2,000,000 dollars and requires a verified domain, a\nCayman company formed through its legal tooling, and a disclosure of prior sales and insider\nallocations.\n\nWhether it can raise money: demonstrably yes, in aggregate. Across 23 curated sales there were\nabout 625 million dollars of commitments and roughly 45 million actually accepted.\n\nWhether it fits this project, today: no, and for reasons that are not about the technology."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "On MetaDAO, separately (continued)",
+      "text": "- The odds on the open side are brutal. Of about 90 permissionless launches, 9 met their\n minimum, and of 44 million dollars committed, 568,000 was accepted. The headline numbers belong\n to a handful of names.\n- It sells an ownership coin, not a grant. The treasury, the right to mint and the project's\n intellectual property pass to an entity governed by traders. That is a reasonable bargain for a\n company. It is a strange one for an Apache-2.0 demo whose whole claim is that its rails are\n honestly labelled simulations.\n- The founder-side legal position is the hard part. An India-resident founder running an\n offshore token sale, forming a Cayman entity and receiving USDC runs straight into the FEMA and\n VDA issues described above, with none of the clean structure the payments section has.\n- There is nothing to price yet. No entity, no revenue, no users, and the rails that make the\n product interesting are explicitly simulated. A market asked to value that will value it at\n roughly what it is worth."
+    },
+    {
+      "doc": "CROSS_BORDER",
+      "file": "docs/CROSS_BORDER.md",
+      "heading": "On MetaDAO, separately (continued)",
+      "text": "A fairer reading of the same research: the parts of MetaDAO worth copying are free. Capped\ndrawdown, a public minimum, refunds when the minimum is missed, and spending that has to be\nproposed in the open are all governance ideas this repository can demonstrate without selling\nanything to anyone. If funding is the real goal, grants and a sponsorship page cost nothing and\ncreate no securities question."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "Running AasthiChain on Drunix",
+      "text": "Drunix is NPCI's re-engineered Hyperledger Fabric, published at\ngithub.com/npci/drunix (v1.0.0, Apache licensed). Its stated\ndifference from stock Fabric is horizontal scaling: the peer is split, and the test network runs\nYugabyteDB as the state database.\n\nThis page says exactly what in this repository is Drunix, what runs on it today, and what is needed\nto point it at a real network. Every version and interface below was checked against the upstream\nrepository rather than assumed.\n\nNothing on this page is aspirational. Where something is not connected, it says so."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "What this repository contains",
+      "text": "Piece Where What it is \n --- --- --- \n Chaincode chaincode/ The contracts themselves: PropertyContract (register, validate, mint, freeze, read), TokenContract (transfer, balance, history, wallet, settlement), KYCContract . Written against the Fabric contract API, so this is the part that would be installed on a Drunix channel. \n Transaction pipeline drunix-gateway/peer.go Our Go implementation of the Drunix architecture: Lite Peer endorsement with read-write set generation, a RAFT orderer, a stateless Validation Service doing policy and signature checks, and a Committing Peer doing MVCC validation before commit. This is what runs in the demo. \n Real-network adapter drunix-gateway/fabric real.go A Fabric Gateway client. Built only with -tags real . Opens a gRPC connection with an X.509 enrolment and submits to a channel and chaincode. \n Client abstraction drunix-gateway/client.go DrunixClient , the interface both of the above satisfy. The rest of the application depends on this and on nothing else, which is what makes the swap a configuration change. \n Fabric network network/ A docker-compose Fabric test network with channel and chaincode deployment scripts."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "What actually runs in the demo",
+      "text": "The simulator, MockLedger , driving the pipeline in peer.go . Blocks are real blocks with real\nhash linking and real MVCC conflict detection; the network underneath them is in-process.\n\n /api/trust reports this as simulated , and the startup log says\n Drunix mode: mock, deterministic Fabric-fork simulator ."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "What was checked against upstream",
+      "text": "Question Answer, from the npci/drunix tree \n --- --- \n How does an application talk to Drunix? It ships internal/pkg/gateway , the Fabric Gateway service. So the Fabric Gateway client is the right client, which is what fabric real.go uses. \n Which client library version? Their application-gateway-go samples pin fabric-gateway v1.10.0 . This repository is pinned to the same v1.10.x line, and TestGatewaySDKMatchesDrunixSamples fails if that drifts. \n Which chaincode API? Their samples use fabric-contract-api-go/v2 v2.2.0 and fabric-chaincode-go/v2 v2.0.0 . chaincode/ was on the v1 line and has been migrated to v2. \n What does an endpoint look like? Their sample uses dns:///localhost:7051 with a separate gateway-peer name for the TLS server name. Both forms work here: pass either host:port or dns:///host:port in DRUNIX PEER ENDPOINT , and set DRUNIX TLS SERVER NAME to the peer's certificate name. \n Is there a network to test against? Yes: drunix-network/test-network with createChannel.sh and deployCC.sh , plus cryptogen and fabric-ca material, a YugabyteDB state store and a Prometheus and Grafana stack. \n\nOne consequence worth stating: because Drunix keeps the Fabric Gateway interface, a correct Fabric\nclient is a correct Drunix client. That is why the adapter is thin and why the compatibility risk\nsits in versions rather than in protocol.\n\n The v2 chaincode migration"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "What was checked against upstream (continued)",
+      "text": "fabric-chaincode-go/v2 dropped shimtest , which the chaincode tests used for a mock stub. Rather\nthan stay on an API Drunix does not use, the tests now carry a small stand-in that implements the\ncomposite-key functions to Fabric's wire format ( U+0000 namespace and separators) along with the\ncreator and transaction boundaries. contractapi.NewChaincode is still constructed in the tests,\nbecause that is what rejects a contract whose method signatures a peer could not serve."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "Switching to a real Drunix network",
+      "text": "Variable Required Notes \n --- --- --- \n DRUNIX MODE=real yes Without it the node runs the simulator \n DRUNIX PEER ENDPOINT yes host:port of the peer gateway. DRUNIX API HOST plus DRUNIX API PORT also works \n DRUNIX MSP ID yes The MSP the signing identity belongs to \n DRUNIX CERT FILE yes PEM X.509 certificate of the enrolment \n DRUNIX KEY FILE yes PEM private key, or an MSP keystore directory holding exactly one \n DRUNIX TLS CERT yes TLS CA of the peer. Omit only with DRUNIX TLS INSECURE=true \n DRUNIX TLS SERVER NAME no Server-name override when the endpoint differs from the certificate \n DRUNIX CHANNEL no Default property-channel \n DRUNIX CHAINCODE no Default aasthichain \n DRUNIX FALLBACK MOCK no true lets the node continue on the simulator when the connection fails. Off by default, deliberately \n\n Two behaviours worth knowing\n\n The adapter refuses rather than degrades. If the endpoint, the enrolment or the TLS trust root\nis missing, NewFabricGateway returns an error and the process exits with a message naming the\nsetting that is missing. A node told to be real and unable to be real is a configuration problem,\nnot something to paper over.\n\nThis replaced the opposite behaviour. The previous adapter reported mode real and then served\nevery call from the in-process simulator. TestRealAdapterHasNoSimulatorFallback exists so that\ncannot come back."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "Switching to a real Drunix network (continued)",
+      "text": "Reads are never submitted. GetPropertyDetails , GetAllProperties , GetBalance ,\n GetTransferHistory , GetWallet and GetKYCStatus are evaluated against an endorsing peer. The\nrest are endorsed, ordered and committed. Submitting a query would consume a block and make a read\nlook like a state change in the ledger history."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "What is verified, and what is not",
+      "text": "Verified in CI , by the drunix-real job on every push:\n\n- the tagged build compiles and vets clean,\n- the adapter refuses to start without an endpoint, an enrolment or a TLS decision,\n- an unusable TLS file is rejected rather than trusted,\n- a keystore with one key works, an empty or ambiguous one is an error,\n- reads are evaluate-only and writes are submit-only,\n- the adapter contains no path back to the simulator.\n\n Not verified, and it cannot be from this repository alone: that the adapter successfully\ntransacts against a real Drunix peer. That needs an endpoint, a channel and an enrolment issued by\nthe network's operator. Until this has been run against one, the honest statement is \"the client\nis implemented and tested up to the connection boundary\", and /api/trust continues to report\nDrunix as simulated."
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "Running against a network",
+      "text": "Against the Drunix test network (the one that proves the mandate)\n\nNeeds Docker, Go, git and jq on a machine you control. Every value below was read from\n drunix-network/test-network/compose/compose-test-net.yaml and that network's README, not guessed:\nOrg1's lite peer lp1.org1 is peer0.org1.example.com:7051 and is published on host port 7051,\nand the default channel is mychannel .\n\nSteps 1 to 3 are scripted, with every correction from the run below already\napplied:\n\n \n\nIt checks the prerequisites first and stops with the reason rather than\nhalf-starting. The same thing by hand:\n\n bash"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "image version differ, and the images are the ones that are 1.0.0.",
+      "text": "git clone https://github.com/npci/drunix.git\ncd drunix/drunix-network\nmkdir -p bin\ncid=$(docker create npcioss/drunix-peer:1.0.0) && docker cp $cid:/usr/local/bin/peer bin/peer && docker rm $cid\ncid=$(docker create npcioss/drunix-orderer:1.0.0) && docker cp $cid:/usr/local/bin/orderer bin/orderer && docker rm $cid"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "4. Point the settlement rail at the peer",
+      "text": "cd /path/to/AasthiChain/drunix-gateway\ngo build -tags real -o /tmp/umigw ./cmd/gateway\n\nCRYPTO=/path/to/drunix/drunix-network/test-network/organizations/peerOrganizations/org1.example.com\nDRUNIX MODE=real \\\nDRUNIX PEER ENDPOINT=dns:///localhost:7051 \\\nDRUNIX MSP ID=Org1MSP \\\nDRUNIX CERT FILE=$CRYPTO/users/User1@org1.example.com/msp/signcerts/cert.pem \\\nDRUNIX KEY FILE=$CRYPTO/users/User1@org1.example.com/msp/keystore \\\nDRUNIX TLS CERT=$CRYPTO/peers/peer0.org1.example.com/tls/ca.crt \\\nDRUNIX TLS SERVER NAME=peer0.org1.example.com \\\nDRUNIX CHANNEL=mychannel \\\nDRUNIX CHAINCODE=aasthichain \\\nUMI ENABLED=true PORT=21100 /tmp/umigw\n bash\ncurl -s localhost:21100/drunix/ledger/status mode should read \"real\", with the channel name\ncurl -s -X POST localhost:21100/drunix/submit -H 'Content-Type: application/json' \\\n -H 'X-Fabric-Identity: originator1' -H 'X-Identity-Role: Originator' \\\n -d '{\"chaincode\":\"aasthichain\",\"function\":\"RegisterProperty\",\"args\":[\"PROP-DRUNIX-001\",\"Demo flat\",\"Maharashtra\",\"Pune\",\"411045\",\"5000000\",\"0000000000000000000000000000000000000000000000000000000000000000\"],\"creatorMsp\":\"Org1MSP\"}'\n powershell"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "usually older, so take it from upstream.",
+      "text": "curl -sSL https://go.dev/dl/go1.25.1.linux-amd64.tar.gz -o /tmp/go.tgz\nsudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf /tmp/go.tgz\necho 'export PATH=/usr/local/go/bin:$PATH' ~/.bashrc && export PATH=/usr/local/go/bin:$PATH\ngo version\n\ndocker info must print a Server section, not an error\njq --version"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "supplies the plugin; add the hyphenated name if it is missing:",
+      "text": "docker compose version\ncommand -v docker-compose sudo ln -s ~/.docker/cli-plugins/docker-compose /usr/local/bin/docker-compose\n bash\ncd ~\ngit clone https://github.com/katepallewarprathmesh-sketch/AasthiChain.git\ncd AasthiChain\nbash scripts/drunix-testnet.sh\n \nError: chaincode install failed with status: 500 ... docker build failed:\nError creating container: Error response from daemon:\nNo such image: npcioss/drunix-ccenv:1.0\n bash\ndocker pull npcioss/drunix-ccenv:1.0\ndocker pull npcioss/drunix-baseos:1.0\n \n{\"channel\":\"mychannel\",\"height\":0,\"txCount\":0,\"mode\":\"real\",\n \"network\":\"NPCI Drunix (Hyperledger Fabric fork), peer dns:///localhost:7051\"}\n \nchaincode response 500, ERR UNAUTHORIZED:\nMSP Org1MSP not authorized, requires one of [OriginatorMSP]\n bash\ncd ~/AasthiChain\nbash scripts/drunix-business-msps.sh\n bash\ncd ~/drunix-lab/drunix/drunix-network/test-network\n./network.sh down\n./network.sh up\n./network.sh createChannel -c mychannel\n./network.sh deployCC -c mychannel -ccn aasthichain -ccp $HOME/AasthiChain/chaincode -ccl go\n \n{\"approvals\": {\"OriginatorMSP\": true, \"RegistrarMSP\": false}}\nAfter 5 attempts, Check commit readiness result on peer0.org1 is INVALID!\nDeploying chaincode failed\n bash\n./network.sh deployCC -c mychannel -ccn aasthichain -ccp $HOME/AasthiChain/chaincode -ccl go \\\n -ccs 1 -r 15 -d 5\n \nError: proposal failed with status: 500 - failed to invoke backing\nimplem"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "supplies the plugin; add the hyphenated name if it is missing: (continued)",
+      "text": "entation of 'ApproveChaincodeDefinitionForMyOrg': attempted to redefine\nuncommitted sequence (1) for namespace aasthichain with unchanged content\n bash\n./network.sh deployCC -c mychannel -ccn aasthichain -ccp $HOME/AasthiChain/chaincode -ccl go \\\n -ccs 1 -ccv 1.1 -r 15 -d 5\n \n{\"approvals\": {\"OriginatorMSP\": true, \"RegistrarMSP\": false}}\nAfter 15 attempts, Check commit readiness result on peer0.org1 is INVALID!\n bash\nORG=$1\nPEER=$2\nshift 1\n...\nfor var in \"$@\"; do\n grep \"$var\" log.txt & /dev/null let rc=1\ndone\n bash\nbash scripts/drunix-business-msps.sh --scripts-only\n \nPOST /drunix/submit PropertyContract:RegisterProperty\n{\"txId\":\"49b171c1ee6474482149a9c16e7a683bf956e62670bbd983aeb373cd5b32d4bd\",\n \"status\":\"COMMITTED\",\"blockNumber\":7,\"channel\":\"mychannel\"}\n \n$ export CORE PEER ADDRESS=localhost:7061\n$ peer channel getinfo -c mychannel\nBlockchain info: {\"height\":8,\n \"currentBlockHash\":\"8NFdeWCdvNac4NWyda+KprMaS5WZQzQHPkTCCe5BQnU=\",\n \"previousBlockHash\":\"4rl8XWf0tMg9+9oHF43NFqw+xENn6S6SUMalVtCmFhE=\"}\n bash\ncd ~/drunix-lab/drunix/drunix-network/test-network\nexport FABRIC CFG PATH=$PWD/../config\nsource scripts/envVar.sh && setGlobals 1\nexport CORE PEER ADDRESS=localhost:7061\npeer channel getinfo -c mychannel\n \nAddress: peer0.org2.example.com:9051 MspId: RegistrarMSP\nMessage: ProposalResponsePayloads do not match\n \nERRO [sqldb] Error in batch sql write. err:ERROR: invalid input syntax"
+    },
+    {
+      "doc": "DRUNIX",
+      "file": "docs/DRUNIX.md",
+      "heading": "supplies the plugin; add the hyphenated name if it is missing: (continued)",
+      "text": "for\ntype json (SQLSTATE 22P02)\npanic: error during commit to txmgr\n bash\ncd ~/drunix-lab/drunix/drunix-network/test-network\n./network.sh down\ncd ~/AasthiChain && git pull\nbash scripts/drunix-testnet.sh\nbash scripts/drunix-business-msps.sh --scripts-only\n bash\nmake network compose up, create channel, deploy chaincode\n \n\nThe enrolment it generates lands under network/crypto-config/... , which is what the\n DRUNIX CERT FILE and DRUNIX KEY FILE paths above should point at. For a plaintext local\nnetwork, set DRUNIX TLS INSECURE=true rather than leaving the TLS variable empty and hoping."
+    },
+    {
+      "doc": "GOVERNANCE",
+      "file": "docs/GOVERNANCE.md",
+      "heading": "Governance",
+      "text": "Consortium infrastructure succeeds or fails on governance, not cryptography. A permissioned\nsettlement network validated by a handful of large institutions is not a public blockchain,\nwhatever the token looks like, and the questions that decide whether it works are the same\nones the card networks and the depositories spent decades on.\n\nThis project is a simulation, so it cannot answer those questions for a real network. What\nit can do is state them, say what the code currently assumes, and be honest about which\nassumptions would not survive contact with a real consortium. Nothing below describes an\nagreement with any organisation."
+    },
+    {
+      "doc": "GOVERNANCE",
+      "file": "docs/GOVERNANCE.md",
+      "heading": "Who may do what, as the code actually stands",
+      "text": "Role May do Enforced where \n --- --- --- \n Originator create a listing, mint tokens for a validated listing, sell rail authorisation and chaincode endorsement policy \n Registrar validate a listing, attest a title, withdraw an attestation rail authorisation \n Investor buy, hold, receive servicing income, delegate bounded authority to an agent rail authorisation \n Regulator supervisory reads, mint, restate supply, see every blotter rail authorisation \n Agent only what a mandate grants it, and only for its principal the mandate layer, on the settlement path \n\nMinting is open to the originator and the regulator as well as the owner. That is a demo\ndecision, taken so an investor identity holding a listing is not stuck, and it is disclosed\non the trust page rather than buried here. DEMO ROLE SWITCH=false closes the role switcher\nthat makes the widening reachable."
+    },
+    {
+      "doc": "GOVERNANCE",
+      "file": "docs/GOVERNANCE.md",
+      "heading": "The five questions",
+      "text": "Who is eligible to join, and what is the process. In the code: nobody joins. The\nidentity set is fixed at five demo participants plus whatever agents a principal delegates\nto. There is no onboarding path, no membership committee and no application. A real\ndeployment needs all three, and the absence is the honest answer rather than an oversight to\nbe papered over.\n\n Who sets fees, and can they change. There are no fees anywhere in this system. No\ntransaction charges a participant, and the settlement asset is simulated wholesale CBDC in\ninteger paise. Any figure a demo shows is a price between two parties, never a network fee.\n\n What happens when a validator's commercial interest conflicts with the network's. The\nsharpest version here is the attestor: the party that vouches for an asset is usually\nconnected to the party that benefits from it trading. The code does not resolve the conflict.\nWhat it does is make the attestor's record public, countable and tied to outcomes: who\nvouched, how often they withdrew, and who was holding when they did. See\n docs/BACKLOG.md and the attestation layer."
+    },
+    {
+      "doc": "GOVERNANCE",
+      "file": "docs/GOVERNANCE.md",
+      "heading": "The five questions (continued)",
+      "text": "What does exit look like. A participant cannot leave. There is no offboarding,\nno settlement of open positions on exit, and no rule about what happens to attestations\nsigned by a departed attestor. Today a withdrawn attestation leaves its signature valid and\nits exposure recorded; a departing attestor would need the same treatment and does not have\nit.\n\n How are smaller participants represented. Not at all. There is one supervisory role and\nit can see and do everything. A real consortium has to answer whether the smallest member\nhas a vote, a veto or only a complaint, and this code takes no position."
+    },
+    {
+      "doc": "GOVERNANCE",
+      "file": "docs/GOVERNANCE.md",
+      "heading": "What the ledger guarantees, and what it does not",
+      "text": "Guaranteed by the code and covered by tests: append-only with detectable tampering, atomic\ndelivery versus payment in a single block, idempotent settlement, supply conservation,\nauthority bounded and counted for delegated agents, and signed attestations whose anchor can\nbe checked independently of this service.\n\nNot guaranteed, and not claimed: legal finality, enforceable accountability for an attestor,\nany connection to RBI, SEBI, a depository or a bank, or recovery for a holder who relied on\nan attestation that turned out to be wrong. The last one is a governance problem, not a\nledger problem, and it is the one worth arguing about."
+    },
+    {
+      "doc": "INTEROP",
+      "file": "docs/INTEROP.md",
+      "heading": "Cross-ledger transfer",
+      "text": "A tokenised asset that can only exist on one permissioned ledger is a\ndatabase row with extra steps. The interesting question is what happens when\na holder wants their position represented somewhere else: a public chain\nwhere they can prove ownership to someone who has never heard of this rail,\nor another institution's ledger entirely.\n\nMost answers to that question either hand-wave or quietly create the asset\ntwice. This one follows the Hyperledger Cacti shape."
+    },
+    {
+      "doc": "INTEROP",
+      "file": "docs/INTEROP.md",
+      "heading": "The shape",
+      "text": "Cacti splits the problem in two, and the code keeps the split visible.\n\n Connectors , one per ledger, each knowing how to talk to its own chain and\nnothing else. There are two: the Drunix fork (this process) and an EVM chain\nover JSON-RPC. A connector reports whether it is actually configured, so an\nunconfigured one cannot be mistaken for a live integration.\n\n A business logic plugin , InteropGateway , which sequences a transfer\nacross connectors and owns the failure handling."
+    },
+    {
+      "doc": "INTEROP",
+      "file": "docs/INTEROP.md",
+      "heading": "The sequence",
+      "text": "Lock and claim, which is the standard asset transfer shape (SATP formalises\nit) and the only one where a crash cannot leave the asset in both places.\n\n- LOCK moves the tokens into the interop-custody account in the\n securities ledger. They leave the holder's position, so they cannot be\n settled here while they are represented elsewhere. This is a real ledger\n movement with a block behind it, not a status flag, which means \"how much\n of this asset is immobilised\" is answered by reading a position.\n- COMMIT records the counterpart leg. The tokens stay in custody: that\n custody balance is the amount represented on the other ledger, which is\n what stops the same square metre existing twice.\n- ABORT returns the tokens. The holder or a supervisor may do it before\n expiry; after expiry anyone may, because a lock only its beneficiary can\n release is a way to strand someone's asset.\n\nA transfer closes exactly once. Aborting a committed transfer is refused,\nwhich is the bug that has drained real bridges: the holder gets their tokens\nback while the remote chain still represents them."
+    },
+    {
+      "doc": "INTEROP",
+      "file": "docs/INTEROP.md",
+      "heading": "Verified against attested",
+      "text": "This is the part worth reading carefully.\n\nWith EVM RPC URL and EVM REGISTRY ADDRESS set, a commit carrying a digest\nis checked against the remote chain by the connector. If the chain has no\nrecord of it, the commit is refused . If it does, the transfer is marked\n remoteLegVerified: true .\n\nWith no connector configured, which is the current state, a commit records a\nreference attested by a supervisor. The record says so in words, the flag\nstays false, and the statistics count committedVerified and\n committedAttestedOnly separately. Adding them together would be the\ndishonest number, so the code never does."
+    },
+    {
+      "doc": "INTEROP",
+      "file": "docs/INTEROP.md",
+      "heading": "What is real and what is not",
+      "text": "Real: the lock, the custody movement, the abort, the expiry rule, the state\nmachine, the refusals, and the blocks behind every step. These all run on\nthis rail and the tests cover them, including an attempt to settle a locked\nposition, which fails.\n\nNot real: anything on a public chain. Nothing here has been bridged to\nSepolia or anywhere else. Pointing the EVM connector at a testnet is a\nconfiguration change rather than new code, but until that is done, a\ncommitted transfer is a claim about another ledger, recorded under the name\nof the person who claimed it."
+    },
+    {
+      "doc": "PERFORMANCE",
+      "file": "docs/PERFORMANCE.md",
+      "heading": "Performance",
+      "text": "Every number on this page was measured on this repository with the command\nprinted next to it. Nothing here is projected, extrapolated or rounded in the\nproject's favour, and a result that went the wrong way is reported as such.\n\nMeasurements come from a shared cloud machine (2 vCPU). Absolute figures will\ndiffer on other hardware; the comparisons between two versions of the same\ncode were taken in the same session on the same machine, which is the part\nthat carries meaning."
+    },
+    {
+      "doc": "PERFORMANCE",
+      "file": "docs/PERFORMANCE.md",
+      "heading": "Read paths",
+      "text": "Bounded page reads. A request for the latest 50 settlements used to\nallocate room for the entire book before filling it, so the cost of one page\ngrew with the age of the deployment. Sizing the copy by the page instead:\n Book size Page Time Allocated \n --- --- --- --- \n 100 instructions 50 13.7 us 18 KB \n 2,000 instructions 50 7.7 us 18 KB \n\nThe allocation is now the same for both, which is the point: a page costs\nwhat a page costs.\n\n Asking about one asset. The attestation view asks what settled against a\nsingle asset. It used to take the whole instruction book, including every\nISO 20022 message trace, and discard almost all of it. With 40 assets and\n2,000 settlements on the rail, filtering inside the rail instead:\n Approach Time Allocated \n --- --- --- \n Filter under the rail's lock 88 us 18 KB \n Copy everything, then filter 797 us 705 KB \n\nThat is about nine times faster and thirty-eight times less memory per call.\n\n Where it does not help. When nearly every row matches, for example a rail\ncarrying one asset and 2,000 trades against it, the filtered path is slightly\nslower than copying the book, because it walks the index twice to size the\nresult exactly: 882 us against 643 us, with the same allocation. The\nrealistic shape for this call is many assets and a question about one, so the\ntrade is worth taking, but it is a trade and not a free win."
+    },
+    {
+      "doc": "PERFORMANCE",
+      "file": "docs/PERFORMANCE.md",
+      "heading": "Bounds on every list route",
+      "text": "A list endpoint without a ceiling is a way to make the server allocate. Every\nroute that reads ?limit= now goes through one helper with a default and a\nmaximum, and a test pins the behaviour, including that a nonsense value falls\nback to the default rather than to everything.\n Route Default Ceiling \n --- --- --- \n settlement instructions 50 500 \n servicing history 100 500 \n ledger blocks 50 500 \n credentials 50 200 \n mandates 50 200 \n interop transfers 50 200 \n notifications 50 200"
+    },
+    {
+      "doc": "PERFORMANCE",
+      "file": "docs/PERFORMANCE.md",
+      "heading": "Front end",
+      "text": "The settlement page loads five panels that sit below the forms people\nactually came for. Splitting them out of the page chunk:\n Chunk Before After \n --- --- --- \n settlement page 69.4 KB 35.9 KB \n\nThe panels now arrive as five separate chunks between 3 KB and 11 KB, fetched\nwhen the page renders them. Total bytes for someone who scrolls the whole\npage are slightly higher; bytes before first paint are roughly halved."
+    },
+    {
+      "doc": "PERFORMANCE",
+      "file": "docs/PERFORMANCE.md",
+      "heading": "Settlement throughput",
+      "text": "The throughput figure shown in the application is measured by a Go benchmark\nand labelled as a benchmark rather than as a live rate, because it is one.\nThe application states both the measured figure and the much lower ceiling\nobserved through the full HTTP path, and marks the live number as not\nmeasured. That labelling is deliberate and should not be quietly improved."
+    },
+    {
+      "doc": "PERFORMANCE",
+      "file": "docs/PERFORMANCE.md",
+      "heading": "What has not been optimised",
+      "text": "- The serverless API handler is one large file. It is a cold-start cost and a\n maintenance cost, and splitting it is not yet done.\n- The rail keeps its working set in memory and replays it from the ledger on\n boot. There is no eviction, so a very long-lived deployment grows. For the\n demo's lifetime this is fine; for a real one it is not.\n- No load test exists. Throughput under concurrency is unmeasured, and this\n page does not claim a figure for it."
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "Private data collections",
+      "text": "Settlement needs two things that pull in opposite directions. Everyone on the\nnetwork has to agree on what happened, and some of what happened is nobody\nelse's business. A participant's identity evidence and the price a bilateral\ntrade was struck at are both facts the ledger has to be able to prove, and\nneither is a fact the rest of the network is entitled to read.\n\nHyperledger Fabric answers this with private data collections, and that is the\npattern implemented here."
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "How it works",
+      "text": "A collection is a named side database with a membership policy. Members hold\nthe value. Every peer, member or not, holds the hash of the key and the hash\nof the value on the public ledger. So the network can prove a record exists,\nprove it has not changed since it was committed, and order it against every\nother transaction, while the contents stay with the organisations entitled to\nthem.\n\nOn this rail:"
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "How it works (continued)",
+      "text": "- Collection definitions are public, served at GET /umi/private/collections .\n Fabric puts the collection config on the public ledger for the same reason:\n a policy nobody can read is not a policy anyone can check.\n- A write commits a UMI PDC WRITE block carrying the collection name, the\n key hash, the value hash and the member roles. Nothing derived from the\n value except its hash. The key is hashed too, because here the key is a\n participant id, which is personal data in its own right.\n- A read by a member returns the value. A read by anyone else returns 403 \n and the proof . That is the mechanism working, not a leak: refusing the\n value while publishing the hash is the entire point.\n- Anyone can verify a value they already hold:\n POST /umi/private/{collection}/{key}/verify . The hash is the SHA-256 of\n the value serialised as JSON with sorted keys, so a counterparty can compute\n it themselves without this code.\n- blockToLive purges the value and keeps the proof, which is how an\n append-only ledger lives with a retention limit."
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "The collections",
+      "text": "Collection Members Also readable by Retention \n --- --- --- --- \n kycEvidence registrar, regulator, admin the subject of the record kept \n settlementTerms regulator, admin the named counterparties purged after 500 blocks \n\nWriting is always a member act. Being the person a KYC record is about does\nnot make you the registrar who attests it, so a subject can read their own\nrecord and cannot write it."
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "What this generalises",
+      "text": "The rail already had one instance of this idea: KYC evidence anchored by\ndigest only in the document register, where the bytes are never stored and no\ncode path can serve them. That works, but it is a single hard-coded case\nexpressed as scattered checks on a document type. A collection states the same\nrule as data, applies it to anything, and makes the policy inspectable over\nHTTP."
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "What is real and what is not",
+      "text": "Real: the policy, the hashes on the chain, the refusal path, independent\nverification, the blockToLive purge and the ledger evidence for both the\nwrite and the purge.\n\nNot real: the distribution. Fabric gossips private data only between\nauthorised peers, so a value never reaches a non-member's disk at all. This\nrail is a single process, so membership is enforced in code rather than by the\nvalue never arriving. Nothing here should be read as a claim that an operator\nwith the process memory cannot see a value. Running the rail as real Fabric\npeers, one per organisation, with these collections declared in the chaincode\ncollection config, is what would close that gap."
+    },
+    {
+      "doc": "PRIVATE-DATA",
+      "file": "docs/PRIVATE-DATA.md",
+      "heading": "Restart behaviour",
+      "text": "A restart replays the UMI PDC WRITE blocks, so the proofs come back and\nverification keeps working. The values do not come back, because they were\nnever on the chain. A recovered record reports valueAvailable: false with a\nnote saying why, rather than looking like an empty record. That is the\nmechanism being honest about itself: if a restart could restore the values\nfrom the chain, the values would have been on the chain."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "Why it exists separately from the rules",
+      "text": "The rail has screened UPI Collect payments since the first week, with\nhand-written rules: amount bands, velocity counts, a structuring window, a\nsmall list of suspicious VPA fragments. Those rules are useful, fast and fully\nexplainable, and they are not machine learning. For a while the code described\nthem as an \"ML-pluggable\" interface, which is the sort of phrasing that lets a\nreader hear \"AI\" without anything having been trained. That wording is gone.\n\nWhat replaces it is an actual trained classifier, fitted in this repository,\nwith its coefficients committed to source control and its measurements\npublished next to them. The rules still decide. The model is a second opinion\nthat has to show its working."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "What it is",
+      "text": "A logistic regression over ten features, fitted by batch gradient descent with\nL2 regularisation. Ten coefficients, one bias, one mean and one standard\ndeviation per feature. Inference is a dot product: microseconds, no service\ncall, no key, nothing to be unavailable.\n\nLinear and small is a choice, not a limitation we are apologising for. A\ngradient-boosted tree would score a little better and would not be able to tell\na payer in one sentence why their payment was flagged. Every score this model\nproduces comes back with the features that moved it and by how much."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "What it was trained on",
+      "text": "Synthetic data. 12,000 generated payments, 70/30 split. \n\nNobody has given this project labelled payment fraud. Real labels come from\nbanks and they do not leave banks. So the training set is generated by a seeded\nprogram in the repository rather than collected, and every surface that reports\na metric says so: the model card endpoint, the weights file, the code comments\nand this page.\n\nThe generator builds two overlapping populations:\n\n- Ordinary payments: amounts clustered around a personal norm, one or two\n payments in a day, verified identity, daytime, an account that has existed\n for a while.\n- Fraudulent shapes drawn from what investigators describe: amounts parked just\n under a reporting threshold, repeated near-identical amounts, bursts of\n payments within minutes, large sums from accounts minutes old, activity\n between midnight and five in the morning.\n\nTwo deliberate contaminations keep the problem honest. Roughly a fifth of the\nfraudulent payments are careful enough to look ordinary, and a tenth of the\nordinary ones carry a shape that looks wrong (a property purchase against a\nquiet history, a new account buying in). Two percent of labels are flipped,\nbecause real fraud labels are decided by tired people reading incomplete files."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "What it was trained on (continued)",
+      "text": "Without that contamination the model scored a held-out AUC of 1.000, which does\nnot mean it was good. It means the generator was separating the classes on the\nmodel's behalf. A clean 1.000 in a report like this should always be read as a\ndefect in the evaluation."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "Features",
+      "text": "Feature Meaning \n --- --- \n log amount log of the payment amount in rupees \n amount vs recent mean this amount over the payer's recent average, capped at 10 \n txn count 10m payments by this payer in the last ten minutes \n txn count 24h payments by this payer in the last day \n log total 24h log of the payer's rupee total over the last day \n log account age min log of the account age in minutes \n kyc verified 1 when KYC is complete \n near threshold how far under a 50k / 2L / 10L reporting line the amount sits, 0 to 1 \n repeat amount share share of recent payments within five percent of this amount \n odd hour 1 when the payment lands between midnight and five, Indian time \n\nTraining and inference call the same extraction function. A feature computed\none way during training and another way in production is the most common way a\nmodel quietly stops working, so there is only one implementation of it and a\ntest asserts the weights file and the extractor agree on the order."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "Measured results",
+      "text": "Held out, on rows the fit never saw, with the operating threshold chosen on the\ntraining split only:\n Metric Value \n --- --- \n AUC 0.824 \n Accuracy 0.860 \n Precision 0.626 \n Recall 0.719 \n F1 0.670 \n Held-out rows 3,600 \n Base rate about 18 percent \n\nRead that honestly. Catching roughly seven in ten of the generated fraud at\nabout six in ten precision is a useful second opinion and nothing like a\nfinished anti-fraud system. It is also a number about the generator, not about\nIndian payments.\n\nThe live figures are served from the weights file rather than copied by hand,\nso this table cannot drift away from the model without a test noticing."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "What it is not allowed to do",
+      "text": "- It does not decide. The published rules make the call. The combined\n assessment returns both scores and labels the agreement between them, which is\n the case a reviewer most needs to see: the payments where the two differ.\n- It does not block anybody's money. A model trained on invented data\n stopping a real settlement would be indefensible.\n- It does not see anything beyond the payment and the payer's recent\n history. No identity attributes, no geography, no device, no counterparty\n profile."
+    },
+    {
+      "doc": "RISK_MODEL",
+      "file": "docs/RISK_MODEL.md",
+      "heading": "Retraining",
+      "text": "The seed is fixed, so a rerun on the same code produces the same file. Changing\nthe generator, the features or the hyperparameters changes the weights and the\npublished metrics together: the numbers on this page come from the same run\nthat produced the coefficients, and there is no path by which one can be\nupdated without the other."
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "What to build next",
+      "text": "Written 19 October 2026, against 774261e plus the proof-page fixes.\n\nThis is a working plan, not a wish list. Everything here is sized, ordered and justified by\nsomething the codebase actually lacks. Items already shipped live in docs/BACKLOG.md under the\nclosed table; deferred audit findings stay there too. If an item below turns out to be wrong when\nit is picked up, the right move is to say so and drop it, not to build it anyway."
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "The one sentence version",
+      "text": "The settlement core is strong and the story above it is now complete (asset, attestor, credential,\ntoken, and conditional payment on a verified result). The two real weaknesses are operational\ncredibility (one untested module, no linting, hand-maintained duplicate APIs) and the first\nninety seconds of a stranger's visit (no screenshots, no hosted walkthrough, demo data with junk\nin it). Those should be fixed before any new feature.\n\n---"
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "P0 · Correctness and credibility",
+      "text": "1. Close the conditional settlement loop on the cash leg\nThe work desk now pays on a verified result. The DvP cash leg still cannot: it settles atomically\nor fails, with nothing in between. The missing shape is cash locked at settlement and released\nwhen a named condition is met, where the condition is the presentation of a valid credential and\nthe party allowed to assert it may be an agent under a mandate. This is the piece that makes the\nthree layers (credential, mandate, escrow) one mechanism rather than three demos.\n\nDone looks like: a UMI CONDITION block family, the reconciliation check proving conservation\nwhile cash sits conditional, a timeout that cannot strand money, and a failure test for every way\nthe condition can fail to arrive.\n\n 2. Test the untested module\n api-gateway has no tests at all ( docs/BACKLOG.md D1). It is the only Go module in that state.\nEither cover it or delete it: an untested module in a repository that advertises its test counts\nis worse than no module.\n\n 3. One API implementation, not two\n frontend/api/index.js and mock-api-server.js are maintained by hand in parallel (D5). They\nhave already drifted once. Extract the shared handlers so the test rig and production cannot\ndiverge silently."
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "P0 · Correctness and credibility (continued)",
+      "text": "4. Lint\nNo ESLint config exists (D2). The result is inconsistent style and a class of bug (unused state,\nmissing dependency arrays, shadowed variables) that nothing currently catches. Add a config and\nwire it into CI as a non-blocking job first, then make it blocking once the backlog is clear.\n\n---"
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "P1 · Reproducibility",
+      "text": "5. A compose file for the whole app\nThree processes have to be started in the right order by hand (D4). One compose file, one command,\ndocumented ports. This is the single biggest reduction in \"I cloned it and nothing happened\".\n\n 6. A seed that is not embarrassing\nThree probe listings and two broken pincodes are still in the demo data (D6), the attestor record\nreads \"100% withdrawn (8 of 8)\" because the test suite withdraws everything it issues, and demo\nwallets accumulate state across runs. A deterministic, curated seed with a reset command would fix\nall three. Nobody should see a 100% withdrawal rate on the page that argues attestors matter.\n\n 7. Rotate the two credentials still listed as unrotated\nD7. A demo key in a public repository is a small risk and a large credibility cost.\n\n---"
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "P2 · First impression",
+      "text": "8. Screenshots and a recorded walkthrough\nThe README describes screens nobody can see without running the stack. Real screenshots of the\nledger explorer, the settlement rail and the proof chain, plus a two-minute recording of the demo\nscript, would do more for a visitor than any new feature on this list.\n\n 9. A hosted read-only instance that stays seeded\nThe public deployment loses its interesting state. A nightly reseed, or a read-only snapshot\ninstance, means the links in the README show something instead of an empty rail.\n\n 10. Interface consistency, done carefully\nThe signed-in screens are visibly older than the landing page. The first attempt at this (a\ncomponent library across three pages at once) was reverted because it changed too much at once.\nThe right version is: one page, behind a flag, reviewed on the running site, then the next. Start\nwith the ledger explorer, which is the page a sceptic opens first.\n\n---"
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "P3 · Depth, once the above is done",
+      "text": "11. A second interop route\nOne hash-locked transfer pattern is thin cover against the fragmentation criticism. A\nnotary-attested route alongside it would show the asset model is transport independent.\n\n 12. Attestor accountability with teeth\nThe record publishes an attestor's history and states plainly that no penalty is enforced. The\nhonest next step is a staking or bonding model where a withdrawal has a cost, or a clear written\nargument for why that belongs to the legal layer and not the rail.\n\n 13. Make the agent path demonstrable end to end\nAn agent can now hold a mandate, deliver work under it and be paid on verification. Nothing in the\nrepository drives that sequence automatically. A scripted agent (clearly labelled as a script, not\nan autonomous system) that runs the whole loop would make the most topical part of the project\nvisible in thirty seconds.\n\n 14. Pagination in the interface, not just the API\nList reads are bounded server side. The pages still render everything they receive. For a demo\ndataset that is fine; it would not survive a real one.\n\n---"
+    },
+    {
+      "doc": "ROADMAP",
+      "file": "docs/ROADMAP.md",
+      "heading": "Deliberately not doing",
+      "text": "- More asset classes. Five shallow ones would add surface and no credibility.\n- A token, a chain or a listing of any kind. The project's argument is that settlement is the\n interesting part.\n- Claiming any real integration. The rail is a simulation of the UMI pattern, the Fabric fork\n is a fork, the talent provider is a pattern not a vendor. That stays true in every surface."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "Taking the EVM connector live on Sepolia",
+      "text": "The cross-ledger gateway ( docs/INTEROP.md ) ships with its EVM connector\nunconfigured, and says so everywhere it is shown. This is the runbook that\nmoves that boundary from simulated to live. It is configuration plus a\ncontract deployment: no code changes, which is the point of putting the\nconnector behind an interface in the first place.\n\nNothing in this document has been run against Sepolia. It is written from the\ncode that would do it, and the fact that it is untried is exactly why the\ntrust page still says the connector is not configured."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "What you need, and what you do not",
+      "text": "Read and write have very different requirements here, and the first version\nof this document ran them together. They are separate:\n\n To verify cross-ledger commits (the interop connector), you need only an RPC\nURL. The check is eth call against verifyDigest , which is a read. No\naccount, no private key, no Sepolia ETH. Any public Sepolia endpoint works.\n\n To write document anchors (the mirror in evm mirror.go ), you need more,\nand the current code cannot do it through a hosted provider. It calls\n eth sendTransaction , which asks the node to sign. Infura, Alchemy and the\nendpoint behind MetaMask hold no keys for you, so they reject it. Writing\nneeds either a node that holds an unlocked account (anvil, geth, a local\nsigner in front of the provider) or local signing in the mirror, which is not\nwritten yet.\n\nSo for the interop work the sequence is: deploy the registry once from a\nwallet you already control, then give the rail a read-only RPC URL and the\ncontract address. Deployment is the only step that spends gas."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "1. Deploy the registry",
+      "text": "contracts/DocumentRegistry.sol is the contract the connector talks to. It\nstores an anchor per document: the CID key, the SHA-256 digest, the asset id,\na type and a validity window, with a registrar allowlist for writes and\n verifyDigest(bytes32) open to everyone for reads.\n\n contracts/deploy.js and contracts/deploy-local.mjs are the existing\ndeployment paths. Deploy to Sepolia, then note the address.\n\nGive the sending account the registrar role:\n\n \n\nWithout it every anchor reverts, while reads keep working, so a missing\nregistrar role looks like \"writes silently fail and verification always says\nno\"."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "EVM_SENDER_ADDRESS=0x<account with the registrar role>",
+      "text": "Restart. Two things change on their own:\n\n- GET /umi/interop reports the EVM connector as configured: true and the\n status line becomes the RPC URL and contract address.\n- A commit carrying a digest is now checked against Sepolia. If the chain has\n no record of it the commit is refused rather than recorded, and the\n transfer stays LOCKED so the holder can still abort and get their tokens\n back.\n\nThe same variables also switch on the existing document mirror\n( evm mirror.go ). Against a hosted provider its writes will fail, for the\nsigning reason above, and that failure is contained: anchoring to the local\nchain is unaffected and no settlement can fail because of it. KYC evidence is\nexcluded from the mirror by design and stays excluded."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "a digest the chain has never seen must be refused, not recorded",
+      "text": "curl -s -X POST https://<rail-host /umi/interop/XCHAIN-000001/commit \\\n -H 'Content-Type: application/json' -H 'X-Identity-Role: Regulator' -H 'X-Identity-Id: regulator1' \\\n -d '{\"remoteTxRef\":\"0x0\",\"digest\":\"'\"$(printf 'nothing' sha256sum cut -d\" \" -f1)\"'\"}'"
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "want: ERR_UMI_INTEROP_STATE, \"evm has no record of that digest\"",
+      "text": "The refusal is the test that matters. A connector that accepts anything is\nworse than no connector, because it turns an attestation into something that\nreads like a confirmation. Both directions are covered by\n TestConfiguredConnectorVerifiesTheRemoteLeg and\n TestConfiguredConnectorRefusesAnUnbackedCommit , which run against a stub\nJSON-RPC node that speaks the same eth call the real contract answers."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "4. Update the trust page",
+      "text": "/trust reads EVM RPC URL and EVM REGISTRY ADDRESS for the public chain\nmirror row, so that one flips on its own. The cross-ledger row is written as\nsimulated in prose and has to be edited by hand once a transfer has actually\nbeen verified against Sepolia. Do not edit it before that: the row is about\nwhat has happened, not what is configured."
+    },
+    {
+      "doc": "SEPOLIA",
+      "file": "docs/SEPOLIA.md",
+      "heading": "What this still would not be",
+      "text": "A verified commit proves the remote chain holds the digest. It does not mint\nanything on Sepolia, and there is no ERC-20 or ERC-721 representing the\nasset over there. The locked tokens are immobilised here against evidence\nrecorded there, which is an anchor, not a bridge. Issuing a real token on the\nremote side, and burning it to release the lock, is the next piece of work\nand is not written."
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "Testing",
+      "text": "Every number on this page came from running the command next to it on 14 October 2026, on a clean\ncheckout at commit 4e6da94 . If a figure here disagrees with what you get, the page is stale:\nplease open an issue rather than assuming your machine is wrong."
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "What each command actually covers",
+      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 95 in tests/ \n Reported result 140 passed, 0 failed \n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant.\n\n tests/outcome.test.mjs covers outcome-based settlement on the work desk: criteria that\ncannot be edited after the engagement opens, a verifier who is neither party, verification\nthat does not move money by itself, a dispute window that only the clock or the funder can\nshorten, and a failed check that freezes the escrow instead of paying it out. It uses a one\nsecond window so the timing path is actually exercised rather than asserted."
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "What each command actually covers (continued)",
+      "text": "tests/mandates.test.mjs covers delegated authority: an agent settling on a principal's\nbehalf. It drives the Go rail directly rather than the web proxy, because the proxy only\nrecognises the five named demo identities and files anything else as investor1 , which\nwould hide the very thing under test. The rail is where every bound is enforced.\n Runtime about 50 seconds \n\n Read the number carefully. The 140 is the count of top-level checks the sweep reports: each\ndirect HTTP assertion counts once, and each suite file counts once however many assertions it\ncontains. Individual suites print their own totals, which are finer grained. For example\n verifyproperty reports 29 assertions and pincodecheck reports 26, but each contributes 1 to the\n140. There is no single meaningful \"total assertions\" figure, and this project does not publish\none.\n\nThree suites are skipped by the api CI job and run in the contracts job instead, because they\nneed solc , a local EVM chain and the reference IPFS hasher: contracts , cidconformance ,\n evmmirror . Locally they run if you have the toolchain and are reported as failures if you do not,\nwhich is deliberate. A test that silently skips is worse than one that fails loudly.\n\n make test-go : the Go modules"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "What each command actually covers (continued)",
+      "text": "Runs scripts/go-tests.sh : gofmt -l , go vet and go test -race -count=1 for each module in\nturn. There is no single module graph in this repository, so a root-level go test ./... cannot\nwork.\n Module Test files Test functions Result \n --- --- --- --- \n chaincode 1 6 ok \n drunix-gateway 29 244 ok \n payment-gateway 6 43 ok \n api-gateway 0 0 no test files \n\n api-gateway having no tests is a real gap, not an oversight in this document. It is listed as a\ngood first issue in CONTRIBUTING.md .\n\n make smoke : the frontend renders\n\nBuilds the bundle with vite.smoke.config.js and renders every route in Node, failing if any route\nproduces an error boundary instead of content. This exists because a route can compile perfectly\nand still throw on first paint.\n \n --- --- \n Command cd frontend && npm run smoke \n Needs nothing running \n Catches render-time crashes, missing providers, bad imports \n Does not catch anything that needs a backend, and anything visual \n\n make secret-scan : tracked credentials\n\n scripts/secret-scan.sh greps every tracked file for things shaped like live credentials: GitHub\ntokens, PayU salts and merchant keys, inline admin keys. Known placeholders ( devkey , testsalt ,\n example ) are allowed. It runs inside the regression sweep as well, so a secret cannot pass\n make test .\n\n npm run build : the lint proxy"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "What each command actually covers (continued)",
+      "text": "There is no ESLint configuration in this repository. ESLint 10 refuses to run without one, so\nthe frontend has no lint gate today. Until one exists, npm run build and node --check are what\ncatch syntax and import errors. Adding a flat config is a good first issue.\n\n---"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "Continuous integration",
+      "text": ".github/workflows/ci.yml runs on pushes and pull requests to main , with permissions:\ncontents: read and no secrets exposed to any job.\n Job What it proves \n --- --- \n go (matrix of 4 modules) formatting, dependency resolution, build, vet, race tests \n frontend npm ci , production build, render smoke \n api shellcheck on scripts/ , boots the real stack plus a PayU test rig, then runs every file in tests/ by discovery \n contracts compiles the Solidity, runs a local EVM chain, checks our CIDs against the reference IPFS implementation, and reads anchors back from the chain rather than from our own API \n image builds the container Render deploys and checks the binary answers /health \n\nThe api job discovers suites rather than listing them. A new file in tests/ is covered by CI\nthe moment it exists, which was not true before and is why several suites once ran only locally.\n\n---"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "Writing a test here",
+      "text": "Suites are plain Node, no framework. The shape is consistent across the directory:\n\n \n\nTwo rules that matter more than style:\n\n1. Sabotage your own test before trusting it. Break the code it covers, confirm it fails, and\n confirm it fails for the right reason. A sabotage that does not compile proves nothing. Several\n assertions in this repository were found to be vacuous exactly this way.\n2. Cold-start the stack before believing a single failure. The sweep is not idempotent across\n runs on one long-lived stack, and make test-fresh is that restart in one command. The usual\n cause is the fraud engine rather than drift: the velocity rule counts the demo payer's payments\n over ten minutes, every run uses the same demo identity, so a second run inside that window is\n blocked on purpose and three suites fail with FAILED FRAUD BLOCKED . The sweep now says so when\n it sees that status, instead of leaving the reader to conclude the repository is broken.\n\n---"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "Known limitations",
+      "text": "- No end-to-end browser test. The render smoke proves routes mount; it does not click through a\n purchase. The closest thing to a full journey check is the integration sweep plus the manual\n walkthrough in DEMO.md .\n- No coverage measurement is published. None is collected, so no percentage is claimed.\n- No load or soak testing. The throughput figures in THROUGHPUT.md come from\n Go benchmarks on one machine and are labelled measured:false where they are derived rather than\n observed.\n- The Fabric network under network/ is not exercised by CI. It needs Docker and the Fabric\n binaries, and nothing in the demo path depends on it.\n- api-gateway is untested , as noted above."
+    },
+    {
+      "doc": "THROUGHPUT",
+      "file": "docs/THROUGHPUT.md",
+      "heading": "The constraint",
+      "text": "Every settlement takes one lock. SettleDvP holds r.mu across the whole\ncritical section: check the cash, check the securities, move both legs, append\nthe block. Settlements cannot overlap.\n\nThat is deliberate. The invariants this rail exists to guarantee are:\n\n- no central bank money is created or destroyed,\n- no token is created or destroyed,\n- both legs settle or neither does.\n\nA single writer is the simplest arrangement in which those cannot be violated.\nOptimistic concurrency, or striping the lock per wallet, would both be faster\nand would each open a window in which a reader can observe one leg without the\nother. The rail is correct first and fast second, and the figures below are the\nceiling that choice buys."
+    },
+    {
+      "doc": "THROUGHPUT",
+      "file": "docs/THROUGHPUT.md",
+      "heading": "Measured",
+      "text": "Two sources, both real, measuring different things.\n\n The engine, from the Go benchmark\n\nRun it yourself:\n\n cd drunix-gateway && go test -bench BenchmarkSettleDvP -run XXX -benchtime 3000x\n\nOn the 2 vCPU container used during development:\n Benchmark ns/op Derived p50 p99 \n --- --- --- --- --- \n BenchmarkSettleDvP 37,911 about 26,000 settlements/sec 0.027 ms 0.131 ms \n BenchmarkSettleDvPContended 40,418 about 24,700 settlements/sec mean lock wait under 1 us max 2 queued \n\nThe contended run barely differs from the serial one, for an unexciting reason\nworth stating rather than hiding: the box has 2 vCPUs, so at most two\ngoroutines were ever really running. This is not evidence that the lock scales.\nIt is evidence that we did not have enough parallelism available to prove\nanything either way.\n\n The live endpoint\n\n GET /umi/throughput reports what this process has actually served. After 25\nsettlements over HTTP on the same container:\n\n settlements 25, settled 25, failed 0\n latency ms p50 0.17, p95 0.243, p99 0.252, max 0.297\n lockWait ms mean 0, max 0\n serial ceiling 5,711/sec at that mean latency\n\nLock wait is zero because the requests arrived one at a time, so nothing ever\nqueued. That is the honest reading: under this load the lock is not the\nconstraint, and the figure is bounded by the work itself."
+    },
+    {
+      "doc": "THROUGHPUT",
+      "file": "docs/THROUGHPUT.md",
+      "heading": "Measured (continued)",
+      "text": "Note the two numbers disagree: about 26,000/sec from the benchmark against\nabout 5,700/sec live. The difference is the rest of the handler, the JSON, and\na container under other load. The lower number is the more useful one, and\nneither is a production figure."
+    },
+    {
+      "doc": "THROUGHPUT",
+      "file": "docs/THROUGHPUT.md",
+      "heading": "What these numbers are not",
+      "text": "- Not end to end. They measure the settlement engine. They exclude the HTTP\n layer, the JSON, the proxy hop through the web app, and the network. A real\n client's experience is dominated by those.\n- Not with a database. The measurements above ran with no DATABASE URL .\n With the Postgres mirror attached, every settlement also does a write, and\n that write will dominate. Expect a figure lower by an order of magnitude or\n more.\n- Not a competitor to a published chain benchmark. Numbers produced by a\n harness against a configured network, on known hardware, are a different\n measurement from an in-process loop. An in-process loop will always look\n better and always mean less.\n- Not a capacity plan. One container, one process, no replication."
+    },
+    {
+      "doc": "THROUGHPUT",
+      "file": "docs/THROUGHPUT.md",
+      "heading": "What would raise the ceiling",
+      "text": "Partitioning by asset.\n\nEvery invariant here is per-asset or per-wallet. There is no rule that spans\ntwo unrelated properties, so two settlements touching disjoint assets have no\nreason to serialise against each other. A shard per asset, with the cash leg\npartitioned by wallet, would let them proceed in parallel without weakening any\nguarantee. Cross-asset operations (baskets) would take the shards in a fixed\norder to avoid deadlock.\n\nThat is a design, not an implementation. It is not built, it is not claimed as\na capability, and the panel in the UI says so."
+    },
+    {
+      "doc": "THROUGHPUT",
+      "file": "docs/THROUGHPUT.md",
+      "heading": "Where to look",
+      "text": "- drunix-gateway/throughput.go : the instrumentation and the report.\n- drunix-gateway/throughput test.go : the tests and both benchmarks.\n- GET /umi/throughput : the live figures.\n- Card 10 on /umi : the same figures with the caveats attached."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "Work Orders: escrowed property work, settled on completion",
+      "text": "Status: design + implementation (this document ships with the code).\n Context: gig-work marketplaces are built on one idea, that a contract links pay to task\ncompletion . This module is where that idea lands inside AasthiChain. No external provider is\nintegrated or named: the talent boundary is an adapter, and it runs as a simulation.\n\n---"
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "1. The problem this solves",
+      "text": "AasthiChain tokenises a property and settles trades atomically on the Aasthi Settlement\nInterface (ASI). What it has never modelled is the cost of keeping the asset real .\n\nA tokenised building still needs inspecting, repairing, revaluing, photographing, and its\ntitle re-verified. Today all of that happens off-ledger, on trust, paid by somebody on an\ninvoice nobody can audit. For an investor holding 400 tokens of a Pune apartment, the\nmaintenance spend is the single largest unexplained hole in the model.\n\nThat gap has the same shape as the one ASI already closed for trading: two things that\nmust happen together, work delivered and money paid , with no honest way to make\nthem simultaneous. ASI's answer was atomic DvP. This module applies the identical\ndiscipline to labour."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "2. The guarantee",
+      "text": "The fee leaves the funder's wallet at the same instant the deliverable is accepted and\n anchored to the ledger. Before acceptance the money is reserved and unspendable ;\n after acceptance the deliverable's hash is on the chain . There is no state in which\n the worker has been paid and no evidence exists, or evidence exists and the escrow is\n still sitting unreleased.\n\nThis is delivery-versus-payment with a deliverable in place of a security."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "4. Where the money sits",
+      "text": "Escrow reuses the e₹-W wallet already on the rail. No new money primitive, no second\nledger, no chance of the two disagreeing.\n Transition Effect on wallets \n --- --- \n fund funder ReservedPaise += fee (requires available = fee ) \n accept funder Balance -= fee , Reserved -= fee ; worker Balance += fee \n refund / cancel funder Reserved -= fee \n\nTwo consequences worth stating plainly:\n\n1. Conservation is untouched. Σ wallet balances still equals lifetime funding at every\n point, because escrow only ever reserves, and acceptance is a transfer between two\n wallets. GET /umi/reconciliation keeps proving it.\n2. Reserved money cannot be double-spent. The DvP engine computes a buyer's capacity\n from available() , which already subtracts Reserved . Escrowing a repair fee therefore\n reduces what that participant can spend on a settlement, automatically. Nothing in the\n settlement path had to change.\n\nAll arithmetic is integer paise. Fees never touch a float."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "5. Evidence on the chain",
+      "text": "Each transition appends a block to the existing hash-chained Drunix ledger, so\n /api/chain/verify proves the work history exactly as it proves settlement history:\n\n WORK CREATED · WORK FUNDED · WORK ASSIGNED · WORK SUBMITTED · WORK ACCEPTED ·\n WORK DISPUTED · WORK REFUNDED · WORK CANCELLED \n\n WORK SUBMITTED carries the deliverable's SHA-256 and its URI. That hash is the whole\npoint: the inspection report handed over in month three can be re-hashed in year five and\nchecked against a block nobody can rewrite.\n\nBecause every transition is on the chain, the work desk restores itself from the ledger\nat boot ( RestoreWorkFromChain ). It needs no new database table and no change to\n UMIStore , and it cannot drift from the audit trail, because the audit trail is the\nsource."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "6. Who may do what",
+      "text": "Enforced in Go, next to the state it protects. The JS layer stays a pure proxy.\n Action Permitted caller \n --- --- \n create, fund, assign the funder, or a supervisor \n submit the assigned worker, or a supervisor \n accept, dispute, refund, cancel the funder, or a supervisor \n read one order either party, or a supervisor \n list orders your own (as funder or worker); supervisors see the desk \n\nSupervisor = role regulator or admin , the same definition the rail already uses.\nA worker cannot accept their own work, and a funder cannot submit on the worker's behalf:\nthat separation is the reason the escrow means anything."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "7. The talent boundary",
+      "text": "No external talent provider is configured, so the integration is written as an\nadapter with an honest fallback, the same pattern the repo already uses for NPCI:\n\n \n\n GET /umi/work/provider reports which mode is active, and every work-order payload carries\n providerMode , so a screenshot can never imply an integration that is not wired up. The request\nshape is this project's own, not a vendor's published contract, so pointing it at a real service\nmeans mapping field names inside the adapter. That one file is the only thing that changes, which\nis the point of putting the seam there.\n\nWhat crosses the boundary is deliberately small: publish an order's spec and acceptance\ncriteria, receive a worker reference back, record it as providerRef . Escrow, state and\nevidence stay on our ledger. No external party is asked to hold money, and none is\nasking us to host their talent graph."
+    },
+    {
+      "doc": "WORK_ORDERS",
+      "file": "docs/WORK_ORDERS.md",
+      "heading": "9. What this is not",
+      "text": "- Not a connection to any real gig-work platform. No such integration exists here, and every\n response says simulation until an endpoint is configured.\n- Not an employment or payroll system. It escrows a fee against one defined deliverable.\n- Not a dispute court. DISPUTED parks the escrow and names a reason; resolving it is a\n supervisor decision, recorded, not an algorithm pretending to judge."
+    }
+  ]
+}

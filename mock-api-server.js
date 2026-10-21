@@ -3559,7 +3559,13 @@ app.post('/api/ai/chat', async (req, res) => {
   }
 
   const context = ai.buildPropertyContext(Object.values(properties).filter(listingIsPublic).map(marketplaceView));
-  const answer = await ai.askGroq({ messages: req.body.messages, propertyContext: context });
+  // Grounding: the project's own documents, retrieved for this question, and
+  // the rail's current figures. Neither is allowed to delay an answer, so a
+  // rail that is down costs the live numbers and nothing else.
+  const knowledge = await import('./frontend/api/lib/knowledge.mjs');
+  const knowledgeContext = knowledge.buildKnowledgeContext(req.body.messages);
+  const railContext = knowledge.buildRailContext(await knowledge.readRail(UMI_GATEWAY_URL));
+  const answer = await ai.askGroq({ messages: req.body.messages, propertyContext: context, knowledgeContext, railContext });
   res.status(answer.status).json(answer.body);
 });
 

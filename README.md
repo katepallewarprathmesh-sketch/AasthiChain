@@ -266,6 +266,25 @@ the world. And it is advisory: the published rules make the decision, the model 
 them, and where the two disagree the disagreement is shown. Every score comes back with the
 features that moved it: [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md).
 
+## An assistant that answers from this project, not from memory
+
+The assistant on the site is grounded in two things, and neither of them is what a language model
+happens to recall about blockchains. The first is this project's own documentation: every design
+document is indexed and the sections that match a question are put in front of the model as
+written, with the document they came from, so an answer can be traced back to a file anyone can
+open. The matching is plain word scoring rather than an embedding service, which means the same
+question retrieves the same passages on every deployment and costs nothing to run.
+
+The second is the rail as it stands at the moment of asking: how much digital rupee is outstanding,
+whether supply still conserves, which cross-border corridors refuse payments here and which
+authorisation each one lacks, and the measured metrics of the trained model with the fact that its
+training data was synthetic attached. Those figures are used as given; the model is not allowed to
+recompute or round them.
+
+When neither source covers a question the assistant says it is not documented and points somewhere
+useful, which is the whole point: it still reads only, still cannot act, and is switched off
+entirely where no key is configured: [`docs/AI_AGENT.md`](docs/AI_AGENT.md).
+
 ## Paying from outside India
 
 Tokens are easy to send across a border; the consideration for Indian property is not. The law
@@ -365,7 +384,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 139 checks across 94 suite files
+make test         # the full sweep: 140 checks across 95 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

@@ -69,6 +69,37 @@ Its limitation is also exact: it cannot answer "which of these assets is actuall
 happened in settlement 4f2a", or "show me every attestation this registrar withdrew", because it
 cannot look anything up. It only knows what was stuffed into its prompt.
 
+## Grounding: documents and live state, not recollection
+
+Shipped. The assistant now answers from two sources besides the listing view, and both carry a
+provenance the reader can check.
+
+**The project's own documentation.** Every document in `docs/`, plus the README, is split into
+sections by heading and committed as a retrieval index. A question is scored against those sections
+with BM25: lexical, deterministic, no embedding call, no vector database and no network hop, so the
+same question retrieves the same sections on every deployment and a wrong answer can be traced to
+the section that produced it. The top sections go into the prompt as written, with the file they
+came from, and the rules tell the model to prefer them over anything it remembers, to name the
+document when it uses one, and never to cite a document it was not given. Notes to ourselves are
+excluded: a backlog, an open-problem audit and a deployment runbook are not statements of fact, and
+an assistant quoting a to-do list is worse than one that says it does not know.
+
+**The rail as it stands right now.** At question time the deployment reads its own rail: how much
+digital rupee is issued and outstanding, whether the conservation check passes, how many corridors
+are configured, which ones refuse payments here and exactly which authorisation each one lacks, and
+the measured metrics of the trained risk model together with the fact that its training data was
+synthetic. These are the rail's own figures. The model is told to use them as given and forbidden to
+recompute, round or extrapolate them.
+
+**When neither covers the question**, the prompt says so explicitly and instructs the assistant to
+answer that it is not documented here and point at the likeliest page. A refusal with a direction is
+a complete answer; a plausible guess is not. Retrieval returns nothing at all when the question
+shares too few words with anything written down, which is what keeps an unrelated question from
+dragging in the least irrelevant section available.
+
+Nothing about the read-only promise changed: still no tool calls, still no write path, still off
+entirely when no key is set.
+
 ## The design: a proposing agent, not an acting one
 
 Three tiers, with the boundary between them enforced in code rather than in the prompt.
