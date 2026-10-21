@@ -6,6 +6,7 @@
 // The read endpoints are an open layer: no auth, no PII usable by agents & DPI.
 
 import React, { useCallback, useEffect, useState } from 'react'
+import { prettifyAssetId } from '../lib/assetNames.js'
 import { useLocation } from 'react-router-dom'
 import api from '../lib/api.js'
 import useLedgerStream from '../lib/useLedgerStream.js'
@@ -101,7 +102,7 @@ function txnSummary(t) {
   if (t.kind === 'escrow-release') return `₹${Number(t.amountINR || 0).toLocaleString('en-IN')} released to seller · ${Number(t.tokens || 0).toLocaleString('en-IN')} tokens · ${t.seller} ⇄ ${t.buyer}`
   if (t.kind === 'umi-dvp') return `${Number(t.tokens || (t.securitiesLeg && t.securitiesLeg.tokens) || 0).toLocaleString('en-IN')} tokens ⇄ ₹${Number(t.cashINR || (t.cashLeg && t.cashLeg.amountINR) || 0).toLocaleString('en-IN')} in e₹-W · ${t.status}${t.failureReason ? ' · ' + t.failureReason : ''}`
   if (t.kind === 'umi-funding') return `₹${Number(t.amountINR || 0).toLocaleString('en-IN')} funded into ${t.walletId} (wholesale CBDC)`
-  if (t.kind === 'umi-isin') return `pilot ISIN ${t.isin} assigned to ${t.assetId}`
+  if (t.kind === 'umi-isin') return `pilot ISIN ${t.isin} assigned to ${prettifyAssetId(t.assetId)} (${t.assetId})`
   if (t.kind === 'umi-servicing') return `₹${Number(t.distributedINR || 0).toLocaleString('en-IN')} servicing paid into ${t.holders} CBDC wallet(s)`
   if (t.kind === 'private-data-write') return `${t.collection} · hash-only proof, value never written to this chain`
   if (t.basketId && t.delivered) return `${t.units} unit(s) issued to ${t.holder} against ${t.delivered.length} delivered holding(s)`

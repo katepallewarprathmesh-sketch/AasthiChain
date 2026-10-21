@@ -15,6 +15,7 @@
 // is not running the page says so plainly and nothing else in the app changes.
 
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { prettifyAssetId } from '../lib/assetNames.js'
 import { umiFetch as umi } from '../lib/umiFetch'
 // These five panels sit below the settlement forms, which is the reason
 // anyone opens this page. Loading them up front made the first paint wait
@@ -308,7 +309,7 @@ export default function UMISettlement() {
   // title and the city, with the reference kept nearby for traceability.
   const propLabel = (id) => {
     const pr = propOf(id)
-    if (!pr) return id
+    if (!pr) return prettifyAssetId(id)
     const city = (pr.location && (pr.location.city || pr.location.state)) || ''
     // Most titles already carry the city ("Green Valley Villas - Pune"), and
     // appending it again read as "Pune: Pune".

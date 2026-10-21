@@ -4,7 +4,7 @@
 import { buildInsights } from '../frontend/api/lib/insights.mjs';
 
 const app = {
-  properties: [{ assetId: 'PROP-A', title: 'Indiabulls', totalTokens: 10000, tokenPrice: 500 }],
+  properties: [{ assetId: 'PROP-A', title: 'Green Valley Villas - Pune', totalTokens: 10000, tokenPrice: 500 }],
   balances: [{ assetId: 'PROP-A', ownerId: 'originator1', balance: 10000 }],
   transfers: [], kyc: [], chain: [],
 };

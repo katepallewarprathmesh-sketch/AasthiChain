@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import PageShell, { Card, Tag } from '../components/PageShell.jsx'
 import { umiFetch, umiPost } from '../lib/umiFetch.js'
+import { useAssetCatalogue, labelFor, labelForProperty, assetRef } from '../lib/assetNames.js'
 
 /**
  * Paying for property from outside India.
@@ -62,7 +63,7 @@ function Rules({ rules }) {
   )
 }
 
-function Intent({ intent, onChanged }) {
+function Intent({ intent, properties, onChanged }) {
   const [ref, setRef] = useState('')
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
@@ -77,11 +78,13 @@ function Intent({ intent, onChanged }) {
 
   return (
     <Card
-      title={intent.id + ' · ' + intent.assetId}
+      title={intent.id + ' · ' + labelFor(intent.assetId, properties)}
       sub={'Quoted ' + new Date(intent.quotedAt).toLocaleString('en-IN')}
       right={<Tag tone={STEP_TONE[intent.status] || 'neutral'}>{intent.status.replace(/_/g, ' ').toLowerCase()}</Tag>}
     >
       <div className="pg-kv">
+        <div>Property</div>
+        <div>{labelFor(intent.assetId, properties)}<div className="pg-card-sub">{assetRef(intent.assetId)}</div></div>
         <div>Purchase</div>
         <div>{money(intent.amountINR)}</div>
         <div>You send</div>
@@ -136,6 +139,7 @@ function Intent({ intent, onChanged }) {
 }
 
 export default function CrossBorder() {
+  const { properties } = useAssetCatalogue()
   const [rules, setRules] = useState(null)
   const [intents, setIntents] = useState([])
   const [err, setErr] = useState('')
@@ -193,8 +197,21 @@ export default function CrossBorder() {
       <Card title="Ask for a funding quote" sub="Eligibility is checked before a quote exists. Try the foreign national option to see the refusal.">
         <form onSubmit={ask} style={{ display: 'grid', gap: 10 }}>
           <div className="pg-kv">
-            <div>Asset</div>
-            <div><input className="pg-input" value={form.assetId} onChange={set('assetId')} /></div>
+            <div>Property</div>
+            <div>
+              {properties.length ? (
+                <select className="pg-input" value={form.assetId} onChange={set('assetId')}>
+                  {!properties.some(p => p.assetId === form.assetId) && (
+                    <option value={form.assetId}>{labelFor(form.assetId, properties)}</option>
+                  )}
+                  {properties.map(p => (
+                    <option key={p.assetId} value={p.assetId}>{labelForProperty(p)}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="pg-input" value={form.assetId} onChange={set('assetId')} />
+              )}
+            </div>
             <div>Amount</div>
             <div><input className="pg-input" type="number" value={form.amountINR} onChange={set('amountINR')} /></div>
             <div>Buyer status</div>
@@ -230,7 +247,7 @@ export default function CrossBorder() {
       </Card>
 
       {err && !intents.length && <div className="pg-card pg-empty">{err}</div>}
-      {intents.map(i => <Intent key={i.id} intent={i} onChanged={load} />)}
+      {intents.map(i => <Intent key={i.id} intent={i} properties={properties} onChanged={load} />)}
     </PageShell>
   )
 }

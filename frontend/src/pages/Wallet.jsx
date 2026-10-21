@@ -421,7 +421,7 @@ export default function Wallet({ user }) {
             </select>
           ) : (
             <input
-              placeholder="Property ID (e.g., PROP-GREEN-VALLEY-PUNE-001)"
+              placeholder="Which property? Its name, or its ledger reference"
               value={transferForm.assetId}
               onChange={e => setTransferForm({ ...transferForm, assetId: e.target.value })}
               style={{

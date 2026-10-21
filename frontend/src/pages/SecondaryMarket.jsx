@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useAssetCatalogue, labelForProperty, labelFor } from '../lib/assetNames.js'
 import api from '../lib/api.js'
 
 // Secondary marketplace: holders selling to each other rather than everyone
@@ -37,6 +38,9 @@ export default function SecondaryMarket({ user }) {
   const [filter, setFilter] = useState('')
 
   const [form, setForm] = useState({ assetId: '', tokens: '', price: '' })
+  // A ledger key is not a property name. Pickers and the order book read from
+  // the catalogue so people see the building, with the key kept underneath.
+  const { properties } = useAssetCatalogue()
 
   const load = useCallback(async () => {
     try {
@@ -72,7 +76,7 @@ export default function SecondaryMarket({ user }) {
       assetId: form.assetId.trim(), seller: me,
       tokens: Number(form.tokens), pricePerTokenINR: Number(form.price),
     }),
-    (d) => `Listed ${d.offer.tokensTotal} tokens of ${d.offer.assetId} at ${money(d.offer.pricePerTokenINR)} each.`)
+    (d) => `Listed ${d.offer.tokensTotal} tokens of ${labelFor(d.offer.assetId, properties)} at ${money(d.offer.pricePerTokenINR)} each.`)
 
   const take = (o, tokens) => run(
     () => api.umiTakeOffer(o.offerId, { buyer: me, tokens }),
@@ -137,8 +141,18 @@ export default function SecondaryMarket({ user }) {
           padding: '16px 18px', margin: '16px 0' }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px' }}>Sell tokens you hold</h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input style={{ ...input, flex: '2 1 220px' }} placeholder="asset id, e.g. PROP-GREEN-VALLEY-PUNE-001"
-              value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} />
+            {properties.length ? (
+              <select style={{ ...input, flex: '2 1 220px' }} value={form.assetId}
+                onChange={e => setForm({ ...form, assetId: e.target.value })}>
+                <option value="">Which property?</option>
+                {properties.map(p => (
+                  <option key={p.assetId} value={p.assetId}>{labelForProperty(p)}</option>
+                ))}
+              </select>
+            ) : (
+              <input style={{ ...input, flex: '2 1 220px' }} placeholder="Which property?"
+                value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} />
+            )}
             <input style={{ ...input, flex: '1 1 110px' }} type="number" placeholder="tokens"
               value={form.tokens} onChange={e => setForm({ ...form, tokens: e.target.value })} />
             <input style={{ ...input, flex: '1 1 130px' }} type="number" placeholder="₹ per token"
@@ -190,7 +204,8 @@ function OfferRow({ offer: o, me, busy, onTake, onCheck, onCancel }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <strong style={{ fontSize: 14 }}>{o.assetId}</strong>
+          <strong style={{ fontSize: 14 }}>{labelFor(o.assetId, properties)}</strong>
+          <div style={{ fontSize: 11, color: C.mut }}>{o.assetId}</div>
           <span style={{ color: C.mut, fontSize: 13 }}>
             {' · '}{o.tokensRemaining} of {o.tokensTotal} left at {money(o.pricePerTokenINR)} each
             {' · '}seller {mine ? 'you' : o.seller}
