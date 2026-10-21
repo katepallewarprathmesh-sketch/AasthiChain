@@ -2,8 +2,9 @@
 
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
-"partial" always says what is missing. Nine of twenty-one are done, seven are
-partial, five have not been started.
+"partial" always says what is missing. The keyword list splits into 25 rows
+because several keywords carry more than one item: 13 are done, 10 are
+partial, 1 has not been started, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
 | --- | --- | --- | --- | --- |
@@ -21,13 +22,13 @@ partial, five have not been started.
 | 11 | Contracts that release on time when rules are fulfilled | done | `OpenCondition` / `SubmitEvent` / `SweepConditions`, plus the escrow in `work.go` and outcome settlement | Release is automatic on attestation and refund is automatic at the deadline. |
 | 12 | Off chain to on chain | partial | Document and deed hashes anchored, the ledger head anchored to Solana, attested events bringing outside facts in | No general oracle: each bridge is hand-wired, and there is no signed-feed abstraction with its own trust and staleness rules. |
 | 13 | KYC plus ML together | partial | The AML check reports rules and model side by side on every movement | KYC tier is not an input to the model, and the model was not trained on identity features at all. |
-| 14a | Cross-border: bank to bank | not started | `crossborder.go` covers a stablecoin corridor only | Correspondent-style bank-to-bank leg with its own reporting. |
-| 14b | Cross-border: card network rails | not started | - | Visa and Mastercard operate their own rails and licensing; modelled as a distinct corridor in phase 2. |
-| 14c | Cross-border: PA-CB licensing | partial | `docs/CBDC.md` records the Payment Aggregator Directions of September 2025, the net-worth test and the ₹25 lakh per-transaction ceiling | Nothing in the code enforces a corridor's licence state or the per-transaction cap. |
-| 14d | Both legs on the same chain, or not | not started | - | The settlement difference between one ledger and two is the interesting case and is unbuilt: atomic where both legs are on-chain, windowed reconciliation where they are not. |
-| 15 | NPCI NIPL peer-to-peer | not started | - | The India-Nepal UPI to NPI model: direct P2P across two domestic schemes, with its own caps. |
+| 14a | Cross-border: bank to bank | done | `corridors.go`, corridor `BANK-CORRESPONDENT` | Authorised dealer status required, purpose codes enforced, provisional until the far leg confirms, three-to-five-day window named. |
+| 14b | Cross-border: card network rails | partial | corridor `CARD-SCHEME` | Modelled as its own rail with scheme membership and the authorise-now-settle-later window. Interchange economics and the chargeback flow are described, not implemented. |
+| 14c | Cross-border: PA-CB licensing | done | corridor `PACB-ECOM`, licence gate in `corridors.go` | The authorisation and intelligence unit registration are required, the ₹25 lakh ceiling is enforced, and a refusal names what is missing. |
+| 14d | Both legs on the same chain, or not | done | corridors `MULTI-CBDC-PVP` and `HTLC-LINKED` | Atomic in one block where both legs are here; hash time-locked with a verified preimage and a working refund path where they are not. |
+| 15 | NPCI NIPL peer-to-peer | done | corridor `NIPL-P2P-NP` | Direct scheme-to-scheme person-to-person link with the published ₹15,000 per transfer and ₹1,00,000 monthly ceilings, and merchant purposes refused. |
 | 16 | Retail to merchant | done | Grant spending pays a merchant account directly; offline redemption pays a shop | Merchant category and identity are first-class in the spend path. |
-| 17 | China, Canada, Singapore precedents | not started | Only the India-Singapore digital assets pact is noted in `docs/CBDC.md` | No research pass on mBridge, Project Jasper or Project Ubin, and no design conclusions drawn from them. |
+| 17 | China, Canada, Singapore precedents | done | `docs/CORRIDORS.md`, the two on-ledger corridors | mBridge (one platform, atomic PvP, seconds instead of days) and Jasper-Ubin (two platforms joined by hash time-locked contracts) were read, and each produced a corridor rather than a citation. |
 | 18 | Blockchain has no time constraints, an FMI does | done | `Finality.SettlementWindow`, the finality section of `docs/CBDC.md` | A provisional leg names the window that closes it instead of reporting the ledger entry as settled. |
 | 19 | Technical and financial finality | done | `Finality` on every movement, tested in `cbdc_test.go` | Recorded as two separate fields that are never collapsed into one. |
 | 20 | Put as many functions as possible on the blockchain | partial | The CBDC layer moved money, conditions, grants and refusals on-chain | Same gap as item 8: the older modules still write about their state rather than keeping it on the chain. |
@@ -35,11 +36,13 @@ partial, five have not been started.
 
 ## The honest summary
 
-The CBDC half of the list is largely built. The cross-border half is mostly
-not: four of its five items have no code behind them, and the one that does is
-a stablecoin corridor rather than any of the rails named. The two items most
-visible to a person watching a demo, a screen for the refund experience and a
-published speed number, are both still only backend facts.
+The CBDC half and the cross-border half are both built now. What is left is
+mostly what a person would see or verify rather than the mechanics. CBDC
+interoperability with other systems is the one item with no code at all, and
+the open partials are eKYC with no verification flow, AML without a sanctions
+list or a report artefact, a speed number that is measured but published
+nowhere, no screen for the refund experience, and the older modules that still
+keep state in Go maps while writing blocks about it.
 
 ## Why not Solidity, and why not Python
 

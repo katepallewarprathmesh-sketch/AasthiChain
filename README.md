@@ -234,6 +234,21 @@ finality is the payment being irrevocable, which in central bank money is the sa
 over a commercial bank rail is not. Where the two differ this layer says so and names the window:
 [`docs/CBDC.md`](docs/CBDC.md).
 
+## Cross-border, as five different things
+
+Sending money abroad is not one rail. A scheme-to-scheme link, an aggregator, a correspondent bank
+chain, a card network and two central bank ledgers settling against each other differ in who may
+carry the payment, how much may move and how long somebody is exposed in the middle. Each is
+modelled on its own terms here, and a payment is refused by the corridor that cannot carry it,
+with the missing authorisation named rather than hidden behind a generic error.
+
+The difference that matters is whether both legs sit on the same ledger. When they do, settlement
+is atomic: one movement, no interval in which one side has paid and the other has not. When they
+do not, the gap is real, and it is closed either by a hash time-locked exchange where revealing
+the secret completes both sides or by a confirmation from the institution on the far side. Until
+that happens the payment is reported as provisional, with the window named:
+[`docs/CORRIDORS.md`](docs/CORRIDORS.md).
+
 ## A model that was trained, not a rule sheet called AI
 
 Payments are screened by hand-written rules: amount bands, velocity, a structuring window. Those
@@ -350,7 +365,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 137 checks across 92 suite files
+make test         # the full sweep: 138 checks across 93 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

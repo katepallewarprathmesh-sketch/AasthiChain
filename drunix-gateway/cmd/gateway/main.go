@@ -247,6 +247,11 @@ func main() {
 		srv.CBDC = drunix.NewCBDCLedger(srv.UMI, chain)
 		log.Printf("CBDC layer mounted at /umi/cbdc/*: simulated e₹, no central bank money is issued")
 
+		// Cross-border corridors on top of the CBDC layer: each rail with
+		// its own licence requirement, caps and settlement model.
+		srv.Corridors = drunix.NewCorridorDesk(srv.UMI, chain, srv.CBDC)
+		log.Printf("Corridors mounted at /umi/corridors/*: simulated, this deployment holds no payment licence")
+
 		if srv.Anchors.CanWrite() {
 			log.Printf("Anchoring mounted at /umi/anchors/*: live Solana writes from %s", srv.Anchors.Address())
 		} else {

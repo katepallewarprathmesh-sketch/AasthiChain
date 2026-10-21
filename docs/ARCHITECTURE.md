@@ -161,6 +161,22 @@ and an `AMLCheck` built from the rules and the trained model in the risk layer. 
 Design note, the regulator's published pilot behaviour and the phases still to come:
 [`CBDC.md`](CBDC.md).
 
+### Cross-border corridors
+
+`corridors.go` carries five rails as separate corridors, each with its own licence requirement,
+ceilings, purpose codes and settlement model. `Check` runs the gate without moving anything;
+`Send` applies it and then branches on the settlement model.
+
+Atomic corridors move money in a single CBDC transfer and are financially final immediately.
+Hash time-locked corridors move it into a per-corridor suspense account, record the hash and the
+timeout, and release only against a preimage that is verified rather than trusted; `Sweep` refunds
+an expired lock. Deferred corridors also park the money in suspense and stay provisional until
+`ConfirmLeg` records the far institution's confirmation. Suspense is an ordinary account on this
+ledger, so the CBDC conservation invariant still holds at every step.
+
+Routes live under `/umi/corridors/*`. Corridor parameters, the precedents they follow and the
+limits of the claim: [`CORRIDORS.md`](CORRIDORS.md).
+
 ### Payment risk: rules and a trained model
 
 `fraud.go` is the rule engine: `ScorePayment` is a pure function over the payment and the payer's
