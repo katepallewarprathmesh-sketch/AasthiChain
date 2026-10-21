@@ -167,6 +167,19 @@ const run = async () => {
     proxied.status === 200 && proxied.body.settlementCurrency === 'INR',
     JSON.stringify(proxied.body).slice(0, 160));
 
+  // 15. The screen exists, reaches the rail only through umiFetch, and is
+  //     reachable from the home page. A layer with no screen is invisible.
+  const { readFileSync } = await import('node:fs');
+  const page = readFileSync(new URL('../frontend/src/pages/CrossBorder.jsx', import.meta.url), 'utf8');
+  ok('the page talks to the rail only through umiFetch',
+    !/[^a-zA-Z]fetch\(/.test(page.replace(/umiFetch\(/g, 'X(')) && page.includes('umiFetch'));
+  ok('the page shows the refusal rather than swallowing it', page.includes('Refused'));
+  ok('the page is labelled a simulation', /Tag tone="sim"/.test(page));
+  const router = readFileSync(new URL('../frontend/src/App.jsx', import.meta.url), 'utf8');
+  ok('the page is routed', router.includes('path="/crossborder"'));
+  const landing = readFileSync(new URL('../frontend/src/pages/Landing.jsx', import.meta.url), 'utf8');
+  ok('the home page links to it', landing.includes("to: '/crossborder'"));
+
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
 };

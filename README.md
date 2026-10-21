@@ -209,8 +209,9 @@ a bank advice reference and a purpose code behind it. Eligibility and the transf
 rules are checked before a quote is given, and a refusal is recorded as plainly as an approval.
 
 It is a simulation, labelled as one: no chain is connected, no custody is held and no money moves.
-The reasoning, the sources and what it deliberately does not claim:
-[`docs/CROSS_BORDER.md`](docs/CROSS_BORDER.md).
+The screen for it is linked from the home page, and asking as a buyer who is not allowed to purchase
+shows the refusal rather than hiding the option. The reasoning, the sources and what it deliberately
+does not claim: [`docs/CROSS_BORDER.md`](docs/CROSS_BORDER.md).
 
 ### Money leg: UPI Collect
 
