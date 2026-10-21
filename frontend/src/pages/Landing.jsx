@@ -366,6 +366,8 @@ export default function Landing({ user }) {
               d: 'An owner can delegate bounded authority: named actions, a spending limit the rail counts itself, a hard expiry and revocation that bites on the next request.' },
             { to: '/crossborder', t: 'Paying from outside India', tag: 'Simulated leg',
               d: 'A stablecoin is converted outside India and the rupee wallet is credited only against a remittance attestation, because the consideration for Indian property has to arrive through banking channels. Buyers who cannot purchase at all are refused before a quote exists.' },
+            { to: '/cbdc', t: 'Digital rupee and its corridors', tag: 'Simulated money, real rules',
+              d: 'Central bank money on the ledger: funds bound to a purpose that refuse to be spent elsewhere, value that works offline, and a refund that pays itself when an event is attested. Cross-border payments show whether they are actually settled or only recorded.' },
             { to: '/ledger', t: 'Ledger explorer', tag: 'Open to anyone',
               d: 'Every block, every settlement, every notice, hash-chained and readable without an account.' },
             { to: '/market', t: 'Resale and price discovery', tag: 'Live in the demo',

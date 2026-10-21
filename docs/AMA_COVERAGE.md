@@ -3,7 +3,7 @@
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
 "partial" always says what is missing. The keyword list splits into 25 rows
-because several keywords carry more than one item: 13 are done, 10 are
+because several keywords carry more than one item: 14 are done, 9 are
 partial, 1 has not been started, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
@@ -18,7 +18,7 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 | 7 | Risk management | done | `fraud.go` rules, the trained model, KYC caps, offline caps, supply conservation, backing gate | Decisions stay with the published rules; the model is advisory. |
 | 8 | Blockchain as the main hero | partial | `cbdc.go` puts the money itself on the ledger; grants, vouchers, conditions and refusals are all blocks | Large parts of the system still treat the chain as a record: listings, documents, work orders and the marketplace keep their state in Go maps and write blocks about it. Making those state transitions chain-first is the real version of this item. |
 | 9 | Speed of the transaction | partial | `throughput.go` measures settlements per second and latency percentiles on demand, with the serialising lock named | The number is measured but not published anywhere a reader lands, and there is no measurement of the CBDC paths specifically. |
-| 10 | Smooth end-user experience (flight cancelled, insurer refunds) | partial | The mechanism is built and tested: `OpenCondition`, `SubmitEvent`, automatic refund with no claim | There is no screen. A person cannot see a locked condition or a refund arriving; it exists only over the API. |
+| 10 | Smooth end-user experience (flight cancelled, insurer refunds) | done | `OpenCondition`, `SubmitEvent`, automatic refund with no claim, shown on the digital rupee page at `/cbdc` | A person can now see money locked against a named event, who is trusted to attest it, the deadline, and the refund once it releases. The page is read only: opening a condition is still an API call. |
 | 11 | Contracts that release on time when rules are fulfilled | done | `OpenCondition` / `SubmitEvent` / `SweepConditions`, plus the escrow in `work.go` and outcome settlement | Release is automatic on attestation and refund is automatic at the deadline. |
 | 12 | Off chain to on chain | partial | Document and deed hashes anchored, the ledger head anchored to Solana, attested events bringing outside facts in | No general oracle: each bridge is hand-wired, and there is no signed-feed abstraction with its own trust and staleness rules. |
 | 13 | KYC plus ML together | partial | The AML check reports rules and model side by side on every movement | KYC tier is not an input to the model, and the model was not trained on identity features at all. |
@@ -41,8 +41,8 @@ mostly what a person would see or verify rather than the mechanics. CBDC
 interoperability with other systems is the one item with no code at all, and
 the open partials are eKYC with no verification flow, AML without a sanctions
 list or a report artefact, a speed number that is measured but published
-nowhere, no screen for the refund experience, and the older modules that still
-keep state in Go maps while writing blocks about it.
+nowhere, and the older modules that still keep state in Go maps while writing
+blocks about it.
 
 ## Why not Solidity, and why not Python
 

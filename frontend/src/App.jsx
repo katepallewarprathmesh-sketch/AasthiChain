@@ -69,6 +69,7 @@ const Trust = lazy(() => import('./pages/Trust.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
 const ProofChain = lazy(() => import('./pages/ProofChain.jsx')) // attestations, credentials, agent authority
 const CrossBorder = lazy(() => import('./pages/CrossBorder.jsx')) // funding a purchase from outside India
+const DigitalRupee = lazy(() => import('./pages/DigitalRupee.jsx')) // the CBDC layer and its corridors
 // Public free tools. No auth, no API calls - they exist to be found in search
 // and to be useful on their own.
 const ToolsIndex = lazy(() => import('./pages/tools/ToolsIndex.jsx'))
@@ -657,6 +658,7 @@ function AppContent({ user, setUser }) {
           <Route path="/umi" element={<UMISettlement />} />
           <Route path="/proof" element={<ProofChain />} />
           <Route path="/crossborder" element={<CrossBorder />} />
+          <Route path="/cbdc" element={<DigitalRupee />} />
           <Route path="/trust" element={<Trust />} />
           <Route path="/support" element={<Support />} />
           <Route path="/verify" element={<VerifyDocument />} />

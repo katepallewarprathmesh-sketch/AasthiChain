@@ -20,6 +20,7 @@ import LedgerExplorer from '../src/pages/LedgerExplorer.jsx'
 import InvestorDashboard from '../src/pages/InvestorDashboard.jsx'
 import Insights from '../src/pages/Insights.jsx'
 import UMISettlement from '../src/pages/UMISettlement.jsx'
+import DigitalRupee from '../src/pages/DigitalRupee.jsx'
 import Support from '../src/pages/Support.jsx'
 import Trust from '../src/pages/Trust.jsx'
 import VerifyDocument from '../src/pages/VerifyDocument.jsx'
@@ -55,6 +56,7 @@ const ROUTES = [
   ['/insights', <Insights />],
   ['/ledger', <LedgerExplorer />],
   ['/umi', <UMISettlement />],
+  ['/cbdc', <DigitalRupee />],
   ['/support', <Support />],
   ['/trust', <Trust />],
   ['/verify', <VerifyDocument />],
