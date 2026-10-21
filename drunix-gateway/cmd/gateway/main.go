@@ -236,6 +236,17 @@ func main() {
 		srv.CrossBorder = drunix.NewCBXRegistry(srv.UMI, chain, nil)
 		log.Printf("Cross-border funding mounted at /umi/crossborder/*: simulated, settles in INR through banking channels")
 
+		// Public-chain anchoring (solana.go). This one is not a simulation:
+		// the RPC calls are live. Reads work with no key; publishing needs a
+		// funded SOLANA_SECRET_B58 and is off until it has one.
+		srv.Anchors = drunix.NewSolanaAnchor(chain,
+			os.Getenv("SOLANA_RPC_URL"), os.Getenv("SOLANA_CLUSTER"), os.Getenv("SOLANA_SECRET_B58"))
+		if srv.Anchors.CanWrite() {
+			log.Printf("Anchoring mounted at /umi/anchors/*: live Solana writes from %s", srv.Anchors.Address())
+		} else {
+			log.Printf("Anchoring mounted at /umi/anchors/*: live reads, writes off until a funded key is set")
+		}
+
 		// Agent passports (agentid.go): an automated actor acts under a
 		// pseudonym, and the principal behind it is split across custodians
 		// so that identifying them takes a threshold and leaves a record.

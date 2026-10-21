@@ -54,6 +54,7 @@ const TYPE_STYLES = {
   AGENT_REVEALED: { label: 'Agent · Principal Identified', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   AGENT_REVEAL_EXPIRED: { label: 'Agent · Request Lapsed', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   // Proof of backing (issuance against an attested figure)
+  UMI_CHAIN_ANCHORED: { label: 'Anchored · Public Chain', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
   UMI_CBX_QUOTED: { label: 'Cross-border · Quoted', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
   UMI_CBX_REFUSED: { label: 'Cross-border · Refused', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_CBX_PAYMENT_RECORDED: { label: 'Cross-border · Transfer Reported', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
@@ -112,6 +113,75 @@ function txnSummary(t) {
   if (t.basketId && t.from && t.to) return `${t.units} unit(s) ${t.from} → ${t.to} (no cash leg)`
   if (t.config) return `channel ${t.channel} · ${(t.orgs || []).length} orgs · ${(t.consensus || '').toLowerCase()}`
   return Object.entries(t).slice(0, 3).map(([k, v]) => `${k}=${v}`).join(' · ')
+}
+
+
+function PublicAnchor() {
+  const [state, setState] = React.useState(null)
+
+  React.useEffect(() => {
+    let alive = true
+    fetch('/api/umi/anchors?limit=3')
+      .then(r => r.json())
+      .then(d => alive && setState(d))
+      .catch(() => alive && setState({ error: true }))
+    return () => { alive = false }
+  }, [])
+
+  if (!state || state.error) return null
+  const st = state.status || {}
+  const latest = (state.anchors || [])[0]
+  const live = st.reachable
+
+  return (
+    <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 18, marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: '#111827' }}>Anchored on a public blockchain</div>
+          <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2, maxWidth: '72ch', lineHeight: 1.6 }}>
+            The head of this ledger is published to Solana as a memo carrying the block height, hash and
+            transaction root. Nothing else leaves this process. Anyone can open the explorer and check that the
+            block here still hashes to the value published then.
+          </div>
+        </div>
+        <span style={{
+          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+          padding: '4px 10px', borderRadius: 999,
+          color: live ? '#047857' : '#92400E', background: live ? '#ECFDF5' : '#FFFBEB',
+          border: `1px solid ${live ? '#A7F3D0' : '#FDE68A'}`,
+        }}>{live ? st.cluster + ' reachable' : 'cluster unreachable'}</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 14 }}>
+        {[
+          ['Network', 'Solana ' + (st.cluster || '')],
+          ['Cluster slot', st.clusterSlot ? '#' + st.clusterSlot : 'unavailable'],
+          ['Anchors published', String(st.anchors ?? 0)],
+          ['Writing', st.writeEnabled ? 'enabled' : 'off'],
+        ].map(([k, v]) => (
+          <div key={k} style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: '10px 12px' }}>
+            <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827', marginTop: 3, wordBreak: 'break-all' }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {latest ? (
+        <div style={{ marginTop: 12, fontSize: 12.5, color: '#374151', lineHeight: 1.7 }}>
+          Block #{latest.height} published at slot {latest.slot || 'pending'} ·{' '}
+          <a href={latest.explorer} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 600 }}>
+            open the transaction
+          </a>
+        </div>
+      ) : (
+        <div style={{ marginTop: 12, fontSize: 12, color: '#92400E', background: '#FFFBEB',
+          border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 12px', lineHeight: 1.6 }}>
+          {st.writeDisabledBecause || 'No anchor has been published from this instance yet.'} Reads and
+          verification against the public cluster work regardless.
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function LedgerExplorer() {
@@ -299,6 +369,13 @@ export default function LedgerExplorer() {
           </div>
         ))}
       </div>
+
+      {/* Public anchor: the one part of this page that is not ours to control.
+          The chain above can be replayed, which proves it is consistent with
+          itself. Only a record on a public network proves it was not rebuilt
+          last night, so the state of that record is shown here plainly,
+          including when nothing has been published yet. */}
+      <PublicAnchor />
 
       {/* Integrity lab */}
       <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 18, marginTop: 16 }}>

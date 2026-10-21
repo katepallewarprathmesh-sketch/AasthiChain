@@ -198,6 +198,21 @@ rather than deciding anything. Whoever supplies the worker sits behind an adapte
 simulation: no external provider is integrated. Design notes:
 [`docs/WORK_ORDERS.md`](docs/WORK_ORDERS.md).
 
+## Anchored on a public blockchain
+
+The settlement ledger here is permissioned, which is the right shape for settlement and also the
+obvious objection: replaying it proves it agrees with itself, not that it is the history that
+existed yesterday. So the head of the chain is published to a public blockchain as a digest, and
+after that, rewriting history would mean rewriting a record on a network nobody here controls.
+
+What crosses over is one line: the chain id, the block height, the block hash and the transaction
+root. No participant, no asset, no amount. An anchor proves a digest existed at a time; it does not
+claim the contents behind it are true, and the settlement data never leaves the service.
+
+This part is not a simulation. The network calls are live, the transaction format is the real one,
+and verification works for anyone with no account and no funds. Publishing costs a fee, so it stays
+switched off, and says so, until a funded key is configured: [`docs/ANCHORING.md`](docs/ANCHORING.md).
+
 ## Paying from outside India
 
 Tokens are easy to send across a border; the consideration for Indian property is not. The law
@@ -297,7 +312,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 134 checks across 89 suite files
+make test         # the full sweep: 135 checks across 90 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

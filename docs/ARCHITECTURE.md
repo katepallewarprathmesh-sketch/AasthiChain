@@ -124,6 +124,20 @@ configured rather than quoted.
 Design note, including the research behind it and a separate assessment of token-sale fundraising:
 [`CROSS_BORDER.md`](CROSS_BORDER.md).
 
+### Public-chain anchoring
+
+The head of the permissioned ledger is published to a public Solana cluster as a memo carrying the
+chain id, block height, block hash and transaction root, and nothing else. Verification reads the
+transaction back, finds the local block at that height and compares the hashes, reporting a
+mismatch rather than swallowing it.
+
+There is no SDK underneath this: base58, the compact-u16 wire prefix, the legacy message layout and
+ed25519 signing are implemented in the module, which means the encodings are unit tested against
+known vectors without a network or a key. Reads are live and free; writing needs a funded key and
+is off until it has one. Supervisors only, because a fee is spent and publication cannot be undone.
+
+Runbook and the limits of the claim: [`ANCHORING.md`](ANCHORING.md).
+
 ## Repository layout
 
 | Path | What it is |

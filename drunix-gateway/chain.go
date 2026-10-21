@@ -125,6 +125,29 @@ func (c *DrunixChain) StreamTo(p EventPublisher) {
 	c.stream = p
 }
 
+// Head is the most recent block, or nil on an empty chain. Reading it takes
+// the same lock as appending, so an anchor can never catch a half-written
+// block.
+func (c *DrunixChain) Head() *DrunixBlock {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.Blocks) == 0 {
+		return nil
+	}
+	return c.Blocks[len(c.Blocks)-1]
+}
+
+// BlockAt returns the block at a height, or nil when the chain does not reach
+// it. Heights are dense and start at zero, so this is an index lookup.
+func (c *DrunixChain) BlockAt(height int64) *DrunixBlock {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if height < 0 || height >= int64(len(c.Blocks)) {
+		return nil
+	}
+	return c.Blocks[height]
+}
+
 // NewChain seeds the genesis block (channel config, org MSPs).
 func NewChain() *DrunixChain {
 	c := &DrunixChain{}

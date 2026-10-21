@@ -60,6 +60,10 @@ type Server struct {
 	// received and converted outside India, credited as rupees only against
 	// an off-ramp attestation (crossborder.go). Nil leaves it unmounted.
 	CrossBorder *CBXRegistry
+	// Anchors publishes the head of this ledger to a public Solana cluster
+	// so an outsider can check the history was not rewritten (solana.go).
+	// Nil leaves the routes unmounted.
+	Anchors *SolanaAnchor
 
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
@@ -153,6 +157,7 @@ func (s *Server) Router() http.Handler {
 	s.registerAttestationRoutes(mux)
 	s.registerBackingRoutes(mux)
 	s.registerCrossBorderRoutes(mux)
+	s.registerAnchorRoutes(mux)
 	s.registerAgentRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
