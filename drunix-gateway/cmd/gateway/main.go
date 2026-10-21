@@ -241,6 +241,12 @@ func main() {
 		// funded SOLANA_SECRET_B58 and is off until it has one.
 		srv.Anchors = drunix.NewSolanaAnchor(chain,
 			os.Getenv("SOLANA_RPC_URL"), os.Getenv("SOLANA_CLUSTER"), os.Getenv("SOLANA_SECRET_B58"))
+		// CBDC settlement layer: e₹ accounts, programmable grants, the
+		// offline voucher path and conditional release. Additive: nothing
+		// else on the rail depends on it.
+		srv.CBDC = drunix.NewCBDCLedger(srv.UMI, chain)
+		log.Printf("CBDC layer mounted at /umi/cbdc/*: simulated e₹, no central bank money is issued")
+
 		if srv.Anchors.CanWrite() {
 			log.Printf("Anchoring mounted at /umi/anchors/*: live Solana writes from %s", srv.Anchors.Address())
 		} else {

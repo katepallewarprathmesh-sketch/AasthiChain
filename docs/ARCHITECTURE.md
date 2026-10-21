@@ -138,6 +138,29 @@ is off until it has one. Supervisors only, because a fee is spent and publicatio
 
 Runbook and the limits of the claim: [`ANCHORING.md`](ANCHORING.md).
 
+### CBDC settlement layer
+
+`cbdc.go` holds the money itself: accounts in integer paise across a retail and a wholesale
+segment, issuance and redemption restricted to the central bank role, and KYC tiers that cap
+balances and payment sizes on the retail side. `Conservation()` proves issued equals held plus
+redeemed and is served publicly.
+
+Three mechanisms sit on top. `Grant` and `Spend` implement purpose-bound money against the
+parameters the regulator lists (expiry, merchant category, named merchants, geography), and a
+failed condition commits a `UMI_CBDC_REFUSED` block rather than returning quietly.
+`IssueOffline` and `RedeemOffline` implement the offline path: value is reserved out of the online
+balance, the voucher carries an HMAC the accepting device can check without connectivity, and the
+nonce index turns a double spend into a deterministic refusal. `OpenCondition`, `SubmitEvent` and
+`SweepConditions` hold money against an attested event, release it to the payee when the named
+attestor reports the event, and return it to the payer at the deadline.
+
+Every movement carries a `Finality` record with the technical and financial parts kept separate,
+and an `AMLCheck` built from the rules and the trained model in the risk layer. Routes live under
+`/umi/cbdc/*`; the layer is additive and unmounts cleanly when the rail or chain is absent.
+
+Design note, the regulator's published pilot behaviour and the phases still to come:
+[`CBDC.md`](CBDC.md).
+
 ### Payment risk: rules and a trained model
 
 `fraud.go` is the rule engine: `ScorePayment` is a pure function over the payment and the payer's

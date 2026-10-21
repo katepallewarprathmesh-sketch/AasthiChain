@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  136 checks, 0 failed
+make test       # integration sweep:  137 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,8 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **91** in `tests/` |
-| Reported result | **136 passed, 0 failed** |
+| Suite files | **92** in `tests/` |
+| Reported result | **137 passed, 0 failed** |
 
 `tests/credentials.test.mjs` is worth running on its own when touching the rail proxy. It
 verifies a credential's Ed25519 signature inside the test process, using only the issuer's
@@ -63,11 +63,11 @@ recognises the five named demo identities and files anything else as `investor1`
 would hide the very thing under test. The rail is where every bound is enforced.
 | Runtime | about 50 seconds |
 
-**Read the number carefully.** The 136 is the count of top-level checks the sweep reports: each
+**Read the number carefully.** The 137 is the count of top-level checks the sweep reports: each
 direct HTTP assertion counts once, and each suite file counts once however many assertions it
 contains. Individual suites print their own totals, which are finer grained. For example
 `verifyproperty` reports 29 assertions and `pincodecheck` reports 26, but each contributes 1 to the
-136. There is no single meaningful "total assertions" figure, and this project does not publish
+137. There is no single meaningful "total assertions" figure, and this project does not publish
 one.
 
 Three suites are skipped by the `api` CI job and run in the `contracts` job instead, because they

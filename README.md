@@ -213,6 +213,27 @@ This part is not a simulation. The network calls are live, the transaction forma
 and verification works for anyone with no account and no funds. Publishing costs a fee, so it stays
 switched off, and says so, until a funded key is configured: [`docs/ANCHORING.md`](docs/ANCHORING.md).
 
+## Central bank money on the ledger
+
+The settlement asset here is a simulated digital rupee, and it lives on the chain rather than in a
+table beside it. Money is issued by the central bank role, moves between accounts, and is redeemed
+back; every paise issued is either in an account or has been destroyed, and that arithmetic is
+published for anyone to check.
+
+Three behaviours follow the pilot rather than the brochure. Money can be bound to a purpose, with
+an expiry, a merchant category, named merchants and a geography, so a food subsidy can only be
+spent at a fair price shop and a spend outside the rule is refused on the rail instead of
+reconciled later. Value can be carried offline as a signed voucher for places connectivity does
+not reach, with small limits and a double spend that is caught on reconnection rather than hoped
+against. And money can be locked against an event, so a cancelled flight pays its own refund the
+moment the airline attests the cancellation: no claim, no form, no wait.
+
+Every movement records two different things that are usually said as one. Technical finality is
+the block being committed, which takes milliseconds and happens around the clock. Financial
+finality is the payment being irrevocable, which in central bank money is the same moment, and
+over a commercial bank rail is not. Where the two differ this layer says so and names the window:
+[`docs/CBDC.md`](docs/CBDC.md).
+
 ## A model that was trained, not a rule sheet called AI
 
 Payments are screened by hand-written rules: amount bands, velocity, a structuring window. Those
@@ -329,7 +350,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 136 checks across 91 suite files
+make test         # the full sweep: 137 checks across 92 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

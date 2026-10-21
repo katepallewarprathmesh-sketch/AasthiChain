@@ -64,6 +64,7 @@ type Server struct {
 	// so an outsider can check the history was not rewritten (solana.go).
 	// Nil leaves the routes unmounted.
 	Anchors *SolanaAnchor
+	CBDC    *CBDCLedger
 
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
@@ -160,6 +161,7 @@ func (s *Server) Router() http.Handler {
 	s.registerBackingRoutes(mux)
 	s.registerCrossBorderRoutes(mux)
 	s.registerAnchorRoutes(mux)
+	s.registerCBDCRoutes(mux)
 	s.registerAgentRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
