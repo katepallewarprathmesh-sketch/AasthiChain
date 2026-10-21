@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import PageShell, { Card, Tag } from '../components/PageShell.jsx'
-import { umiFetch } from '../lib/umiFetch.js'
+import { umiFetch, umiPost, explainRail } from '../lib/umiFetch.js'
 
 /**
  * The digital rupee layer, with a screen.
@@ -10,9 +10,14 @@ import { umiFetch } from '../lib/umiFetch.js'
  * that refuses to be spent outside its purpose, and a refund that pays itself
  * when an event is attested instead of when somebody files a claim.
  *
- * The page is read-only on purpose. It computes nothing: every number,
- * including the conservation check and both kinds of finality, comes from the
- * rail exactly as the rail reports it.
+ * The page computes nothing: every number, including the conservation check
+ * and both kinds of finality, comes from the rail exactly as the rail reports
+ * it, and every action is the rail's own endpoint rather than a local edit.
+ *
+ * Actions are shown to a signed-in participant only, and the rail still
+ * decides: issuing asks for a regulator, spending outside a purpose is
+ * refused at the point of sale, and a corridor with no licence refuses by
+ * name. A refusal is printed as the rail worded it rather than softened.
  */
 
 const money = (paise) => '₹' + (Number(paise || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })
@@ -191,8 +196,9 @@ function Corridors({ corridors, blocked }) {
   )
 }
 
-function Transfers({ transfers }) {
+function Transfers({ transfers, user, reload }) {
   if (!transfers.length) return null
+  const act = run(reload)
   return (
     <Card title="Cross-border payments" sub="Where each one actually sits, rather than whether a screen said done.">
       {transfers.map((t) => (
@@ -203,6 +209,24 @@ function Transfers({ transfers }) {
           </div>
           <p className="pg-card-sub" style={{ marginTop: 4 }}>{t.corridorId} · {t.purposeCode}{t.travelRuleApplied ? ' · originator and beneficiary recorded' : ''}{t.reportable ? ' · reportable' : ''}</p>
           <Finality f={t.finality} />
+          {user && t.status === 'AWAITING_CLAIM' && (
+            <ActionForm
+              hint="Hash locked. Whoever knows the secret behind the lock can claim it; if nobody does before the timeout, the money goes back to the payer on its own."
+              fields={[{ name: 'secret', label: 'Secret', placeholder: 'the preimage of the hash lock' }]}
+              submitLabel="Claim"
+              onSubmit={(f) => act(`/corridors/transfers/${encodeURIComponent(t.transferId)}/claim`, { secret: f.secret },
+                (d) => `Claimed. The transfer is now ${String(d.transfer.status).toLowerCase()}.`)}
+            />
+          )}
+          {user && t.status === 'AWAITING_FOREIGN_LEG' && (
+            <ActionForm
+              hint="The other leg settles on somebody else's books. Confirming here records that it arrived; until then this payment is recorded, not settled."
+              fields={[]}
+              submitLabel="Confirm the other leg"
+              onSubmit={() => act(`/corridors/transfers/${encodeURIComponent(t.transferId)}/confirm`, {},
+                (d) => `Confirmed. The transfer is now ${String(d.transfer.status).toLowerCase()}.`)}
+            />
+          )}
         </div>
       ))}
     </Card>
@@ -240,7 +264,345 @@ function Movements({ movements }) {
   )
 }
 
-export default function DigitalRupee() {
+
+// ---------------------------------------------------------------- actions --
+//
+// One form component for every action, because the shape is always the same:
+// a few fields, one button, and the rail's answer printed verbatim. Hand
+// rolling eight of these would have produced eight slightly different error
+// behaviours.
+
+function ActionForm({ fields, submitLabel, onSubmit, hint, busyLabel = 'Working' }) {
+  const initial = {}
+  for (const f of fields) initial[f.name] = f.value === undefined ? '' : f.value
+  const [form, setForm] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const set = (name) => (e) => setForm((f) => ({ ...f, [name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+
+  const go = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    setResult(null)
+    try {
+      const r = await onSubmit(form)
+      setResult(r)
+    } catch (err) {
+      setResult({ ok: false, message: String(err && err.message ? err.message : err) })
+    }
+    setBusy(false)
+  }
+
+  return (
+    <form onSubmit={go}>
+      {hint && <p className="pg-card-sub" style={{ marginTop: 0, marginBottom: 12 }}>{hint}</p>}
+      <div className="pg-grid" style={{ gap: 12 }}>
+        {fields.map((f) => (
+          <div key={f.name}>
+            <label className="pg-field" htmlFor={'dr-' + f.name}>{f.label}</label>
+            {f.options ? (
+              <select id={'dr-' + f.name} className="pg-input" value={form[f.name]} onChange={set(f.name)}>
+                {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : f.type === 'checkbox' ? (
+              <input id={'dr-' + f.name} type="checkbox" checked={!!form[f.name]} onChange={set(f.name)} />
+            ) : (
+              <input
+                id={'dr-' + f.name}
+                className="pg-input"
+                type={f.type || 'text'}
+                value={form[f.name]}
+                placeholder={f.placeholder || ''}
+                onChange={set(f.name)}
+              />
+            )}
+            {f.note && <p className="pg-card-sub" style={{ marginTop: 4 }}>{f.note}</p>}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <button className="pg-btn" type="submit" disabled={busy}>{busy ? busyLabel : submitLabel}</button>
+      </div>
+      {result && (
+        <div style={{ marginTop: 12 }}>
+          <Tag tone={result.ok ? 'live' : 'bad'}>{result.ok ? 'Done' : 'Refused'}</Tag>
+          <p className="pg-card-sub" style={{ marginTop: 6 }}>{result.message}</p>
+        </div>
+      )}
+    </form>
+  )
+}
+
+// Every action funnels through here so a refusal always reads the same way:
+// the rail's own sentence, never a rewrite of it.
+const run = (reload) => async (path, body, say) => {
+  const { ok, data } = await umiPost(path, body)
+  if (ok) await reload()
+  return { ok, message: ok ? say(data) : explainRail(data) }
+}
+
+const paise = (rupees) => Math.round(Number(rupees || 0) * 100)
+const PURPOSES = ['P2P_FAMILY_MAINTENANCE', 'P2P_GIFT', 'GOODS_IMPORT', 'SERVICES_EXPORT', 'EDUCATION', 'TRAVEL']
+
+function ActionDesk({ user, corridors, grants, reload }) {
+  const [tab, setTab] = useState('issue')
+  const act = run(reload)
+  const me = (user && (user.identityId || user.id || user.username)) || ''
+  const usable = ((corridors && corridors.corridors) || []).filter((c) => !((corridors && corridors.blockedCorridors) || {})[c.id])
+  const blockedList = ((corridors && corridors.corridors) || []).filter((c) => ((corridors && corridors.blockedCorridors) || {})[c.id])
+
+  if (!user) {
+    return (
+      <Card title="Doing something here" sub="Every action on this layer is recorded against a named participant.">
+        <p className="pg-card-sub">
+          Sign in to issue, transfer, lock money against an event, attest one, bind money to a purpose,
+          carry value offline or send across a corridor. Reading needs no account; moving money does.
+        </p>
+      </Card>
+    )
+  }
+
+  const tabs = [
+    ['issue', 'Issue and redeem'],
+    ['transfer', 'Transfer'],
+    ['condition', 'Lock against an event'],
+    ['attest', 'Attest an event'],
+    ['grant', 'Bind to a purpose'],
+    ['spend', 'Spend a grant'],
+    ['offline', 'Offline value'],
+    ['corridor', 'Send across a border'],
+  ]
+
+  return (
+    <Card
+      title="Doing something here"
+      sub="These are the rail's own endpoints. The rail decides: a refusal is printed exactly as it was worded, including which authorisation or rule was missing."
+      right={<Tag tone="neutral">Signed in as {me || user.role}</Tag>}
+    >
+      <div className="pg-tabs" role="tablist">
+        {tabs.map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} className="pg-tab" onClick={() => setTab(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'issue' && (
+        <div className="pg-grid" style={{ gap: 24 }}>
+          <ActionForm
+            hint="Issuing creates money, so the rail asks for a regulator or an operator. A bank-funded issue is technically final immediately and financially provisional until its settlement window closes: both are shown separately rather than averaged into one word."
+            fields={[
+              { name: 'holder', label: 'Holder', value: me },
+              { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '5000' },
+              { name: 'segment', label: 'Segment', value: 'RETAIL', options: [{ value: 'RETAIL', label: 'Retail' }, { value: 'WHOLESALE', label: 'Wholesale' }] },
+              { name: 'kycTier', label: 'KYC tier', value: 'MIN_KYC', options: [{ value: 'MIN_KYC', label: 'Minimal (caps apply)' }, { value: 'FULL_KYC', label: 'Full' }] },
+              { name: 'bank', label: 'Funded from the bank rail', type: 'checkbox', value: false, note: 'Leave this off for a direct issue.' },
+            ]}
+            submitLabel="Issue"
+            onSubmit={(f) => act('/cbdc/issue', {
+              holder: f.holder, amountPaise: paise(f.amount), segment: f.segment,
+              kycTier: f.kycTier, fundedByBankRail: !!f.bank,
+            }, (d) => `${money(d.movement.amountPaise)} issued to ${d.account.holder}. Financially ${String(d.movement.finality.financial).toLowerCase()}, recorded in block ${d.movement.finality.blockHeight}.`)}
+          />
+          <ActionForm
+            hint="Redeeming destroys money again, so the conservation check at the top of this page keeps balancing."
+            fields={[
+              { name: 'holder', label: 'Holder', value: me },
+              { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '1000' },
+            ]}
+            submitLabel="Redeem"
+            onSubmit={(f) => act('/cbdc/redeem', { holder: f.holder, amountPaise: paise(f.amount) },
+              (d) => `${money(d.movement.amountPaise)} redeemed. Outstanding supply fell by the same amount.`)}
+          />
+        </div>
+      )}
+
+      {tab === 'transfer' && (
+        <ActionForm
+          hint="A transfer between two accounts on this layer is final when the block is written: there is no settlement window and no suspense account behind it."
+          fields={[
+            { name: 'from', label: 'From', value: me },
+            { name: 'to', label: 'To', placeholder: 'originator1' },
+            { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '500' },
+          ]}
+          submitLabel="Transfer"
+          onSubmit={(f) => act('/cbdc/transfer', { from: f.from, to: f.to, amountPaise: paise(f.amount) },
+            (d) => `${money(d.movement.amountPaise)} moved to ${d.movement.to}. Screening said ${String(d.movement.aml?.decision || 'nothing').toLowerCase()}.`)}
+        />
+      )}
+
+      {tab === 'condition' && (
+        <ActionForm
+          hint="This is the refund nobody has to ask for. The money leaves the payer's spendable balance now and is paid to the payee the moment the named attestor reports the event. If the deadline passes first it returns to the payer without a claim."
+          fields={[
+            { name: 'payer', label: 'Payer', value: me },
+            { name: 'payee', label: 'Payee', placeholder: 'originator1' },
+            { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '3000' },
+            { name: 'eventType', label: 'Event', value: 'POSSESSION_HANDOVER', placeholder: 'FLIGHT_CANCELLED' },
+            { name: 'eventKey', label: 'Which one', placeholder: 'PROP-GREEN-VALLEY-PUNE-001' },
+            { name: 'attestor', label: 'Who is trusted to report it', placeholder: 'registrar1' },
+            { name: 'deadlineHours', label: 'Deadline in hours', type: 'number', value: '24' },
+          ]}
+          submitLabel="Lock the money"
+          onSubmit={(f) => act('/cbdc/conditions', {
+            payer: f.payer, payee: f.payee, amountPaise: paise(f.amount),
+            eventType: f.eventType, eventKey: f.eventKey, attestor: f.attestor,
+            deadlineHours: Number(f.deadlineHours || 24),
+          }, (d) => `${money(d.condition.amountPaise)} locked. ${d.condition.attestor} can release it until ${new Date(d.condition.deadline).toLocaleString()}.`)}
+        />
+      )}
+
+      {tab === 'attest' && (
+        <ActionForm
+          hint="Reporting an event releases only the conditions that named you as their attestor. Anything else stays locked, which is the whole safeguard: saying a flight was cancelled does not let you empty somebody else's escrow."
+          fields={[
+            { name: 'eventType', label: 'Event', value: 'POSSESSION_HANDOVER' },
+            { name: 'eventKey', label: 'Which one', placeholder: 'PROP-GREEN-VALLEY-PUNE-001' },
+          ]}
+          submitLabel="Report the event"
+          onSubmit={(f) => act('/cbdc/events', { eventType: f.eventType, eventKey: f.eventKey },
+            (d) => `${(d.released || []).length} condition(s) released, worth ${money((d.released || []).reduce((t, c) => t + c.amountPaise, 0))}. ${d.note || ''}`)}
+        />
+      )}
+
+      {tab === 'grant' && (
+        <ActionForm
+          hint="Purpose-bound money: a food allowance that cannot buy fuel, a subsidy that works in one state only. The rule travels with the money and is checked when it is spent, not reconciled afterwards."
+          fields={[
+            { name: 'sponsor', label: 'Sponsor', value: me },
+            { name: 'beneficiary', label: 'Beneficiary', placeholder: 'investor2' },
+            { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '2000' },
+            { name: 'purpose', label: 'Purpose', placeholder: 'Monthly food allowance' },
+            { name: 'categories', label: 'Merchant categories', placeholder: 'GROCERY, PHARMACY', note: 'Comma separated. Leave blank for any merchant.' },
+            { name: 'states', label: 'States', placeholder: 'Maharashtra', note: 'Comma separated. Leave blank for anywhere.' },
+          ]}
+          submitLabel="Bind the money"
+          onSubmit={(f) => {
+            const list = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean)
+            return act('/cbdc/grants', {
+              sponsor: f.sponsor, beneficiary: f.beneficiary, amountPaise: paise(f.amount),
+              condition: { purpose: f.purpose, merchantCategories: list(f.categories), allowedStates: list(f.states) },
+            }, (d) => `${money(d.grant.amountPaise)} bound to ${d.grant.condition.purpose || 'a purpose'} for ${d.grant.beneficiary}.`)
+          }}
+        />
+      )}
+
+      {tab === 'spend' && (
+        <ActionForm
+          hint="Try a spend that breaks the rule. A grocery grant presented at a fuel merchant is refused here, at the point of sale, with the reason named."
+          fields={[
+            { name: 'grantId', label: 'Grant', value: grants[0] ? grants[0].grantId : '', options: grants.length ? grants.map((g) => ({ value: g.grantId, label: `${(g.condition || {}).purpose || g.grantId} (${money(g.amountPaise - g.spentPaise)} left)` })) : undefined, placeholder: 'CBDC-GRANT-...' },
+            { name: 'merchant', label: 'Merchant', placeholder: 'KIRANA-01' },
+            { name: 'merchantCategory', label: 'Merchant category', placeholder: 'GROCERY' },
+            { name: 'state', label: 'State', placeholder: 'Maharashtra' },
+            { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '250' },
+          ]}
+          submitLabel="Spend"
+          onSubmit={(f) => act(`/cbdc/grants/${encodeURIComponent(f.grantId)}/spend`, {
+            merchant: f.merchant, merchantCategory: f.merchantCategory, state: f.state, amountPaise: paise(f.amount),
+          }, (d) => `${money(d.movement.amountPaise)} spent at ${f.merchant}. ${money(d.grant.amountPaise - d.grant.spentPaise)} of the grant is left.`)}
+        />
+      )}
+
+      {tab === 'offline' && (
+        <OfflineDesk me={me} act={act} />
+      )}
+
+      {tab === 'corridor' && (
+        <div className="pg-grid" style={{ gap: 24 }}>
+          <ActionForm
+            hint="Check first. This answers whether the corridor would carry the payment, what it would cost in delay, and which authorisation is missing if it would not, without moving anything."
+            fields={[
+              { name: 'corridorId', label: 'Corridor', value: (usable[0] && usable[0].id) || '', options: ((corridors && corridors.corridors) || []).map((c) => ({ value: c.id, label: c.name })) },
+              { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '10000' },
+              { name: 'purposeCode', label: 'Purpose', value: PURPOSES[0], options: PURPOSES.map((p) => ({ value: p, label: p.replace(/_/g, ' ').toLowerCase() })) },
+            ]}
+            submitLabel="Check"
+            onSubmit={async (f) => {
+              const { ok, data } = await umiPost('/corridors/check', { corridorId: f.corridorId, amountPaise: paise(f.amount), purposeCode: f.purposeCode, payer: me })
+              if (!ok) return { ok: false, message: explainRail(data) }
+              const c = data.check || {}
+              return { ok: !!c.allowed, message: c.allowed
+                ? `Allowed. Settles ${String(c.settlementModel || '').replace(/_/g, ' ').toLowerCase()}, ${c.settlementWindow || 'immediately'}.${c.travelRuleApplies ? ' Originator and beneficiary details are required at this amount.' : ''}`
+                : `Refused: ${(c.reasons || [c.reason]).filter(Boolean).join('; ')}` }
+            }}
+          />
+          <ActionForm
+            hint="Sending puts the money where the settlement model says it goes. On an atomic corridor it is final in one block; on a hash-locked one it waits in suspense for the secret; on a bank corridor it is recorded and nothing settles until the window closes."
+            fields={[
+              { name: 'corridorId', label: 'Corridor', value: (usable[0] && usable[0].id) || '', options: ((corridors && corridors.corridors) || []).map((c) => ({ value: c.id, label: c.name })) },
+              { name: 'payee', label: 'Payee', placeholder: 'investor2' },
+              { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '10000' },
+              { name: 'purposeCode', label: 'Purpose', value: PURPOSES[0], options: PURPOSES.map((p) => ({ value: p, label: p.replace(/_/g, ' ').toLowerCase() })) },
+              { name: 'originator', label: 'Originator details', placeholder: 'required above the travel rule threshold' },
+              { name: 'beneficiary', label: 'Beneficiary details', placeholder: 'required above the travel rule threshold' },
+              { name: 'hashLock', label: 'Hash lock', placeholder: '64 hex characters, hash-locked corridor only' },
+              { name: 'timeoutHours', label: 'Timeout in hours', type: 'number', value: '24' },
+            ]}
+            submitLabel="Send"
+            onSubmit={(f) => act('/corridors/send', {
+              corridorId: f.corridorId, payer: me, payee: f.payee, amountPaise: paise(f.amount),
+              purposeCode: f.purposeCode, originator: f.originator, beneficiary: f.beneficiary,
+              hashLock: f.hashLock, timeoutHours: Number(f.timeoutHours || 24),
+            }, (d) => `${money(d.transfer.amountPaise)} on ${d.transfer.corridorId}: ${String(d.transfer.status).replace(/_/g, ' ').toLowerCase()}.`)}
+          />
+          {blockedList.length > 0 && (
+            <p className="pg-card-sub">
+              {blockedList.map((c) => c.name).join(' and ')} {blockedList.length > 1 ? 'are' : 'is'} listed but refuses every payment here,
+              because this deployment holds none of the authorisations {blockedList.length > 1 ? 'they' : 'it'} needs. Sending anyway
+              is the honest way to see what the refusal says.
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// Offline value is a two-step story, so the issued voucher has to survive
+// between the two forms: it is the thing that was carried away from the
+// ledger, and redeeming it is what proves it was only spent once.
+function OfflineDesk({ me, act }) {
+  const [voucher, setVoucher] = useState(null)
+
+  return (
+    <div className="pg-grid" style={{ gap: 24 }}>
+      <ActionForm
+        hint="Value reserved on the ledger and carried away from it: a signed voucher a receiving device can verify with no connectivity. The reservation stays inside the holder's balance, so the supply still conserves."
+        fields={[
+          { name: 'holder', label: 'Holder', value: me },
+          { name: 'device', label: 'Device', placeholder: 'PHONE-01' },
+          { name: 'amount', label: 'Amount in rupees', type: 'number', placeholder: '400' },
+        ]}
+        submitLabel="Issue a voucher"
+        onSubmit={async (f) => {
+          const r = await act('/cbdc/offline/issue', { holder: f.holder, device: f.device, amountPaise: paise(f.amount) },
+            (d) => { setVoucher(d.voucher); return `Voucher ${d.voucher.voucherId} for ${money(d.voucher.amountPaise)}, usable until ${new Date(d.voucher.expiresAt).toLocaleString()}.` })
+          return r
+        }}
+      />
+      {voucher ? (
+        <div>
+          <p className="pg-card-sub" style={{ marginTop: 0 }}>
+            Holding voucher <span className="pg-mono">{voucher.voucherId}</span> for {money(voucher.amountPaise)}.
+            Redeem it twice: the second attempt is refused and names who redeemed it first.
+          </p>
+          <ActionForm
+            fields={[{ name: 'payee', label: 'Redeem to', placeholder: 'originator1' }]}
+            submitLabel="Redeem the voucher"
+            onSubmit={(f) => act('/cbdc/offline/redeem', { voucher, payee: f.payee },
+              (d) => `Redeemed to ${f.payee}. ${money(d.movement.amountPaise)} is back on the ledger and the reservation is released.`)}
+          />
+        </div>
+      ) : (
+        <p className="pg-card-sub">Issue a voucher first; it will appear here so it can be redeemed.</p>
+      )}
+    </div>
+  )
+}
+
+export default function DigitalRupee({ user = null }) {
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [grants, setGrants] = useState([])
@@ -289,11 +651,12 @@ export default function DigitalRupee() {
       {err && <Card title="Not available"><p className="pg-card-sub">{err}</p></Card>}
       {loading && !status && <Card title="Loading"><p className="pg-card-sub">Reading the rail.</p></Card>}
       <Overview status={status} />
+      <ActionDesk user={user} corridors={corridors} grants={grants} reload={load} />
       <Conditions conditions={conditions} />
       <Grants grants={grants} />
       <Accounts accounts={accounts} />
       <Corridors corridors={(corridors && corridors.corridors) || []} blocked={corridors && corridors.blockedCorridors} />
-      <Transfers transfers={transfers} />
+      <Transfers transfers={transfers} user={user} reload={load} />
       <Movements movements={movements} />
       {status && accounts.length === 0 && (
         <Card title="Nothing has happened yet">

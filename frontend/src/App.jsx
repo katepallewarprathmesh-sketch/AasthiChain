@@ -69,6 +69,7 @@ const Trust = lazy(() => import('./pages/Trust.jsx'))
 const UMISettlement = lazy(() => import('./pages/UMISettlement.jsx')) // UMI rail (additive)
 const ProofChain = lazy(() => import('./pages/ProofChain.jsx')) // attestations, credentials, agent authority
 const CrossBorder = lazy(() => import('./pages/CrossBorder.jsx')) // funding a purchase from outside India
+const Explore = lazy(() => import('./pages/Explore.jsx'))
 const DigitalRupee = lazy(() => import('./pages/DigitalRupee.jsx')) // the CBDC layer and its corridors
 // Public free tools. No auth, no API calls - they exist to be found in search
 // and to be useful on their own.
@@ -218,7 +219,7 @@ function Footer() {
   const faint = dark ? '#64718A' : '#9CA3AF'
 
   const cols = [
-    { h: 'Product', links: [['Marketplace', '/marketplace'], ['My Wallet', '/wallet'], ['List a Property', '/admin'], ['Regulator Audit', '/regulator']] },
+    { h: 'Product', links: [['Marketplace', '/marketplace'], ['My Wallet', '/wallet'], ['Digital rupee', '/cbdc'], ['Everything on AasthiChain', '/explore']] },
     { h: 'Platform', links: [['How it works', '/#how-it-works'], ['Free calculators', '/tools'], ['What is real vs simulated', '/trust'], ['Support the project', '/support']] },
     { h: 'Learn', links: [['Demat 2.0 explained', '/learn/what-is-demat-2'], ['Atomic DvP explained', '/learn/what-is-atomic-dvp'], ['UMI explained', '/learn/what-is-umi']] },
     { h: 'Legal', links: [['About', '/about'], ['Privacy', '/privacy'], ['Terms of Use', '/terms']] },
@@ -267,22 +268,126 @@ function Footer() {
   )
 }
 
+// Everything that is not a daily screen lives behind one menu instead of
+// stretching the navbar until nothing in it stands out. The full directory,
+// with a sentence per page and a filter, is at /explore.
+function MoreMenu({ groups, mut, text, chipBg, chipBorder, isMobile }) {
+  const [open, setOpen] = useState(false)
+  const close = () => setOpen(false)
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          textDecoration: 'none', fontSize: isMobile ? 12.5 : 13, fontWeight: 500,
+          padding: isMobile ? '6px 9px' : '8px 12px', borderRadius: 8, whiteSpace: 'nowrap',
+          cursor: 'pointer', background: open ? chipBg : 'transparent', color: mut,
+          border: `1px solid ${open ? chipBorder : 'transparent'}`,
+        }}
+      >
+        More
+      </button>
+      {open && (
+        <>
+          <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 150 }} aria-hidden="true" />
+          <div
+            style={{
+              position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 200, minWidth: 260,
+              maxHeight: '70vh', overflowY: 'auto', background: chipBg === '#F9FAFB' ? '#FFFFFF' : '#101623',
+              border: `1px solid ${chipBorder}`, borderRadius: 12, padding: 10,
+              boxShadow: '0 24px 60px -24px rgba(15,23,42,0.45)',
+            }}
+          >
+            {groups.map((g) => (
+              <div key={g.name} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: mut, padding: '6px 8px' }}>{g.name}</div>
+                {g.items.map((i) => (
+                  <Link
+                    key={i.path}
+                    to={i.path}
+                    onClick={close}
+                    style={{ display: 'block', textDecoration: 'none', fontSize: 13, fontWeight: 500, color: text, padding: '7px 8px', borderRadius: 8 }}
+                  >
+                    {i.label}
+                  </Link>
+                ))}
+              </div>
+            ))}
+            <Link
+              to="/explore"
+              onClick={close}
+              style={{ display: 'block', textDecoration: 'none', fontSize: 12.5, fontWeight: 700, color: text, padding: '8px', borderTop: `1px solid ${chipBorder}`, marginTop: 4 }}
+            >
+              Everything on AasthiChain
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock }) {
   const location = useLocation()
+  // Five daily screens stay in the bar. Everything else is one click away in
+  // the More menu, which is what keeps the bar readable as the site grows.
   const navItems = user
     ? [
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/marketplace', label: 'Marketplace' },
         { path: '/wallet', label: 'Wallet' },
         { path: '/ledger', label: 'Ledger' },
-        { path: '/market', label: 'Resale' },
         { path: '/umi', label: 'Settlement' },
-        { path: '/proof', label: 'Proof' },
         ...(['Originator', 'Registrar', 'Regulator'].includes(user.role) ? [{ path: '/admin', label: 'Admin' }] : []),
-        ...(user.role === 'Registrar' || user.role === 'Regulator' ? [{ path: '/admin/ops', label: 'Ops' }] : []),
-        ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
       ]
-    : [{ path: '/', label: 'Home' }]
+    : [{ path: '/', label: 'Home' }, { path: '/marketplace', label: 'Marketplace' }, { path: '/umi', label: 'Settlement' }]
+  const moreGroups = [
+    {
+      name: 'Money and settlement',
+      items: [
+        ...(user ? [{ path: '/market', label: 'Resale market' }] : []),
+        { path: '/cbdc', label: 'Digital rupee' },
+        { path: '/crossborder', label: 'Cross-border' },
+        { path: '/proof', label: 'Proof' },
+        ...(user ? [] : [{ path: '/ledger', label: 'Ledger explorer' }]),
+      ],
+    },
+    {
+      name: 'Check for yourself',
+      items: [
+        { path: '/verify', label: 'Verify a document' },
+        { path: '/trust', label: 'Trust' },
+        { path: '/support', label: 'Support' },
+      ],
+    },
+    {
+      name: 'Learn and calculate',
+      items: [
+        { path: '/learn', label: 'Explainers' },
+        { path: '/tools', label: 'Calculators' },
+        { path: '/insights', label: 'Insights' },
+      ],
+    },
+    ...(user && (user.role === 'Registrar' || user.role === 'Regulator')
+      ? [{
+          name: 'Operate',
+          items: [
+            { path: '/admin/ops', label: 'Operations' },
+            ...(user.role === 'Regulator' ? [{ path: '/regulator', label: 'Audit' }] : []),
+          ],
+        }]
+      : []),
+  ]
   const navPaths = navItems.map((i) => i.path)
   // '/marketplace'.startsWith('/market') is true, so the Resale tab lit up
   // whenever Marketplace was open. Match whole path segments, and when two
@@ -330,6 +435,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
                 background: isActive(item.path) ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent',
               }}>{item.label}</Link>
             ))}
+            <MoreMenu groups={moreGroups} mut={mut} text={text} chipBg={chipBg} chipBorder={chipBorder} isMobile={isMobile} />
           </div>
         </div>
 
@@ -658,7 +764,8 @@ function AppContent({ user, setUser }) {
           <Route path="/umi" element={<UMISettlement />} />
           <Route path="/proof" element={<ProofChain />} />
           <Route path="/crossborder" element={<CrossBorder />} />
-          <Route path="/cbdc" element={<DigitalRupee />} />
+          <Route path="/cbdc" element={<DigitalRupee user={effectiveUser} />} />
+          <Route path="/explore" element={<Explore />} />
           <Route path="/trust" element={<Trust />} />
           <Route path="/support" element={<Support />} />
           <Route path="/verify" element={<VerifyDocument />} />

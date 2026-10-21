@@ -117,6 +117,21 @@ and an explicit settlement window where one is not.
 path rather than adjectives, and the consumer surfaces where this is visible:
 a refund that arrives before the passenger has left the airport.
 
+The experience half of phase 4 is shipped. The digital rupee screen shows the
+conservation check, both kinds of finality, purpose-bound money and every
+condition with the party trusted to release it, and it can act as well as
+report: issue and redeem, transfer, lock money against an event, attest one,
+bind money to a purpose and try a spend that breaks the rule, carry value
+offline and redeem it, check a corridor before sending and then send across
+it, claim a hash-locked transfer or confirm a foreign leg. Reading needs no
+account; every action is recorded against a named participant, and a refusal
+is shown exactly as the rail worded it, including which authorisation was
+missing. The latency half is still unpublished.
+
+Every page on the site, this one included, is listed with a sentence of
+explanation in the directory at `/explore`, so nothing is reachable only by
+knowing its URL and the navigation bar can stay short.
+
 ## What this is not
 
 This is a simulation of the regulator's design, built in the open against

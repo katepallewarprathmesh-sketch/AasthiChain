@@ -41,6 +41,11 @@ export const ROUTE_SEO = {
     description:
       "ASI is AasthiChain's own settlement rail, built to the pattern RBI set out for the Unified Market Interface: the securities leg and the wholesale CBDC cash leg commit in one block, or neither moves.",
   },
+  '/explore': {
+    title: 'Everything on AasthiChain: the full page directory',
+    description:
+      'One searchable list of every page on AasthiChain: the marketplace, the ledger explorer, atomic settlement, the digital rupee layer, cross-border corridors, document verification and the free property calculators.',
+  },
   '/cbdc': {
     title: 'Digital Rupee Layer: Offline and Programmable | AasthiChain',
     description:
