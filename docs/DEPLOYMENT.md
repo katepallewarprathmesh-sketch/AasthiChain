@@ -143,7 +143,14 @@ Credentials are never committed; `.env.payu` is gitignored.
 [README](../README.md#architecture) shows. Re-export after editing:
 
 ```bash
-pip install cairosvg
+pip install cairosvg pillow
 python3 -c "import cairosvg; cairosvg.svg2png(url='docs/architecture.svg', \
   write_to='docs/architecture.png', scale=2, background_color='#F7F5F0')"
+
+# The diagram is flat colour, so a 64 colour palette is indistinguishable from
+# the 24 bit export and about a third of the size. Skip this and the file
+# roughly triples, in a repository every clone pays for.
+python3 -c "from PIL import Image; im=Image.open('docs/architecture.png').convert('RGBA'); \
+  bg=Image.new('RGB', im.size, (247,245,240)); bg.paste(im, mask=im.split()[3]); \
+  bg.quantize(colors=64, dither=Image.NONE).save('docs/architecture.png', optimize=True)"
 ```
