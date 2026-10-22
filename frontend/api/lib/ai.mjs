@@ -224,7 +224,7 @@ export function buildPropertyContext(properties) {
   return `Properties currently listed (${visible.length}):\n${lines.join('\n')}${more}`;
 }
 
-export function systemPrompt(propertyContext, knowledgeContext = null, railContext = null) {
+export function systemPrompt(propertyContext, knowledgeContext = null, railContext = null, recordContext = null) {
   return [
     'You are Aasthi AI, the assistant on AasthiChain — an Indian fractional real-estate',
     'tokenisation platform. Properties are registered, validated by a registrar, then',
@@ -309,12 +309,17 @@ export function systemPrompt(propertyContext, knowledgeContext = null, railConte
     '  Prefer them over anything you remember. Name the document when you use one, like',
     '  "the CBDC design doc says". Never cite a document that is not shown to you, never',
     '  invent a file name, and never quote a figure from memory when a document is present.',
+    '- RECORDS: when the question named a reference (a settlement, a block, a transfer, a',
+    '  grant), the record itself is fetched and shown. Answer from it. If it says no such',
+    '  record exists, say that; never describe a record you were not given.',
     '- LIVE RAIL STATE: figures read from this deployment moments ago. Use them as given.',
     '  Do not recompute, round or extrapolate them, and do not turn an unmeasured thing',
     '  into an estimate.',
     '- If neither source covers the question, say that this is not documented here and',
     '  point at the page or document most likely to help. That is a complete answer. A',
     '  plausible guess is not.',
+    '',
+    recordContext || 'RECORDS: the question named no reference to look up.',
     '',
     railContext || 'LIVE RAIL STATE: not available for this question.',
     '',
@@ -409,7 +414,7 @@ async function askOnce(client, model, wire) {
  * Asks Groq. Returns {status, body} ready to send either way — a failure
  * upstream is reported as a failure here, never as a confident answer.
  */
-export async function askGroq({ messages, propertyContext, knowledgeContext = null, railContext = null }) {
+export async function askGroq({ messages, propertyContext, knowledgeContext = null, railContext = null, recordContext = null }) {
   if (!isConfigured()) {
     return {
       status: 503,
@@ -443,7 +448,7 @@ export async function askGroq({ messages, propertyContext, knowledgeContext = nu
   });
 
   const wire = [
-    { role: 'system', content: systemPrompt(propertyContext, knowledgeContext, railContext) },
+    { role: 'system', content: systemPrompt(propertyContext, knowledgeContext, railContext, recordContext) },
     ...messages.map((m) => ({ role: m.role, content: String(m.content).trim() })),
   ];
 

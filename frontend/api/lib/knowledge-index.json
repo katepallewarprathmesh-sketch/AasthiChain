@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "e32923f77dffbd5045ff109fdabaa5d5ab52a60577fe1b51527d575c58939c94",
+  "sourceDigest": "672f5efd5d1372425b4c51ac0817821b5f25cb64c856e78679d5d6d8b2799957",
   "sections": [
     {
       "doc": "README",
@@ -85,7 +85,13 @@
       "doc": "README",
       "file": "README.md",
       "heading": "An assistant that answers from this project, not from memory",
-      "text": "The assistant on the site is grounded in two things, and neither of them is what a language model\nhappens to recall about blockchains. The first is this project's own documentation: every design\ndocument is indexed and the sections that match a question are put in front of the model as\nwritten, with the document they came from, so an answer can be traced back to a file anyone can\nopen. The matching is plain word scoring rather than an embedding service, which means the same\nquestion retrieves the same passages on every deployment and costs nothing to run.\n\nThe second is the rail as it stands at the moment of asking: how much digital rupee is outstanding,\nwhether supply still conserves, which cross-border corridors refuse payments here and which\nauthorisation each one lacks, and the measured metrics of the trained model with the fact that its\ntraining data was synthetic attached. Those figures are used as given; the model is not allowed to\nrecompute or round them.\n\nWhen neither source covers a question the assistant says it is not documented and points somewhere\nuseful, which is the whole point: it still reads only, still cannot act, and is switched off\nentirely where no key is configured: docs/AI AGENT.md ."
+      "text": "The assistant on the site is grounded in two things, and neither of them is what a language model\nhappens to recall about blockchains. The first is this project's own documentation: every design\ndocument is indexed and the sections that match a question are put in front of the model as\nwritten, with the document they came from, so an answer can be traced back to a file anyone can\nopen. The matching is plain word scoring rather than an embedding service, which means the same\nquestion retrieves the same passages on every deployment and costs nothing to run.\n\nThe second is the rail as it stands at the moment of asking: how much digital rupee is outstanding,\nwhether supply still conserves, which cross-border corridors refuse payments here and which\nauthorisation each one lacks, and the measured metrics of the trained model with the fact that its\ntraining data was synthetic attached. Those figures are used as given; the model is not allowed to\nrecompute or round them."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "An assistant that answers from this project, not from memory (continued)",
+      "text": "It can also now answer about one specific thing. When a question names a reference, a settlement, a\nblock, a conditional payment, a cross-border transfer, that record is fetched and answered from. The\nmodel is not handed a tool to go and get it: the reference is recognised and the record is fetched\nby ordinary code, so naming a settlement can only ever cause a settlement to be read. A reference\nthat matches nothing is reported as matching nothing.\n\nWhen no source covers a question the assistant says it is not documented and points somewhere\nuseful, which is the whole point: it still reads only, still cannot act, and is switched off\nentirely where no key is configured: docs/AI AGENT.md ."
     },
     {
       "doc": "README",
@@ -229,7 +235,13 @@
       "doc": "AI_AGENT",
       "file": "docs/AI_AGENT.md",
       "heading": "Grounding: documents and live state, not recollection (continued)",
-      "text": "The rail as it stands right now. At question time the deployment reads its own rail: how much\ndigital rupee is issued and outstanding, whether the conservation check passes, how many corridors\nare configured, which ones refuse payments here and exactly which authorisation each one lacks, and\nthe measured metrics of the trained risk model together with the fact that its training data was\nsynthetic. These are the rail's own figures. The model is told to use them as given and forbidden to\nrecompute, round or extrapolate them.\n\n When neither covers the question , the prompt says so explicitly and instructs the assistant to\nanswer that it is not documented here and point at the likeliest page. A refusal with a direction is\na complete answer; a plausible guess is not. Retrieval returns nothing at all when the question\nshares too few words with anything written down, which is what keeps an unrelated question from\ndragging in the least irrelevant section available.\n\nNothing about the read-only promise changed: still no tool calls, still no write path, still off\nentirely when no key is set."
+      "text": "The rail as it stands right now. At question time the deployment reads its own rail: how much\ndigital rupee is issued and outstanding, whether the conservation check passes, how many corridors\nare configured, which ones refuse payments here and exactly which authorisation each one lacks, and\nthe measured metrics of the trained risk model together with the fact that its training data was\nsynthetic. These are the rail's own figures. The model is told to use them as given and forbidden to\nrecompute, round or extrapolate them.\n\n When neither covers the question , the prompt says so explicitly and instructs the assistant to\nanswer that it is not documented here and point at the likeliest page. A refusal with a direction is\na complete answer; a plausible guess is not. Retrieval returns nothing at all when the question\nshares too few words with anything written down, which is what keeps an unrelated question from\ndragging in the least irrelevant section available."
+    },
+    {
+      "doc": "AI_AGENT",
+      "file": "docs/AI_AGENT.md",
+      "heading": "Grounding: documents and live state, not recollection (continued)",
+      "text": "A named record, fetched by reference. Summary state answers \"how much is outstanding\"; it does\nnot answer \"what happened in settlement UMI-3F2A9C1B04\", which is the question people actually\narrive with. References in a question are now recognised by pattern (settlement instructions,\ntokenised assets, digital rupee conditions, movements and grants, cross-border transfers, and a\nblock by its height), the matching records are fetched by this code, and the facts go into the\nprompt. The model is given no tool to call: a model that chooses its own endpoint is a model that\ncan be talked into choosing one, and this sits in front of a settlement rail. A settlement id can\nonly ever cause a settlement to be read. At most four references are followed per question, only\npublic records are reachable, and a reference that matches nothing comes back as \"no record exists\nwith that reference\", which the prompt requires be passed on as written.\n\nNothing about the read-only promise changed: still no tool calls, still no write path, still off\nentirely when no key is set."
     },
     {
       "doc": "AI_AGENT",

@@ -97,6 +97,17 @@ a complete answer; a plausible guess is not. Retrieval returns nothing at all wh
 shares too few words with anything written down, which is what keeps an unrelated question from
 dragging in the least irrelevant section available.
 
+**A named record, fetched by reference.** Summary state answers "how much is outstanding"; it does
+not answer "what happened in settlement UMI-3F2A9C1B04", which is the question people actually
+arrive with. References in a question are now recognised by pattern (settlement instructions,
+tokenised assets, digital rupee conditions, movements and grants, cross-border transfers, and a
+block by its height), the matching records are fetched by this code, and the facts go into the
+prompt. The model is given no tool to call: a model that chooses its own endpoint is a model that
+can be talked into choosing one, and this sits in front of a settlement rail. A settlement id can
+only ever cause a settlement to be read. At most four references are followed per question, only
+public records are reachable, and a reference that matches nothing comes back as "no record exists
+with that reference", which the prompt requires be passed on as written.
+
 Nothing about the read-only promise changed: still no tool calls, still no write path, still off
 entirely when no key is set.
 

@@ -281,7 +281,13 @@ authorisation each one lacks, and the measured metrics of the trained model with
 training data was synthetic attached. Those figures are used as given; the model is not allowed to
 recompute or round them.
 
-When neither source covers a question the assistant says it is not documented and points somewhere
+It can also now answer about one specific thing. When a question names a reference, a settlement, a
+block, a conditional payment, a cross-border transfer, that record is fetched and answered from. The
+model is not handed a tool to go and get it: the reference is recognised and the record is fetched
+by ordinary code, so naming a settlement can only ever cause a settlement to be read. A reference
+that matches nothing is reported as matching nothing.
+
+When no source covers a question the assistant says it is not documented and points somewhere
 useful, which is the whole point: it still reads only, still cannot act, and is switched off
 entirely where no key is configured: [`docs/AI_AGENT.md`](docs/AI_AGENT.md).
 

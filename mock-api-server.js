@@ -3564,8 +3564,14 @@ app.post('/api/ai/chat', async (req, res) => {
   // rail that is down costs the live numbers and nothing else.
   const knowledge = await import('./frontend/api/lib/knowledge.mjs');
   const knowledgeContext = knowledge.buildKnowledgeContext(req.body.messages);
-  const railContext = knowledge.buildRailContext(await knowledge.readRail(UMI_GATEWAY_URL));
-  const answer = await ai.askGroq({ messages: req.body.messages, propertyContext: context, knowledgeContext, railContext });
+  const [railState, recordContext] = await Promise.all([
+    knowledge.readRail(UMI_GATEWAY_URL),
+    knowledge.lookupRecords(req.body.messages, UMI_GATEWAY_URL),
+  ]);
+  const railContext = knowledge.buildRailContext(railState);
+  const answer = await ai.askGroq({
+    messages: req.body.messages, propertyContext: context, knowledgeContext, railContext, recordContext,
+  });
   res.status(answer.status).json(answer.body);
 });
 

@@ -24,6 +24,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   retrieve, buildKnowledgeContext, buildRailContext, readRail, tokenise, loadIndex,
+  identifiersIn, lookupRecords,
 } from '../frontend/api/lib/knowledge.mjs';
 import { systemPrompt } from '../frontend/api/lib/ai.mjs';
 
@@ -145,7 +146,58 @@ async function main() {
       chat.status === 503 && body.error === 'ERR_AI_NOT_CONFIGURED', `${chat.status} ${body.error}`);
   }
 
-  // 10. Grounding must not have loosened the read-only promise.
+  // 10. Looking a named record up, which is the question people actually ask.
+  ok('a reference in the question is recognised',
+    JSON.stringify(identifiersIn('what happened in settlement UMI-3F2A9C1B04 and in block 5?'))
+      === JSON.stringify([{ kind: 'instruction', id: 'UMI-3F2A9C1B04' }, { kind: 'block', id: '5' }]),
+    JSON.stringify(identifiersIn('what happened in settlement UMI-3F2A9C1B04 and in block 5?')));
+  ok('a question with no reference looks nothing up',
+    identifiersIn('how does settlement work here').length === 0);
+  ok('a question stuffed with references is capped',
+    identifiersIn(Array.from({ length: 12 }, (_, i) => `UMI-ABCDEF01${i}0`).join(' ')).length <= 4);
+
+  ok('an unknown reference is reported as unknown, not invented',
+    /No settlement instruction exists with the reference UMI-DEADBEEF99/.test(
+      String(await lookupRecords([{ role: 'user', content: 'what happened in UMI-DEADBEEF99' }], RAIL))));
+
+  // A real record: open one on the rail and ask for it back by reference.
+  const post = (path, body, id = 'investor1', role = 'Investor') => fetch(RAIL + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Fabric-Identity': id, 'X-Identity-Role': role },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+
+  await post('/umi/cbdc/issue', { holder: 'investor1', amountPaise: 900000, kycTier: 'FULL_KYC' }, 'regulator1', 'Regulator');
+  const opened = await post('/umi/cbdc/conditions', {
+    payer: 'investor1', payee: 'originator1', amountPaise: 150000,
+    eventType: 'FLIGHT_CANCELLED', eventKey: 'TEST-KNOWLEDGE', attestor: 'registrar1', deadlineHours: 24,
+  });
+  const conditionId = opened && opened.condition && opened.condition.conditionId;
+  if (!conditionId) {
+    ok('a conditional payment could be opened to look up', false, JSON.stringify(opened).slice(0, 160));
+  } else {
+    const found = String(await lookupRecords([{ role: 'user', content: `what happened in ${conditionId}` }], RAIL));
+    ok('a real reference returns the record itself', found.includes(conditionId), found.slice(0, 160));
+    ok('the record states who may release it and by when',
+      /registrar1 attests FLIGHT_CANCELLED/.test(found) && /returns to the payer/.test(found));
+    ok('the amount comes from the rail, not from arithmetic', found.includes('₹1,500'), found.slice(0, 200));
+  }
+
+  const blockLook = String(await lookupRecords([{ role: 'user', content: 'what is in block 5' }], RAIL));
+  ok('a block can be looked up by height', /Block 5, type /.test(blockLook), blockLook.slice(0, 140));
+  const noBlock = String(await lookupRecords([{ role: 'user', content: 'what is in block 999999' }], RAIL));
+  ok('a block that does not exist says so', /no block 999999/.test(noBlock), noBlock.slice(0, 140));
+
+  ok('the lookup layer is pattern driven, not a tool the model can steer',
+    /are recognised here, by pattern/i.test(
+      readFileSync(new URL('frontend/api/lib/knowledge.mjs', root), 'utf8').replace(/\s+/g, ' ')));
+  const withRecords = systemPrompt('Properties: none.', null, null, blockLook).replace(/\s+/g, ' ');
+  ok('the prompt forbids describing a record it was not given',
+    /never describe a record you were not given/i.test(withRecords));
+  ok('with no reference the prompt says none was named',
+    /RECORDS: the question named no reference/i.test(systemPrompt('x', null, null, null)));
+
+  // 11. Grounding must not have loosened the read-only promise.
   const ai = readFileSync(new URL('frontend/api/lib/ai.mjs', root), 'utf8');
   ok('the assistant still has no tools and cannot act',
     !/tool_choice|tools:\s*\[/.test(ai) && /It reads\. It never acts/.test(ai));
