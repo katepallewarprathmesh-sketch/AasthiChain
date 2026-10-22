@@ -11,6 +11,7 @@ import {
   Num, Mono, InfoTip, inr, inrShort,
 } from '../components/ui.jsx'
 import { propertyImage, REPRESENTATIVE_NOTE } from '../lib/propertyImages.js'
+import { registryStatus } from '../lib/registryStatus.js'
 
 
 // Address check result, shown as it is. A listing whose pincode the India Post
@@ -243,6 +244,7 @@ export default function PropertyDetail({ user }) {
   }
 
   const heroImage = propertyImage(property)
+  const reg = registryStatus(property)
 
   return (
     <main className="ax ax-wrap" style={{ maxWidth: 1120, paddingTop: 24, paddingBottom: 64 }}>
@@ -275,7 +277,8 @@ export default function PropertyDetail({ user }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             {property.status === 'TOKENIZED'
               ? <Badge tone="success">Available</Badge>
-              : <Badge tone="warning">{property.registrarValidationStatus || property.status || 'Not yet available'}</Badge>}
+              : <Badge tone="pending">{property.status || 'Not yet available'}</Badge>}
+            <Badge tone={reg.tone}>{reg.label}</Badge>
             {verif && (verif.verified ? <Badge tone="success">Checks passed</Badge> : <Badge tone="warning">Checks need attention</Badge>)}
           </div>
           <h1 className="ax-display ax-h2" style={{ fontSize: 'clamp(24px, 3vw, 32px)' }}>{property.title}</h1>

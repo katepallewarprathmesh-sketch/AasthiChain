@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "5351794fea00aaef7e72b1ec57315045f4c670d34c0146fbd2fd4709e8ed9cc5",
+  "sourceDigest": "9708918219498381f1ab84335c7aafba8b3c33901c164298709d287311fe9c58",
   "sections": [
     {
       "doc": "README",
@@ -1201,7 +1201,7 @@
       "doc": "TESTING",
       "file": "docs/TESTING.md",
       "heading": "What each command actually covers",
-      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 100 in tests/ \n Reported result 145 passed, 0 failed \n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant.\n\n tests/outcome.test.mjs covers outcome-based settlement on the work desk: criteria that\ncannot be edited after the engagement opens, a verifier who is neither party, verification\nthat does not move money by itself, a dispute window that only the clock or the funder can\nshorten, and a failed check that freezes the escrow instead of paying it out. It uses a one\nsecond window so the timing path is actually exercised rather than asserted."
+      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 100 in tests/ \n Reported result 146 passed, 0 failed \n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant.\n\n tests/outcome.test.mjs covers outcome-based settlement on the work desk: criteria that\ncannot be edited after the engagement opens, a verifier who is neither party, verification\nthat does not move money by itself, a dispute window that only the clock or the funder can\nshorten, and a failed check that freezes the escrow instead of paying it out. It uses a one\nsecond window so the timing path is actually exercised rather than asserted."
     },
     {
       "doc": "TESTING",

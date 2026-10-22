@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { propertyImage, REPRESENTATIVE_NOTE } from '../lib/propertyImages.js'
+import { registryStatus } from '../lib/registryStatus.js'
 
 /**
  * The AasthiChain design system, as components.
@@ -385,7 +386,7 @@ export function PropertyCard({ p, href }) {
   const price = Number(p.pricePerTokenINR) || (p.totalTokens ? Number(p.valuationINR) / Number(p.totalTokens) : 0)
   const available = Number(p.availableTokens ?? p.tokensAvailable ?? NaN)
   const funded = Number(p.fundedPct)
-  const verified = p.verified === true || p.verificationStatus === 'VERIFIED' || p.registryVerified === true
+  const reg = registryStatus(p)
   const img = propertyImage(p)
   const to = href || `/property/${encodeURIComponent(p.assetId)}`
   return (
@@ -394,9 +395,7 @@ export function PropertyCard({ p, href }) {
         {img.src
           ? <img src={img.src} alt={img.isRepresentative ? '' : `${p.title || p.assetId}`} loading="lazy" />
           : <ArchPlaceholder seed={p.assetId} label={`Illustration for ${p.title || p.assetId}`} />}
-        {verified
-          ? <Badge tone="success">Registrar verified</Badge>
-          : <Badge tone="warning">Verification pending</Badge>}
+        <Badge tone={reg.tone} title={reg.at ? `Validated ${new Date(reg.at).toLocaleDateString('en-IN')}` : undefined}>{reg.label}</Badge>
         {/* The picture is generic unless the owner supplied one. Saying so on
             the image itself is the only place a reader will reliably see it. */}
         {img.isRepresentative && (
