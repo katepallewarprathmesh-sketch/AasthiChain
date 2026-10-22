@@ -264,8 +264,19 @@ type CorridorCheck struct {
 }
 
 // Check runs the gate without moving anything.
-func (d *CorridorDesk) Check(corridorID string, amountPaise int64, purpose, payer string, now time.Time) (CorridorCheck, error) {
+// timer starts a per-path measurement (see pathspeed.go).
+func (d *CorridorDesk) timer(name string) *pathTimer {
+	if d == nil || d.rail == nil {
+		return nil
+	}
+	return d.rail.speed.begin(name)
+}
+
+func (d *CorridorDesk) Check(corridorID string, amountPaise int64, purpose, payer string, now time.Time) (_res CorridorCheck, err error) {
+	spd := d.timer("corridor.check")
+	defer func() { spd.done(err == nil) }()
 	d.mu.Lock()
+	spd.locked()
 	defer d.mu.Unlock()
 	return d.checkLocked(corridorID, amountPaise, purpose, payer, now)
 }
@@ -373,8 +384,11 @@ type SendRequest struct {
 
 // Send puts a payment on a corridor. What happens next depends entirely on
 // the settlement model, which is the point of the whole file.
-func (d *CorridorDesk) Send(req SendRequest, now time.Time) (*CorridorTransfer, error) {
+func (d *CorridorDesk) Send(req SendRequest, now time.Time) (_tr *CorridorTransfer, err error) {
+	spd := d.timer("corridor.send")
+	defer func() { spd.done(err == nil) }()
 	d.mu.Lock()
+	spd.locked()
 	defer d.mu.Unlock()
 
 	chk, err := d.checkLocked(req.CorridorID, req.AmountPaise, req.PurposeCode, req.Payer, now)
@@ -526,8 +540,11 @@ func (d *CorridorDesk) refuseLocked(c Corridor, req SendRequest, reason, detail 
 // Claim completes a hash time-locked transfer by revealing the secret. The
 // preimage is checked, not taken on trust: this is the mechanism that makes a
 // two-ledger swap atomic without anybody holding both sides.
-func (d *CorridorDesk) Claim(transferID, secret string, now time.Time) (*CorridorTransfer, error) {
+func (d *CorridorDesk) Claim(transferID, secret string, now time.Time) (_tr *CorridorTransfer, err error) {
+	spd := d.timer("corridor.claim")
+	defer func() { spd.done(err == nil) }()
 	d.mu.Lock()
+	spd.locked()
 	defer d.mu.Unlock()
 
 	t, ok := d.transfers[strings.TrimSpace(transferID)]
@@ -573,8 +590,11 @@ func (d *CorridorDesk) Claim(transferID, secret string, now time.Time) (*Corrido
 
 // ConfirmLeg is the far institution reporting that its side completed. Only
 // then does a deferred corridor become financially final.
-func (d *CorridorDesk) ConfirmLeg(transferID, attestor string, now time.Time) (*CorridorTransfer, error) {
+func (d *CorridorDesk) ConfirmLeg(transferID, attestor string, now time.Time) (_tr *CorridorTransfer, err error) {
+	spd := d.timer("corridor.confirm")
+	defer func() { spd.done(err == nil) }()
 	d.mu.Lock()
+	spd.locked()
 	defer d.mu.Unlock()
 
 	t, ok := d.transfers[strings.TrimSpace(transferID)]

@@ -376,6 +376,13 @@ type UMIRail struct {
 	// Separate from the HTTP metrics because the question a reviewer asks
 	// about a settlement engine is not how long a request took.
 	engine *engineStats
+
+	// speed measures the other money paths: CBDC movements, corridor sends,
+	// instrument conversions (see pathspeed.go). The engine figure describes
+	// DvP and nothing else, so quoting it for these would be quoting a
+	// measurement of different work. Shared here because the CBDC ledger and
+	// the corridor desk both hold a rail.
+	speed *speedBook
 }
 
 // ServicingRecord is one holder's share of one servicing run — the row an
@@ -409,6 +416,7 @@ func NewUMIRail(sec SecuritiesLedger, chain *DrunixChain) *UMIRail {
 		assets:        make(map[string]*AssetProfile),
 		retired:       make(map[string]int64),
 		engine:        newEngineStats(),
+		speed:         newSpeedBook(),
 		isins:         make(map[string]*PilotISIN),
 		instructions:  make(map[string]*SettlementInstruction),
 		baskets:       make(map[string]*Basket),

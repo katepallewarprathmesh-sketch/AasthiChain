@@ -319,7 +319,17 @@ func (d *CBDCInteropDesk) RecordSchemeSettlement(paymentID, by string, now time.
 
 // Convert swaps a tokenised deposit for central bank money or back. One
 // operation, because two would be a window in which the total is wrong.
-func (d *CBDCInteropDesk) Convert(holder, direction string, amountPaise int64, by string) (map[string]interface{}, error) {
+// timer starts a per-path measurement (see pathspeed.go).
+func (d *CBDCInteropDesk) timer(name string) *pathTimer {
+	if d == nil || d.cbdc == nil {
+		return nil
+	}
+	return d.cbdc.timer(name)
+}
+
+func (d *CBDCInteropDesk) Convert(holder, direction string, amountPaise int64, by string) (_out map[string]interface{}, err error) {
+	spd := d.timer("interop.convert")
+	defer func() { spd.done(err == nil) }()
 	holder = strings.TrimSpace(holder)
 	direction = strings.ToUpper(strings.TrimSpace(direction))
 	if holder == "" || amountPaise <= 0 {
@@ -329,6 +339,7 @@ func (d *CBDCInteropDesk) Convert(holder, direction string, amountPaise int64, b
 	switch direction {
 	case "DEPOSIT_TO_E_RUPEE":
 		d.mu.Lock()
+		spd.locked()
 		if d.deposits[holder] < amountPaise {
 			have := d.deposits[holder]
 			d.mu.Unlock()

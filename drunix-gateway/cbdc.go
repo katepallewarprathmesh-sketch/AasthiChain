@@ -347,6 +347,15 @@ func cbdcID(prefix string) string {
 // was then refused for exceeding a ten thousand rupee holding cap that has no
 // business applying to a settlement account. Infrastructure holders are
 // wholesale, which capsFor already treats as uncapped.
+// timer starts a per-path measurement (see pathspeed.go). Nil-safe at every
+// level, so a ledger built without a rail measures nothing and costs nothing.
+func (l *CBDCLedger) timer(name string) *pathTimer {
+	if l == nil || l.rail == nil {
+		return nil
+	}
+	return l.rail.speed.begin(name)
+}
+
 func (l *CBDCLedger) walletLocked(holder, segment, tier string) *CBDCAccount {
 	holder = strings.TrimSpace(holder)
 	infrastructure := strings.HasPrefix(holder, "suspense:")
@@ -412,11 +421,14 @@ func capsFor(w *CBDCAccount) (balanceCap, transferCap int64) {
 // Issue creates central bank money into a wallet. `fundedByBankRail` records
 // the honest case: the holder's bank has been debited over a rail that has not
 // settled yet, so the ledger entry is final and the funding is not.
-func (l *CBDCLedger) Issue(holder, segment, tier string, amountPaise int64, fundedByBankRail bool, by string) (*CBDCAccount, *CBDCMovement, error) {
+func (l *CBDCLedger) Issue(holder, segment, tier string, amountPaise int64, fundedByBankRail bool, by string) (_acct *CBDCAccount, _mv *CBDCMovement, err error) {
+	spd := l.timer("cbdc.issue")
+	defer func() { spd.done(err == nil) }()
 	if strings.TrimSpace(holder) == "" || amountPaise <= 0 {
 		return nil, nil, fmt.Errorf("%w: holder and a positive amount in paise are required", ErrCBDCFields)
 	}
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	w := l.walletLocked(holder, segment, tier)
@@ -457,8 +469,11 @@ func fundingLabel(bankRail bool) string {
 
 // Redeem destroys money back to the issuer. Supply falls: the same arithmetic
 // in reverse, so the conservation check still balances.
-func (l *CBDCLedger) Redeem(holder string, amountPaise int64, by string) (*CBDCAccount, *CBDCMovement, error) {
+func (l *CBDCLedger) Redeem(holder string, amountPaise int64, by string) (_acct *CBDCAccount, _mv *CBDCMovement, err error) {
+	spd := l.timer("cbdc.redeem")
+	defer func() { spd.done(err == nil) }()
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 	w, ok := l.wallets[strings.TrimSpace(holder)]
 	if !ok {
@@ -487,8 +502,11 @@ func (l *CBDCLedger) Redeem(holder string, amountPaise int64, by string) (*CBDCA
 /* ---------------------------------------------------------------- transfer */
 
 // Transfer moves money between wallets, screened on the way through.
-func (l *CBDCLedger) Transfer(from, to string, amountPaise int64) (*CBDCMovement, error) {
+func (l *CBDCLedger) Transfer(from, to string, amountPaise int64) (_mv *CBDCMovement, err error) {
+	spd := l.timer("cbdc.transfer")
+	defer func() { spd.done(err == nil) }()
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 	return l.transferLocked(from, to, amountPaise, "TRANSFER", "ONLINE", nil)
 }
@@ -609,11 +627,14 @@ func (l *CBDCLedger) recordLocked(m CBDCMovement) *CBDCMovement {
 // Grant issues purpose-bound money to a beneficiary. The money is real money
 // in the beneficiary's wallet; what the grant adds is a condition the rail
 // enforces at the point of spending.
-func (l *CBDCLedger) Grant(sponsor, beneficiary string, amountPaise int64, cond ProgramCondition) (*CBDCGrant, error) {
+func (l *CBDCLedger) Grant(sponsor, beneficiary string, amountPaise int64, cond ProgramCondition) (_g *CBDCGrant, err error) {
+	spd := l.timer("cbdc.grant")
+	defer func() { spd.done(err == nil) }()
 	if strings.TrimSpace(cond.Purpose) == "" {
 		return nil, fmt.Errorf("%w: purpose-bound money needs a stated purpose", ErrCBDCFields)
 	}
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	if _, err := l.transferLocked(sponsor, beneficiary, amountPaise, "GRANT", "ONLINE", map[string]interface{}{
@@ -641,8 +662,11 @@ func (l *CBDCLedger) Grant(sponsor, beneficiary string, amountPaise int64, cond 
 
 // Spend draws against a grant at a merchant. Every condition is checked before
 // anything moves, and a failure is written to the chain with the reason.
-func (l *CBDCLedger) Spend(grantID string, ctx SpendContext, now time.Time) (*CBDCGrant, *CBDCMovement, error) {
+func (l *CBDCLedger) Spend(grantID string, ctx SpendContext, now time.Time) (_g *CBDCGrant, _mv *CBDCMovement, err error) {
+	spd := l.timer("cbdc.spend")
+	defer func() { spd.done(err == nil) }()
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	g, ok := l.grants[strings.TrimSpace(grantID)]
@@ -715,7 +739,9 @@ func (l *CBDCLedger) Spend(grantID string, ctx SpendContext, now time.Time) (*CB
 // the holder can spend with no connectivity. The reservation is the whole
 // trick: the money is already gone from the online balance, so an offline
 // spend cannot create money, only move money that was set aside.
-func (l *CBDCLedger) IssueOffline(holder, device string, amountPaise int64, now time.Time) (*OfflineVoucher, error) {
+func (l *CBDCLedger) IssueOffline(holder, device string, amountPaise int64, now time.Time) (_v *OfflineVoucher, err error) {
+	spd := l.timer("cbdc.offlineIssue")
+	defer func() { spd.done(err == nil) }()
 	if strings.TrimSpace(device) == "" {
 		return nil, fmt.Errorf("%w: a device identifier is required, because the voucher is bound to it", ErrCBDCFields)
 	}
@@ -724,6 +750,7 @@ func (l *CBDCLedger) IssueOffline(holder, device string, amountPaise int64, now 
 			"double spend can cost", ErrCBDCOfflineCap, rupees(offlineVoucherCapPaise))
 	}
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	w, ok := l.wallets[strings.TrimSpace(holder)]
@@ -779,8 +806,11 @@ func (l *CBDCLedger) signVoucher(v *OfflineVoucher) string {
 // Three ways this fails and all of them are detected rather than assumed away:
 // a forged signature, an expired voucher, and the same voucher presented
 // twice.
-func (l *CBDCLedger) RedeemOffline(v OfflineVoucher, payee string, now time.Time) (*CBDCMovement, error) {
+func (l *CBDCLedger) RedeemOffline(v OfflineVoucher, payee string, now time.Time) (_mv *CBDCMovement, err error) {
+	spd := l.timer("cbdc.offlineRedeem")
+	defer func() { spd.done(err == nil) }()
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	held, ok := l.vouchers[strings.TrimSpace(v.VoucherID)]
@@ -846,11 +876,14 @@ func (l *CBDCLedger) RedeemOffline(v OfflineVoucher, payee string, now time.Time
 // OpenCondition locks money against an event. The cancelled flight and the
 // refund that pays itself: nobody files a claim, because the rule was written
 // when the money went in.
-func (l *CBDCLedger) OpenCondition(payer, payee string, amountPaise int64, eventType, eventKey, attestor string, deadline time.Time) (*CBDCCondition, error) {
+func (l *CBDCLedger) OpenCondition(payer, payee string, amountPaise int64, eventType, eventKey, attestor string, deadline time.Time) (_c *CBDCCondition, err error) {
+	spd := l.timer("cbdc.openCondition")
+	defer func() { spd.done(err == nil) }()
 	if strings.TrimSpace(eventType) == "" || strings.TrimSpace(eventKey) == "" || strings.TrimSpace(attestor) == "" {
 		return nil, fmt.Errorf("%w: an event type, a key and the party trusted to attest it are required", ErrCBDCFields)
 	}
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	w, ok := l.wallets[strings.TrimSpace(payer)]
@@ -886,8 +919,11 @@ func (l *CBDCLedger) OpenCondition(payer, payee string, amountPaise int64, event
 // Every open condition waiting on that event pays immediately. Only the party
 // named at the time the money was locked can attest it, which is the whole
 // security model and is checked rather than assumed.
-func (l *CBDCLedger) SubmitEvent(attestor, eventType, eventKey string, now time.Time) ([]*CBDCCondition, error) {
+func (l *CBDCLedger) SubmitEvent(attestor, eventType, eventKey string, now time.Time) (_rel []*CBDCCondition, err error) {
+	spd := l.timer("cbdc.submitEvent")
+	defer func() { spd.done(err == nil) }()
 	l.mu.Lock()
+	spd.locked()
 	defer l.mu.Unlock()
 
 	eventType = strings.ToUpper(strings.TrimSpace(eventType))

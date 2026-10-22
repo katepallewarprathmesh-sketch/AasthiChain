@@ -357,7 +357,14 @@ serial one because the box has two cores, so at most two things were ever really
 not evidence the design scales, only that there was not enough parallelism available to find out.
 And the lock wait is zero because nothing ever queued, which means under that load the engine was
 not the constraint. The live page shows what this process has actually served, and says "nothing
-measured yet" when it has served nothing: [`docs/THROUGHPUT.md`](docs/THROUGHPUT.md).
+measured yet" when it has served nothing.
+
+That figure describes delivery versus payment and nothing else, so the other money paths are now
+timed separately rather than borrowing it. A corridor eligibility check costs about 400
+nanoseconds because it deliberately moves nothing; creating central bank money about 21,000; a
+digital rupee transfer about 46,000, which is more than a settlement because it runs a screening
+pass and screening is the expensive part. Completions and refusals are counted apart, since a
+refusal returns before the work it refused: [`docs/THROUGHPUT.md`](docs/THROUGHPUT.md).
 
 ## Screening that is a list, a case and a report
 
@@ -503,7 +510,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 146 checks across 101 suite files
+make test         # the full sweep: 147 checks across 102 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

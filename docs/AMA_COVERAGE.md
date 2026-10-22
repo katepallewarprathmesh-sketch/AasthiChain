@@ -3,7 +3,7 @@
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
 "partial" always says what is missing. The keyword list splits into 25 rows
-because several keywords carry more than one item: 17 are done, 7 are partial,
+because several keywords carry more than one item: 18 are done, 6 are partial,
 none is untouched, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
@@ -17,7 +17,7 @@ none is untouched, and 1 was a question rather than a feature.
 | 6 | Law of the land | partial | Disclaimers throughout, FEMA and nationality refusals in `crossborder.go`, PA-CB and finality notes in `docs/CBDC.md` | The statutory basis is described in prose but not modelled: no designation state, no per-jurisdiction rule set that a transaction is actually tested against. |
 | 7 | Risk management | done | `fraud.go` rules, the trained model, KYC caps, offline caps, supply conservation, backing gate | Decisions stay with the published rules; the model is advisory. |
 | 8 | Blockchain as the main hero | partial | `cbdc.go` puts the money itself on the ledger; grants, vouchers, conditions and refusals are all blocks | Large parts of the system still treat the chain as a record: listings, documents, work orders and the marketplace keep their state in Go maps and write blocks about it. Making those state transitions chain-first is the real version of this item. |
-| 9 | Speed of the transaction | partial | `throughput.go`, the live panel on the settlement page, and the published figures in `README.md` and `docs/THROUGHPUT.md` | The measured engine and HTTP figures are now published where a reader lands, with the two-core caveat attached. Still no measurement of the CBDC or corridor paths specifically. |
+| 9 | Speed of the transaction | done | `throughput.go` and `/umi/throughput` for DvP; `pathspeed.go` and `/umi/pathspeed` for the CBDC, corridor and conversion paths; the live panel on the settlement page; figures in `README.md` and `docs/THROUGHPUT.md` | Every money path is now timed where the work happens, with completions and refusals counted apart, lock wait reported beside the latency, and the work each path does stated next to its figure. A path with no traffic reports nothing rather than zero. The two-core caveat is attached to every published number. |
 | 10 | Smooth end-user experience (flight cancelled, insurer refunds) | done | `OpenCondition`, `SubmitEvent`, automatic refund with no claim, shown on the digital rupee page at `/cbdc` | A person can now see money locked against a named event, who is trusted to attest it, the deadline, and the refund once it releases. The page also opens conditions, attests events, issues and spends purpose-bound money, carries value offline and sends across a corridor, so the behaviour can be tried rather than read about. |
 | 11 | Contracts that release on time when rules are fulfilled | done | `OpenCondition` / `SubmitEvent` / `SweepConditions`, plus the escrow in `work.go` and outcome settlement | Release is automatic on attestation and refund is automatic at the deadline. |
 | 12 | Off chain to on chain | partial | Document and deed hashes anchored, the ledger head anchored to Solana, attested events bringing outside facts in | No general oracle: each bridge is hand-wired, and there is no signed-feed abstraction with its own trust and staleness rules. |
@@ -37,10 +37,10 @@ none is untouched, and 1 was a question rather than a feature.
 ## The honest summary
 
 The CBDC half and the cross-border half are both built now, and every keyword
-raised has code behind it. What is left is depth rather than absence: the open
-partials are the speed of the CBDC and corridor paths specifically
-(the settlement engine is measured and published), and the older modules that
-still keep state in Go maps while writing blocks about it.
+raised has code behind it. What is left is depth rather than absence. Speed is
+now measured per path rather than only for DvP, so the remaining partials are
+led by the older modules that still keep their state in Go maps while writing
+blocks about it (items 8 and 20), which is the one that would take real work.
 
 ## Why not Solidity, and why not Python
 

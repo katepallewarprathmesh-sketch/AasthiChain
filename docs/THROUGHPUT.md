@@ -64,6 +64,52 @@ about 5,700/sec live. The difference is the rest of the handler, the JSON, and
 a container under other load. The lower number is the more useful one, and
 neither is a production figure.
 
+## The other money paths
+
+The figures above describe DvP settlement and nothing else. A CBDC transfer,
+a programmable-money spend and a corridor send do different work, take
+different locks and cost different amounts, so quoting the DvP number for
+them would be quoting a measurement of something else. That gap was listed as
+an open item and this closes it.
+
+`GET /umi/pathspeed` reports the same shape per path: calls, completed,
+refused, latency percentiles, lock wait, and a line saying what work the path
+actually does. Refusals are counted and timed apart from completions, because
+a refusal returns before the work it refused and folding the two together
+would flatter the average. A path with no traffic is omitted rather than
+reported as zero.
+
+The synthetic companion, on the same 2 vCPU container, median of three runs at
+`-benchtime 3000x`:
+
+| Benchmark | ns/op | Derived | What it does |
+|---|---|---|---|
+| `BenchmarkCorridorCheck` | 377 | about 2,650,000/sec | Licences, caps, Travel Rule and monthly usage. Moves nothing. |
+| `BenchmarkCBDCIssue` | 20,866 | about 47,900/sec | Cap check, balance, supply counter, one block. |
+| `BenchmarkSettleDvP` | 33,024 | about 30,200/sec | Both legs plus the block, under one lock. |
+| `BenchmarkCBDCTransfer` | 46,238 | about 21,600/sec | AML screen, caps, both balances, one block. |
+
+Two things in that table are worth reading rather than skimming.
+
+A CBDC transfer costs more than a DvP settlement. That looks wrong until you
+look at the work: the transfer runs an AML screen, and the screen is the
+expensive part, not the money movement. Screening is not optional and the cost
+belongs in the figure.
+
+A corridor check is roughly a hundred times cheaper than anything that moves
+money, because it deliberately moves nothing. It is the pricing and
+eligibility pass. Quoting it as "corridor speed" would be the dishonest
+version of this table.
+
+The transfer benchmark rotates payers. The AML velocity rule blocks a payer
+after eight payments in ten minutes, which is correct behaviour, and a
+benchmark that tripped it would be timing the refusal path while claiming to
+time the transfer path.
+
+Run them:
+
+    cd drunix-gateway && go test -run XXX -bench "BenchmarkCBDC|BenchmarkCorridor" -benchtime 3000x -count=3
+
 ## What these numbers are not
 
 - **Not end to end.** They measure the settlement engine. They exclude the HTTP
@@ -95,7 +141,10 @@ a capability, and the panel in the UI says so.
 
 ## Where to look
 
-- `drunix-gateway/throughput.go`: the instrumentation and the report.
+- `drunix-gateway/throughput.go`: the DvP instrumentation and report.
+- `drunix-gateway/pathspeed.go`: the per-path instrumentation and report.
+- `drunix-gateway/pathspeed_test.go`: the per-path tests and benchmarks.
+- `GET /umi/pathspeed`: the live per-path figures.
 - `drunix-gateway/throughput_test.go`: the tests and both benchmarks.
 - `GET /umi/throughput`: the live figures.
 - Card 10 on `/umi`: the same figures with the caveats attached.
