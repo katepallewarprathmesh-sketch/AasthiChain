@@ -85,6 +85,26 @@ async function main() {
     (again.body.drafted || []).every((p) => p.subject !== conditionId),
     JSON.stringify((again.body.drafted || []).map((p) => p.subject)));
 
+  // 3c. Staleness, deterministically. The proposal above is about a
+  // conditional payment; release that payment and the reason for the
+  // proposal is gone. Approving it afterwards must perform nothing. This
+  // scenario exists because a planted defect that removed the freshness
+  // check broke no test: the suite accepted either outcome.
+  if (drafted) {
+    const key = cond.body.condition.eventKey;
+    const released = await post('/cbdc/events', 'registrar1', 'Registrar', { eventType: 'DELIVERY', eventKey: key });
+    ok('the condition can be released by its attestor', released.status === 200 || released.status === 201,
+      `${released.status} ${JSON.stringify(released.body).slice(0, 120)}`);
+    const late = await post(`/proposals/${drafted.proposalId}/approve`, 'regulator1', 'Regulator', { note: 'late' });
+    ok('approving a proposal whose situation resolved is refused as stale',
+      late.status === 409 && late.body.error === 'ERR_UMI_AGENT_STALE', `${late.status} ${late.body.error}`);
+    ok('the staleness says what changed',
+      /no longer needs anybody|released|refunded/i.test(String(late.body.message)), String(late.body.message).slice(0, 160));
+    const after = await get(`/proposals/${drafted.proposalId}`);
+    ok('and the proposal is recorded as stale, not approved',
+      after.body?.proposal?.status === 'STALE', String(after.body?.proposal?.status));
+  }
+
   // 4. The queue is public, because a queue only its operator can see is a
   // queue nobody can hold to account.
   const queue = await get('/proposals', 'investor1', 'Investor');

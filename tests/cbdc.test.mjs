@@ -193,6 +193,38 @@ const run = async () => {
   const proxied = await call(BASE, '/api/umi/cbdc');
   ok('the app proxies the CBDC status', proxied.status === 200 && !!proxied.body.policy);
 
+  // Transfer and redemption, which the rail action coverage tool reported as
+  // declared but never exercised by any suite: the conservation identity was
+  // being checked without either of the paths that can break it.
+  const sender = 'cov-sender-' + Date.now();
+  const receiver = 'cov-receiver-' + Date.now();
+  await post('/umi/cbdc/issue', 'regulator1', 'Regulator', {
+    holder: sender, amountPaise: 500000, kycTier: 'FULL_KYC', segment: 'RETAIL',
+  });
+  const moved = await post('/umi/cbdc/transfer', sender, 'Investor', {
+    from: sender, to: receiver, amountPaise: 200000,
+  });
+  ok('money moves between two wallets', moved.status === 201 || moved.status === 200,
+    `${moved.status} ${JSON.stringify(moved.body).slice(0, 140)}`);
+  const recvd = await rail(`/umi/cbdc/accounts/${receiver}`, { headers: headers('regulator1', 'Regulator') });
+  ok('the receiving wallet holds exactly what was sent',
+    recvd.body?.account?.balancePaise === 200000, JSON.stringify(recvd.body?.account || {}).slice(0, 120));
+
+  const notMine = await post('/umi/cbdc/transfer', 'investor2', 'Investor', {
+    from: sender, to: receiver, amountPaise: 1000,
+  });
+  ok('somebody else cannot move your money', notMine.status === 403, String(notMine.status));
+
+  const redeemed = await post('/umi/cbdc/redeem', 'regulator1', 'Regulator', {
+    holder: receiver, amountPaise: 50000,
+  });
+  ok('money can be redeemed back out of circulation', redeemed.status === 201 || redeemed.status === 200,
+    `${redeemed.status} ${JSON.stringify(redeemed.body).slice(0, 140)}`);
+  const afterRedeem = await rail('/umi/cbdc', { headers: headers('investor1', 'Investor') });
+  ok('and the conservation identity still holds across both paths',
+    afterRedeem.body?.conservation?.conserved === true,
+    JSON.stringify(afterRedeem.body?.conservation || {}).slice(0, 140));
+
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
 };

@@ -305,6 +305,29 @@ short list of things an approval can cause is published by the system rather tha
 documentation. It cannot create or move money, cannot close a compliance case, cannot attest to
 anything, and cannot approve its own work: [`docs/AI_AGENT.md`](docs/AI_AGENT.md).
 
+## How much of this is actually tested
+
+A pass count is not a coverage figure. Ninety-nine suites passing says nothing about how much of
+the settlement rail they reach, so there is a tool that measures it: it maps every action the rail
+exposes, replays each suite against that map without running anything, and marks each action as
+certainly covered, possibly covered, or reached by nothing. Same commit, same number, on any
+machine.
+
+The current answer is **58.1% of 86 actions certainly covered**, with another 18.6% possible and
+the rest untouched. That figure is published because it is unflattering and because a number
+nobody recomputes is a claim rather than a measurement: a check in the suite fails if the published
+figure drifts from the measured one, or if coverage falls.
+
+It paid for itself on the first run by showing that moving and redeeming digital rupees were
+exercised by nothing at all, while the identity those two paths can break was being asserted
+confidently. There is also a small harness that plants realistic defects, a threshold nudged out
+of reach, a guard dropped, to check the suite notices. Four of five were caught; the fifth was not,
+and chasing it turned up a real hole in the approval logic as well as in the tests. Both are fixed:
+[`docs/TESTING.md`](docs/TESTING.md).
+
+The approach is lifted from Scapia's write-up of their Argus test lab, which published its own
+uncomfortable coverage numbers rather than its pass rate.
+
 ## How fast, measured rather than claimed
 
 On the two-core container used for development, settlement runs at about **37,900 nanoseconds of
@@ -463,7 +486,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 143 checks across 98 suite files
+make test         # the full sweep: 144 checks across 99 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

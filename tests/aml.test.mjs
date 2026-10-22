@@ -90,6 +90,10 @@ async function main() {
   ok('the case records the screening that caused it',
     !!caseId && opened.body.case.matches.length > 0 && opened.body.case.status === 'OPEN');
 
+  const readOne = await get(`/aml/cases/${caseId}`, 'regulator1', 'Regulator');
+  ok('a single case can be read by its reference',
+    readOne.status === 200 && readOne.body.case.caseId === caseId, String(readOne.status));
+
   // 5. The lifecycle, including the refusals that make it a control.
   const noGrounds = await post(`/aml/cases/${caseId}/clear`, 'regulator1', 'Regulator', {});
   ok('a case cannot be cleared without grounds', noGrounds.status === 400, String(noGrounds.status));

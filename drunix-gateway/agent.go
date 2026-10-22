@@ -473,6 +473,26 @@ func (a *AgentDesk) evidenceStillHolds(p Proposal, now time.Time) (string, bool)
 				return "the case is now " + strings.ToLower(c.Status) + ", so somebody has already worked it", false
 			}
 		}
+		// The same applies to a conditional payment: once it has been
+		// released or refunded there is nothing left to draw attention to.
+		// This case was missing until a planted defect showed that removing
+		// the freshness check broke nothing any test could see.
+		if strings.HasPrefix(p.Subject, "CBDC-COND") && a.cbdc != nil {
+			found := false
+			for _, c := range a.cbdc.Conditions() {
+				if c.ConditionID != p.Subject {
+					continue
+				}
+				found = true
+				if !strings.EqualFold(c.Status, "OPEN") {
+					return "the conditional payment is now " + strings.ToLower(c.Status) +
+						", so it no longer needs anybody's attention", false
+				}
+			}
+			if !found {
+				return "that conditional payment no longer exists", false
+			}
+		}
 	}
 	return "", true
 }

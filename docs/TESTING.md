@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  143 checks, 0 failed
+make test       # integration sweep:  144 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,8 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **98** in `tests/` |
-| Reported result | **143 passed, 0 failed** |
+| Suite files | **99** in `tests/` |
+| Reported result | **144 passed, 0 failed** |
 
 `tests/credentials.test.mjs` is worth running on its own when touching the rail proxy. It
 verifies a credential's Ed25519 signature inside the test process, using only the issuer's
@@ -118,6 +118,73 @@ the frontend has no lint gate today. Until one exists, `npm run build` and `node
 catch syntax and import errors. Adding a flat config is a good first issue.
 
 ---
+
+## How much of the rail do these checks actually touch?
+
+A pass count is not a coverage figure. Ninety-eight suites passing says nothing about how much of
+the rail they reach, and the honest way to find out is to measure it rather than assume.
+
+The approach is borrowed from Scapia's write-up of their Argus test lab (October 2026). Their
+second tool is the interesting one: map every action a user can take, replay the suite against that
+map on paper, and give each action one of three verdicts. Their own published answer was
+uncomfortable (24.6% of commerce actions certainly covered, one vertical under 2%) and publishing
+it was the point.
+
+    node scripts/coverage-rail.mjs          the figure, by area
+    node scripts/coverage-rail.mjs --gaps   exactly what nothing reaches
+
+The tool reads source only, starts nothing and executes nothing, so the same commit gives the same
+number on any machine. It builds the catalogue from the route table declared at the top of each
+server file, cross-checks every declared path against the registered routes so the catalogue cannot
+drift into fiction, then replays each suite's requests against it.
+
+| Verdict | Meaning |
+| --- | --- |
+| covered | a suite certainly issues this method against this path |
+| possible | a suite reaches the path, but the method is not provable from the source |
+| not covered | nothing in the suite reaches it |
+
+As measured: **58.1%** of 86 rail actions are certainly covered, 18.6% are possible, and the rest
+are reached by nothing. `tests/coverage.test.mjs` recomputes this on every run and fails if the
+published figure drifts from the measured one, if coverage falls below its floor, or if a declared
+route stops being served.
+
+The measurement earned its keep immediately. It showed that `POST /umi/cbdc/transfer` and
+`POST /umi/cbdc/redeem` were exercised by nothing at all: the conservation identity was being
+asserted without either of the two paths that can break it. The Travel Rule refusal and the
+corridor dry run were in the same state. Those now have tests, which is how the figure moved from
+51.2% to 58.1%.
+
+## Does the suite catch anything? Planted defects
+
+A green suite has two possible meanings and no way to tell them apart: the code is correct, or the
+assertions are weak. Argus had the same problem, and settled it by deleting a real feature on a
+branch to see whether the suite noticed.
+
+    node scripts/plant-defect.mjs            plant each defect, run the suite that should notice
+    node scripts/plant-defect.mjs aml-threshold
+
+Each defect is a mistake somebody could plausibly make in review: a threshold nudged out of reach, a
+guard dropped, a refusal softened. The harness edits the file, rebuilds and restarts the rail, runs
+the one suite that should fail, then restores the file in a `finally` block. It refuses to start if
+the files it touches have uncommitted changes.
+
+| Planted defect | Caught |
+| --- | --- |
+| Screening stops blocking (block threshold raised out of reach) | yes, 5 checks |
+| The Aadhaar refusal is removed, so a twelve digit number is accepted | yes, 2 checks |
+| A video session without liveness is treated as face-to-face | yes, 2 checks |
+| The Travel Rule check passes with the parties unnamed | yes |
+| The proposing agent stops re-reading its evidence before acting | **no, initially** |
+
+The last row is why the harness exists. Removing the agent's freshness check broke nothing any test
+could see, because the suite accepted either outcome at that point and only the Go unit test
+covered staleness. Worse, the hole was real in the code as well: the freshness check handled AML
+cases but never conditional payments, so a proposal about a payment that had already been released
+would have been approved and acted on. Both are fixed, and the scenario is now tested end to end.
+
+These are five planted defects, not a proof. They say the suite notices these five specific
+mistakes, and nothing about the ones nobody thought of.
 
 ## Continuous integration
 

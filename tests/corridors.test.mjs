@@ -131,6 +131,36 @@ const run = async () => {
   const twice = await post(`/umi/corridors/transfers/${id}/claim`, { secret });
   ok('a settled swap cannot be claimed twice', twice.status === 409);
 
+  // 5b. The Travel Rule, asserted directly. A planted defect that removed
+  // this check was caught only incidentally, by a later assertion, which is
+  // not the same as testing it.
+  const unnamed = await post('/umi/corridors/send', {
+    corridorId: 'BANK-CORRESPONDENT', payer, payee: n('beneficiary-anon'), amountPaise: 20000000,
+    purposeCode: 'FAMILY_MAINTENANCE', originator: '', beneficiary: '',
+  });
+  ok('a payment above the Travel Rule threshold needs both parties named',
+    unnamed.status === 409 && unnamed.body.error === 'ERR_UMI_CORRIDOR_TRAVEL_RULE',
+    `${unnamed.status} ${unnamed.body.error}`);
+  ok('and the refusal names the threshold rather than failing vaguely',
+    /88,?500|identified/.test(String(unnamed.body.message)), String(unnamed.body.message).slice(0, 140));
+
+  // 5c. The read paths and the dry run, which the coverage tool reported as
+  // never exercised by any suite.
+  const dryRun = await post('/umi/corridors/check', {
+    corridorId: 'BANK-CORRESPONDENT', amountPaise: 20000000, purposeCode: 'FAMILY_MAINTENANCE', payer,
+  });
+  ok('a corridor can be checked without moving money',
+    dryRun.status === 200 && typeof dryRun.body.check?.eligible === 'boolean',
+    `${dryRun.status} ${JSON.stringify(dryRun.body).slice(0, 140)}`);
+  const listed = await rail('/umi/corridors/transfers?limit=5', { headers: headers('investor1', 'Investor') });
+  ok('recent transfers can be listed', listed.status === 200 && Array.isArray(listed.body.transfers));
+  if ((listed.body.transfers || []).length) {
+    const one = await rail(`/umi/corridors/transfers/${listed.body.transfers[0].transferId}`,
+      { headers: headers('investor1', 'Investor') });
+    ok('and one transfer can be read by its reference',
+      one.status === 200 && one.body.transfer.transferId === listed.body.transfers[0].transferId);
+  }
+
   // 6. A deferred corridor is provisional until the far side reports.
   const uk = n('beneficiary-uk');
   const corr = await post('/umi/corridors/send', {
@@ -153,11 +183,11 @@ const run = async () => {
   ok('and the beneficiary is paid', settled.body?.account?.balancePaise === 40000000);
 
   // 7. The travel rule binds above its threshold.
-  const unnamed = await post('/umi/corridors/send', {
+  const unnamedParties = await post('/umi/corridors/send', {
     corridorId: 'BANK-CORRESPONDENT', payer, payee: n('someone'), amountPaise: 20000000, purposeCode: 'EDUCATION',
   });
-  ok('a large payment without named parties is refused', unnamed.status === 409,
-    JSON.stringify(unnamed.body).slice(0, 160));
+  ok('a large payment without named parties is refused', unnamedParties.status === 409,
+    JSON.stringify(unnamedParties.body).slice(0, 160));
 
   // 8. Money is never lost: the CBDC conservation check still balances.
   const cbdc = await rail('/umi/cbdc');

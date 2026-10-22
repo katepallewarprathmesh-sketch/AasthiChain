@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "bd812a25138ba7200797b1b6e917e8727bc05828b3e9f057edd39549dc27344a",
+  "sourceDigest": "a48854be6f10fd882fa83916ed8e8f97a15fa659eac76937c00286de63ddb110",
   "sections": [
     {
       "doc": "README",
@@ -92,6 +92,12 @@
       "file": "README.md",
       "heading": "An agent that proposes and never acts",
       "text": "The useful half of an agent in a settlement system is noticing. The dangerous half is acting. This\none keeps the first and refuses the second: it reads live state, drafts a specific action with the\nevidence that prompted it, and stops. A correspondent leg outstanding past its window, a\nconditional payment hours from expiring with nobody having attested, a screening case nobody has\npicked up, backing that has gone stale: each becomes a drafted action in a queue, with its reasons,\nwhat approving it would do, and what happens if it is ignored.\n\nNothing it drafts runs on a timer. A named person approves, and at that moment the facts behind the\nproposal are read again: if the world moved while the proposal sat there, it goes stale and nothing\nis performed. The ledger records the approver, not the agent, because \"the agent did it\" is not an\naudit trail.\n\nIt also does not choose its own actions. Noticing is ordinary code reading ordinary state, and the\nshort list of things an approval can cause is published by the system rather than described in\ndocumentation. It cannot create or move money, cannot close a compliance case, cannot attest to\nanything, and cannot approve its own work: docs/AI AGENT.md ."
+    },
+    {
+      "doc": "README",
+      "file": "README.md",
+      "heading": "How much of this is actually tested",
+      "text": "A pass count is not a coverage figure. Ninety-nine suites passing says nothing about how much of\nthe settlement rail they reach, so there is a tool that measures it: it maps every action the rail\nexposes, replays each suite against that map without running anything, and marks each action as\ncertainly covered, possibly covered, or reached by nothing. Same commit, same number, on any\nmachine.\n\nThe current answer is 58.1% of 86 actions certainly covered , with another 18.6% possible and\nthe rest untouched. That figure is published because it is unflattering and because a number\nnobody recomputes is a claim rather than a measurement: a check in the suite fails if the published\nfigure drifts from the measured one, or if coverage falls.\n\nIt paid for itself on the first run by showing that moving and redeeming digital rupees were\nexercised by nothing at all, while the identity those two paths can break was being asserted\nconfidently. There is also a small harness that plants realistic defects, a threshold nudged out\nof reach, a guard dropped, to check the suite notices. Four of five were caught; the fifth was not,\nand chasing it turned up a real hole in the approval logic as well as in the tests. Both are fixed:\n docs/TESTING.md .\n\nThe approach is lifted from Scapia's write-up of their Argus test lab, which published its own\nuncomfortable coverage numbers rather than its pass rate."
     },
     {
       "doc": "README",
@@ -1171,7 +1177,7 @@
       "doc": "TESTING",
       "file": "docs/TESTING.md",
       "heading": "What each command actually covers",
-      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 98 in tests/ \n Reported result 143 passed, 0 failed \n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant.\n\n tests/outcome.test.mjs covers outcome-based settlement on the work desk: criteria that\ncannot be edited after the engagement opens, a verifier who is neither party, verification\nthat does not move money by itself, a dispute window that only the clock or the funder can\nshorten, and a failed check that freezes the escrow instead of paying it out. It uses a one\nsecond window so the timing path is actually exercised rather than asserted."
+      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 99 in tests/ \n Reported result 144 passed, 0 failed \n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant.\n\n tests/outcome.test.mjs covers outcome-based settlement on the work desk: criteria that\ncannot be edited after the engagement opens, a verifier who is neither party, verification\nthat does not move money by itself, a dispute window that only the clock or the funder can\nshorten, and a failed check that freezes the escrow instead of paying it out. It uses a one\nsecond window so the timing path is actually exercised rather than asserted."
     },
     {
       "doc": "TESTING",
@@ -1190,6 +1196,30 @@
       "file": "docs/TESTING.md",
       "heading": "What each command actually covers (continued)",
       "text": "There is no ESLint configuration in this repository. ESLint 10 refuses to run without one, so\nthe frontend has no lint gate today. Until one exists, npm run build and node --check are what\ncatch syntax and import errors. Adding a flat config is a good first issue.\n\n---"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "How much of the rail do these checks actually touch?",
+      "text": "A pass count is not a coverage figure. Ninety-eight suites passing says nothing about how much of\nthe rail they reach, and the honest way to find out is to measure it rather than assume.\n\nThe approach is borrowed from Scapia's write-up of their Argus test lab (October 2026). Their\nsecond tool is the interesting one: map every action a user can take, replay the suite against that\nmap on paper, and give each action one of three verdicts. Their own published answer was\nuncomfortable (24.6% of commerce actions certainly covered, one vertical under 2%) and publishing\nit was the point.\n\n node scripts/coverage-rail.mjs the figure, by area\n node scripts/coverage-rail.mjs --gaps exactly what nothing reaches\n\nThe tool reads source only, starts nothing and executes nothing, so the same commit gives the same\nnumber on any machine. It builds the catalogue from the route table declared at the top of each\nserver file, cross-checks every declared path against the registered routes so the catalogue cannot\ndrift into fiction, then replays each suite's requests against it.\n Verdict Meaning \n --- --- \n covered a suite certainly issues this method against this path \n possible a suite reaches the path, but the method is not provable from the source \n not covered nothing in the suite reaches it"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "How much of the rail do these checks actually touch? (continued)",
+      "text": "As measured: 58.1% of 86 rail actions are certainly covered, 18.6% are possible, and the rest\nare reached by nothing. tests/coverage.test.mjs recomputes this on every run and fails if the\npublished figure drifts from the measured one, if coverage falls below its floor, or if a declared\nroute stops being served.\n\nThe measurement earned its keep immediately. It showed that POST /umi/cbdc/transfer and\n POST /umi/cbdc/redeem were exercised by nothing at all: the conservation identity was being\nasserted without either of the two paths that can break it. The Travel Rule refusal and the\ncorridor dry run were in the same state. Those now have tests, which is how the figure moved from\n51.2% to 58.1%."
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "Does the suite catch anything? Planted defects",
+      "text": "A green suite has two possible meanings and no way to tell them apart: the code is correct, or the\nassertions are weak. Argus had the same problem, and settled it by deleting a real feature on a\nbranch to see whether the suite noticed.\n\n node scripts/plant-defect.mjs plant each defect, run the suite that should notice\n node scripts/plant-defect.mjs aml-threshold\n\nEach defect is a mistake somebody could plausibly make in review: a threshold nudged out of reach, a\nguard dropped, a refusal softened. The harness edits the file, rebuilds and restarts the rail, runs\nthe one suite that should fail, then restores the file in a finally block. It refuses to start if\nthe files it touches have uncommitted changes.\n Planted defect Caught \n --- --- \n Screening stops blocking (block threshold raised out of reach) yes, 5 checks \n The Aadhaar refusal is removed, so a twelve digit number is accepted yes, 2 checks \n A video session without liveness is treated as face-to-face yes, 2 checks \n The Travel Rule check passes with the parties unnamed yes \n The proposing agent stops re-reading its evidence before acting no, initially"
+    },
+    {
+      "doc": "TESTING",
+      "file": "docs/TESTING.md",
+      "heading": "Does the suite catch anything? Planted defects (continued)",
+      "text": "The last row is why the harness exists. Removing the agent's freshness check broke nothing any test\ncould see, because the suite accepted either outcome at that point and only the Go unit test\ncovered staleness. Worse, the hole was real in the code as well: the freshness check handled AML\ncases but never conditional payments, so a proposal about a payment that had already been released\nwould have been approved and acted on. Both are fixed, and the scenario is now tested end to end.\n\nThese are five planted defects, not a proof. They say the suite notices these five specific\nmistakes, and nothing about the ones nobody thought of."
     },
     {
       "doc": "TESTING",
