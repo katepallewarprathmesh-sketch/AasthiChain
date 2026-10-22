@@ -137,6 +137,42 @@ agent without a valid mandate gets the same refusal any other caller gets.
 A useful property of staging it this way: Tier 1 is independently valuable, and if Tier 2 never
 ships, nothing is half-built.
 
+### Tier 2 as built
+
+Tier 2 now exists, and it is narrower than the sketch above in one deliberate way: **the model does
+not choose the action.** Detection is ordinary code reading ordinary state, and each detector can
+emit exactly one kind of proposal with arguments taken from the record that triggered it. A model
+that picks its own action can be argued into picking one, and this sits in front of money. Where a
+language model is configured at all, its job is to explain a proposal that already exists.
+
+Four detectors, each watching for a situation where the right next step needs a person:
+
+| What it notices | What it drafts |
+| --- | --- |
+| A correspondent leg outstanding beyond its stated five-day window | Chase the far institution and record their confirmation |
+| A conditional payment inside six hours of its deadline, unattested | Flag it for attention: it will not release or extend |
+| An AML case open for a day with no reviewer | Flag it for attention: it will not clear or report |
+| Backing gone stale or over-issued | Ask the named attestor for a current statement |
+
+Three rules make the queue safe to work from:
+
+**Approval re-reads the world.** A proposal carries the facts it was drafted from. When somebody
+approves it, those facts are tested again. If the transfer was already confirmed, or the case
+already picked up, the proposal goes stale and nothing runs. An approval is permission to act on
+the state that justified it, not on whatever state exists later.
+
+**The approver is the signed caller, never a field in the request body.** An approval that can name
+somebody else is not an approval. The block records the person; "the agent did it" is a sentence
+this layer never produces.
+
+**The whole list of effects is four handlers**, and two of them only write a record. The agent
+cannot issue, redeem or move money, cannot clear or report an AML case, cannot create an
+attestation, cannot approve its own proposal, and never runs on a timer. Those limits are published
+by the layer itself rather than described here, so they can be checked rather than trusted.
+
+The queue is public even though deciding is supervisor-only: a list of drafted actions that only
+its operator can see is a list nobody can hold to account.
+
 ## Honest scope: what it must refuse
 
 - No price estimates, no yield projections, no "good investment" judgements. The platform does not
@@ -182,8 +218,11 @@ A number from that suite is publishable. A demo transcript is not.
 ## Order of work
 
 1. Tool layer plus identity scoping, read-only, with the evaluation suite written alongside it.
+   **Built differently:** grounding is injected by server code (documents, live rail state and
+   records named by reference) rather than exposed as tools the model may call, for the same
+   reason the proposing agent does not choose its own action.
 2. Citations in the UI: each answer shows the blocks and records behind it.
-3. Proposals with human approval, arguments visible, nothing dispatched without a click.
+3. Proposals with human approval, arguments visible, nothing dispatched without a click. **Built.**
 4. An MCP server exposing the same read tools, so external agents can use the rail as the factual
    layer. This is the piece the rest of the industry is missing and the cheapest differentiator
    available here.

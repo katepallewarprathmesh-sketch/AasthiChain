@@ -707,6 +707,90 @@ function Screening({ aml, cases, user, reload }) {
   )
 }
 
+// The proposing agent. The queue is public on purpose: a list of drafted
+// actions that only its operator can see is a list nobody can hold to
+// account. Approving is an act by the person who clicks, and the block says
+// so rather than crediting the agent.
+function Proposals({ agent, user, reload }) {
+  if (!agent) return null
+  const act = run(reload)
+  const queue = agent.proposalQueue || []
+  const drafts = queue.filter((p) => p.status === 'DRAFT')
+  const decided = queue.filter((p) => p.status !== 'DRAFT').slice(0, 4)
+
+  return (
+    <Card
+      title="A proposing agent, which never acts"
+      sub="It reads live state, drafts a specific action with the evidence behind it, and stops. Nothing it drafts runs on a timer or a schedule: a named person approves it, and the ledger records that person, not the agent."
+      right={<Tag tone="neutral">{drafts.length} awaiting a decision</Tag>}
+    >
+      <div className="pg-kv">
+        <div>It can propose</div><div>{(agent.actionsItCanPropose || []).join(', ').toLowerCase().replace(/_/g, ' ')}</div>
+        <div>It cannot</div><div>{(agent.itCannot || []).join('; ')}</div>
+        <div>On approval</div><div>{agent.onApproval}</div>
+        <div>Last scan</div><div>{agent.lastScan ? new Date(agent.lastScan).toLocaleString('en-IN') : 'not run yet'}</div>
+      </div>
+
+      {user && (
+        <div style={{ marginTop: 14 }}>
+          <ActionForm
+            hint="Read current state and draft whatever is worth a person's attention. Scanning performs nothing."
+            fields={[]}
+            submitLabel="Scan now"
+            onSubmit={() => act('/proposals/scan', {}, (d) => d.count === 0
+              ? 'Nothing worth proposing. Scanning performed nothing, as always.'
+              : `${d.count} proposal(s) drafted. None of them has been performed.`)}
+          />
+        </div>
+      )}
+
+      {drafts.length === 0 && <p className="pg-card-sub" style={{ marginTop: 12 }}>Nothing is waiting for a decision.</p>}
+
+      {drafts.map((p) => (
+        <div key={p.proposalId} className="pg-row" style={{ padding: '14px 0', borderTop: '1px solid #E2E8F0' }}>
+          <div><b>{p.title}</b> <Tag tone="sim">drafted, not performed</Tag></div>
+          <ul className="pg-card-sub" style={{ margin: '6px 0 0 18px' }}>
+            {(p.why || []).map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+          <p className="pg-card-sub" style={{ marginTop: 6 }}><b>If approved:</b> {p.whatWillHappen}</p>
+          <p className="pg-card-sub"><b>If ignored:</b> {p.ifIgnored}</p>
+          {user && (
+            <div className="pg-grid" style={{ gap: 16, marginTop: 8 }}>
+              <ActionForm
+                fields={[{ name: 'note', label: 'Approve, in your name', placeholder: 'Checked with the far bank' }]}
+                submitLabel="Approve"
+                onSubmit={(f) => act(`/proposals/${encodeURIComponent(p.proposalId)}/approve`, { note: f.note },
+                  (d) => d.proposal.result)}
+              />
+              <ActionForm
+                fields={[{ name: 'reason', label: 'Reject, with a reason', placeholder: 'Already handled outside the rail' }]}
+                submitLabel="Reject"
+                onSubmit={(f) => act(`/proposals/${encodeURIComponent(p.proposalId)}/reject`, { reason: f.reason },
+                  () => 'Rejected, with your reason recorded against the proposal.')}
+              />
+            </div>
+          )}
+        </div>
+      ))}
+
+      {decided.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <h3 className="pg-card-title" style={{ fontSize: 16 }}>Decided</h3>
+          {decided.map((p) => (
+            <p key={p.proposalId} className="pg-card-sub" style={{ marginTop: 6 }}>
+              <Tag tone={p.status === 'APPROVED' ? 'live' : p.status === 'STALE' ? 'sim' : 'bad'}>{p.status.toLowerCase()}</Tag>{' '}
+              {p.title} {p.decidedBy ? `: ${p.status === 'APPROVED' ? 'approved' : p.status === 'STALE' ? 'went stale under' : 'rejected'} by ${p.decidedBy}` : ''}
+              {p.reason ? ` (${p.reason})` : ''}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <p className="pg-card-sub" style={{ marginTop: 14, opacity: 0.85 }}>{agent.disclaimer}</p>
+    </Card>
+  )
+}
+
 export default function DigitalRupee({ user = null }) {
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -717,6 +801,7 @@ export default function DigitalRupee({ user = null }) {
   const [transfers, setTransfers] = useState([])
   const [aml, setAml] = useState(null)
   const [amlCases, setAmlCases] = useState([])
+  const [agent, setAgent] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -726,7 +811,7 @@ export default function DigitalRupee({ user = null }) {
       const { ok, data } = await umiFetch(path)
       return ok ? data : fallback
     }
-    const [st, acc, gr, co, mv, cor, tr, aml, amlCases] = await Promise.all([
+    const [st, acc, gr, co, mv, cor, tr, aml, agent, amlCases] = await Promise.all([
       get('/cbdc', null),
       get('/cbdc/accounts', {}),
       get('/cbdc/grants', {}),
@@ -735,6 +820,7 @@ export default function DigitalRupee({ user = null }) {
       get('/corridors', null),
       get('/corridors/transfers?limit=15', {}),
       get('/aml', null),
+      get('/proposals', null),
       get('/aml/cases?limit=10', {}),
     ])
     if (!st) setErr('This deployment does not have the digital rupee layer mounted.')
@@ -747,6 +833,7 @@ export default function DigitalRupee({ user = null }) {
     setTransfers(tr.transfers || [])
     setAml(aml)
     setAmlCases(amlCases.cases || [])
+    setAgent(agent)
     setLoading(false)
   }, [])
 
@@ -769,6 +856,7 @@ export default function DigitalRupee({ user = null }) {
       <Corridors corridors={(corridors && corridors.corridors) || []} blocked={corridors && corridors.blockedCorridors} />
       <Transfers transfers={transfers} user={user} reload={load} />
       <Screening aml={aml} cases={amlCases} user={user} reload={load} />
+      <Proposals agent={agent} user={user} reload={load} />
       <Movements movements={movements} />
       {status && accounts.length === 0 && (
         <Card title="Nothing has happened yet">

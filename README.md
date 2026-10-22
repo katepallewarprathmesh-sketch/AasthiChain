@@ -266,6 +266,25 @@ the world. And it is advisory: the published rules make the decision, the model 
 them, and where the two disagree the disagreement is shown. Every score comes back with the
 features that moved it: [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md).
 
+## An agent that proposes and never acts
+
+The useful half of an agent in a settlement system is noticing. The dangerous half is acting. This
+one keeps the first and refuses the second: it reads live state, drafts a specific action with the
+evidence that prompted it, and stops. A correspondent leg outstanding past its window, a
+conditional payment hours from expiring with nobody having attested, a screening case nobody has
+picked up, backing that has gone stale: each becomes a drafted action in a queue, with its reasons,
+what approving it would do, and what happens if it is ignored.
+
+Nothing it drafts runs on a timer. A named person approves, and at that moment the facts behind the
+proposal are read again: if the world moved while the proposal sat there, it goes stale and nothing
+is performed. The ledger records the approver, not the agent, because "the agent did it" is not an
+audit trail.
+
+It also does not choose its own actions. Noticing is ordinary code reading ordinary state, and the
+short list of things an approval can cause is published by the system rather than described in
+documentation. It cannot create or move money, cannot close a compliance case, cannot attest to
+anything, and cannot approve its own work: [`docs/AI_AGENT.md`](docs/AI_AGENT.md).
+
 ## Screening that is a list, a case and a report
 
 Checking a payment against sanctions and politically exposed person lists used to be a sentence in
@@ -410,7 +429,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 141 checks across 96 suite files
+make test         # the full sweep: 142 checks across 97 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials
