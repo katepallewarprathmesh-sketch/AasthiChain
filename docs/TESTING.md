@@ -174,8 +174,10 @@ the files it touches have uncommitted changes.
 | Screening stops blocking (block threshold raised out of reach) | yes, 5 checks |
 | The Aadhaar refusal is removed, so a twelve digit number is accepted | yes, 2 checks |
 | A video session without liveness is treated as face-to-face | yes, 2 checks |
-| The Travel Rule check passes with the parties unnamed | yes |
-| The proposing agent stops re-reading its evidence before acting | **no, initially** |
+| The Travel Rule check passes with the parties unnamed | yes, 3 checks |
+| The proposing agent stops re-reading its evidence before acting | **no, first time; yes, 3 checks, now** |
+
+All five are caught as of the current commit. One was not, and that is the row worth reading.
 
 The last row is why the harness exists. Removing the agent's freshness check broke nothing any test
 could see, because the suite accepted either outcome at that point and only the Go unit test

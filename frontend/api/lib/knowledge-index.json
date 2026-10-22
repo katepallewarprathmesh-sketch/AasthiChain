@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "a48854be6f10fd882fa83916ed8e8f97a15fa659eac76937c00286de63ddb110",
+  "sourceDigest": "a1897d140667fac2b962d5833762d0e42b766c9584691a4438559bb063ca28dd",
   "sections": [
     {
       "doc": "README",
@@ -1213,7 +1213,7 @@
       "doc": "TESTING",
       "file": "docs/TESTING.md",
       "heading": "Does the suite catch anything? Planted defects",
-      "text": "A green suite has two possible meanings and no way to tell them apart: the code is correct, or the\nassertions are weak. Argus had the same problem, and settled it by deleting a real feature on a\nbranch to see whether the suite noticed.\n\n node scripts/plant-defect.mjs plant each defect, run the suite that should notice\n node scripts/plant-defect.mjs aml-threshold\n\nEach defect is a mistake somebody could plausibly make in review: a threshold nudged out of reach, a\nguard dropped, a refusal softened. The harness edits the file, rebuilds and restarts the rail, runs\nthe one suite that should fail, then restores the file in a finally block. It refuses to start if\nthe files it touches have uncommitted changes.\n Planted defect Caught \n --- --- \n Screening stops blocking (block threshold raised out of reach) yes, 5 checks \n The Aadhaar refusal is removed, so a twelve digit number is accepted yes, 2 checks \n A video session without liveness is treated as face-to-face yes, 2 checks \n The Travel Rule check passes with the parties unnamed yes \n The proposing agent stops re-reading its evidence before acting no, initially"
+      "text": "A green suite has two possible meanings and no way to tell them apart: the code is correct, or the\nassertions are weak. Argus had the same problem, and settled it by deleting a real feature on a\nbranch to see whether the suite noticed.\n\n node scripts/plant-defect.mjs plant each defect, run the suite that should notice\n node scripts/plant-defect.mjs aml-threshold\n\nEach defect is a mistake somebody could plausibly make in review: a threshold nudged out of reach, a\nguard dropped, a refusal softened. The harness edits the file, rebuilds and restarts the rail, runs\nthe one suite that should fail, then restores the file in a finally block. It refuses to start if\nthe files it touches have uncommitted changes.\n Planted defect Caught \n --- --- \n Screening stops blocking (block threshold raised out of reach) yes, 5 checks \n The Aadhaar refusal is removed, so a twelve digit number is accepted yes, 2 checks \n A video session without liveness is treated as face-to-face yes, 2 checks \n The Travel Rule check passes with the parties unnamed yes, 3 checks \n The proposing agent stops re-reading its evidence before acting no, first time; yes, 3 checks, now \n\nAll five are caught as of the current commit. One was not, and that is the row worth reading."
     },
     {
       "doc": "TESTING",

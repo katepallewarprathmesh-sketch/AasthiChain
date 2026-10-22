@@ -65,7 +65,7 @@ const DEFECTS = [
     find: 'if why, fresh := a.evidenceStillHolds(copyP, time.Now()); !fresh {',
     replace: 'if why, fresh := a.evidenceStillHolds(copyP, time.Now()); false && !fresh {',
     suite: 'tests/proposals.test.mjs',
-    shouldCatch: 'approval either performs the action or refuses as stale',
+    shouldCatch: 'approving a proposal whose situation resolved is refused as stale',
   },
   {
     id: 'corridor-travel-rule',
