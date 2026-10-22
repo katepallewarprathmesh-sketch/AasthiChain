@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 906" width="1200" height="906" role="img"
-     aria-label="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1086" width="1200" height="1086" role="img"
+     aria-label="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; every state change is written to an append-only record that the whole system answers to; and a layer of assurance sits under all of it: a register of the keys that sign, a risk layer that judges a payment before it settles, and copies of the proof on public chains that a holder can check without asking the platform.">
   <!-- Styling is set per element rather than in a <style> block: some renderers
        and sanitisers drop embedded CSS, and a diagram that loses its type is
        worse than no diagram. -->
@@ -12,7 +12,7 @@
     </marker>
   </defs>
 
-  <rect width="1200" height="906" fill="#F7F5F0"/>
+  <rect width="1200" height="1086" fill="#F7F5F0"/>
 
   <!-- people -->
   <text x="60" y="52" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">PEOPLE</text>
@@ -107,4 +107,21 @@
   <text x="60" y="848" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" letter-spacing="2" fill="#8A8375">RECORD</text>
   <rect x="60" y="858" width="1080" height="36" rx="10" fill="#FFFFFF" stroke="#DED8CC"/>
   <text x="84" y="882" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#1E3A5F">Append-only and tamper-evident · durable across restarts · a stopped rail is restarted only by a supervised, recorded repair</text>
+
+  <!-- assurance: what keeps the record worth trusting -->
+  <line x1="600" y1="894" x2="600" y2="930" stroke="#9AA3AF" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="60" y="958" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#8A8375" letter-spacing="2">ASSURANCE</text>
+  <rect x="60" y="972" width="1080" height="96" rx="12" fill="#FFFFFF" stroke="#DED8CC"/>
+  <rect x="80" y="986" width="334" height="68" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
+  <text x="100" y="1010" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Signing keys</text>
+  <text x="100" y="1028" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">every key is screened before it signs, and</text>
+  <text x="100" y="1045" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">can be revoked; a weak key never enters service</text>
+  <rect x="433" y="986" width="334" height="68" rx="9" fill="#F7F5F0" stroke="#E6E0D4"/>
+  <text x="453" y="1010" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Judgement before settlement</text>
+  <text x="453" y="1028" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">a payment is scored and an agent may propose;</text>
+  <text x="453" y="1045" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#8A8375">advisory, and a person still decides</text>
+  <rect x="786" y="986" width="334" height="68" rx="9" fill="#FFFFFF" stroke="#8A8375" stroke-dasharray="5 4"/>
+  <text x="806" y="1010" font-family="Helvetica, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#1E3A5F">Proof on public chains</text>
+  <text x="806" y="1028" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#5C6B7F">anchors and a restricted token, checkable</text>
+  <text x="806" y="1045" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#8A8375">by anyone; a mirror, the record stays on the rail</text>
 </svg>

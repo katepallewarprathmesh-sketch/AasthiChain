@@ -66,7 +66,7 @@ Running it another way, every configuration switch, and what each one does when 
 
 <div align="center">
 
-<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; and every state change is written to an append-only record that the whole system answers to." width="100%">
+<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; every state change is written to an append-only record that the whole system answers to; and a layer of assurance sits under all of it: a register of the keys that sign, a risk layer that judges a payment before it settles, and copies of the proof on public chains that a holder can check without asking the platform." width="100%">
 
 </div>
 

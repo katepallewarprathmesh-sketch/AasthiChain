@@ -138,6 +138,49 @@ is off until it has one. Supervisors only, because a fee is spent and publicatio
 
 Runbook and the limits of the claim: [`ANCHORING.md`](ANCHORING.md).
 
+### A restricted token on the EVM
+
+Anchoring proves a block happened. It does not let a holder prove a position, so there is also a
+token contract: an ERC-20 base carrying the ERC-7943 restriction interface, arranged the way
+ERC-3643 arranges a permissioned security token, with the balances in the token, eligibility in an
+identity registry, the rules of the offering in a compliance contract, and the issuer and regulator
+powers behind agent roles.
+
+Two choices are worth stating because they were close. ERC-1400 was not used: its one real
+advantage is partitions, which a single property's fractional interest does not need, and the
+family never left Draft. ERC-3643's own identity half was not used either, because this system
+already has decentralised identifiers, signed credentials, KYC tiers and a key register, and a
+second identity system that has to agree with the first is a defect waiting for a date. ERC-7943 is
+identity-agnostic on purpose, which is the right seam when the identity layer already exists.
+
+Every ordinary movement passes through one internal gate, so a restriction cannot be avoided by
+using an approval instead of a transfer, and minting faces the same eligibility check as a
+purchase. The forced transfer that an estate or a court order needs is restricted to an agent and
+still refuses to place tokens with somebody who may not hold them.
+
+This leg is a mirror. Settlement, the cash leg and conservation stay on the permissioned rail,
+because finality on a public chain follows rules a regulator does not set. The contract carries the
+rail's asset id and records which rail position it is mirroring, so a reader can tell whether the
+mirror is current instead of assuming it.
+
+### The keys that sign
+
+A signature is only worth the key behind it, and the industry spent October 2026 relearning that
+when eight certificate authority private keys turned out to be recoverable from their own public
+certificates. So the keys here are registered rather than assumed: a key is screened before it
+enters service, registration needs a signed challenge so the holder proves possession, duplicates
+are refused, and the register itself is on the ledger, which means a revocation is a recorded event
+rather than an email.
+
+The screen rejects small scalars, repeated-byte seeds, known low-order points and reuse. It is
+worth being precise about what passing means: it means no known-bad pattern was found, not that the
+key was generated well. Entropy cannot be proved after the fact, and every verdict says so.
+
+Revocation distinguishes a compromise from a retirement, because only the first makes earlier
+signatures worthless.
+
+Key handling end to end: [`KEYS.md`](KEYS.md).
+
 ### CBDC settlement layer
 
 `cbdc.go` holds the money itself: accounts in integer paise across a retail and a wholesale
