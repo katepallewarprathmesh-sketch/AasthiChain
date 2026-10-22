@@ -1,642 +1,482 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SignInButton } from '@clerk/react'
 import { isClerkConfigured } from '../App.jsx'
+import { useProperties } from '../hooks/useProperties.js'
+import {
+  Button, Badge, SimBadge, Card, Metric, PropertyCard, SkeletonCard, EmptyState, ErrorState,
+  Field, MoneyInput, Num, Mono, inr, inrShort, InfoTip,
+} from '../components/ui.jsx'
 
-/* ============================================================
-   AasthiChain premium landing (dark-first, light option)
-   Brand preserved: registry navy → azure accent, Fraunces + Inter,
-   registry-office trust language, honest simulation labeling.
-   ============================================================ */
+/* ============================================================================
+   AasthiChain home page.
 
-const THEME_KEY = 'aasthi_theme'
+   The product this fronts is a settlement rail with a property marketplace on
+   top of it, and the page has to work for two readers at once: somebody who
+   has never bought a fraction of anything, and somebody evaluating whether
+   the infrastructure underneath is real. The order below is deliberate:
+   plain language first, the system index further down, and the honest limits
+   never further than one screen from a claim.
 
-function useLandingTheme() {
-  const [mode, setMode] = useState(() => {
-    try { return localStorage.getItem(THEME_KEY) || 'dark' } catch { return 'dark' }
-  })
+   The one rule this page must not break: a simulated thing must never be
+   able to read as a real one. Every surface that touches simulated money
+   carries the label, and no figure here is invented. Listings come from the
+   API; the calculator says in its own heading that it is illustrative.
+   ========================================================================== */
+
+function useLightChrome() {
+  // The shared navigation adapts to this flag. The home page is an ivory and
+  // white surface now, so the dark glass treatment would be unreadable over
+  // it. Setting it here keeps App.jsx untouched.
   useEffect(() => {
-    try { localStorage.setItem(THEME_KEY, mode) } catch {}
-    document.documentElement.setAttribute('data-landing-theme', mode)
-    window.dispatchEvent(new CustomEvent('aasthi-theme', { detail: mode }))
-    // keep the body backdrop in sync (overscroll edges match the hero)
-    document.body.style.background = mode === 'dark' ? '#0A0D13' : '#F7F5F0'
+    document.documentElement.setAttribute('data-landing-theme', 'light')
+    try { localStorage.setItem('aasthi_theme', 'light') } catch { /* private mode is fine */ }
+    window.dispatchEvent(new CustomEvent('aasthi-theme', { detail: 'light' }))
+    document.body.style.background = '#FFFFFF'
     return () => { document.body.style.background = '' }
-  }, [mode])
-  // Listen for theme changes from OTHER toggles (e.g. the navbar) so the whole
-  // page reacts instantly no refresh needed. Same-value setMode bails, so the
-  // echo of our own dispatch causes no re-render loop.
-  useEffect(() => {
-    const onTheme = (e) => { if (e?.detail) setMode(e.detail) }
-    window.addEventListener('aasthi-theme', onTheme)
-    return () => window.removeEventListener('aasthi-theme', onTheme)
-  }, [])
-  return [mode, () => setMode(m => (m === 'dark' ? 'light' : 'dark'))]
-}
-
-function useReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll('.rv')
-    if (!('IntersectionObserver' in window)) { els.forEach(el => el.classList.add('in')); return }
-    const io = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } })
-    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' })
-    els.forEach(el => io.observe(el))
-    return () => io.disconnect()
   }, [])
 }
 
-/* ---------- tiny inline icon set (stroke = currentColor) ---------- */
-const I = {
-  arrow: (s = 14) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-  ),
-  shield: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z"/><path d="M9.2 12.2l2 2 3.6-4"/></svg>
-  ),
-  zap: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13 2L4.5 13.5H11L9.5 22 19 10h-6.5L13 2z"/></svg>
-  ),
-  rupee: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 3h12M6 8h12M15 3c0 5-3.5 6.5-9 6.5L15 21"/></svg>
-  ),
-  swap: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4"/><path d="M20 16H7M11 20l-4-4 4-4"/></svg>
-  ),
-  badge: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a6 6 0 100-12 6 6 0 000 12z"/><path d="M8.2 13.9L7 22l5-3 5 3-1.2-8.1"/></svg>
-  ),
-  eye: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
-  ),
-  spark: (s = 20) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg>
-  ),
-  sun: (s = 15) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-  ),
-  moon: (s = 15) => (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
-  ),
-}
-
-/* ---------- ecosystem network SVG (hero visual) ---------- */
-function NetworkViz() {
-  const N = ({ x, y, label, sub, accent }) => (
-    <g>
-      <circle cx={x} cy={y} r="34" fill="var(--raised)" stroke="var(--line-2)" />
-      <circle cx={x} cy={y} r="34" fill="none" stroke={accent || 'var(--accent)'} strokeOpacity="0.35" />
-      <circle cx={x} cy={y} r="5" fill={accent || 'var(--accent)'} />
-      <text x={x} y={y + 52} textAnchor="middle" fill="var(--text)" fontSize="11.5" fontWeight="600" fontFamily="Inter, sans-serif">{label}</text>
-      <text x={x} y={y + 66} textAnchor="middle" fill="var(--faint)" fontSize="9.5" fontFamily="Inter, sans-serif">{sub}</text>
-    </g>
-  )
+/* A calm architectural scene, drawn rather than photographed.
+   A stock photograph of a building that is not one of these properties,
+   placed beside real listings, is the kind of small untruth this project
+   spends its time avoiding. */
+function HeroArt() {
   return (
-    <svg viewBox="0 0 560 480" style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="AasthiChain network owners, registrar, investors and regulator settling on the Drunix ledger">
+    <svg viewBox="0 0 560 420" role="img" aria-label="Illustration of contemporary apartment buildings" style={{ width: '100%', height: 'auto', display: 'block' }}>
       <defs>
-        <radialGradient id="core" cx="50%" cy="42%" r="65%">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </radialGradient>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#F6F3EB" /><stop offset="100%" stopColor="#E9EFEA" />
+        </linearGradient>
       </defs>
-
-      {/* edges ledger ↔ orgs */}
-      <g stroke="var(--accent)" strokeOpacity="0.4" strokeWidth="1.4">
-        <line className="flow" x1="280" y1="225" x2="105" y2="105" />
-        <line className="flow" x1="280" y1="225" x2="455" y2="105" />
-        <line className="flow-slow" x1="280" y1="225" x2="105" y2="345" />
-        <line className="flow-slow" x1="280" y1="225" x2="455" y2="345" />
-        <line className="flow" x1="280" y1="225" x2="280" y2="415" />
+      <rect width="560" height="420" rx="18" fill="url(#sky)" />
+      <circle cx="452" cy="86" r="34" fill="#C5A56A" opacity="0.22" />
+      <g fill="#173B2B">
+        <rect x="46" y="188" width="118" height="232" opacity="0.14" />
+        <rect x="396" y="150" width="124" height="270" opacity="0.14" />
+        <rect x="178" y="92" width="204" height="328" opacity="0.26" />
       </g>
-
-      {/* core ledger */}
-      <g>
-        <circle cx="280" cy="225" r="120" fill="url(#core)" />
-        <circle className="pulse-ring" cx="280" cy="225" r="74" fill="none" stroke="var(--accent)" strokeOpacity="0.5" />
-        <circle cx="280" cy="225" r="58" fill="var(--raised)" stroke="var(--line-2)" />
-        <circle cx="280" cy="225" r="74" fill="none" stroke="var(--accent)" strokeOpacity="0.35" strokeDasharray="1 6" />
-        <text x="280" y="219" textAnchor="middle" fill="var(--text)" fontSize="13.5" fontWeight="700" fontFamily="Fraunces, Georgia, serif">Aasthi Ledger</text>
-        <text x="280" y="236" textAnchor="middle" fill="var(--accent)" fontSize="10" fontWeight="600" fontFamily="Inter, sans-serif" letterSpacing="1.4">DRUNIX · FABRIC</text>
-        <text x="280" y="251" textAnchor="middle" fill="var(--faint)" fontSize="9" fontFamily="Inter, sans-serif">4-org permissioned network</text>
+      <g fill="#F6F3EB" opacity="0.82">
+        {Array.from({ length: 9 }).map((_, r) =>
+          Array.from({ length: 5 }).map((_, c) => (
+            <rect key={`a${r}${c}`} x={196 + c * 36} y={112 + r * 33} width="24" height="20" rx="2" />
+          ))
+        )}
       </g>
-
-      <N x={105} y={105} label="Property Owner" sub="lists & tokenizes" />
-      <N x={455} y={105} label="Registrar" sub="verifies title" accent="var(--ok)" />
-      <N x={455} y={345} label="Regulator" sub="audits · can freeze" accent="var(--warn)" />
-      <N x={105} y={345} label="Investors" sub="own from ₹500" />
-      <N x={280} y={415} label="UPI · IMPS Rail" sub="collect → UTR proof" accent="var(--accent-2)" />
+      <g fill="#FFFFFF" opacity="0.5">
+        {Array.from({ length: 6 }).map((_, r) =>
+          Array.from({ length: 3 }).map((_, c) => (
+            <rect key={`b${r}${c}`} x={60 + c * 34} y={206 + r * 34} width="22" height="18" rx="2" />
+          ))
+        )}
+        {Array.from({ length: 7 }).map((_, r) =>
+          Array.from({ length: 3 }).map((_, c) => (
+            <rect key={`c${r}${c}`} x={410 + c * 36} y={168 + r * 34} width="24" height="18" rx="2" />
+          ))
+        )}
+      </g>
+      <rect x="0" y="404" width="560" height="16" fill="#173B2B" opacity="0.1" />
     </svg>
   )
 }
 
-/* ---------- settlement pipeline ---------- */
-function Pipeline() {
-  const steps = [
-    { k: 'Collect', d: 'UPI request to you' },
-    { k: 'Approve', d: 'in your UPI app' },
-    { k: 'CONFIRMED', d: 'bank UTR issued' },
-    { k: 'Transfer', d: 'tokens on Drunix' },
-    { k: 'RELEASED', d: 'escrow settles' },
-  ]
-  return (
-    <div className="acx-card-glass rv rv-d2" style={{ padding: '26px 26px 22px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-        <span className="acx-eyebrow">Atomic settlement live pipeline</span>
-        <span className="acx-chip" style={{ padding: '4px 10px', fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--ok)' }} /> money &amp; tokens move together</span>
-      </div>
-      <div className="acx-pipeline" style={{ display: 'flex', gap: 10, alignItems: 'stretch', marginTop: 20 }}>
-        {steps.map((s, i) => (
-          <React.Fragment key={s.k}>
-            <div className="acx-pipeline-step" style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-              <div className="acx-pipeline-num" style={{
-                width: 34, height: 34, margin: '0 auto', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: i >= 2 ? 'var(--accent-deep)' : 'var(--panel-2)', border: '1px solid var(--line-2)',
-                color: i >= 2 ? 'var(--accent-2)' : 'var(--muted)', fontSize: 12, fontWeight: 700,
-              }}>{i + 1}</div>
-              <div className="acx-pipeline-title" style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8, color: 'var(--text)' }}>{s.k}</div>
-              <div className="acx-pipeline-desc" style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{s.d}</div>
-            </div>
-            {i < steps.length - 1 && (
-              <div className="acx-pipeline-connector" style={{ flex: '0 0 26px', display: 'flex', alignItems: 'center' }}>
-                <div className="acx-pipe-line" style={{ width: '100%' }} />
-              </div>
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-      <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--line)', fontSize: 11, color: 'var(--faint)', lineHeight: 1.6 }}>
-        If the payment fails no tokens move. If the transfer fails the payment is refunded. No partial failures, ever.
-      </div>
-    </div>
-  )
-}
+/* The index of what is actually built. Each entry links to the screen that
+   shows it and carries the honest label for that part. */
+const SHIPPED = [
+  { to: '/umi', t: 'Unified Market Interface rail', tag: 'Simulated rail, real logic',
+    d: 'Wholesale CBDC wallets, the settlement lifecycle and atomic delivery versus payment in integer paise, with an ISO 20022 trace on every instruction.' },
+  { to: '/proof', t: 'Attestation and credentials', tag: 'Real signatures',
+    d: 'Who vouched for an asset, what they vouched for, and a signature anyone can check without asking this service. Withdrawing an attestation names the holders exposed by it.' },
+  { to: '/proof', t: 'Authority for software agents', tag: 'No agent runs here',
+    d: 'An owner can delegate bounded authority: named actions, a spending limit the rail counts itself, a hard expiry and revocation that bites on the next request.' },
+  { to: '/crossborder', t: 'Paying from outside India', tag: 'Simulated leg',
+    d: 'A stablecoin is converted outside India and the rupee wallet is credited only against a remittance attestation, because the consideration for Indian property has to arrive through banking channels.' },
+  { to: '/cbdc', t: 'Digital rupee and its corridors', tag: 'Simulated money, real rules',
+    d: 'Funds bound to a purpose that refuse to be spent elsewhere, value that works offline, and a refund that pays itself when an event is attested. Screening, verification and interoperability sit on the same page.' },
+  { to: '/ledger', t: 'Ledger explorer', tag: 'Open to anyone',
+    d: 'Every block, every settlement, every notice, hash-chained and readable without an account.' },
+  { to: '/market', t: 'Resale and price discovery', tag: 'Live in the demo',
+    d: 'A secondary market for tokens, settled on the same rail as the primary sale rather than beside it.' },
+  { to: '/umi', t: 'Asset servicing and income', tag: 'Live in the demo',
+    d: 'Rent and coupon distributions land pro rata in holders wallets on the due date, with no file exchange between registries.' },
+  { to: '/umi', t: 'Cross-chain settlement', tag: 'Pattern demonstration',
+    d: 'A hash-locked transfer between ledgers, framed the way interoperability frameworks do it, so the asset is not trapped on one chain.' },
+  { to: '/umi', t: 'Private data between parties', tag: 'Fabric-style',
+    d: 'Evidence shared only with the parties entitled to it, with the hash on the shared ledger and a time to live on the data.' },
+  { to: '/umi', t: 'Beyond property', tag: 'Same core',
+    d: 'Carbon credits, baskets and an escrowed work desk run on the identical issuance, settlement and reconciliation core. That is the argument for it being infrastructure rather than one product.' },
+  { to: '/trust', t: 'What is real and what is not', tag: 'Read this first',
+    d: 'One page listing every simulated edge of the system, kept honest on purpose, including the parts that make the demo easier.' },
+]
 
-/* ============================================================ */
-// Demo identities are a development convenience, not a way into production.
-const demoAuthAllowed = import.meta.env.VITE_DEMO_AUTH === 'true'
+const FAQ = [
+  { q: 'What am I actually buying?',
+    a: 'A token recorded against a property on this ledger, representing a fraction of its value. On this deployment that record is a demonstration: it is not a registered transfer of immovable property, and it does not by itself make anybody an owner in law.' },
+  { q: 'Why ₹500?',
+    a: 'A property is divided into tokens of equal value, so a ₹75,00,000 property becomes 15,000 tokens of ₹500. The floor exists so the question stops being whether you have lakhs available and starts being whether the property is worth owning.' },
+  { q: 'What does "verified" mean here?',
+    a: 'That a registrar participant has attested to the title and that the deed fingerprint on the ledger matches the document presented. It does not mean this platform has independently inspected the property or that the attestation is true. A false statement produces a precise, well-evidenced, false record, which is why the attestor is named beside it.' },
+  { q: 'Can I sell?',
+    a: 'There is a secondary market in the demo, settled on the same rail as the primary sale. Whether a buyer exists at a price is not something any platform can promise, and nothing here estimates liquidity.' },
+  { q: 'Is my money at risk in this demo?',
+    a: 'No real money moves here. Payments run against test providers or a simulated rail, and every screen that touches money says which. Nothing on this site is an offer, and none of it is investment advice.' },
+]
 
 export default function Landing({ user }) {
-  const [showDev, setShowDev] = useState(false)
-  const [mode, toggleTheme] = useLandingTheme()
-  useReveal()
+  useLightChrome()
+  const { properties, loading, error, refresh } = useProperties('')
+  const featured = useMemo(() => (properties || []).slice(0, 3), [properties])
 
-  const handleDemoLogin = (roleData) => {
-    try {
-      const token = btoa(JSON.stringify({ identityId: roleData.id, role: roleData.role, mspId: roleData.mspId, exp: Date.now() + 3600000 }))
-      const demoUser = { token, identityId: roleData.id, role: roleData.role, mspId: roleData.mspId, fabricMode: 'demo', isDemo: true }
-      localStorage.setItem('aasthi_user', JSON.stringify(demoUser))
-      localStorage.setItem('aasthi_token', token)
-      localStorage.setItem('aasthi_clerk_demo_identity', roleData.id)
-      window.location.href = '/marketplace'
-    } catch (e) { console.error('demo login failed', e) }
-  }
+  // Illustrative only: a token price typed by the reader, not a quote. The
+  // authoritative price, availability and limits come from the property page,
+  // which reads them from the API.
+  const [amount, setAmount] = useState('5000')
+  const tokenPrice = 500
+  const tokens = Math.floor((Number(amount) || 0) / tokenPrice)
 
-  const ctaPrimary = user ? (
-    <Link to="/marketplace" className="acx-btn acx-btn-primary acx-btn-lg">Explore Properties {I.arrow(15)}</Link>
-  ) : isClerkConfigured ? (
-    <SignInButton mode="modal" fallbackRedirectUrl="/marketplace">
-      <button className="acx-btn acx-btn-primary acx-btn-lg">Start Investing {I.arrow(15)}</button>
-    </SignInButton>
-  ) : (
-    <Link to="/login" className="acx-btn acx-btn-primary acx-btn-lg">Start Investing {I.arrow(15)}</Link>
-  )
+  const [blocks, setBlocks] = useState(null)
+  const [blocksFailed, setBlocksFailed] = useState(false)
+  useEffect(() => {
+    let alive = true
+    fetch('/api/drunix/chain?limit=4')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => { if (alive) setBlocks(Array.isArray(d.blocks) ? d.blocks : []) })
+      .catch(() => { if (alive) setBlocksFailed(true) })
+    return () => { alive = false }
+  }, [])
 
   return (
-    <div className="acx acx-anim" data-mode={mode} style={{ minHeight: 'calc(100vh - 64px)' }}>
-
-      {/* ================= HERO ================= */}
-      <header style={{ position: 'relative' }}>
-        <div className="acx-hero-bg" />
-        <div className="acx-wrap" style={{ position: 'relative', paddingTop: 96, paddingBottom: 40 }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -46 }}>
-            <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`}
-              style={{ color: 'var(--muted)' }} title="Toggle light / dark">
-              {mode === 'dark' ? I.sun() : I.moon()}
-            </button>
-          </div>
-
-          <div className="acx-rhero">
-            <div>
-              <div className="rv in acx-chip" style={{ marginBottom: 22 }}>
-                <span className="acx-dot" />
-                Built on NPCI Drunix · UPI-settled · Testnet simulation
-              </div>
-              <h1 className="acx-h1 rv in" style={{ fontSize: 'clamp(40px, 5.2vw, 64px)', margin: 0 }}>
-                Own a piece of<br />premium real estate.<br />
-                <em>From ₹500.</em>
-              </h1>
-              <p className="rv in rv-d1" style={{ fontSize: 16.5, lineHeight: 1.65, color: 'var(--muted)', marginTop: 22, maxWidth: '56ch' }}>
-                AasthiChain turns verified properties into fractional tokens. Pay by UPI, own instantly, trade anytime
-                registry-office trust a permissioned ledger, not a speculative cryptocurrency. No paperwork. No ₹75 lakh barrier.
-              </p>
-              <div className="rv in rv-d2" style={{ display: 'flex', gap: 12, marginTop: 30, flexWrap: 'wrap' }}>
-                {ctaPrimary}
-                <a href="#how-it-works" className="acx-btn acx-btn-ghost acx-btn-lg">How it works</a>
-              </div>
-              <div className="rv in rv-d3" style={{ display: 'flex', gap: '18px 26px', marginTop: 40, flexWrap: 'wrap' }}>
-                {[['₹500', 'entry, not ₹75L'], ['T+0', 'UPI settlement'], ['4 orgs', 'permissioned network'], ['100%', 'atomic transfers']].map(([k, v]) => (
-                  <div key={k}>
-                    <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 24, fontWeight: 600, color: 'var(--text)' }}>{k}</div>
-                    <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3, letterSpacing: '0.02em' }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ecosystem visual + live settlement card */}
-            <div className="rv in rv-d2" style={{ position: 'relative' }}>
-              <div className="acx-card-glass acx-anim" style={{ padding: '18px 10px 6px', position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 14px' }}>
-                  <span className="acx-eyebrow" style={{ letterSpacing: '0.12em' }}>The AasthiChain network</span>
-                  <span className="acx-chip" style={{ padding: '4px 10px', fontSize: 10 }}><span className="acx-dot pip" /> live testnet</span>
-                </div>
-                <NetworkViz />
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* ================= TRUST BAR ================= */}
-      <section className="acx-band">
-        <div className="acx-wrap" style={{ paddingTop: 22, paddingBottom: 22 }}>
-          <div className="rv" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-            {['NPCI Drunix ledger', 'UPI · IMPS rails', 'Atomic DvP settlement', 'Registrar-verified titles', 'Regulator oversight'].map((t, i) => (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                {i > 0 && <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--faint)', opacity: 0.5 }} />}
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>{t}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= WHY (preserved copy, premium cards) ================= */}
-      <section className="acx-wrap" style={{ paddingTop: 76, paddingBottom: 76 }}>
-        <div style={{ maxWidth: 640 }}>
-          <div className="acx-eyebrow rv">Why AasthiChain</div>
-          <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(26px, 3.2vw, 38px)', marginTop: 12 }}>
-            Real estate, rebuilt for <em>everyone else</em>.
-          </h2>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18, marginTop: 36 }}>
-          {[
-            {
-              ico: I.eye(), t: 'The problem', d: 'Premium properties cost ₹75L+ out of reach for most. Selling takes months, paperwork is messy, and you can\u2019t own just 0.1% of a villa. No transparency, no liquidity.',
-            },
-            {
-              ico: I.swap(), t: 'The AasthiChain way', d: 'Each property becomes fixed tokens like shares. A ₹75L villa becomes 15,000 tokens at ₹500. Buy 100 tokens for ₹50,000, hold fractional ownership, trade instantly.',
-            },
-            {
-              ico: I.shield(), t: 'Why you can trust it', d: 'Every property is verified, every transfer is recorded, every payment is atomic money and tokens move together or both refunded. Registry-office grade trust a permissioned ledger, not a speculative cryptocurrency.',
-            },
-          ].map((c, i) => (
-            <div key={c.t} className={`acx-card rv rv-d${i + 1}`} style={{ padding: 26 }}>
-              <div className="acx-ico">{c.ico}</div>
-              <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 19, fontWeight: 600, marginTop: 18, color: 'var(--text)' }}>{c.t}</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.7, color: 'var(--muted)', marginTop: 10 }}>{c.d}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ================= FEATURES ================= */}
-      <section id="platform" className="acx-band">
-        <div className="acx-wrap" style={{ paddingTop: 76, paddingBottom: 80 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ maxWidth: 560 }}>
-              <div className="acx-eyebrow rv">Platform</div>
-              <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(26px, 3.2vw, 38px)', marginTop: 12 }}>
-                Institutional rails, <em>retail-simple</em> experience.
-              </h2>
-            </div>
-            <p className="rv rv-d2" style={{ fontSize: 13.5, color: 'var(--muted)', maxWidth: '40ch', lineHeight: 1.7 }}>
-              Everything serious about the plumbing hidden behind one familiar action: pay by UPI.
-            </p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginTop: 40 }}>
-            {[
-              { ico: I.rupee(), t: 'Fractional from ₹500', d: 'Own 0.1% of a villa, not a 30-year loan. Tokens are fixed-supply and priced from the verified valuation.' },
-              { ico: I.zap(), t: 'UPI Collect payments', d: 'The seller requests, you approve in your UPI app merchant-grade collect with RRN and IMPS UTR proof on every payment.' },
-              { ico: I.swap(), t: 'Atomic DvP settlement', d: 'Delivery-versus-payment on the Drunix ledger: SettleDvP moves tokens and escrow together, with the UTR anchored on-chain.' },
-              { ico: I.badge(), t: 'Registrar-verified titles', d: 'No listing goes live without document hash anchoring and a Registrar review fraud is stopped before tokenization.' },
-              { ico: I.shield(), t: 'Regulator guardrails', d: 'A full audit view with emergency freeze. Cap table, transfers and payment trails are inspectable end-to-end.' },
-              { ico: I.spark(), t: 'AI fraud shield', d: 'An explainable risk engine screens every collect velocity, structuring, high-value patterns and re-screens at approval.' },
-            ].map((f, i) => (
-              <div key={f.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 26 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="acx-ico">{f.ico}</div>
-                  <span style={{ fontSize: 10, color: 'var(--faint)', fontFamily: 'Inter, sans-serif', letterSpacing: '0.08em' }}>0{i + 1}</span>
-                </div>
-                <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 18, fontWeight: 600, marginTop: 18, color: 'var(--text)' }}>{f.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--muted)', marginTop: 9 }}>{f.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= WHAT IS INSIDE =================
-          The home page described the first six months of the project and
-          nothing after it. Everything built since (the settlement rail, the
-          attestation chain, agent authority, interop, private data) existed
-          only behind a URL somebody had to be told about. This section is
-          the index of what is actually in here, with the honest label on
-          each one and a link to the screen that shows it. */}
-      <section id="inside" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 20 }}>
-        <div style={{ maxWidth: 660 }}>
-          <div className="acx-eyebrow rv">What is inside</div>
-          <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(26px, 3.2vw, 38px)', marginTop: 12 }}>
-            The whole system, <em>not just the storefront.</em>
-          </h2>
-          <p className="rv rv-d2" style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 14, lineHeight: 1.75 }}>
-            Each of these is built and running, and each one says plainly what part of it is a simulation.
-            Nothing here is a roadmap item.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 36 }}>
-          {[
-            { to: '/umi', t: 'Unified Market Interface rail', tag: 'Simulated rail, real logic',
-              d: 'Wholesale CBDC wallets, the settlement lifecycle and atomic delivery versus payment in integer paise, with an ISO 20022 trace on every instruction.' },
-            { to: '/proof', t: 'Attestation and credentials', tag: 'Real signatures',
-              d: 'Who vouched for an asset, what they vouched for, and a signature anyone can check without asking this service. Withdrawing an attestation names the holders exposed by it.' },
-            { to: '/proof', t: 'Authority for software agents', tag: 'No agent runs here',
-              d: 'An owner can delegate bounded authority: named actions, a spending limit the rail counts itself, a hard expiry and revocation that bites on the next request.' },
-            { to: '/crossborder', t: 'Paying from outside India', tag: 'Simulated leg',
-              d: 'A stablecoin is converted outside India and the rupee wallet is credited only against a remittance attestation, because the consideration for Indian property has to arrive through banking channels. Buyers who cannot purchase at all are refused before a quote exists.' },
-            { to: '/cbdc', t: 'Digital rupee and its corridors', tag: 'Simulated money, real rules',
-              d: 'Central bank money on the ledger: funds bound to a purpose that refuse to be spent elsewhere, value that works offline, and a refund that pays itself when an event is attested. Cross-border payments show whether they are actually settled or only recorded.' },
-            { to: '/ledger', t: 'Ledger explorer', tag: 'Open to anyone',
-              d: 'Every block, every settlement, every notice, hash-chained and readable without an account.' },
-            { to: '/market', t: 'Resale and price discovery', tag: 'Live in the demo',
-              d: 'A secondary market for tokens, settled on the same rail as the primary sale rather than beside it.' },
-            { to: '/umi', t: 'Asset servicing and income', tag: 'Live in the demo',
-              d: 'Rent and coupon distributions land pro rata in holders wallets on the due date, with no file exchange between registries.' },
-            { to: '/umi', t: 'Cross-chain settlement', tag: 'Pattern demonstration',
-              d: 'A hash-locked transfer between ledgers, framed the way interoperability frameworks do it, so the asset is not trapped on one chain.' },
-            { to: '/umi', t: 'Private data between parties', tag: 'Fabric-style',
-              d: 'Evidence shared only with the parties entitled to it, with the hash on the shared ledger and a time to live on the data.' },
-            { to: '/umi', t: 'Beyond property', tag: 'Same core',
-              d: 'Carbon credits, baskets and an escrowed work desk run on the identical issuance, settlement and reconciliation core. That is the argument for it being infrastructure rather than one product.' },
-            { to: '/trust', t: 'What is real and what is not', tag: 'Read this first',
-              d: 'One page listing every simulated edge of the system, kept honest on purpose, including the parts that make the demo easier.' },
-          ].map((f, i) => (
-            <Link key={f.t + i} to={f.to} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`}
-              style={{ padding: 24, textDecoration: 'none', display: 'block', color: 'inherit' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 17.5, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{f.t}</h3>
-                <span className="acx-chip" style={{ fontSize: 9.5, flexShrink: 0 }}>{f.tag}</span>
-              </div>
-              <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--muted)', marginTop: 10 }}>{f.d}</p>
-              <div style={{ fontSize: 11.5, color: 'var(--accent)', fontWeight: 600, marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                Open {I.arrow(12)}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ================= HOW IT WORKS ================= */}
-      <section id="how-it-works" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 40 }}>
-        <div style={{ maxWidth: 640 }}>
-          <div className="acx-eyebrow rv">How it works</div>
-          <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(26px, 3.2vw, 38px)', marginTop: 12 }}>
-            Four roles. One secure flow.
-          </h2>
-          <p className="rv rv-d2" style={{ fontSize: 14, color: 'var(--muted)', marginTop: 12, lineHeight: 1.7 }}>
-            From listing to ownership every step permissioned, every step recorded.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 40 }}>
-          {[
-            { role: 'Property Owner', n: '01', desc: 'Lists property with documents hash anchored, verified before tokenization', steps: ['List property', 'Upload documents', 'Get verified', 'Tokens created'] },
-            { role: 'Registrar', n: '02', desc: 'Checks legal title and approves prevents fraud before it starts', steps: ['Review documents', 'Verify title', 'Approve', 'Monitor'] },
-            { role: 'You Investor', n: '03', desc: 'Browse, pay via UPI, own instantly trade anytime', steps: ['Browse properties', 'Pay via UPI', 'Own tokens', 'Trade or hold'] },
-            { role: 'Regulator', n: '04', desc: 'Audits everything can pause markets if needed for safety', steps: ['Audit properties', 'Check ownership', 'Review transfers', 'Ensure safety'] },
-          ].map((item, i) => (
-            <div key={item.role} className={`acx-card rv rv-d${(i % 4) + 1}`} style={{ padding: 22, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: 14, right: 18, fontFamily: 'Fraunces, Georgia, serif', fontSize: 30, fontWeight: 600, color: 'var(--line-2)' }}>{item.n}</div>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.02em' }}>{item.role}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginTop: 8, minHeight: 38 }}>{item.desc}</div>
-              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {item.steps.map((s, j) => (
-                  <div key={j} style={{ fontSize: 11.5, display: 'flex', gap: 9, alignItems: 'center' }}>
-                    <span style={{ width: 18, height: 18, borderRadius: 6, background: 'var(--accent-deep)', color: 'var(--accent-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 700, flexShrink: 0 }}>{j + 1}</span>
-                    <span style={{ color: 'var(--muted)' }}>{s}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ================= PAYMENTS / PIPELINE (preserved anchor #payments) ================= */}
-      <section id="payments" className="acx-wrap" style={{ paddingTop: 40, paddingBottom: 80 }}>
-        <div className="acx-rsplit">
+    <main className="ax">
+      {/* ---------------------------------------------------------- hero */}
+      <section className="ax-section" style={{ background: 'var(--ax-ivory)', paddingTop: 64 }}>
+        <div className="ax-wrap" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,.95fr)', gap: 48, alignItems: 'center' }}>
           <div>
-            <div className="acx-eyebrow rv">Payments</div>
-            <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(24px, 3vw, 34px)', marginTop: 12 }}>
-              Secure payments,<br /><em>instant</em> ownership.
-            </h2>
-            <p className="rv rv-d2" style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.75, marginTop: 16, maxWidth: '52ch' }}>
-              Pay via UPI just like you pay for anything. Your payment is verified with a bank UTR, then tokens transfer
-              instantly on the Drunix ledger. Both happen together or both are reversed.
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+              <Badge tone="gold">Fractional property</Badge>
+              <SimBadge>Settlement rail simulated</SimBadge>
+            </div>
+            <h1 className="ax-display ax-h1">Own a fraction of India&rsquo;s real estate.</h1>
+            <p className="ax-lede">
+              Explore property ownership from ₹500, with transparent records and clearly explained
+              investment terms.
             </p>
-            <div className="rv rv-d3" style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
-              {['UPI Collect', 'UTR reconciliation', 'Escrow release', 'Idempotent by design'].map(t => (
-                <span key={t} className="acx-chip" style={{ fontSize: 11 }}>{t}</span>
-              ))}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 30 }}>
+              <Button to="/marketplace">Explore properties</Button>
+              <Button to="#how-it-works" variant="secondary" as="a" href="#how-it-works">How it works</Button>
             </div>
-          </div>
-          <Pipeline />
-        </div>
-      </section>
-
-      {/* ================= TRUST / SECURITY / TRANSPARENCY ================= */}
-      <section id="trust" className="acx-band">
-        <div className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 84 }}>
-          <div style={{ maxWidth: 640 }}>
-            <div className="acx-eyebrow rv">Trust &amp; transparency</div>
-            <h2 className="acx-h1 rv rv-d1" style={{ fontSize: 'clamp(26px, 3.2vw, 38px)', marginTop: 12 }}>
-              Boring where it matters.<br /><em>That's the point.</em>
-            </h2>
+            <p className="ax-hint" style={{ marginTop: 18, maxWidth: '54ch' }}>
+              This deployment is a working demonstration. No real money moves, and nothing here is an
+              offer or investment advice.
+            </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginTop: 40 }}>
-            {[
-              { t: 'Hash-chained Drunix ledger', d: 'Every settlement is a block SHA-512 chained, merkle-committed, publicly verifiable by anyone, agent or DPI stack. Open the Ledger Explorer and prove it.' },
-              { t: 'Permissioned identity', d: 'Every actor signs with JWT + MSP identity across four organizations. No anonymous actors can touch the ledger.' },
-              { t: 'Double-spend protection', d: 'MVCC versioning on the Fabric state DB plus composite-key balances the same token cannot be sold twice.' },
-              { t: 'Idempotent everything', d: 'Payments, webhooks and settlements are idempotent retries and refreshes can never double-credit an investor.' },
-              { t: 'Auditable cap table', d: 'Who owns what is a ledger query, not a spreadsheet. Regulators see the same truth investors see.' },
-              { t: 'Honest by labeling', d: 'The payment and market-infrastructure rails are simulations, labelled as such in the interface and in every response they return. Nothing here is connected to a real institution.' },
-              { t: 'Aligned with regulation', d: 'Designed around the Asset Tokenisation (Regulation) Bill 2026: KYC/AML gates, registrar validation, custodian pathway, regulator freeze.' },
-            ].map((c, i) => (
-              <div key={c.t} className={`acx-card rv ${i % 3 === 1 ? 'rv-d1' : i % 3 === 2 ? 'rv-d2' : ''}`} style={{ padding: 24 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}>{I.shield(18)}</div>
-                  <div>
-                    <h3 style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>{c.t}</h3>
-                    <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--muted)', marginTop: 7 }}>{c.d}</p>
+          <div>
+            <HeroArt />
+            {/* The explainer card. Illustrative figures, labelled as such on
+                the card itself rather than in a footnote. */}
+            <div className="ax-card ax-card--raised" style={{ marginTop: -46, marginLeft: 18, marginRight: 18, position: 'relative' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <h2 className="ax-card-title" style={{ fontSize: 15 }}>How a property is divided</h2>
+                <Badge tone="info">Illustrative</Badge>
+              </div>
+              <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, margin: '16px 0 0' }}>
+                {[
+                  ['Property value', '₹75,00,000'],
+                  ['Tokens issued', '15,000'],
+                  ['Price per token', '₹500'],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <dt className="ax-hint" style={{ margin: 0 }}>{k}</dt>
+                    <dd style={{ margin: '4px 0 0', fontWeight: 650, fontSize: 17 }}><Num>{v}</Num></dd>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-            <div className="rv" style={{ marginTop: 24, textAlign: 'center' }}>
-              <a href="/ledger" style={{ color: 'var(--accent)', fontSize: 13.5, fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid var(--accent-30)' }}>Open the Drunix Ledger Explorer →</a>
+                ))}
+              </dl>
+              <p className="ax-hint" style={{ marginTop: 14 }}>
+                An example, not a listing. Real properties below carry their own figures from the register.
+              </p>
             </div>
-        </div>
-      </section>
-
-      {/* ================= DEMO ACCESS (preserved behavior) ================= */}
-      {/* One-click role switcher. This lived on the homepage and was the
-          reason almost nobody signed up: the fastest route into the product
-          skipped the account entirely. Now local-development only. */}
-      {demoAuthAllowed && (
-        <section id="demo" className="acx-wrap" style={{ paddingTop: 80, paddingBottom: 30 }}>
-          <div className="acx-card-glass rv" style={{ padding: 28 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Try every role instantly</h3>
-                <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-                  One-click demo identities with instant mock sign-in. Local development only no verification, under 2 seconds.
-                </p>
-              </div>
-              <span className="acx-chip" style={{ fontSize: 10.5 }}><span className="acx-dot" style={{ background: 'var(--warn)' }} /> LOCAL ONLY</span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 22 }}>
-              {[
-                { id: 'originator1', role: 'Originator', label: 'Owner', desc: 'List & tokenize property', color: 'var(--accent)' },
-                { id: 'registrar1', role: 'Registrar', label: 'Registrar', desc: 'Validate title & approve', color: 'var(--ok)' },
-                { id: 'investor1', role: 'Investor', label: 'Investor', desc: 'Buy via UPI & own', color: 'var(--accent-2)' },
-                { id: 'regulator1', role: 'Regulator', label: 'Regulator', desc: 'Audit & freeze', color: 'var(--warn)' },
-              ].map(r => (
-                <button
-                  key={r.id}
-                  onClick={() => handleDemoLogin(r)}
-                  className="acx-card"
-                  style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: 'var(--panel)', color: 'var(--text)' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, background: r.color, color: 'var(--accent-ink)' }}>{r.label[0]}</div>
-                    <span style={{ fontSize: 10, color: 'var(--faint)', fontFamily: 'Inter, monospace' }}>{r.id}</span>
-                  </div>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 12 }}>{r.label}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{r.desc}</div>
-                  <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}>Enter as {r.label} {I.arrow(12)}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ================= FINAL CTA ================= */}
-      <section className="acx-wrap" style={{ paddingTop: 50, paddingBottom: 80 }}>
-        <div className="acx-card-glass rv" style={{
-          padding: 'clamp(36px, 6vw, 64px)', textAlign: 'center', position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(600px 220px at 50% -40px, var(--glow), transparent)' }} />
-          <h2 className="acx-h1" style={{ fontSize: 'clamp(26px, 3.4vw, 40px)', margin: 0, position: 'relative' }}>
-            Ready to own premium real estate?
-          </h2>
-          <p style={{ fontSize: 14.5, color: 'var(--muted)', maxWidth: '52ch', margin: '14px auto 0', lineHeight: 1.7, position: 'relative' }}>
-            Start from ₹500. Verified properties, secure UPI payments, instant blockchain ownership. No paperwork, no waiting.
-          </p>
-          <div style={{ marginTop: 28, display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', position: 'relative' }}>
-            {ctaPrimary}
-            {/* The demo-role section below is local-development only, so this
-                shortcut must not render in production it would link to an
-                anchor that does not exist on the page. */}
-            {demoAuthAllowed && (
-              <a href="#demo" className="acx-btn acx-btn-ghost acx-btn-lg">Use a demo role</a>
-            )}
-          </div>
-          <div style={{ marginTop: 18, fontSize: 11.5, color: 'var(--faint)', position: 'relative' }}>
-            {demoAuthAllowed
-              ? 'Sign in with Clerk top-right, or jump in with a demo role below.'
-              : 'Sign in with Clerk using the button at the top right.'}
           </div>
         </div>
       </section>
 
-      {/* ================= JUDGE / DEV DETAILS (preserved content) ================= */}
-      <section className="acx-band">
-        <div className="acx-wrap" style={{ paddingTop: 26, paddingBottom: 60 }}>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <button
-              onClick={() => setShowDev(!showDev)}
-              className="acx-chip"
-              style={{ cursor: 'pointer', padding: '9px 18px', background: 'transparent' }}
-            >
-              {showDev ? 'Hide' : 'Show'} Technical Details For Judges &amp; Developers
-            </button>
-          </div>
+      {/* ------------------------------------------------ featured listings */}
+      <section className="ax-section" id="properties">
+        <div className="ax-wrap">
+          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
+            <div>
+              <p className="ax-eyebrow">Open listings</p>
+              <h2 className="ax-display ax-h2">Properties on the register</h2>
+              <p className="ax-lede" style={{ fontSize: 16 }}>
+                Every card below is a record returned by the platform, not a sample. Where a figure is
+                missing, the card says so rather than filling the gap.
+              </p>
+            </div>
+            <Button to="/marketplace" variant="secondary">View all properties</Button>
+          </header>
 
-          {showDev && (
-            <div className="rv in" style={{ marginTop: 24 }}>
-              <div className="acx-card" style={{ padding: 22, marginBottom: 16, borderColor: 'var(--accent-deep)' }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-2)' }}>Settlement core in Go</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 1.75 }}>
-                  The rail is a Go service: wallets and positions in integer paise, atomic delivery versus payment,
-                  idempotent settlement, an append-only hash-chained ledger that survives a restart, signed credentials
-                  with their anchors, bounded authority for agents, and reconciliation that proves supply is conserved.
-                  The web app is a thin proxy in front of it and holds no settlement logic of its own.
-                  Chaincode runs on a permissioned Fabric-derived network for the parts that are exercised against a real one.
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
-                <span className="acx-chip" style={{ borderColor: 'var(--warn)', color: 'var(--warn)', fontSize: 10 }}>SIMULATION</span>
-                <span style={{ fontSize: 11, color: 'var(--faint)' }}>
-                  The payment and market-infrastructure rails are simulations with no live institutional connectivity.
-                  That is stated here, on the trust page, and in every response the rail returns.
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-                <div className="acx-card" style={{ padding: 22 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>What the ledger actually guarantees</h4>
-                  <ul style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, paddingLeft: 18, lineHeight: 1.8 }}>
-                    <li>Append-only with tampering detectable by anyone reading the chain</li>
-                    <li>Both legs of a trade in one block, so there is no settlement-risk window</li>
-                    <li>Retries are idempotent: a repeated request replays its original answer</li>
-                    <li>Supply conservation and reconciliation are asserted by tests, not claimed in prose</li>
-                    <li>Credentials carry a signature checkable without this service, and an anchor on the chain</li>
-                    <li>Agent authority is bounded, counted by the rail and revocable in one request</li>
-                  </ul>
-                </div>
-                <div className="acx-card" style={{ padding: 22 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>What it does not</h4>
-                  <ul style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, paddingLeft: 18, lineHeight: 1.8 }}>
-                    <li>No connection to any central bank, regulator, depository or payment network</li>
-                    <li>Identity verification is a stub: nothing is checked against a real document source</li>
-                    <li>An attestor here carries no enforceable accountability, which is the honest gap</li>
-                    <li>Withdrawing an attestation is a notice. It reverses no settled trade and freezes nothing</li>
-                    <li>Legal finality is not claimed anywhere in this system</li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="acx-card" style={{ marginTop: 16, padding: 20 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>How to check any of this yourself</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.8 }}>
-                  Clone the repository, run the stack with one command and run the sweep. It brings up the rail and the
-                  app, seeds data and exercises settlement, failure paths, ledger consistency and the trust chain end to
-                  end. The exact commands, the prerequisites and the limitations are written down rather than summarised,
-                  and the counts in the documentation are asserted by a test so they cannot quietly go stale.
-                </div>
-              </div>
+          {error ? (
+            <ErrorState
+              title="The listings did not load"
+              detail="The marketplace service did not answer. Nothing is shown rather than showing a cached guess."
+              onRetry={refresh}
+            />
+          ) : loading ? (
+            <div className="ax-grid ax-grid--3">{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</div>
+          ) : featured.length === 0 ? (
+            <EmptyState
+              title="No properties are listed yet"
+              body="When an originator lists a property and a registrar attests to its title, it appears here."
+              action={<Button to="/marketplace" variant="secondary" size="sm">Open the marketplace</Button>}
+            />
+          ) : (
+            <div className="ax-grid ax-grid--3">
+              {featured.map((p) => <PropertyCard key={p.assetId} p={p} />)}
             </div>
           )}
         </div>
       </section>
-    </div>
+
+      {/* -------------------------------------------------- how it works */}
+      <section className="ax-section ax-section--ivory" id="how-it-works">
+        <div className="ax-wrap">
+          <p className="ax-eyebrow">How it works</p>
+          <h2 className="ax-display ax-h2">Three steps, no blockchain vocabulary required.</h2>
+          <div className="ax-grid ax-grid--3" style={{ marginTop: 32 }}>
+            {[
+              ['01', 'Discover a property', 'Browse listings with their valuation, the price of one token, how much is still available and who attested to the title.'],
+              ['02', 'Review and invest', 'Enter an amount, see exactly how many tokens it buys and what it costs, then confirm. The result you see is the one the settlement core returned.'],
+              ['03', 'Track what you own', 'Your holdings, the income distributed against them and every settlement that touched them stay visible, with a public record behind each entry.'],
+            ].map(([n, t, d]) => (
+              <div key={n} className="ax-card" style={{ background: '#fff' }}>
+                <div className="ax-mono" style={{ color: 'var(--ax-gold)', fontWeight: 700, fontSize: 13 }}>{n}</div>
+                <h3 className="ax-card-title" style={{ marginTop: 10 }}>{t}</h3>
+                <p className="ax-body" style={{ marginTop: 8 }}>{d}</p>
+              </div>
+            ))}
+          </div>
+          <p className="ax-hint" style={{ marginTop: 20, maxWidth: '70ch' }}>
+            Fractional ownership simply means a property is divided into equal units and you hold some
+            of them. The ledger underneath records who holds what; you never have to touch it.
+          </p>
+        </div>
+      </section>
+
+      {/* ----------------------------------------------------- calculator */}
+      <section className="ax-section">
+        <div className="ax-wrap ax-grid ax-grid--2" style={{ alignItems: 'center', gap: 40 }}>
+          <div>
+            <p className="ax-eyebrow">Work out the maths</p>
+            <h2 className="ax-display ax-h2">What does ₹5,000 buy?</h2>
+            <p className="ax-lede" style={{ fontSize: 16 }}>
+              At ₹500 a token, an amount simply divides. The calculator on a property page uses that
+              property&rsquo;s real token price, its availability and the limits the settlement core enforces.
+            </p>
+            <Button to="/tools" variant="secondary" style={{ marginTop: 22 }}>Open the calculators</Button>
+          </div>
+          <Card
+            title="Token calculator"
+            sub="Illustrative at ₹500 a token. Not a quote, and not tied to a listing."
+            right={<Badge tone="info">Illustrative</Badge>}
+            raised
+          >
+            <Field label="Amount to invest" htmlFor="ax-calc" hint="Whole tokens only: a part token cannot be issued.">
+              <MoneyInput id="ax-calc" value={amount} onChange={setAmount} aria-describedby="ax-calc-out" />
+            </Field>
+            <div id="ax-calc-out" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}>
+              <Metric label="Tokens" value={<Num>{tokens.toLocaleString('en-IN')}</Num>} />
+              <Metric label="Cost" value={<Num>{inr(tokens * tokenPrice)}</Num>} foot={tokens * tokenPrice !== Number(amount || 0) ? `${inr(Math.max(0, (Number(amount) || 0) - tokens * tokenPrice))} left over` : 'Exact'} />
+            </div>
+            <p className="ax-hint" style={{ marginTop: 14 }}>
+              No return is shown here. Rent and resale depend on the property and the market, and a
+              projected yield on a landing page is a guess dressed as a number.
+            </p>
+          </Card>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------- trust */}
+      <section className="ax-section ax-section--forest">
+        <div className="ax-wrap">
+          <p className="ax-eyebrow" style={{ color: 'var(--ax-gold)' }}>Trust and transparency</p>
+          <h2 className="ax-display ax-h2" style={{ maxWidth: '18ch' }}>What the record proves, and what it does not.</h2>
+          <div className="ax-grid ax-grid--3" style={{ marginTop: 34 }}>
+            {[
+              ['Registrar title validation', 'A registrar participant attests that the title is what the listing says. The attestation is signed, and withdrawing it names every holder it exposed.'],
+              ['Deed fingerprinting', 'The deed is hashed and only the fingerprint is stored. The document never leaves your machine during verification, and a changed byte changes the fingerprint.'],
+              ['Append-only ownership', 'Entries are added, never edited. Each block carries the hash of the one before it, so a quiet correction after the fact is detectable.'],
+              ['Atomic delivery versus payment', 'Tokens and money move in one operation. There is no moment where one side has paid and the other has not.'],
+              ['Public verification', 'The ledger, the attestations and the signatures can be checked by anyone, without an account and without asking this service to vouch for itself.'],
+              ['A ledger record is not a title deed', 'This is the limit worth stating plainly. A record here shows what this system was told and what it settled. Legal ownership of immovable property in India is established at the sub-registrar, not here.'],
+            ].map(([t, d], i) => (
+              <div key={t} style={{ borderTop: '1px solid rgba(255,255,255,.16)', paddingTop: 18 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 650, color: i === 5 ? 'var(--ax-gold)' : '#fff' }}>{t}</h3>
+                <p className="ax-body" style={{ marginTop: 8 }}>{d}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 34 }}>
+            <Button to="/verify" variant="onforest">Verify a deed</Button>
+            <Button to="/trust" variant="ghost" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}>What is real and what is not</Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------ ledger preview */}
+      <section className="ax-section">
+        <div className="ax-wrap">
+          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div>
+              <p className="ax-eyebrow">The record</p>
+              <h2 className="ax-display ax-h2">Ledger explorer</h2>
+              <p className="ax-lede" style={{ fontSize: 16 }}>The most recent entries, as the chain returned them.</p>
+            </div>
+            <Button to="/ledger" variant="secondary">Open the explorer</Button>
+          </header>
+
+          <Card pad="sm">
+            {blocksFailed ? (
+              <ErrorState title="The chain did not answer" detail="No block heights are shown rather than showing numbers nobody can check." />
+            ) : blocks === null ? (
+              <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2].map((i) => <div key={i} className="ax-skel" style={{ height: 44 }} />)}</div>
+            ) : blocks.length === 0 ? (
+              <EmptyState title="No blocks yet" body="Nothing has been settled on this instance of the chain." />
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="ax-table">
+                  <caption className="ax-sr">Most recent ledger entries</caption>
+                  <thead>
+                    <tr><th scope="col">Height</th><th scope="col">Type</th><th scope="col">Recorded</th><th scope="col">Block hash</th></tr>
+                  </thead>
+                  <tbody>
+                    {blocks.slice(0, 4).map((b) => (
+                      <tr key={b.height ?? b.hash}>
+                        <td className="ax-num"><Mono>#{b.height}</Mono></td>
+                        <td>{String(b.type || '').replace(/_/g, ' ').toLowerCase() || 'entry'}</td>
+                        <td className="ax-hint" style={{ whiteSpace: 'nowrap' }}>{b.timestamp ? new Date(b.timestamp).toLocaleString('en-IN') : 'not stated'}</td>
+                        <td><Mono title={b.hash}>{String(b.hash || '').slice(0, 18)}…</Mono></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      </section>
+
+      {/* ================= WHAT IS INSIDE =================
+          The home page once described the first six months of the project and
+          nothing after it. Everything built since existed only behind a URL
+          somebody had to be told about. This is the index of what is actually
+          in here, with the honest label on each one. */}
+      <section className="ax-section ax-section--ivory" id="inside">
+        <div className="ax-wrap">
+          <p className="ax-eyebrow">What is inside</p>
+          <h2 className="ax-display ax-h2">The whole system, not just the storefront.</h2>
+          <p className="ax-lede" style={{ fontSize: 16 }}>
+            Each of these is built and running, and each says plainly which part of it is a simulation.
+            Nothing here is a roadmap item.
+          </p>
+          <div className="ax-grid ax-grid--auto" style={{ marginTop: 32 }}>
+            {SHIPPED.map((f) => (
+              <Link key={f.t} to={f.to} className="ax-card" style={{ textDecoration: 'none', color: 'inherit', background: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                  <h3 className="ax-card-title" style={{ fontSize: 15.5 }}>{f.t}</h3>
+                  <Badge tone={/Simulated|No agent|Pattern/i.test(f.tag) ? 'sim' : 'success'}>{f.tag}</Badge>
+                </div>
+                <p className="ax-body" style={{ marginTop: 10, fontSize: 13.5 }}>{f.d}</p>
+                <span style={{ display: 'inline-block', marginTop: 12, fontSize: 13, fontWeight: 600, color: 'var(--ax-green)' }}>Open →</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------ FAQ */}
+      <section className="ax-section">
+        <div className="ax-wrap" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,.8fr) minmax(0,1.2fr)', gap: 44 }}>
+          <div>
+            <p className="ax-eyebrow">Questions</p>
+            <h2 className="ax-display ax-h2">Before you start</h2>
+            <p className="ax-lede" style={{ fontSize: 16 }}>
+              The answers people actually need, including the ones that are inconvenient for us.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
+              <Button to="/learn" variant="secondary" size="sm">Learn the system</Button>
+              <Button to="/support" variant="ghost" size="sm">Support</Button>
+            </div>
+          </div>
+          <div>
+            {FAQ.map((f) => (
+              <details key={f.q} style={{ borderBottom: '1px solid var(--ax-line)', padding: '16px 0' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 15.5, color: 'var(--ax-ink)' }}>{f.q}</summary>
+                <p className="ax-body" style={{ marginTop: 10 }}>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* -------------------------------------------------------- risk */}
+      <section className="ax-section ax-section--line" style={{ paddingTop: 44, paddingBottom: 44 }}>
+        <div className="ax-wrap">
+          <Card style={{ background: 'var(--ax-warning-wash)', borderColor: 'rgba(154,107,22,.28)' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+              <Badge tone="warning">Risk disclosure</Badge>
+              <Badge tone="sim">SIMULATION</Badge>
+            </div>
+            <p className="ax-body" style={{ color: 'var(--ax-ink)', maxWidth: '88ch' }}>
+              Property values fall as well as rise, rental income can stop, and a fractional holding can be
+              hard to sell when you want to sell it. This deployment is a demonstration: the settlement rail,
+              the digital rupee wallets and the identity checks are simulated, payment flows run against test
+              providers, and it is not connected to a live national payments rail or a production chain.
+              Nothing here is an offer, a solicitation or investment advice, and a record on this ledger is
+              not proof of legal title to immovable property.
+            </p>
+          </Card>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------- footer */}
+      <footer style={{ background: 'var(--ax-forest)', color: 'rgba(237,242,238,.78)', padding: '52px 0 36px' }}>
+        <div className="ax-wrap">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) repeat(3, minmax(0,1fr))', gap: 32 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+                  <path d="M13 3 23 10v13h-7v-7h-6v7H3V10z" fill="none" stroke="#C5A56A" strokeWidth="1.8" strokeLinejoin="round" />
+                </svg>
+                <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 19, color: '#fff', fontWeight: 600 }}>AasthiChain</span>
+              </div>
+              <p className="ax-body" style={{ marginTop: 12, maxWidth: '38ch' }}>
+                Fractional property ownership on a settlement rail that shows its working.
+              </p>
+            </div>
+            {[
+              ['Product', [['Explore properties', '/marketplace'], ['Ledger explorer', '/ledger'], ['Settlement rail', '/umi'], ['Verify a deed', '/verify']]],
+              ['Learn', [['Learn', '/learn'], ['Calculators', '/tools'], ['Insights', '/insights'], ['About', '/about']]],
+              ['Company', [['Support', '/support'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['Trust', '/trust']]],
+            ].map(([heading, links]) => (
+              <nav key={heading} aria-label={heading}>
+                <h2 style={{ fontSize: 12, letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', margin: '0 0 12px' }}>{heading}</h2>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 9 }}>
+                  {links.map(([label, to]) => (
+                    <li key={to}><Link to={to} style={{ color: 'rgba(237,242,238,.82)', textDecoration: 'none', fontSize: 14 }}>{label}</Link></li>
+                  ))}
+                </ul>
+              </nav>
+            ))}
+          </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,.14)', marginTop: 34, paddingTop: 20, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', fontSize: 12.5 }}>
+            <span>A demonstration of market infrastructure. Simulated settlement, real code.</span>
+            {!user && isClerkConfigured && (
+              <SignInButton mode="modal">
+                <button className="ax-btn ax-btn--ghost ax-btn--sm" style={{ color: '#fff' }}>Sign in</button>
+              </SignInButton>
+            )}
+          </div>
+        </div>
+      </footer>
+    </main>
   )
 }

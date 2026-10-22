@@ -6,6 +6,10 @@ import PropertyDocuments from '../components/PropertyDocuments.jsx'
 import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
 import { applySeo, propertySeo } from '../lib/seo.js'
+import {
+  Button, Badge, Card as AxCard, Metric, Progress, Breadcrumbs, ArchPlaceholder,
+  Num, Mono, InfoTip, inr, inrShort,
+} from '../components/ui.jsx'
 
 
 // Address check result, shown as it is. A listing whose pincode the India Post
@@ -238,67 +242,99 @@ export default function PropertyDetail({ user }) {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 16px' }}>
-      <Link to="/marketplace" style={{ fontSize: 13, color: '#1E3A5F', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
-        ← Back to Properties
-      </Link>
+    <main className="ax ax-wrap" style={{ maxWidth: 1120, paddingTop: 24, paddingBottom: 64 }}>
+      <Breadcrumbs items={[
+        { label: 'Home', to: '/' },
+        { label: 'Properties', to: '/marketplace' },
+        { label: property.title || id },
+      ]} />
 
-      <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+      {/* Overview. The photograph is drawn rather than stocked: a picture of
+          a building that is not this building, printed beside a valuation,
+          is the kind of small untruth this project avoids. */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 28, alignItems: 'start' }}>
+        <div style={{ borderRadius: 'var(--ax-r-lg)', overflow: 'hidden', border: '1px solid var(--ax-line)', aspectRatio: '16 / 10', background: 'var(--ax-ivory)' }}>
+          {property.imageUrl
+            ? <img src={property.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            : <ArchPlaceholder seed={property.assetId} label={`Illustration for ${property.title || property.assetId}`} />}
+        </div>
+
         <div>
-          <h1 className="pg-title">{property.title}</h1>
-          <p style={{ color: '#6B7280', fontSize: 13, marginTop: 6 }}>
-            📍 {property.location?.city || 'Pune'}, {property.location?.state || 'Maharashtra'} • Owner & seller: <strong>{property.originatorId || 'Owner'}</strong>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {property.status === 'TOKENIZED'
+              ? <Badge tone="success">Available</Badge>
+              : <Badge tone="warning">{property.registrarValidationStatus || property.status || 'Not yet available'}</Badge>}
+            {verif && (verif.verified ? <Badge tone="success">Checks passed</Badge> : <Badge tone="warning">Checks need attention</Badge>)}
+          </div>
+          <h1 className="ax-display ax-h2" style={{ fontSize: 'clamp(24px, 3vw, 32px)' }}>{property.title}</h1>
+          <p className="ax-body" style={{ marginTop: 8 }}>
+            {[property.location?.locality, property.location?.city, property.location?.state].filter(Boolean).join(', ') || 'Location not stated'}
+            {' · '}Owner and seller: <strong style={{ color: 'var(--ax-ink)' }}>{property.originatorId || 'Owner'}</strong>
           </p>
           {property.locationCheck && (
-            <p style={{ fontSize: 12, marginTop: 6, color: locationCheckTone(property.locationCheck.status) }}>
+            <p style={{ fontSize: 12.5, marginTop: 8, lineHeight: 1.55, color: locationCheckTone(property.locationCheck.status) }}>
               {locationCheckLabel(property.locationCheck)}
             </p>
           )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 20 }}>
+            <Metric label="Valuation" value={<Num>{inrShort(property.valuationINR)}</Num>} foot={<Num>{moneyExact(property.valuationINR)}</Num>} />
+            <Metric
+              label="Price per token"
+              value={<Num>{inr(tokenPrice)}</Num>}
+              foot={<><Num>{(property.totalTokens || 0).toLocaleString('en-IN')}</Num> tokens in issue</>}
+              tip="The valuation divided by the number of tokens issued. This is the figure the settlement core charges against; nothing on this page re-derives it."
+            />
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <Progress value={soldPct} label={`${soldPct} percent funded`} />
+            <p className="ax-hint" style={{ marginTop: 7 }}>
+              <Num>{soldPct}%</Num> funded · <Num>{Number(soldShown || 0).toLocaleString('en-IN')}</Num> of{' '}
+              <Num>{(property.totalTokens || 0).toLocaleString('en-IN')}</Num> tokens taken
+              {sub?.fullySubscribed ? ' · primary sale closed' : ''}
+            </p>
+          </div>
         </div>
-        <span style={{
-          fontSize: 12,
-          fontWeight: 600,
-          padding: '6px 12px',
-          borderRadius: 20,
-          background: property.status === 'TOKENIZED' ? '#F0FDF4' : '#FFFBEB',
-          color: property.status === 'TOKENIZED' ? '#059669' : '#D97706',
-          border: `1px solid ${property.status === 'TOKENIZED' ? '#BBF7D0' : '#FDE68A'}`
-        }}>
-          {property.status === 'TOKENIZED' ? 'Available' : property.registrarValidationStatus || property.status}
-        </span>
-      </div>
+      </section>
 
       {verif && (
-        <section style={{ marginTop: 24, background: 'white', border: `1px solid ${verif.verified ? '#BBF7D0' : '#FDE68A'}`, borderRadius: 12, padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Verification</h3>
-            <span style={{
-              fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 20,
-              background: verif.verified ? '#F0FDF4' : '#FFFBEB',
-              color: verif.verified ? '#059669' : '#D97706',
-              border: `1px solid ${verif.verified ? '#BBF7D0' : '#FDE68A'}`,
-            }}>
-              {verif.verified ? 'All checks passed' : 'Needs attention'}
-            </span>
-          </div>
-          <p style={{ fontSize: 12.5, color: '#4B5563', marginTop: 8, lineHeight: 1.6 }}>{verif.summary}</p>
+        <AxCard
+          style={{ marginTop: 28 }}
+          title="Verification"
+          sub="What each check establishes, and what it does not."
+          right={verif.verified ? <Badge tone="success">All checks passed</Badge> : <Badge tone="warning">Needs attention</Badge>}
+        >
+          <p className="ax-body">{verif.summary}</p>
 
-          <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '14px 0 0' }}>
             {(verif.checks || []).map(c => (
-              <li key={c.id} style={{ display: 'flex', gap: 10, padding: '9px 0', borderTop: '1px solid #F3F4F6' }}>
-                <span aria-hidden style={{ color: c.ok ? '#059669' : '#D97706', fontWeight: 800, lineHeight: 1.4 }}>{c.ok ? '✓' : '!'}</span>
-                <span>
-                  <strong style={{ fontSize: 13, color: '#111827' }}>{c.label}</strong>
-                  <span style={{ display: 'block', fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 1.55, wordBreak: 'break-word' }}>{c.detail}</span>
+              <li key={c.id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderTop: '1px solid var(--ax-line)' }}>
+                {/* The word carries the state, not the colour. */}
+                <span style={{ flex: 'none', marginTop: 1 }}>
+                  {c.ok ? <Badge tone="success">Passed</Badge> : <Badge tone="warning">Check</Badge>}
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <strong style={{ fontSize: 14, color: 'var(--ax-ink)' }}>{c.label}</strong>
+                  <span className="ax-body" style={{ display: 'block', fontSize: 13, marginTop: 3, wordBreak: 'break-word' }}>{c.detail}</span>
                 </span>
               </li>
             ))}
           </ul>
 
+          <p className="ax-hint" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--ax-line)' }}>
+            These checks say that a registrar attested to this title and that the recorded fingerprint
+            matches the deed presented. They do not say that the attestation is true, and a record here
+            is not proof of legal title: that is established at the sub-registrar.
+          </p>
+
           {(verif.chainEvidence || []).length > 0 && (
-            <p style={{ fontSize: 11.5, color: '#6B7280', marginTop: 12 }}>
-              On the ledger: {verif.chainEvidence.map(e => `#${e.height} ${e.type.replace(/_/g, ' ').toLowerCase()}`).join(' · ')}
-              {' — '}<Link to="/ledger" style={{ color: '#1E3A5F' }}>open the explorer</Link>
+            <p className="ax-hint" style={{ marginTop: 10 }}>
+              On the ledger:{' '}
+              {verif.chainEvidence.map(e => (
+                <span key={e.height}><Mono>#{e.height}</Mono> {e.type.replace(/_/g, ' ').toLowerCase()}{' '}</span>
+              ))}
+              <Link to="/ledger" style={{ color: 'var(--ax-green)', fontWeight: 600 }}>open the explorer</Link>
             </p>
           )}
 
@@ -359,7 +395,7 @@ export default function PropertyDetail({ user }) {
               </p>
             )}
           </details>
-        </section>
+        </AxCard>
       )}
 
       <PropertyDocuments assetId={id} />
@@ -656,6 +692,6 @@ export default function PropertyDetail({ user }) {
           />
         </div>
       )}
-    </div>
+    </main>
   )
 }

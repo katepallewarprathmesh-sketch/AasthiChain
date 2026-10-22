@@ -1,8 +1,25 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useProperties } from '../hooks/useProperties.js'
-import SimplePropertyCard from '../components/SimplePropertyCard.jsx'
+import {
+  Button, Badge, Card, Field, Input, Select, Segmented, PropertyCard, SkeletonCard,
+  EmptyState, ErrorState, Num, inr, inrShort, Progress, Breadcrumbs,
+} from '../components/ui.jsx'
 
+/**
+ * Property discovery.
+ *
+ * The filtering and sorting logic is unchanged: it runs client-side over the
+ * list the hook already fetched, so changing a control is instant and costs
+ * no extra request. What changed is everything around it, plus three states
+ * this page used to collapse into one: loading, genuinely empty, and "we
+ * could not ask". A visitor who sees an empty grid should know which of
+ * those three happened.
+ *
+ * The secondary market is deliberately only a signpost here. This page lists
+ * primary offerings; resale prices and depth come from the market API on
+ * /market, and inventing either would be inventing liquidity.
+ */
 export default function Marketplace({ user }) {
   const [filter, setFilter] = useState('')
   const [cityFilter, setCityFilter] = useState('')
@@ -11,25 +28,24 @@ export default function Marketplace({ user }) {
   const [maxPrice, setMaxPrice] = useState('')
   const [sort, setSort] = useState('')
   const [search, setSearch] = useState('')
+  const [layout, setLayout] = useState('grid')
 
   const { properties, loading, error, refresh } = useProperties(filter)
 
-  const priceOf = p => Number(p.pricePerTokenINR) ||
+  const priceOf = (p) => Number(p.pricePerTokenINR) ||
     (p.totalTokens ? p.valuationINR / p.totalTokens : 0)
 
-  // Filtering and sorting run client-side over the already-fetched list, so
-  // changing a control is instant and costs no extra request.
-  const filtered = properties.filter(p => {
+  const filtered = useMemo(() => (properties || []).filter((p) => {
     if (cityFilter && p.location?.city !== cityFilter) return false
     if (typeFilter && p.propertyType !== typeFilter) return false
     if (minYield && Number(p.expectedYieldPct || 0) < Number(minYield)) return false
     if (maxPrice && priceOf(p) > Number(maxPrice)) return false
     if (search) {
-      const hay = `${p.title || ''} ${p.location?.city || ''} ${p.propertyType || ''}`.toLowerCase()
+      const hay = `${p.title || ''} ${p.location?.city || ''} ${p.location?.locality || ''} ${p.propertyType || ''}`.toLowerCase()
       if (!hay.includes(search.toLowerCase())) return false
     }
     return true
-  })
+  }), [properties, cityFilter, typeFilter, minYield, maxPrice, search])
 
   const sorters = {
     yield: (a, b) => Number(b.expectedYieldPct || 0) - Number(a.expectedYieldPct || 0),
@@ -40,210 +56,182 @@ export default function Marketplace({ user }) {
   }
   const shown = sort && sorters[sort] ? [...filtered].sort(sorters[sort]) : filtered
 
-  const cities = [...new Set(properties.map(p => p.location?.city).filter(Boolean))].sort()
-  const types = [...new Set(properties.map(p => p.propertyType).filter(Boolean))].sort()
-  const clearAll = () => { setFilter(''); setCityFilter(''); setTypeFilter(''); setMinYield(''); setMaxPrice(''); setSort(''); setSearch('') }
+  const cities = [...new Set((properties || []).map((p) => p.location?.city).filter(Boolean))].sort()
+  const types = [...new Set((properties || []).map((p) => p.propertyType).filter(Boolean))].sort()
+  const clearAll = () => {
+    setFilter(''); setCityFilter(''); setTypeFilter(''); setMinYield('')
+    setMaxPrice(''); setSort(''); setSearch('')
+  }
   const activeFilters = [cityFilter, typeFilter, minYield, maxPrice, search, filter].filter(Boolean).length
 
   return (
-    <div className="pg">
-      <div style={{ marginBottom: 24 }}>
-        <h1 className="pg-title">Properties</h1>
-        <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6, maxWidth: '60ch' }}>
-          Own a piece of premium properties from ₹500. Secure, instant, no paperwork.
-        </p>
-      </div>
+    <main className="ax ax-wrap" style={{ paddingTop: 28, paddingBottom: 72 }}>
+      <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Properties' }]} />
 
-      <div style={{
-        background: 'white',
-        border: '1px solid #E5E7EB',
-        borderRadius: 12,
-        padding: '14px 16px',
-        marginBottom: 20,
-        display: 'flex',
-        gap: 10,
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #E5E7EB',
-            borderRadius: 8,
-            fontSize: 13,
-            background: 'white'
-          }}
-        >
-          <option value="">All Properties</option>
-          <option value="TOKENIZED">Available Now</option>
-          <option value="DRAFT">Coming Soon</option>
-        </select>
-
-        <select
-          value={cityFilter}
-          onChange={e => setCityFilter(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #E5E7EB',
-            borderRadius: 8,
-            fontSize: 13,
-            background: 'white'
-          }}
-        >
-          <option value="">All Cities</option>
-          {cities.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        <select
-          value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
-          style={{ padding: '8px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}
-        >
-          <option value="">All Types</option>
-          {types.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-
-        <select
-          value={minYield}
-          onChange={e => setMinYield(e.target.value)}
-          title="Minimum expected rental yield"
-          style={{ padding: '8px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}
-        >
-          <option value="">Any Yield</option>
-          <option value="6">6%+ yield</option>
-          <option value="8">8%+ yield</option>
-          <option value="10">10%+ yield</option>
-        </select>
-
-        <select
-          value={maxPrice}
-          onChange={e => setMaxPrice(e.target.value)}
-          title="Maximum price per token - your minimum investment"
-          style={{ padding: '8px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}
-        >
-          <option value="">Any Entry Price</option>
-          <option value="250">Under ₹250/token</option>
-          <option value="500">Under ₹500/token</option>
-          <option value="1000">Under ₹1,000/token</option>
-        </select>
-
-        <select
-          value={sort}
-          onChange={e => setSort(e.target.value)}
-          style={{ padding: '8px 12px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, background: 'white' }}
-        >
-          <option value="">Sort: Default</option>
-          <option value="yield">Highest yield</option>
-          <option value="priceAsc">Lowest entry price</option>
-          <option value="priceDesc">Highest entry price</option>
-          <option value="funded">Most funded</option>
-          <option value="valuation">Largest value</option>
-        </select>
-
-        <input
-          placeholder="Search name, city or type"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #E5E7EB',
-            borderRadius: 8,
-            fontSize: 13,
-            minWidth: 200,
-            flex: 1
-          }}
-        />
-
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#9CA3AF' }}>{shown.length} of {properties.length} properties{activeFilters > 0 ? ` · ${activeFilters} filter${activeFilters > 1 ? 's' : ''}` : ''}</span>
-          <button
-            onClick={refresh}
-            style={{
-              padding: '8px 14px',
-              border: '1px solid #E5E7EB',
-              borderRadius: 8,
-              background: 'white',
-              fontSize: 13,
-              cursor: 'pointer'
-            }}
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <div style={{
-            width: 32,
-            height: 32,
-            border: '3px solid #E5E7EB',
-            borderTopColor: '#1E3A5F',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            margin: '0 auto'
-          }}></div>
-          <p style={{ color: '#6B7280', fontSize: 14, marginTop: 12 }}>Loading properties...</p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-        </div>
-      ) : error ? (
-        <div style={{
-          background: '#FEF2F2',
-          border: '1px solid #FECACA',
-          borderRadius: 12,
-          padding: 20,
-          textAlign: 'center'
-        }}>
-          <p style={{ fontSize: 14, color: '#991B1B' }}>Failed to load: {error}</p>
-          <button onClick={refresh} style={{
-            marginTop: 12,
-            padding: '8px 16px',
-            background: '#1E3A5F',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer'
-          }}>
-            Try Again
-          </button>
-        </div>
-      ) : shown.length === 0 ? (
-        <div style={{
-          background: 'white',
-          border: '1px solid #E5E7EB',
-          borderRadius: 12,
-          padding: '40px 20px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: 32 }}>🏠</div>
-          <p style={{ fontSize: 16, fontWeight: 600, marginTop: 12, color: '#111827' }}>No properties found</p>
-          <p style={{ fontSize: 13, color: '#6B7280', marginTop: 6, maxWidth: '40ch', margin: '6px auto 0' }}>
-            Try changing filters or search. Or register a new property if you are an owner.
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 22, flexWrap: 'wrap', marginBottom: 26 }}>
+        <div>
+          <p className="ax-eyebrow">Primary market</p>
+          <h1 className="ax-display ax-h2">Properties</h1>
+          <p className="ax-lede" style={{ fontSize: 16 }}>
+            Fractional ownership from ₹500. Every figure on a card comes from the property record;
+            where something has not been published, the card says so.
           </p>
-          <button onClick={clearAll} style={{
-            marginTop: 16,
-            padding: '8px 16px',
-            border: '1px solid #E5E7EB',
-            borderRadius: 8,
-            background: 'white',
-            cursor: 'pointer'
-          }}>
-            Clear Filters
-          </button>
+        </div>
+        <Card pad="sm" style={{ minWidth: 260 }}>
+          <h2 className="ax-card-title" style={{ fontSize: 14 }}>Looking to buy from another holder?</h2>
+          <p className="ax-body" style={{ fontSize: 13, marginTop: 6 }}>
+            Resale offers live on the secondary market, priced by the people posting them.
+          </p>
+          <Button to="/market" variant="secondary" size="sm" style={{ marginTop: 12 }}>Open secondary market</Button>
+        </Card>
+      </header>
+
+      {/* ------------------------------------------------------- controls */}
+      <Card pad="sm" style={{ marginBottom: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.4fr) repeat(auto-fit, minmax(140px, 1fr))', gap: 12, alignItems: 'end' }}>
+          <Field label="Search" htmlFor="mk-search">
+            <Input
+              id="mk-search" type="search" placeholder="Name, locality or city"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+            />
+          </Field>
+          <Field label="Availability" htmlFor="mk-status">
+            <Select id="mk-status" value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="">All properties</option>
+              <option value="TOKENIZED">Available now</option>
+              <option value="DRAFT">Coming soon</option>
+            </Select>
+          </Field>
+          <Field label="City" htmlFor="mk-city">
+            <Select id="mk-city" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+              <option value="">All cities</option>
+              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </Field>
+          <Field label="Type" htmlFor="mk-type">
+            <Select id="mk-type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+              <option value="">All types</option>
+              {types.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </Field>
+          <Field label="Max token price" htmlFor="mk-price">
+            <Select id="mk-price" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)}>
+              <option value="">Any price</option>
+              <option value="500">Up to ₹500</option>
+              <option value="1000">Up to ₹1,000</option>
+              <option value="5000">Up to ₹5,000</option>
+            </Select>
+          </Field>
+          <Field label="Indicated yield" htmlFor="mk-yield" tip="Yield shown by the originator on the listing. It is an expectation, not a promise, and nothing here verifies it.">
+            <Select id="mk-yield" value={minYield} onChange={(e) => setMinYield(e.target.value)}>
+              <option value="">Any</option>
+              <option value="6">6% and above</option>
+              <option value="8">8% and above</option>
+              <option value="10">10% and above</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--ax-line)' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="ax-hint" role="status">
+              {loading ? 'Loading properties' : <><Num>{shown.length}</Num> of <Num>{(properties || []).length}</Num> shown</>}
+            </span>
+            {activeFilters > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearAll}>Clear {activeFilters} filter{activeFilters > 1 ? 's' : ''}</Button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Field label="" htmlFor="mk-sort">
+              <Select id="mk-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort properties">
+                <option value="">Sort: default</option>
+                <option value="priceAsc">Token price, low to high</option>
+                <option value="priceDesc">Token price, high to low</option>
+                <option value="valuation">Valuation, high to low</option>
+                <option value="funded">Most funded</option>
+                <option value="yield">Indicated yield</option>
+              </Select>
+            </Field>
+            <Segmented
+              label="Layout"
+              value={layout}
+              onChange={setLayout}
+              options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* --------------------------------------------------------- results */}
+      {error ? (
+        <ErrorState
+          title="Properties did not load"
+          detail="The listing service did not answer, so nothing is shown. A stale cache would look identical to a live list, which is worse than an empty page."
+          onRetry={refresh}
+        />
+      ) : loading ? (
+        <div className="ax-grid ax-grid--auto">{[0, 1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} />)}</div>
+      ) : shown.length === 0 ? (
+        <EmptyState
+          title={activeFilters ? 'Nothing matches those filters' : 'No properties are listed yet'}
+          body={activeFilters
+            ? 'Try widening the price range or clearing the city filter.'
+            : 'When an originator lists a property and a registrar attests to its title, it appears here.'}
+          action={activeFilters ? <Button variant="secondary" size="sm" onClick={clearAll}>Clear filters</Button> : null}
+        />
+      ) : layout === 'grid' ? (
+        <div className="ax-grid ax-grid--auto">
+          {shown.map((p) => <PropertyCard key={p.assetId} p={p} />)}
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: 16
-        }}>
-          {shown.map(prop => (
-            <SimplePropertyCard key={prop.assetId} property={prop} />
-          ))}
-        </div>
+        <Card pad="sm">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="ax-table">
+              <caption className="ax-sr">Properties, as a table</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Property</th>
+                  <th scope="col">Location</th>
+                  <th scope="col" className="ax-num">Valuation</th>
+                  <th scope="col" className="ax-num">Per token</th>
+                  <th scope="col">Funded</th>
+                  <th scope="col">Title</th>
+                  <th scope="col"><span className="ax-sr">Action</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((p) => {
+                  const price = priceOf(p)
+                  const verified = p.verified === true || p.verificationStatus === 'VERIFIED' || p.registryVerified === true
+                  const funded = Number(p.fundedPct)
+                  return (
+                    <tr key={p.assetId}>
+                      <td style={{ fontWeight: 600 }}>{p.title || p.assetId}</td>
+                      <td className="ax-hint">{[p.location?.locality, p.location?.city].filter(Boolean).join(', ') || 'Not stated'}</td>
+                      <td className="ax-num">{p.valuationINR ? inrShort(p.valuationINR) : '–'}</td>
+                      <td className="ax-num">{price ? inr(Math.round(price)) : '–'}</td>
+                      <td style={{ minWidth: 130 }}>
+                        {Number.isFinite(funded) && funded > 0
+                          ? <><Progress value={funded} label={`${Math.round(funded)} percent funded`} /><span className="ax-hint"><Num>{Math.round(funded)}%</Num></span></>
+                          : <span className="ax-hint">Not published</span>}
+                      </td>
+                      <td>{verified ? <Badge tone="success">Registrar verified</Badge> : <Badge tone="warning">Pending</Badge>}</td>
+                      <td><Button to={`/property/${encodeURIComponent(p.assetId)}`} size="sm" variant="secondary">View</Button></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
-    </div>
+
+      <p className="ax-hint" style={{ marginTop: 26, maxWidth: '82ch' }}>
+        A listing is a record on this platform, not a registered conveyance. Verification means a
+        registrar participant attested to the title and the deed fingerprint matches; it does not mean
+        this platform inspected the property. Values can fall, income can stop, and a fractional
+        holding may be hard to sell when you want to sell it.
+      </p>
+    </main>
   )
 }
