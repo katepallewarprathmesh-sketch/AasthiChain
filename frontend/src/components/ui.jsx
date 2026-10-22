@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { propertyImage, REPRESENTATIVE_NOTE } from '../lib/propertyImages.js'
 
 /**
  * The AasthiChain design system, as components.
@@ -385,16 +386,28 @@ export function PropertyCard({ p, href }) {
   const available = Number(p.availableTokens ?? p.tokensAvailable ?? NaN)
   const funded = Number(p.fundedPct)
   const verified = p.verified === true || p.verificationStatus === 'VERIFIED' || p.registryVerified === true
+  const img = propertyImage(p)
   const to = href || `/property/${encodeURIComponent(p.assetId)}`
   return (
     <article className="ax-pcard">
       <div className="ax-pcard-media">
-        {p.imageUrl
-          ? <img src={p.imageUrl} alt="" loading="lazy" />
+        {img.src
+          ? <img src={img.src} alt={img.isRepresentative ? '' : `${p.title || p.assetId}`} loading="lazy" />
           : <ArchPlaceholder seed={p.assetId} label={`Illustration for ${p.title || p.assetId}`} />}
         {verified
           ? <Badge tone="success">Registrar verified</Badge>
           : <Badge tone="warning">Verification pending</Badge>}
+        {/* The picture is generic unless the owner supplied one. Saying so on
+            the image itself is the only place a reader will reliably see it. */}
+        {img.isRepresentative && (
+          <span
+            title={REPRESENTATIVE_NOTE}
+            style={{
+              position: 'absolute', right: 10, bottom: 10, fontSize: 10.5, fontWeight: 600,
+              padding: '3px 8px', borderRadius: 999, background: 'rgba(23,33,43,.72)', color: '#fff',
+            }}
+          >Representative image</span>
+        )}
       </div>
       <div className="ax-pcard-body">
         <div>

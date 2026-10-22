@@ -10,6 +10,7 @@ import {
   Button, Badge, Card as AxCard, Metric, Progress, Breadcrumbs, ArchPlaceholder,
   Num, Mono, InfoTip, inr, inrShort,
 } from '../components/ui.jsx'
+import { propertyImage, REPRESENTATIVE_NOTE } from '../lib/propertyImages.js'
 
 
 // Address check result, shown as it is. A listing whose pincode the India Post
@@ -241,6 +242,8 @@ export default function PropertyDetail({ user }) {
     }
   }
 
+  const heroImage = propertyImage(property)
+
   return (
     <main className="ax ax-wrap" style={{ maxWidth: 1120, paddingTop: 24, paddingBottom: 64 }}>
       <Breadcrumbs items={[
@@ -253,11 +256,20 @@ export default function PropertyDetail({ user }) {
           a building that is not this building, printed beside a valuation,
           is the kind of small untruth this project avoids. */}
       <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 28, alignItems: 'start' }}>
-        <div style={{ borderRadius: 'var(--ax-r-lg)', overflow: 'hidden', border: '1px solid var(--ax-line)', aspectRatio: '16 / 10', background: 'var(--ax-ivory)' }}>
-          {property.imageUrl
-            ? <img src={property.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            : <ArchPlaceholder seed={property.assetId} label={`Illustration for ${property.title || property.assetId}`} />}
-        </div>
+        <figure style={{ margin: 0 }}>
+          <div style={{ position: 'relative', borderRadius: 'var(--ax-r-lg)', overflow: 'hidden', border: '1px solid var(--ax-line)', aspectRatio: '16 / 10', background: 'var(--ax-ivory)' }}>
+            {heroImage.src
+              ? <img
+                  src={heroImage.src}
+                  alt={heroImage.isRepresentative ? '' : `${property.title || property.assetId}`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              : <ArchPlaceholder seed={property.assetId} label={`Illustration for ${property.title || property.assetId}`} />}
+          </div>
+          {heroImage.isRepresentative && (
+            <figcaption className="ax-hint" style={{ marginTop: 8 }}>{REPRESENTATIVE_NOTE}</figcaption>
+          )}
+        </figure>
 
         <div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
