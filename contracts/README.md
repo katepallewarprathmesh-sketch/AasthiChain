@@ -1,3 +1,66 @@
+# PropertyToken.sol: the public-chain leg of a fractional property
+
+The asset tokens are issued, transferred and settled on the permissioned rail.
+`PropertyToken.sol` exists so a holder can prove a position on a public chain
+without asking us, and so a counterparty who will only trust a public chain
+gets the same arithmetic.
+
+It is a mirror, not the record. Where the two disagree, the rail is right.
+Settlement, the cash leg and conservation stay on the rail, because a public
+chain is final under rules the regulator does not set.
+
+## The standard, and why
+
+ERC-20 for the base, so an ordinary wallet or venue sees a token it already
+understands, plus **ERC-7943 (uRWA)**, Final since May 2026, for the
+restriction surface: `canTransact`, `canTransfer`, `getFrozenTokens`,
+`setFrozenTokens`, `forcedTransfer`, with the `ForcedTransfer` and `Frozen`
+events and the three standard errors.
+
+The arrangement is the one **ERC-3643** uses: the token holds balances, an
+identity registry says who may hold, a compliance contract holds the rules of
+the offering, and agent roles carry the powers an issuer and a regulator
+actually need (freeze, forced transfer, recovery, pause).
+
+Two standards were considered and not used. **ERC-1400** was rejected because
+its one real advantage over the alternatives is partitions, which a single
+property's fractional interest does not use, and the family never left Draft.
+**ERC-3643 with ONCHAINID** was rejected only for its identity half: it
+prescribes a per-investor identity contract, and this project already has
+DIDs, verifiable credentials, KYC tiers and a signing-key register. Running
+two identity systems that must agree is a promise that one day they will not.
+ERC-7943 is deliberately identity-agnostic, which is the right seam when the
+identity layer already exists.
+
+## What is enforced, and where
+
+Every ordinary movement goes through one internal gate, so a restriction
+cannot be sidestepped by using `transferFrom` or an approval instead of
+`transfer`. Minting passes the same eligibility check as a purchase.
+
+- unverified or lapsed holder: refused
+- lock-up still running on the receiving side: refused
+- offering caps (holders, position per holder, minimum KYC tier): refused
+- frozen tokens: the unfrozen part still moves, the frozen part does not
+- `forcedTransfer`: agent only, and still refuses an ineligible recipient
+- recovery of a lost key: only to another wallet of the same investor
+
+## Running it
+
+```bash
+npm i --no-save solc@0.8.26 ethers@6
+npx ganache --wallet.deterministic --chain.chainId 1337
+node contracts/deploy-token.mjs            # prints the addresses to export
+node tests/propertytoken.test.mjs          # 66 checks against a live deployment
+```
+
+The suite skips cleanly when solc, ethers or a chain is absent, so the normal
+gate is unaffected. Nothing in the deploy script mints: supply on the public
+chain should follow the rail, never lead it.
+
+
+---
+
 # Payment Escrow: Sepolia Testnet, Atomic DvP Settlement Pattern Demo
 
 **Purpose:** Demonstrate real on-chain testnet transactions demonstrating an atomic delivery-vs-payment settlement pattern. It uses Sepolia test ETH, which has no monetary value.

@@ -118,7 +118,7 @@ so we didn't have to teach it anything new."*
 
 ### 6 · Close on verifiability (15s)
 
-> "Everything you just saw is in one public repository: the settlement core in Go, 104 integration
+> "Everything you just saw is in one public repository: the settlement core in Go, 105 integration
 > suites and 57 Go test files, green in CI on every commit. You can clone it and re-run the
 > conservation proof yourself."
 
