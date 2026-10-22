@@ -45,6 +45,10 @@ func corridorStatusFor(err error) (int, string) {
 		return http.StatusConflict, "ERR_UMI_CORRIDOR_STATE"
 	case errors.Is(err, ErrCorridorSecret):
 		return http.StatusForbidden, "ERR_UMI_CORRIDOR_SECRET"
+	case errors.Is(err, ErrAMLBlocked):
+		// Screening refused it, not the corridor. The caller is told which,
+		// because the two have entirely different remedies.
+		return http.StatusForbidden, "ERR_UMI_AML_BLOCKED"
 	default:
 		code, reason := cbdcStatusFor(err)
 		if reason != "ERR_UMI_CBDC_FIELDS" {

@@ -208,6 +208,11 @@ type CorridorDesk struct {
 	corridors map[string]Corridor
 	transfers map[string]*CorridorTransfer
 	order     []string
+
+	// AML is optional. When a desk is attached, the parties named under the
+	// Travel Rule are screened before anything moves, and a listed name
+	// stops the payment instead of being noticed afterwards.
+	AML *AMLDesk
 }
 
 // NewCorridorDesk wires the layer. Licences come from CORRIDOR_LICENCES as a
@@ -386,6 +391,24 @@ func (d *CorridorDesk) Send(req SendRequest, now time.Time) (*CorridorTransfer, 
 		return nil, fmt.Errorf("%w: above %s this corridor carries originator and beneficiary details, and one of them is missing",
 			ErrCorridorTravel, rupees(travelRulePaise))
 	}
+	// Sanctions and PEP screening, before the money moves rather than in a
+	// report the following morning. Only the names the Travel Rule already
+	// requires are screened; a corridor that carries no names has nothing to
+	// screen, which is itself worth knowing.
+	if d.AML != nil {
+		scr := d.AML.ScreenParties(req.Originator, req.Beneficiary)
+		switch scr.Decision {
+		case AMLBlock:
+			d.AML.OpenCase(scr, req.Payer, req.CorridorID, req.Payee, req.AmountPaise)
+			d.refuseLocked(c, req, "SANCTIONS", scr.Note)
+			return nil, fmt.Errorf("%w: %s", ErrAMLBlocked, scr.Note)
+		case AMLReview:
+			// A near match is a question, not an answer. The payment goes,
+			// and a case is open before it lands.
+			d.AML.OpenCase(scr, req.Payer, req.CorridorID, req.Payee, req.AmountPaise)
+		}
+	}
+
 	if !chk.Eligible {
 		reason := "INELIGIBLE"
 		errOut := ErrCorridorCap

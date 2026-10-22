@@ -339,10 +339,25 @@ func cbdcID(prefix string) string {
 }
 
 // walletLocked fetches or opens a wallet. Caller holds l.mu.
+//
+// A corridor's suspense account is infrastructure, not somebody's wallet: it
+// is where money waits while a far leg is outstanding. Opened as a retail
+// wallet it inherited retail KYC ceilings, and a four lakh rupee remittance
+// was then refused for exceeding a ten thousand rupee holding cap that has no
+// business applying to a settlement account. Infrastructure holders are
+// wholesale, which capsFor already treats as uncapped.
 func (l *CBDCLedger) walletLocked(holder, segment, tier string) *CBDCAccount {
 	holder = strings.TrimSpace(holder)
+	infrastructure := strings.HasPrefix(holder, "suspense:")
 	if w, ok := l.wallets[holder]; ok {
+		if infrastructure && w.Segment != CBDCWholesale {
+			w.Segment = CBDCWholesale
+			w.KYCTier = KYCFull
+		}
 		return w
+	}
+	if infrastructure {
+		segment, tier = CBDCWholesale, KYCFull
 	}
 	if segment == "" {
 		segment = CBDCRetail

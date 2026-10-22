@@ -602,6 +602,111 @@ function OfflineDesk({ me, act }) {
   )
 }
 
+// Screening is shown next to the money it stops, rather than in a compliance
+// console nobody opens. The list is public: a person refused by a screen is
+// entitled to see what they were screened against.
+function Screening({ aml, cases, user, reload }) {
+  const [checked, setChecked] = useState(null)
+  if (!aml) return null
+  const act = run(reload)
+  const counts = aml.cases || {}
+
+  return (
+    <Card
+      title="Sanctions and politically exposed person screening"
+      sub="A name is matched against a list before the money moves. A match stops the payment and opens a case; a near match opens a case and lets a person decide, because a resemblance is a question rather than an answer."
+      right={<Tag tone={aml.listIsSynthetic ? 'sim' : 'live'}>{aml.listIsSynthetic ? 'Synthetic list' : 'Configured list'}</Tag>}
+    >
+      <div className="pg-kv">
+        <div>List</div><div>{aml.listName}</div>
+        <div>Entries</div><div>{aml.listSize} ({aml.sanctionEntries} sanctions, {aml.pepEntries} politically exposed)</div>
+        <div>Stops a payment at</div><div>{aml.thresholds?.block} similarity</div>
+        <div>Opens a case at</div><div>{aml.thresholds?.review} similarity</div>
+        <div>Cases</div>
+        <div>{counts.OPEN || 0} open, {counts.UNDER_REVIEW || 0} in review, {counts.CLEARED || 0} cleared, {counts.REPORTED || 0} reported</div>
+        <div>Reports produced</div><div>{aml.reports || 0}</div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <ActionForm
+          hint="Screen a name without moving anything. This is the same check the payment path runs, against the same list."
+          fields={[{ name: 'name', label: 'Name to screen', placeholder: 'Dmitri Volkanov' }]}
+          submitLabel="Screen"
+          onSubmit={async (f) => {
+            const { ok, data } = await umiPost('/aml/screen', { name: f.name })
+            if (!ok) return { ok: false, message: explainRail(data) }
+            setChecked(data.screening)
+            return { ok: data.screening.decision === 'CLEAR', message: data.screening.note }
+          }}
+        />
+      </div>
+
+      {checked && checked.matches && checked.matches.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <h3 className="pg-card-title" style={{ fontSize: 16 }}>Why it matched</h3>
+          {checked.matches.map((m) => (
+            <div key={m.entry.listId + m.matchedOn} className="pg-row" style={{ padding: '10px 0', borderTop: '1px solid #E2E8F0' }}>
+              <div>
+                <b>{m.entry.name}</b>{' '}
+                <Tag tone={m.entry.kind === 'PEP' ? 'neutral' : 'bad'}>{m.entry.kind === 'PEP' ? 'politically exposed' : 'sanctioned'}</Tag>{' '}
+                <Tag tone="neutral">score {m.score}</Tag>
+              </div>
+              <p className="pg-card-sub" style={{ marginTop: 4 }}>
+                Matched on {m.matchedOn}. {m.why}. Listed under {m.entry.programme}, source {m.entry.source}.
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {user && cases.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <h3 className="pg-card-title" style={{ fontSize: 16 }}>Open cases</h3>
+          <p className="pg-card-sub">A hit is not a decision. Somebody reviews it, writes down what they concluded, and either clears it or escalates it into a report.</p>
+          {cases.map((c) => (
+            <div key={c.caseId} className="pg-row" style={{ padding: '12px 0', borderTop: '1px solid #E2E8F0' }}>
+              <div>
+                <b>{c.subject}</b>{' '}
+                <Tag tone={c.status === 'CLEARED' ? 'live' : c.status === 'REPORTED' ? 'bad' : 'sim'}>{c.status.replace(/_/g, ' ').toLowerCase()}</Tag>
+              </div>
+              <p className="pg-card-sub" style={{ marginTop: 4 }}>
+                {c.caseId}{c.relatedRef ? ' · ' + c.relatedRef : ''}{c.amountPaise ? ' · ' + money(c.amountPaise) : ''}
+                {c.reviewer ? ' · reviewer ' + c.reviewer : ''}{c.reportId ? ' · report ' + c.reportId : ''}
+              </p>
+              {(c.notes || []).slice(-2).map((n, i) => (
+                <p key={i} className="pg-card-sub" style={{ marginTop: 2 }}>{n.action.toLowerCase()}: {n.text}</p>
+              ))}
+              {(c.status === 'OPEN' || c.status === 'UNDER_REVIEW') && (
+                <div className="pg-grid" style={{ gap: 16, marginTop: 8 }}>
+                  <ActionForm
+                    fields={[{ name: 'reason', label: 'Clear it, with grounds', placeholder: 'Same name, different passport and date of birth' }]}
+                    submitLabel="Clear"
+                    onSubmit={(f) => act(`/aml/cases/${encodeURIComponent(c.caseId)}/clear`, { reason: f.reason },
+                      () => 'Cleared, with the grounds recorded against your name.')}
+                  />
+                  <ActionForm
+                    fields={[
+                      { name: 'grounds', label: 'Grounds for suspicion', placeholder: 'Name matches a listed entity; purpose inconsistent' },
+                      { name: 'narrative', label: 'What was observed', placeholder: 'Payment to an entity matching a listed party, no documentation' },
+                    ]}
+                    submitLabel="Produce a report"
+                    onSubmit={(f) => act(`/aml/cases/${encodeURIComponent(c.caseId)}/report`, {
+                      grounds: String(f.grounds || '').split(';').map((x) => x.trim()).filter(Boolean),
+                      narrative: f.narrative,
+                    }, (d) => `Report ${d.report.reportId} produced, hash recorded in block ${d.report.blockHeight}. It has not been filed with anybody.`)}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="pg-card-sub" style={{ marginTop: 14, opacity: 0.85 }}>{aml.disclaimer}</p>
+    </Card>
+  )
+}
+
 export default function DigitalRupee({ user = null }) {
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -610,6 +715,8 @@ export default function DigitalRupee({ user = null }) {
   const [movements, setMovements] = useState([])
   const [corridors, setCorridors] = useState(null)
   const [transfers, setTransfers] = useState([])
+  const [aml, setAml] = useState(null)
+  const [amlCases, setAmlCases] = useState([])
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -619,7 +726,7 @@ export default function DigitalRupee({ user = null }) {
       const { ok, data } = await umiFetch(path)
       return ok ? data : fallback
     }
-    const [st, acc, gr, co, mv, cor, tr] = await Promise.all([
+    const [st, acc, gr, co, mv, cor, tr, aml, amlCases] = await Promise.all([
       get('/cbdc', null),
       get('/cbdc/accounts', {}),
       get('/cbdc/grants', {}),
@@ -627,6 +734,8 @@ export default function DigitalRupee({ user = null }) {
       get('/cbdc/movements?limit=25', {}),
       get('/corridors', null),
       get('/corridors/transfers?limit=15', {}),
+      get('/aml', null),
+      get('/aml/cases?limit=10', {}),
     ])
     if (!st) setErr('This deployment does not have the digital rupee layer mounted.')
     setStatus(st)
@@ -636,6 +745,8 @@ export default function DigitalRupee({ user = null }) {
     setMovements(mv.movements || [])
     setCorridors(cor)
     setTransfers(tr.transfers || [])
+    setAml(aml)
+    setAmlCases(amlCases.cases || [])
     setLoading(false)
   }, [])
 
@@ -657,6 +768,7 @@ export default function DigitalRupee({ user = null }) {
       <Accounts accounts={accounts} />
       <Corridors corridors={(corridors && corridors.corridors) || []} blocked={corridors && corridors.blockedCorridors} />
       <Transfers transfers={transfers} user={user} reload={load} />
+      <Screening aml={aml} cases={amlCases} user={user} reload={load} />
       <Movements movements={movements} />
       {status && accounts.length === 0 && (
         <Card title="Nothing has happened yet">

@@ -249,8 +249,11 @@ func main() {
 
 		// Cross-border corridors on top of the CBDC layer: each rail with
 		// its own licence requirement, caps and settlement model.
+		srv.AML = drunix.NewAMLDesk(chain)
 		srv.Corridors = drunix.NewCorridorDesk(srv.UMI, chain, srv.CBDC)
+		srv.Corridors.AML = srv.AML
 		log.Printf("Corridors mounted at /umi/corridors/*: simulated, this deployment holds no payment licence")
+		log.Printf("AML screening mounted at /umi/aml/*: %s", drunix.AMLListDescription(srv.AML))
 
 		if srv.Anchors.CanWrite() {
 			log.Printf("Anchoring mounted at /umi/anchors/*: live Solana writes from %s", srv.Anchors.Address())

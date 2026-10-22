@@ -66,6 +66,7 @@ type Server struct {
 	Anchors   *SolanaAnchor
 	CBDC      *CBDCLedger
 	Corridors *CorridorDesk
+	AML       *AMLDesk
 
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
@@ -164,6 +165,7 @@ func (s *Server) Router() http.Handler {
 	s.registerAnchorRoutes(mux)
 	s.registerCBDCRoutes(mux)
 	s.registerCorridorRoutes(mux)
+	s.registerAMLRoutes(mux)
 	s.registerAgentRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))

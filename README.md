@@ -266,6 +266,26 @@ the world. And it is advisory: the published rules make the decision, the model 
 them, and where the two disagree the disagreement is shown. Every score comes back with the
 features that moved it: [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md).
 
+## Screening that is a list, a case and a report
+
+Checking a payment against sanctions and politically exposed person lists used to be a sentence in
+a document here. It is now three things that can be exercised. Names are matched against a loaded
+list in a way that survives the usual evasions: a missing full stop, a different transliteration, a
+dropped middle name, an honorific. A strong match stops the payment before it moves; a resemblance
+lets it go and opens a case, because a similar name is a question rather than an answer, and both
+thresholds are published rather than buried.
+
+A hit then becomes a case file somebody has to work: picked up, annotated, and either cleared with
+stated grounds against the reviewer's name or escalated. Escalation produces an actual document,
+with the subject, the transaction, the grounds and a narrative, hashed so the copy held and the
+copy produced can be shown to be the same one.
+
+Two things are said everywhere this appears. The list shipped here is synthetic, because publishing
+a copy of a real sanctions list in a demonstration invites somebody to rely on it and a stale list
+is worse than none; a deployment with a licensed list configures its own and the screening says
+which is loaded. And nothing produced here is filed with any authority: the report is an artefact,
+not a submission: [`docs/AML.md`](docs/AML.md).
+
 ## An assistant that answers from this project, not from memory
 
 The assistant on the site is grounded in two things, and neither of them is what a language model
@@ -390,7 +410,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 140 checks across 95 suite files
+make test         # the full sweep: 141 checks across 96 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

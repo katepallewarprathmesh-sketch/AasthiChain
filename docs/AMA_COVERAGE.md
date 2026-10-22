@@ -3,7 +3,7 @@
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
 "partial" always says what is missing. The keyword list splits into 25 rows
-because several keywords carry more than one item: 14 are done, 9 are
+because several keywords carry more than one item: 15 are done, 8 are
 partial, 1 has not been started, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
@@ -13,7 +13,7 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 | 3 | Better offline protocol | done | `IssueOffline` / `RedeemOffline`, `tests/cbdc.test.mjs` | Reserved value, signed voucher, bounded exposure, deterministic double-spend detection. Noted limit: symmetric signing, where production needs per-device keys. |
 | 4a | Programmable CBDC | done | `Grant` / `Spend`, `ProgramCondition` | Expiry, merchant category, named merchants, geography, all enforced on the rail with refusals committed. |
 | 4b | Interoperability of CBDC with other systems | not started | - | e₹ against UPI, against a tokenised deposit, against another CBDC. Planned as phase 3 in `docs/CBDC.md`. |
-| 5 | Anti money laundering | partial | `screenLocked` in `cbdc.go`, `fraud.go`, `riskmodel.go` | Screening and a reporting threshold exist. No sanctions or PEP list, no counterparty network view, no suspicious transaction report artefact, no case management for a flagged payment. |
+| 5 | Anti money laundering | done | `aml.go`, `/umi/aml/*`, `docs/AML.md`, plus `screenLocked` in `cbdc.go`, `fraud.go`, `riskmodel.go` | Sanctions and PEP screening against a named list with transliteration-tolerant matching, two published thresholds, case management with attributed clearance, and a suspicious transaction report artefact hashed onto the ledger. The shipped list is synthetic and says so; there is still no customer risk rating, no typology library and no counterparty network view. |
 | 6 | Law of the land | partial | Disclaimers throughout, FEMA and nationality refusals in `crossborder.go`, PA-CB and finality notes in `docs/CBDC.md` | The statutory basis is described in prose but not modelled: no designation state, no per-jurisdiction rule set that a transaction is actually tested against. |
 | 7 | Risk management | done | `fraud.go` rules, the trained model, KYC caps, offline caps, supply conservation, backing gate | Decisions stay with the published rules; the model is advisory. |
 | 8 | Blockchain as the main hero | partial | `cbdc.go` puts the money itself on the ledger; grants, vouchers, conditions and refusals are all blocks | Large parts of the system still treat the chain as a record: listings, documents, work orders and the marketplace keep their state in Go maps and write blocks about it. Making those state transitions chain-first is the real version of this item. |
@@ -39,10 +39,9 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 The CBDC half and the cross-border half are both built now. What is left is
 mostly what a person would see or verify rather than the mechanics. CBDC
 interoperability with other systems is the one item with no code at all, and
-the open partials are eKYC with no verification flow, AML without a sanctions
-list or a report artefact, a speed number that is measured but published
-nowhere, and the older modules that still keep state in Go maps while writing
-blocks about it.
+the open partials are eKYC with no verification flow, a speed number that is
+measured but published nowhere, and the older modules that still keep state in
+Go maps while writing blocks about it.
 
 ## Why not Solidity, and why not Python
 

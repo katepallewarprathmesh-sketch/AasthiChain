@@ -138,7 +138,8 @@ const run = async () => {
     purposeCode: 'FAMILY_MAINTENANCE', originator: 'Sender Name', beneficiary: 'Receiver Name',
   });
   ok('a correspondent payment waits for its far leg',
-    corr.status === 201 && corr.body.transfer.status === 'AWAITING_FOREIGN_LEG');
+    corr.status === 201 && corr.body.transfer.status === 'AWAITING_FOREIGN_LEG',
+    `${corr.status} ${corr.body.error + " " + corr.body.message}`);
   ok('it names the three to five day window',
     /three to five/.test(String(corr.body?.transfer?.finality?.settlementWindow)));
   const held = await rail(`/umi/cbdc/accounts/${uk}`);

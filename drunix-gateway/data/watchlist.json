@@ -1,0 +1,65 @@
+{
+  "name": "AasthiChain synthetic screening list (not a real sanctions list)",
+  "note": "Every name below is invented for testing. No real person, company or vessel appears here, and nothing in this file reflects any designation by any authority. A deployment that holds a licensed copy of a real list points AML_WATCHLIST_PATH at it; the format is the same: name, aliases, kind, programme, country, source.",
+  "entries": [
+    {
+      "listID": "SYN-SAN-001",
+      "listId": "SYN-SAN-001",
+      "name": "Arvex Metals Trading FZE",
+      "aliases": ["Arvex Metals", "Arvex Metal Trading Free Zone"],
+      "kind": "SANCTION",
+      "programme": "Invented proliferation finance programme, used to exercise the entity path",
+      "country": "Fictional",
+      "source": "Synthetic list shipped with this repository",
+      "note": "Entity rather than individual: the matcher must handle company suffixes."
+    },
+    {
+      "listId": "SYN-SAN-002",
+      "name": "Dmitri Volkanov",
+      "aliases": ["D. Volkanov", "Dimitri Volkanoff"],
+      "kind": "SANCTION",
+      "programme": "Invented asset freeze programme",
+      "country": "Fictional",
+      "source": "Synthetic list shipped with this repository",
+      "note": "Two transliterations, which is the usual reason a screen misses a hit."
+    },
+    {
+      "listId": "SYN-SAN-003",
+      "name": "Miriam Oyelaran",
+      "aliases": ["Miriam Oyelaran-Cole"],
+      "kind": "SANCTION",
+      "programme": "Invented sanctions programme",
+      "country": "Fictional",
+      "source": "Synthetic list shipped with this repository"
+    },
+    {
+      "listId": "SYN-PEP-001",
+      "name": "Rajesh Kumar Verma",
+      "aliases": ["R. K. Verma"],
+      "kind": "PEP",
+      "programme": "Invented state minister, used to exercise the politically exposed person path",
+      "country": "Fictional",
+      "source": "Synthetic list shipped with this repository",
+      "note": "A politically exposed person is not a prohibited person: the correct outcome is enhanced scrutiny, not a block."
+    },
+    {
+      "listId": "SYN-PEP-002",
+      "name": "Ana Lucia Ferreira dos Santos",
+      "aliases": ["Ana L. Ferreira", "Ana Ferreira Santos"],
+      "kind": "PEP",
+      "programme": "Invented central bank board member",
+      "country": "Fictional",
+      "source": "Synthetic list shipped with this repository",
+      "note": "Long name with dropped middle parts, which is where naive exact matching fails."
+    },
+    {
+      "listId": "SYN-SAN-004",
+      "name": "Helios Shipping Lines Limited",
+      "aliases": ["Helios Shipping", "Helios Lines Ltd"],
+      "kind": "SANCTION",
+      "programme": "Invented shipping sector designation",
+      "country": "Fictional",
+      "source": "Synthetic list shipped with this repository"
+    }
+  ]
+}
