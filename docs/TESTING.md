@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  148 checks, 0 failed
+make test       # integration sweep:  149 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,8 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **103** in `tests/` |
-| Reported result | **148 passed, 0 failed** |
+| Suite files | **104** in `tests/` |
+| Reported result | **149 passed, 0 failed** |
 
 One hazard worth knowing before a repeat run: anything already listening on `:8080` or `:21100`
 is the enemy of a trustworthy result. A leftover app answers with a different admin key and a
@@ -150,7 +150,7 @@ drift into fiction, then replays each suite's requests against it.
 | possible | a suite reaches the path, but the method is not provable from the source |
 | not covered | nothing in the suite reaches it |
 
-As measured: **61.3%** of 93 rail actions are certainly covered, 17.2% are possible, and the rest
+As measured: **64%** of 100 rail actions are certainly covered, 16% are possible, and the rest
 are reached by nothing. `tests/coverage.test.mjs` recomputes this on every run and fails if the
 published figure drifts from the measured one, if coverage falls below its floor, or if a declared
 route stops being served.

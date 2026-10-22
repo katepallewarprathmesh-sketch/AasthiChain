@@ -70,6 +70,10 @@ type Server struct {
 	Agent       *AgentDesk
 	KYC         *KYCDesk
 	CBDCInterop *CBDCInteropDesk
+	// Keys is the register of signing keys the rail trusts, screened on the
+	// way in and revocable in one act (see keyregistry.go). Nil means the
+	// /umi/keys/* routes are not mounted and nothing else changes.
+	Keys *KeyRegistry
 
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
@@ -173,6 +177,7 @@ func (s *Server) Router() http.Handler {
 	s.registerProposalRoutes(mux)
 	s.registerKYCRoutes(mux)
 	s.registerCBDCInteropRoutes(mux)
+	s.registerKeyRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

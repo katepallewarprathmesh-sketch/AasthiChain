@@ -40,6 +40,10 @@ const TYPE_STYLES = {
   // Cross-chain interop (hash-locked)
   UMI_CREDENTIAL_ISSUED: { label: 'Credential · Issued', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
   UMI_CREDENTIAL_REVOKED: { label: 'Credential · Revoked', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_KEY_REGISTERED: { label: 'Signing Key · Registered', color: '#065F46', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_KEY_REJECTED: { label: 'Signing Key · Refused as Weak', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  UMI_KEY_REVOKED: { label: 'Signing Key · Revoked', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_KEY_AUDITED: { label: 'Signing Keys · Re-screened', color: '#1E40AF', bg: '#EFF6FF', border: '#BFDBFE' },
   UMI_ATTESTATION_WITHDRAWN: { label: 'Attestation · Withdrawn', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_MANDATE_GRANTED: { label: 'Mandate · Granted', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
   UMI_MANDATE_USED: { label: 'Mandate · Used', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },

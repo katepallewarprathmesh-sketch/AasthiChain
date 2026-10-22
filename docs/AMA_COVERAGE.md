@@ -2,9 +2,9 @@
 
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
-"partial" always says what is missing. The keyword list splits into 25 rows
-because several keywords carry more than one item: 18 are done, 6 are partial,
-none is untouched, and 1 was a question rather than a feature.
+"partial" always says what is missing. The keyword list splits into 27 rows
+because several keywords carry more than one item: 19 are done, 6 are partial,
+one is not started, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
 | --- | --- | --- | --- | --- |
@@ -33,6 +33,8 @@ none is untouched, and 1 was a question rather than a feature.
 | 19 | Technical and financial finality | done | `Finality` on every movement, tested in `cbdc_test.go` | Recorded as two separate fields that are never collapsed into one. |
 | 20 | Put as many functions as possible on the blockchain | partial | The CBDC layer moved money, conditions, grants and refusals on-chain | Same gap as item 8: the older modules still write about their state rather than keeping it on the chain. |
 | 21 | Any suitable language, not only Go | answered | See below | No change needed yet; the reasoning is recorded so it can be revisited per component. |
+| 26 | Key compromise: could an eMudhra happen here | done | `keyregistry.go`, `/umi/keys/*`, `docs/KEYS.md` | Added 22 October 2026, the day after the eMudhra intermediate CA incident. Signing keys are screened before use against the failure family those keys fell into (small integers in both byte orders, repeated bytes, low-order points, guessable seeds), proof of possession is required, duplicates are refused, every registration, refusal, revocation and audit run is written to the chain, and a key can be revoked in one act with the reason deciding whether past signatures stand. Keys already in service can be re-screened on demand, which is the answer to the eighteen months those keys went unexamined. The screen states in writing that it cannot prove good entropy. Open: no scheduled audit, no single rotate operation, no hardware-backed keys, and the rail's own issuer key is reported but not yet registered. |
+| 27 | Solidity and EVM contracts for the token itself | not started | Today: `contracts/DocumentRegistry.sol` and `PaymentEscrow.sol` on Sepolia for document anchors only; the token and every settlement rule live in Go | **Requested as a requirement 22 October 2026.** The asset tokens are issued, transferred and settled entirely inside the Go rail, with the public chain used only to anchor digests. The requirement is a Solidity token contract so a holder's position exists on a public chain rather than only in our ledger. Scope to decide before building: which standard (ERC-20 per property, ERC-1155 for a multi-property register, or ERC-3643 / ERC-1400 for a permissioned security token with on-chain transfer restrictions), whether the EVM leg is the record or a mirror of the Go rail, and how a transfer restricted by KYC tier, lock-up or regulator freeze is enforced on-chain rather than bypassed by trading the token directly. The honest risk, which also has to be designed around, is that a public token contract makes settlement finality depend on a chain whose rules the regulator does not set. |
 
 ## The honest summary
 
@@ -41,6 +43,13 @@ raised has code behind it. What is left is depth rather than absence. Speed is
 now measured per path rather than only for DvP, so the remaining partials are
 led by the older modules that still keep their state in Go maps while writing
 blocks about it (items 8 and 20), which is the one that would take real work.
+
+Two rows were added on 22 October 2026. Item 26 came from an incident rather
+than a question: eight certificate authority private keys turned out to be
+small integers, so the same question was asked of this rail and the answer
+was uncomfortable enough to fix the same day. Item 27 is a requirement rather
+than a gap being excused: the tokens are real positions in the Go ledger and
+a public contract would let a holder prove one without asking us.
 
 ## Why not Solidity, and why not Python
 

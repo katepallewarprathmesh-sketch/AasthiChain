@@ -31,6 +31,15 @@ var umiEndpointList = []string{
 	"GET  /umi/carbon/retirements",
 	"GET  /umi/throughput",
 	"GET  /umi/pathspeed",
+	// Signing keys: screened on the way in, revocable in one act, public so
+	// an outsider can audit them (see keyregistry.go).
+	"GET  /umi/keys",
+	"GET  /umi/keys/posture",
+	"POST /umi/keys                          {\"use\":\"credential-issuer\",\"publicKey\":\"<hex>\",\"challengeSignature\":\"<hex>\"}",
+	"POST /umi/keys/challenge",
+	"POST /umi/keys/screen                   {\"publicKey\":\"<hex>\"}",
+	"POST /umi/keys/audit",
+	"POST /umi/keys/{keyId}/revoke           {\"reason\":\"KEY_COMPROMISE\"}",
 	// Private data collections: the value stays with the members, the
 	// chain carries only the hashes.
 	"GET  /umi/private/collections",

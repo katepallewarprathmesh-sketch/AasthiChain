@@ -255,6 +255,7 @@ func main() {
 		srv.Agent = drunix.NewAgentDesk(chain, srv.Corridors, srv.CBDC, srv.AML, srv.Backing)
 		srv.KYC = drunix.NewKYCDesk(chain, srv.CBDC)
 		srv.CBDCInterop = drunix.NewCBDCInteropDesk(chain, srv.CBDC)
+		srv.Keys = drunix.NewKeyRegistry(chain)
 		log.Printf("Corridors mounted at /umi/corridors/*: simulated, this deployment holds no payment licence")
 		log.Printf("AML screening mounted at /umi/aml/*: %s", drunix.AMLListDescription(srv.AML))
 		log.Printf("CBDC interoperability mounted at /umi/cbdc/interop/*: e-rupee to bank and tokenised deposit, far legs simulated")
