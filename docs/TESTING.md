@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  147 checks, 0 failed
+make test       # integration sweep:  148 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,14 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **100** in `tests/` |
-| Reported result | **147 passed, 0 failed** |
+| Suite files | **103** in `tests/` |
+| Reported result | **148 passed, 0 failed** |
+
+One hazard worth knowing before a repeat run: anything already listening on `:8080` or `:21100`
+is the enemy of a trustworthy result. A leftover app answers with a different admin key and a
+dozen suites fail for reasons that have nothing to do with the code. `make test-fresh` now clears
+those strays rather than starting a process that cannot bind, and `scripts/dev-stack.sh` refuses
+to report a healthy stack it did not actually start.
 
 `tests/credentials.test.mjs` is worth running on its own when touching the rail proxy. It
 verifies a credential's Ed25519 signature inside the test process, using only the issuer's

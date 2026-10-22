@@ -1,4 +1,4 @@
-.PHONY: help dev stop test test-fresh test-go test-all smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
+.PHONY: help counts dev stop test test-fresh test-go test-all smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
 
 # Default target: say what is available rather than doing something surprising.
 help:
@@ -12,6 +12,7 @@ help:
 	@echo "  make test-all     dev, then both of the above"
 	@echo "  make smoke        build the frontend and render every route"
 	@echo "  make secret-scan  refuse tracked files that look like live credentials"
+	@echo "  make counts       report (and with FIX=1 repair) the published test census"
 	@echo
 	@echo "  make umi          run the settlement rail alone, in the foreground"
 	@echo "  make frontend     run Vite with hot reload on :5173"
@@ -63,6 +64,14 @@ smoke:
 
 secret-scan:
 	bash scripts/secret-scan.sh
+
+# The suite and Go file counts are counted from the repository. The total
+# check count is the result of a run, so it is only changed when you pass one:
+#   make counts                     report drift
+#   make counts FIX=1               repair the counted figures
+#   make counts FIX=1 CHECKS=148    also publish a check total you just measured
+counts:
+	node scripts/doc-counts.mjs $(if $(FIX),--fix) $(if $(CHECKS),--checks $(CHECKS))
 
 # ---------------------------------------------------------------------------
 # Individual pieces

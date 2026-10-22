@@ -19,6 +19,63 @@ APP_PORT=${APP_PORT:-8080}
 EVM_PORT=${EVM_PORT:-8545}
 ADMIN_KEY=${ADMIN_DASHBOARD_KEY:-devkey}
 
+# ---------------------------------------------------------------------------
+# Ports, and the trap they used to set
+#
+# wait_for_port only asks "is something listening". If an older rail or app
+# is still holding the port, the new process fails to bind, dies quietly, and
+# the script reports a healthy stack while every request is served by the old
+# binary. That looks exactly like a route that was added and does not work:
+# the handler is in the source, in the built binary, and still 404s.
+#
+# So a port is claimed before it is used: whatever is holding it is stopped
+# first, and if the port is still busy afterwards the script says so and
+# stops rather than lying about what is running.
+# ---------------------------------------------------------------------------
+
+port_busy() { # port
+  (echo >"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+# The two things this script starts, by the command line they run under.
+pattern_for() { # name
+  case "$1" in
+    rail) echo "^/tmp/umigw$" ;;
+    app)  echo "node server\.js" ;;
+    *)    echo "" ;;
+  esac
+}
+
+stop_strays() { # name, port
+  local name=$1 port=$2 pattern pids
+  pattern=$(pattern_for "$name")
+  [[ -z "$pattern" ]] && return 0
+  port_busy "$port" || return 0
+  pids=$(pgrep -f "$pattern" 2>/dev/null | grep -v "^$$\$" || true)
+  [[ -z "$pids" ]] && return 0
+  echo "  stopping an earlier $name still on :$port (pid $(echo "$pids" | tr '\n' ' '))"
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    port_busy "$port" || return 0
+    sleep 0.5
+  done
+  # shellcheck disable=SC2086
+  kill -9 $pids 2>/dev/null
+  sleep 1
+  return 0
+}
+
+claim_port() { # name, port
+  stop_strays "$1" "$2"
+  if port_busy "$2"; then
+    echo "port $2 is still held by something this script did not start." >&2
+    echo "The $1 would fail to bind and the stack would serve whatever is already there." >&2
+    echo "Find it with: pgrep -af 'umigw|node server.js'" >&2
+    exit 1
+  fi
+}
+
 WANT_EVM=1
 case "${1:-}" in
   --no-evm) WANT_EVM=0 ;;
@@ -34,6 +91,12 @@ case "${1:-}" in
         rm -f "$pidfile"
       fi
     done
+    # A pidfile is not the whole truth. A rail or app started by hand, or by
+    # an earlier sandbox session whose pidfile is gone, still holds the port
+    # and is the reason a "restarted" stack can serve a stale binary. Clear
+    # those too, or --stop has not stopped the stack.
+    stop_strays rail "$RAIL_PORT"
+    stop_strays app "$APP_PORT"
     exit 0
     ;;
 esac
@@ -132,16 +195,31 @@ if [[ $WANT_EVM -eq 1 ]]; then
 fi
 
 echo "starting the UMI rail on :$RAIL_PORT…"
+claim_port rail "$RAIL_PORT"
 env UMI_ENABLED=true UMI_SEED_DEMO=true DRUNIX_MODE=mock PORT="$RAIL_PORT" \
     "${EVM_ENV[@]}" /tmp/umigw >/tmp/aasthi-rail.log 2>&1 &
-echo $! >/tmp/aasthi-rail.pid
+RAIL_PID=$!
+echo $RAIL_PID >/tmp/aasthi-rail.pid
 wait_for_port "$RAIL_PORT" 30 || { echo "rail failed; see /tmp/aasthi-rail.log" >&2; exit 1; }
+# The port being open is not proof our process opened it.
+kill -0 "$RAIL_PID" 2>/dev/null || {
+  echo "the rail died during startup; see /tmp/aasthi-rail.log" >&2
+  tail -20 /tmp/aasthi-rail.log >&2
+  exit 1
+}
 
 echo "starting the app on :$APP_PORT…"
+claim_port app "$APP_PORT"
 env DEMO_AUTH=true ADMIN_DASHBOARD_KEY="$ADMIN_KEY" UMI_GATEWAY_URL="http://localhost:$RAIL_PORT" \
     PORT="$APP_PORT" node server.js >/tmp/aasthi-app.log 2>&1 &
-echo $! >/tmp/aasthi-app.pid
+APP_PID=$!
+echo $APP_PID >/tmp/aasthi-app.pid
 wait_for_port "$APP_PORT" 30 || { echo "app failed; see /tmp/aasthi-app.log" >&2; exit 1; }
+kill -0 "$APP_PID" 2>/dev/null || {
+  echo "the app died during startup; see /tmp/aasthi-app.log" >&2
+  tail -20 /tmp/aasthi-app.log >&2
+  exit 1
+}
 
 echo
 echo "  app        http://localhost:$APP_PORT"
