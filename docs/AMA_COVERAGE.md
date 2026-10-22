@@ -3,13 +3,13 @@
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
 "partial" always says what is missing. The keyword list splits into 25 rows
-because several keywords carry more than one item: 15 are done, 8 are
+because several keywords carry more than one item: 16 are done, 7 are
 partial, 1 has not been started, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
 | --- | --- | --- | --- | --- |
 | 1 | CBDC | done | `cbdc.go`, `/umi/cbdc/*`, `docs/CBDC.md` | Retail and wholesale segments, issue, transfer, redeem, conserved supply. |
-| 2 | eKYC | partial | KYC tiers in `cbdc.go`, verified-identity flags across the rail, credentials in `credentials.go` | There is no identity verification flow: tiers are asserted at account opening, not earned by verifying a document or a one-time code. No Aadhaar-style or video path, and no re-KYC expiry. |
+| 2 | eKYC | done | `kyc.go`, `/umi/kyc/*`, `docs/KYC.md`, tiers in `cbdc.go` | Five identification routes with the ceilings each one carries, video identification enforced against all four of its conditions, offline file freshness, periodic updation by risk band, and a wallet tier written by the verification rather than asserted. Aadhaar numbers are refused outright, not stored. The external steps (UIDAI call, registry upload, the video session itself) are simulated and say so. |
 | 3 | Better offline protocol | done | `IssueOffline` / `RedeemOffline`, `tests/cbdc.test.mjs` | Reserved value, signed voucher, bounded exposure, deterministic double-spend detection. Noted limit: symmetric signing, where production needs per-device keys. |
 | 4a | Programmable CBDC | done | `Grant` / `Spend`, `ProgramCondition` | Expiry, merchant category, named merchants, geography, all enforced on the rail with refusals committed. |
 | 4b | Interoperability of CBDC with other systems | not started | - | e₹ against UPI, against a tokenised deposit, against another CBDC. Planned as phase 3 in `docs/CBDC.md`. |
@@ -17,7 +17,7 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 | 6 | Law of the land | partial | Disclaimers throughout, FEMA and nationality refusals in `crossborder.go`, PA-CB and finality notes in `docs/CBDC.md` | The statutory basis is described in prose but not modelled: no designation state, no per-jurisdiction rule set that a transaction is actually tested against. |
 | 7 | Risk management | done | `fraud.go` rules, the trained model, KYC caps, offline caps, supply conservation, backing gate | Decisions stay with the published rules; the model is advisory. |
 | 8 | Blockchain as the main hero | partial | `cbdc.go` puts the money itself on the ledger; grants, vouchers, conditions and refusals are all blocks | Large parts of the system still treat the chain as a record: listings, documents, work orders and the marketplace keep their state in Go maps and write blocks about it. Making those state transitions chain-first is the real version of this item. |
-| 9 | Speed of the transaction | partial | `throughput.go` measures settlements per second and latency percentiles on demand, with the serialising lock named | The number is measured but not published anywhere a reader lands, and there is no measurement of the CBDC paths specifically. |
+| 9 | Speed of the transaction | partial | `throughput.go`, the live panel on the settlement page, and the published figures in `README.md` and `docs/THROUGHPUT.md` | The measured engine and HTTP figures are now published where a reader lands, with the two-core caveat attached. Still no measurement of the CBDC or corridor paths specifically. |
 | 10 | Smooth end-user experience (flight cancelled, insurer refunds) | done | `OpenCondition`, `SubmitEvent`, automatic refund with no claim, shown on the digital rupee page at `/cbdc` | A person can now see money locked against a named event, who is trusted to attest it, the deadline, and the refund once it releases. The page also opens conditions, attests events, issues and spends purpose-bound money, carries value offline and sends across a corridor, so the behaviour can be tried rather than read about. |
 | 11 | Contracts that release on time when rules are fulfilled | done | `OpenCondition` / `SubmitEvent` / `SweepConditions`, plus the escrow in `work.go` and outcome settlement | Release is automatic on attestation and refund is automatic at the deadline. |
 | 12 | Off chain to on chain | partial | Document and deed hashes anchored, the ledger head anchored to Solana, attested events bringing outside facts in | No general oracle: each bridge is hand-wired, and there is no signed-feed abstraction with its own trust and staleness rules. |
@@ -39,9 +39,9 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 The CBDC half and the cross-border half are both built now. What is left is
 mostly what a person would see or verify rather than the mechanics. CBDC
 interoperability with other systems is the one item with no code at all, and
-the open partials are eKYC with no verification flow, a speed number that is
-measured but published nowhere, and the older modules that still keep state in
-Go maps while writing blocks about it.
+the open partials are the speed of the CBDC and corridor paths specifically
+(the settlement engine is measured and published), and the older modules that
+still keep state in Go maps while writing blocks about it.
 
 ## Why not Solidity, and why not Python
 

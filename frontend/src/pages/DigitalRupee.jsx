@@ -791,6 +791,81 @@ function Proposals({ agent, user, reload }) {
   )
 }
 
+// Verification. The tier a wallet carries is the output of this, not a word
+// somebody put in the request that opened it. The route decides the ceiling,
+// which is the whole point of distinguishing the routes.
+function Verification({ kyc, user, reload }) {
+  if (!kyc) return null
+  const act = run(reload)
+
+  return (
+    <Card
+      title="Verifying who somebody is"
+      sub="Five identification routes, each with the limits it carries. Only a video session with an identified official, a liveness check, the PAN shown on the call and the holder in India counts as equal to meeting somebody, and only that route lifts the annual ceiling."
+      right={<Tag tone="sim">verification steps simulated</Tag>}
+    >
+      <div className="pg-table" style={{ marginTop: 4 }}>
+        {(kyc.routes || []).map((r) => (
+          <div key={r.route} className="pg-row" style={{ padding: '10px 0', borderTop: '1px solid #E2E8F0' }}>
+            <div>
+              <b>{r.route.replace(/_/g, ' ').toLowerCase()}</b>{' '}
+              <Tag tone={r.faceToFaceEquivalent ? 'live' : 'neutral'}>
+                {r.faceToFaceEquivalent ? 'equal to meeting in person' : 'remote'}
+              </Tag>{' '}
+              <Tag tone="neutral">{r.tier === 'FULL_KYC' ? 'full tier' : 'minimum tier'}</Tag>
+              {r.annualDebitCap && <> <Tag tone="sim">{r.annualDebitCap} a year</Tag></>}
+            </div>
+            <p className="pg-card-sub" style={{ marginTop: 4 }}>{r.meaning}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="pg-kv" style={{ marginTop: 14 }}>
+        <div>Verified holders</div><div>{kyc.verifiedHolders} ({kyc.faceToFaceEquivalent} at full tier)</div>
+        <div>Re-verification</div>
+        <div>high risk {kyc.periodicUpdation?.HIGH}, medium {kyc.periodicUpdation?.MEDIUM}, low {kyc.periodicUpdation?.LOW}</div>
+        <div>Registry upload</div><div>{kyc.registryUploadWindow}</div>
+      </div>
+
+      <p className="pg-card-sub" style={{ marginTop: 12, padding: '10px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 9 }}>
+        <b>Aadhaar:</b> {kyc.aadhaarPolicy}
+      </p>
+
+      {user && (
+        <div className="pg-grid" style={{ gap: 16, marginTop: 14 }}>
+          <ActionForm
+            hint="Offline route: paste the reference identifier the file carries (last four digits and a timestamp), never an Aadhaar number."
+            fields={[
+              { name: 'holder', label: 'Holder', placeholder: 'investor1' },
+              { name: 'offlineReferenceId', label: 'Offline reference id', placeholder: '1234202610220930' },
+              { name: 'pan', label: 'PAN (optional)', placeholder: 'ABCDE1234F' },
+            ]}
+            submitLabel="Verify, offline route"
+            onSubmit={(f) => act('/kyc/verify', {
+              holder: f.holder, route: 'AADHAAR_OFFLINE_XML', consent: true, pan: f.pan,
+              offlineReferenceId: f.offlineReferenceId, offlineGeneratedAt: new Date().toISOString(),
+            }, (d) => `${d.record.tier} until a video session: ${d.record.note}`)}
+          />
+          <ActionForm
+            hint="Video route: all four conditions are required, and a missing one is refused rather than waved through."
+            fields={[
+              { name: 'holder', label: 'Holder', placeholder: 'investor1' },
+              { name: 'videoOfficial', label: 'Official on the call', placeholder: 'officer-7' },
+            ]}
+            submitLabel="Verify, video session"
+            onSubmit={(f) => act('/kyc/verify', {
+              holder: f.holder, route: 'VCIP', consent: true, videoOfficial: f.videoOfficial,
+              livenessPassed: true, panShownOnCall: true, locationInIndia: true,
+            }, (d) => `Full tier, no annual ceiling. ${d.record.note}`)}
+          />
+        </div>
+      )}
+
+      <p className="pg-card-sub" style={{ marginTop: 14, opacity: 0.85 }}>{kyc.disclaimer}</p>
+    </Card>
+  )
+}
+
 export default function DigitalRupee({ user = null }) {
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -802,6 +877,7 @@ export default function DigitalRupee({ user = null }) {
   const [aml, setAml] = useState(null)
   const [amlCases, setAmlCases] = useState([])
   const [agent, setAgent] = useState(null)
+  const [kyc, setKyc] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -811,7 +887,7 @@ export default function DigitalRupee({ user = null }) {
       const { ok, data } = await umiFetch(path)
       return ok ? data : fallback
     }
-    const [st, acc, gr, co, mv, cor, tr, aml, agent, amlCases] = await Promise.all([
+    const [st, acc, gr, co, mv, cor, tr, aml, agent, kyc, amlCases] = await Promise.all([
       get('/cbdc', null),
       get('/cbdc/accounts', {}),
       get('/cbdc/grants', {}),
@@ -821,6 +897,7 @@ export default function DigitalRupee({ user = null }) {
       get('/corridors/transfers?limit=15', {}),
       get('/aml', null),
       get('/proposals', null),
+      get('/kyc', null),
       get('/aml/cases?limit=10', {}),
     ])
     if (!st) setErr('This deployment does not have the digital rupee layer mounted.')
@@ -834,6 +911,7 @@ export default function DigitalRupee({ user = null }) {
     setAml(aml)
     setAmlCases(amlCases.cases || [])
     setAgent(agent)
+    setKyc(kyc)
     setLoading(false)
   }, [])
 
@@ -856,6 +934,7 @@ export default function DigitalRupee({ user = null }) {
       <Corridors corridors={(corridors && corridors.corridors) || []} blocked={corridors && corridors.blockedCorridors} />
       <Transfers transfers={transfers} user={user} reload={load} />
       <Screening aml={aml} cases={amlCases} user={user} reload={load} />
+      <Verification kyc={kyc} user={user} reload={load} />
       <Proposals agent={agent} user={user} reload={load} />
       <Movements movements={movements} />
       {status && accounts.length === 0 && (

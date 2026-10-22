@@ -266,6 +266,26 @@ the world. And it is advisory: the published rules make the decision, the model 
 them, and where the two disagree the disagreement is shown. Every score comes back with the
 features that moved it: [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md).
 
+## Verification that produces the tier, instead of trusting it
+
+A wallet's KYC tier used to be a word in the request that opened it, which made every ceiling built
+on that tier a rule enforced faithfully against a fact nobody had checked. It is now the output of
+a verification: a route, evidence kept as a hash, an expiry, and a trail.
+
+Which route is used decides what follows, exactly as the rules intend. Identification over a video
+call with an official, a liveness check, the PAN shown on the call and the holder in India is
+treated as equal to meeting somebody, and carries no ceiling for being remote; miss any one of
+those and it is refused with the list of what was missing. A one-time-password route is permitted
+but capped at a lakh a year with closer scrutiny, because nobody met anybody. An offline identity
+file goes stale after three working days. Records expire on a schedule set by risk band.
+
+The part worth stating plainly: this system refuses to hold an Aadhaar number. Submit one in any
+field and the request is rejected rather than quietly redacted, because the compliant pattern for
+anyone without a licensed vault is not to receive it at all. What is kept is the reference the
+offline route returns, which carries only the last four digits, and even that is hashed before it
+reaches a block. The verification steps themselves are simulated and say so on every response:
+[`docs/KYC.md`](docs/KYC.md).
+
 ## An agent that proposes and never acts
 
 The useful half of an agent in a settlement system is noticing. The dangerous half is acting. This
@@ -284,6 +304,20 @@ It also does not choose its own actions. Noticing is ordinary code reading ordin
 short list of things an approval can cause is published by the system rather than described in
 documentation. It cannot create or move money, cannot close a compliance case, cannot attest to
 anything, and cannot approve its own work: [`docs/AI_AGENT.md`](docs/AI_AGENT.md).
+
+## How fast, measured rather than claimed
+
+On the two-core container used for development, settlement runs at about **37,900 nanoseconds of
+engine time per settlement**: roughly 26,000 a second in a tight loop, with a median of 0.027 ms
+and a 99th percentile of 0.131 ms. Over HTTP, with requests arriving one at a time, the same box
+served 25 settlements at a median of 0.17 ms and a 99th percentile of 0.252 ms.
+
+Two caveats that matter more than the figures. The contended benchmark barely differs from the
+serial one because the box has two cores, so at most two things were ever really running: that is
+not evidence the design scales, only that there was not enough parallelism available to find out.
+And the lock wait is zero because nothing ever queued, which means under that load the engine was
+not the constraint. The live page shows what this process has actually served, and says "nothing
+measured yet" when it has served nothing: [`docs/THROUGHPUT.md`](docs/THROUGHPUT.md).
 
 ## Screening that is a list, a case and a report
 
@@ -429,7 +463,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 142 checks across 97 suite files
+make test         # the full sweep: 143 checks across 98 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

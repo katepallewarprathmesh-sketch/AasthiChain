@@ -175,6 +175,7 @@ type CBDCAccount struct {
 	Holder          string `json:"holder"`
 	Segment         string `json:"segment"`
 	KYCTier         string `json:"kycTier"`
+	KYCVerifiedBy   string `json:"kycVerifiedBy,omitempty"` // the route that produced the tier, empty when asserted
 	BalancePaise    int64  `json:"balancePaise"`
 	OfflineReserved int64  `json:"offlineReservedPaise"`
 	LockedPaise     int64  `json:"lockedPaise"`
@@ -371,6 +372,27 @@ func (l *CBDCLedger) walletLocked(holder, segment, tier string) *CBDCAccount {
 	}
 	l.wallets[holder] = w
 	return w
+}
+
+// ApplyVerifiedKYC raises (or records) a wallet's tier as the result of a
+// verification that happened, rather than as an argument somebody passed in
+// the request that created the wallet. It never lowers a tier silently and
+// never opens a wallet that does not exist: verification is about who
+// somebody is, not about giving them money.
+func (l *CBDCLedger) ApplyVerifiedKYC(holder, tier, route string) {
+	if l == nil || strings.TrimSpace(holder) == "" {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w, ok := l.wallets[strings.TrimSpace(holder)]
+	if !ok {
+		return
+	}
+	if tier == KYCFull || w.KYCTier == "" {
+		w.KYCTier = tier
+	}
+	w.KYCVerifiedBy = route
 }
 
 // capsFor returns the balance and per-movement ceilings for a wallet. An

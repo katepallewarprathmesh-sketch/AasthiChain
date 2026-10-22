@@ -253,8 +253,10 @@ func main() {
 		srv.Corridors = drunix.NewCorridorDesk(srv.UMI, chain, srv.CBDC)
 		srv.Corridors.AML = srv.AML
 		srv.Agent = drunix.NewAgentDesk(chain, srv.Corridors, srv.CBDC, srv.AML, srv.Backing)
+		srv.KYC = drunix.NewKYCDesk(chain, srv.CBDC)
 		log.Printf("Corridors mounted at /umi/corridors/*: simulated, this deployment holds no payment licence")
 		log.Printf("AML screening mounted at /umi/aml/*: %s", drunix.AMLListDescription(srv.AML))
+		log.Printf("Electronic KYC mounted at /umi/kyc/*: simulated verification, real flow; Aadhaar numbers are refused, not stored")
 		log.Printf("Proposing agent mounted at /umi/agent/*: drafts actions for a person to approve, executes nothing on its own")
 
 		if srv.Anchors.CanWrite() {
