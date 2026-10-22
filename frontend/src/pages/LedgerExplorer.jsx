@@ -6,6 +6,7 @@
 // The read endpoints are an open layer: no auth, no PII usable by agents & DPI.
 
 import React, { useCallback, useEffect, useState } from 'react'
+import { Badge, Button, CopyButton, Mono, Num } from '../components/ui.jsx'
 import { prettifyAssetId } from '../lib/assetNames.js'
 import { useLocation } from 'react-router-dom'
 import api from '../lib/api.js'
@@ -328,48 +329,37 @@ export default function LedgerExplorer() {
 
 
   return (
-    <div className="pg pg-narrow">
+    <main className="ax ax-wrap" style={{ maxWidth: 980, paddingTop: 26, paddingBottom: 64 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>NPCI Drunix · permissioned network</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 className="pg-title">Ledger Explorer</h1>
+          <p className="ax-eyebrow">Permissioned network</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 className="ax-display ax-h2">Ledger explorer</h1>
             {/* Say which it is. Claiming "live" on a page that is really
                 polling is the kind of small lie that costs trust later. */}
-            <span title={liveMode === 'live'
-              ? 'Connected to the rail — new blocks arrive as they are committed'
-              : liveMode === 'polling'
-                ? 'The live stream could not be opened here, so this page refreshes on a timer'
-                : 'Checking for a live connection'}
-              style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-                padding: '3px 9px', borderRadius: 999,
-                color: liveMode === 'live' ? '#047857' : '#6B7280',
-                background: liveMode === 'live' ? '#ECFDF5' : '#F3F4F6',
-                border: `1px solid ${liveMode === 'live' ? '#A7F3D0' : '#E5E7EB'}`,
-              }}>
-              {liveMode === 'live' ? 'Live' : liveMode === 'polling' ? 'Refreshing' : 'Connecting'}
-            </span>
+            <Badge tone={liveMode === 'live' ? 'success' : 'pending'}>
+              {liveMode === 'live' ? 'Live' : liveMode === 'polling' ? 'Refreshing on a timer' : 'Connecting'}
+            </Badge>
             {lastBlock && liveMode === 'live' && (
-              <span style={{ fontSize: 12, color: '#6B7280' }}>
-                block #{lastBlock.height} · {lastBlock.type}
+              <span className="ax-hint">
+                <Mono>#{lastBlock.height}</Mono> {String(lastBlock.type || '').replace(/_/g, ' ').toLowerCase()}
               </span>
             )}
           </div>
-          <p style={{ fontSize: 13.5, color: '#6B7280', maxWidth: '64ch', lineHeight: 1.6 }}>
-            Distributed ledgers and decentralized trust as the open layer for digitization, agents, DPI and programmable finance.
-            Every settlement is a block verify it yourself, no account needed.
+          <p className="ax-lede" style={{ fontSize: 15.5 }}>
+            Every settlement is a block, hash-chained to the one before it. Replay the chain yourself:
+            no account, no permission, and nothing here asks you to take our word for it.
           </p>
         </div>
         {verify && (
-          <div style={{
-            padding: '10px 16px', borderRadius: 10, fontWeight: 700, fontSize: 13,
-            background: verify.valid ? '#ECFDF5' : '#FEF2F2',
-            border: `1px solid ${verify.valid ? '#A7F3D0' : '#FECACA'}`,
-            color: verify.valid ? '#065F46' : '#991B1B'
-          }}>
-            {verify.valid ? '✓ Chain valid' : `✗ INVALID at #${verify.brokenAt}`} · {verify.blocks} blocks
+          <div className="ax-card ax-card--pad-sm" style={{ borderColor: verify.valid ? 'rgba(36,107,74,.3)' : 'rgba(161,61,46,.35)' }}>
+            <Badge tone={verify.valid ? 'success' : 'error'}>
+              {verify.valid ? 'Chain verified' : `Broken at #${verify.brokenAt}`}
+            </Badge>
+            <p className="ax-hint" style={{ marginTop: 7 }}>
+              <Num>{verify.blocks}</Num> blocks recomputed from genesis
+            </p>
           </div>
         )}
       </div>
@@ -397,9 +387,9 @@ export default function LedgerExplorer() {
       {/* Stats strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 18 }}>
         {stats.map(([k, v]) => (
-          <div key={k} style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 10, padding: '10px 12px' }}>
-            <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827', marginTop: 3, wordBreak: 'break-all' }}>{v}</div>
+          <div key={k} className="ax-card ax-card--pad-sm">
+            <div className="ax-metric-label">{k}</div>
+            <div className="ax-metric-value" style={{ fontSize: 15, marginTop: 5, wordBreak: 'break-all' }}>{v}</div>
           </div>
         ))}
       </div>
@@ -480,11 +470,14 @@ export default function LedgerExplorer() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 13, color: '#111827' }}>#{b.height}</span>
+                    <Mono title={`Block height ${b.height}`}><strong>#{b.height}</strong></Mono>
                     <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 999, color: st.color, background: st.bg, border: `1px solid ${st.border}` }}>{st.label}</span>
-                    <span style={{ fontSize: 11.5, color: '#6B7280' }}>{new Date(b.timestamp).toLocaleString('en-IN')}</span>
+                    <span className="ax-hint">{new Date(b.timestamp).toLocaleString('en-IN')}</span>
                   </div>
-                  <code style={{ fontSize: 10, fontFamily: 'monospace', color: '#9CA3AF' }}>{shortHash(b.hash)}</code>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Mono title={b.hash}>{shortHash(b.hash)}</Mono>
+                    <CopyButton value={b.hash} label="Copy block hash" />
+                  </span>
                 </div>
                 <div style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}>
                   {(b.txns || []).map((t, i) => <div key={i}>{txnSummary(t)}</div>)}
@@ -509,6 +502,6 @@ export default function LedgerExplorer() {
           </div>
         )}
       </div>
-    </div>
+    </main>
   )
 }

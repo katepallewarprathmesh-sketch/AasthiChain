@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react'
 import api from '../lib/api.js'
 import { useLocalCache } from '../hooks/useLocalCache.js'
 import PayUCheckout from './PayUCheckout.jsx'
+import { Badge, SimBadge, Button, Mono, Num, CopyButton, inr } from './ui.jsx'
 
 const STATUS_STEPS = [
   { key: 'collect', label: 'Payment Request', desc: 'Secure request created' },
@@ -322,17 +323,29 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'success' && payment) {
     return (
-      <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
-        <div style={{ fontSize: 32 }}>✓</div>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#065F46', margin: '8px 0 0' }}>Payment Successful!</h3>
-        <p style={{ fontSize: 13, color: '#374151', marginTop: 8, lineHeight: 1.5 }}>
-          You bought <strong>{Number(payment.tokenAmount || clampedAmount).toLocaleString('en-IN')} tokens</strong> of this property for <strong>₹{Number(payment.amountINR || total).toLocaleString('en-IN')}</strong>.<br />
-          Money and tokens moved together nothing partial.
+      <div className="ax ax-card" style={{ borderColor: 'rgba(36,107,74,.3)', background: 'var(--ax-success-wash)' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {/* The badge reports what the backend returned, not what the
+              animation finished doing. A purchase recorded without an atomic
+              settlement leg says so below rather than here. */}
+          <Badge tone="success">{payment.umiInstructionId ? 'Settled' : 'Recorded'}</Badge>
+          <SimBadge>Test payment provider</SimBadge>
+        </div>
+        <h3 className="ax-display" style={{ fontSize: 21, marginTop: 14, textAlign: 'center' }}>
+          {payment.umiInstructionId ? 'Settled against your payment' : 'Tokens recorded'}
+        </h3>
+        <p className="ax-body" style={{ marginTop: 10, textAlign: 'center', color: 'var(--ax-ink)' }}>
+          <Num>{Number(payment.tokenAmount || clampedAmount).toLocaleString('en-IN')}</Num> tokens for{' '}
+          <Num>{inr(Number(payment.amountINR || total))}</Num>.
+          {payment.umiInstructionId ? ' Tokens and cash moved in one operation: there was no moment where one side had paid and the other had not.' : ''}
         </p>
         {payment.utr && (
-          <div style={{ background: 'white', border: '1px solid #D1FAE5', borderRadius: 8, padding: '8px 12px', margin: '12px auto', maxWidth: 320, fontSize: 12 }}>
-            <div style={{ color: '#6B7280', fontSize: 11 }}>Bank reference (UTR)</div>
-            <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#065F46' }}>{payment.utr}</div>
+          <div className="ax-card ax-card--pad-sm" style={{ margin: '14px auto 0', maxWidth: 340, textAlign: 'center' }}>
+            <div className="ax-hint">Bank reference (UTR)</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <Mono><strong>{payment.utr}</strong></Mono>
+              <CopyButton value={payment.utr} label="Copy the bank reference" />
+            </div>
           </div>
         )}
         {payment.risk && (
@@ -345,10 +358,10 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             the DvP — saying "settled, nothing partial" in that case is
             contradicted by the UMI_DVP_FAILED block on the chain. */}
         {payment.umiInstructionId ? (
-          <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
-            Settled on NPCI Drunix · atomic DvP ·{' '}
-            <a href={`/ledger?tx=${encodeURIComponent(payment.umiInstructionId)}`} style={{ color: '#059669' }}>see the block</a>
-          </div>
+          <p className="ax-hint" style={{ marginTop: 10, textAlign: 'center' }}>
+            Atomic delivery versus payment on the settlement rail ·{' '}
+            <a href={`/ledger?tx=${encodeURIComponent(payment.umiInstructionId)}`} style={{ color: 'var(--ax-green)', fontWeight: 600 }}>see the block</a>
+          </p>
         ) : (
           <div style={{ fontSize: 11, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 10px', marginTop: 8, textAlign: 'left', lineHeight: 1.6 }}>
             Your tokens are recorded in the ownership ledger, but the UMI settlement rail
@@ -375,13 +388,12 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
             {payment.utr && <a href={`/api/npci/utr/${payment.utr}`} target="_blank" rel="noopener" style={{ color: '#1E3A5F' }}>Verify UTR →</a>}
           </div>
         )}
-        <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="/wallet" className="btn btn-primary" style={{ fontSize: 13, textDecoration: 'none', padding: '10px 16px' }}>
-            View Wallet →
-          </a>
-          <button className="btn btn-secondary" style={{ fontSize: 13, padding: '10px 16px' }} onClick={() => { setStep('form'); setPayment(null); setTransfer(null); setError('') }}>
-            Buy More
-          </button>
+        <div style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Button href="/wallet" size="sm">View your wallet</Button>
+          <Button
+            variant="secondary" size="sm"
+            onClick={() => { setStep('form'); setPayment(null); setTransfer(null); setError('') }}
+          >Buy more</Button>
         </div>
       </div>
     )
@@ -389,11 +401,16 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'error') {
     return (
-      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Buy Tokens</h3>
-        <div style={{ marginTop: 12, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 12, fontSize: 12, color: '#991B1B', lineHeight: 1.5 }}>
-          {error}
+      <div className="ax ax-card">
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Badge tone="error">Not completed</Badge>
+          <h3 className="ax-card-title">Nothing was bought</h3>
         </div>
+        <p className="ax-body" style={{ marginTop: 10, color: 'var(--ax-ink)' }}>{error}</p>
+        <p className="ax-hint" style={{ marginTop: 8 }}>
+          No tokens moved and no holding changed. If money was taken by the test provider it is
+          reversed by the same flow that took it.
+        </p>
         <button
           onClick={() => {
             // Drop the stored PayU hand-off first. Without this the resume

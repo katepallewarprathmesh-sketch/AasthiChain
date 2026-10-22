@@ -10,6 +10,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
+import {
+  Button, Badge, Card as AxCard, Metric as AxMetric, Progress, Num, Mono,
+  EmptyState, Skeleton, inr, inrShort, InfoTip,
+} from '../components/ui.jsx'
 import BasketPanel from '../components/BasketPanel.jsx'
 
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
@@ -119,169 +123,300 @@ export default function InvestorDashboard({ user }) {
   const basketValue = basketHoldings.reduce((s2, b) => s2 + Number(b.valueINR || 0), 0)
   const portfolio = assetsValue + cash + basketValue
 
+  // Allocation by property, derived from the holdings already fetched. No
+  // new call and no new figure: it is the same valuation, shown as shares.
+  const allocation = holdings
+    .map((h) => ({
+      label: h.propertyTitle || h.balance?.assetId,
+      assetId: h.balance?.assetId,
+      value: Number(h.valueINR || 0),
+      tokens: Number(h.balance?.balance || 0),
+    }))
+    .filter((a) => a.value > 0)
+    .sort((a, b) => b.value - a.value)
+  const allocTotal = allocation.reduce((s2, a) => s2 + a.value, 0)
+  const pending = settlements.filter((s2) => s2.status !== 'SETTLED' && s2.status !== 'FAILED')
+
   return (
-    <div className="pg">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+    <main className="ax ax-wrap" style={{ paddingTop: 26, paddingBottom: 64 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: '#9CA3AF', textTransform: 'uppercase' }}>
-            Investor dashboard
-          </div>
-          <h1 className="pg-title">
-            {user?.name || identityId}
-          </h1>
-          <p style={{ fontSize: 13, color: '#6B7280', maxWidth: '62ch', lineHeight: 1.6 }}>
-            Everything you own, what it has paid you, and the ledger blocks that prove it.
+          <p className="ax-eyebrow">Investor dashboard</p>
+          <h1 className="ax-display ax-h2">{user?.name || identityId}</h1>
+          <p className="ax-lede" style={{ fontSize: 15.5 }}>
+            Everything you own, what it has paid you, and the ledger blocks behind each figure.
           </p>
         </div>
-        <button onClick={load} disabled={loading} style={{
-          padding: '9px 14px', background: '#1E3A5F', color: 'white', border: 'none',
-          borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1
-        }}>{loading ? 'Refreshing…' : 'Refresh'}</button>
-      </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Button to="/marketplace" variant="secondary" size="sm">Browse properties</Button>
+          <Button size="sm" onClick={load} disabled={loading}>{loading ? 'Refreshing' : 'Refresh'}</Button>
+        </div>
+      </header>
 
-      {/* Headline numbers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginTop: 18 }}>
-        <Metric label="Portfolio value" value={money(portfolio)}
-          sub={basketValue > 0 ? 'property + baskets + e₹-W cash' : 'property + e₹-W cash'} color="#1E3A5F" />
-        <Metric label="Property value" value={money(assetsValue)} sub={`${tokenCount.toLocaleString('en-IN')} tokens · ${holdings.length} ${holdings.length === 1 ? 'property' : 'properties'}`} />
-        <Metric label="e₹-W cash" value={railDown ? '—' : money(cash)} sub={wallet?.walletId || 'wholesale CBDC wallet'} color="#6D28D9" />
-        <Metric
+      {/* Headline numbers. Each says what it is made of: a portfolio total
+          with an unstated basis is the easiest number on a page like this to
+          read as something it is not. */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginTop: 24 }}>
+        <AxMetric
+          label="Portfolio value"
+          value={loading ? <Skeleton h={26} w="70%" /> : <Num>{inr(portfolio)}</Num>}
+          foot={basketValue > 0 ? 'Property and baskets at last valuation, plus simulated cash' : 'Property at last valuation, plus simulated cash'}
+          tip="Holdings valued at the token price recorded on each property, plus your wholesale digital rupee balance. It is a valuation, not a price anybody has offered you, and the cash leg is simulated."
+        />
+        <AxMetric
+          label="Property value"
+          value={loading ? <Skeleton h={26} w="60%" /> : <Num>{inr(assetsValue)}</Num>}
+          foot={<><Num>{tokenCount.toLocaleString('en-IN')}</Num> tokens across <Num>{holdings.length}</Num> {holdings.length === 1 ? 'property' : 'properties'}</>}
+        />
+        <AxMetric
+          label="Digital rupee cash"
+          value={railDown ? 'Unavailable' : <Num>{inr(cash)}</Num>}
+          foot={railDown ? 'The settlement rail did not answer' : <>{wallet?.walletId || 'wholesale wallet'} · simulated money</>}
+        />
+        <AxMetric
           label="Income received"
-          value={railDown || incomeUnavailable ? '—' : money(totalIncome)}
-          sub={incomeUnavailable
+          value={railDown || incomeUnavailable ? 'Unavailable' : <Num>{inr(totalIncome)}</Num>}
+          foot={incomeUnavailable
             ? 'Income history needs a newer gateway build'
-            : `${income?.count || 0} rent / coupon payouts`}
-          color="#065F46" />
-      </div>
+            : <><Num>{income?.count || 0}</Num> rent or coupon payouts, already credited</>}
+          tip="Money actually distributed to you and credited to your wallet. This is realised income, not a projection."
+        />
+      </section>
 
       {/* Only claim a total outage when everything really failed. Otherwise
-          list precisely what is missing, so the page never tells the user that
-          cash is unavailable while the cash figure is sitting right above. */}
+          list precisely what is missing, so the page never says cash is
+          unavailable while the cash figure sits right above it. */}
       {railDown ? (
-        <div style={{ ...card, marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12.5, lineHeight: 1.6 }}>
-          The UMI settlement rail is not reachable, so cash, income and settlement history are unavailable.
-          Your holdings and valuation above are unaffected.
-        </div>
+        <AxCard style={{ marginTop: 16, background: 'var(--ax-warning-wash)', borderColor: 'rgba(154,107,22,.3)' }}>
+          <Badge tone="warning">Settlement rail unreachable</Badge>
+          <p className="ax-body" style={{ marginTop: 10, color: 'var(--ax-ink)' }}>
+            Cash, income and settlement history cannot be read right now. Your holdings and their
+            valuation above are unaffected, because those come from a different service.
+          </p>
+        </AxCard>
       ) : railIssues.length > 0 ? (
-        <div style={{ ...card, marginTop: 14, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12.5, lineHeight: 1.6 }}>
-          <strong>The settlement rail is online.</strong> Everything below is live except:
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-            {railIssues.map(([what, why]) => <li key={what}>{what} — {why}</li>)}
+        <AxCard style={{ marginTop: 16, background: 'var(--ax-warning-wash)', borderColor: 'rgba(154,107,22,.3)' }}>
+          <Badge tone="warning">Partly unavailable</Badge>
+          <p className="ax-body" style={{ marginTop: 10, color: 'var(--ax-ink)' }}>
+            The settlement rail is online. Everything below is live except:
+          </p>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+            {railIssues.map(([what, why]) => (
+              <li key={what} className="ax-body" style={{ fontSize: 13.5 }}><strong style={{ color: 'var(--ax-ink)' }}>{what}</strong>: {why}</li>
+            ))}
           </ul>
-        </div>
+        </AxCard>
       ) : null}
 
-      <BasketPanel
-        holdings={basketHoldings}
-        catalogue={basketCatalogue}
-        unavailable={basketsUnavailable}
-        identityId={identityId}
-        onChanged={load}
-      />
-
-      {/* Holdings */}
-      <div style={{ ...card, marginTop: 16 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Holdings</h2>
-        {holdings.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-            Nothing yet. <Link to="/marketplace" style={{ color: '#1E3A5F', fontWeight: 600 }}>Browse properties →</Link>
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-            {holdings.map((h, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
-                border: '1px solid #F3F4F6', borderRadius: 9, padding: '10px 12px' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>
-                    {h.propertyTitle || h.balance?.assetId}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 2 }}>
-                    {Number(h.balance?.balance || 0).toLocaleString('en-IN')} tokens
-                    {h.tokenPrice ? ` · ${money(h.tokenPrice)} each` : ''}
-                  </div>
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#1E3A5F' }}>{money(h.valueINR)}</div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div style={{ marginTop: 18 }}>
+        <BasketPanel
+          holdings={basketHoldings}
+          catalogue={basketCatalogue}
+          unavailable={basketsUnavailable}
+          identityId={identityId}
+          onChanged={load}
+        />
       </div>
 
-      {/* Income */}
-      {!railDown && (
-        <div style={{ ...card, marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Rent &amp; coupon income</h2>
-            <span style={{ fontSize: 11.5, color: '#6B7280' }}>paid straight into your e₹-W wallet by smart contract</span>
-          </div>
-          {!income || income.count === 0 ? (
-            <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-              No distributions yet. When an issuer runs a servicing payout, your share is credited automatically
-              and appears here with the block that recorded it.
-            </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)', gap: 18, marginTop: 18, alignItems: 'start' }}>
+        {/* ------------------------------------------------------ holdings */}
+        <AxCard title="Holdings" sub="Valued at the token price recorded on each property.">
+          {loading ? (
+            <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2].map((i) => <Skeleton key={i} h={52} />)}</div>
+          ) : holdings.length === 0 ? (
+            <EmptyState
+              title="Nothing held yet"
+              body="When you buy tokens in a property, they appear here with their valuation and the blocks that recorded them."
+              action={<Button to="/marketplace" size="sm" variant="secondary">Browse properties</Button>}
+            />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
-              {income.payouts.map(p => (
-                <div key={p.servicingId + p.holder} style={{ display: 'flex', justifyContent: 'space-between', gap: 10,
-                  flexWrap: 'wrap', alignItems: 'center', border: '1px solid #F3F4F6', borderRadius: 9, padding: '9px 12px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, color: '#111827', fontWeight: 600, overflowWrap: 'anywhere' }}>
-                      {p.assetId}{p.isin ? ` · ISIN ${p.isin}` : ''}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
-                      {new Date(p.settledAt).toLocaleString('en-IN')} · on {Number(p.tokens).toLocaleString('en-IN')} tokens
-                      {p.blockHeight ? ` · block #${p.blockHeight}` : ''}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#065F46' }}>+{money(p.amountINR)}</div>
-                </div>
-              ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="ax-table">
+                <caption className="ax-sr">Your property holdings</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Property</th>
+                    <th scope="col" className="ax-num">Tokens</th>
+                    <th scope="col" className="ax-num">Price each</th>
+                    <th scope="col" className="ax-num">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {holdings.map((h, i) => (
+                    <tr key={i}>
+                      <td>
+                        {h.balance?.assetId
+                          ? <Link to={`/property/${encodeURIComponent(h.balance.assetId)}`} style={{ color: 'var(--ax-ink)', fontWeight: 600 }}>
+                              {h.propertyTitle || h.balance.assetId}
+                            </Link>
+                          : <strong>{h.propertyTitle}</strong>}
+                      </td>
+                      <td className="ax-num">{Number(h.balance?.balance || 0).toLocaleString('en-IN')}</td>
+                      <td className="ax-num">{h.tokenPrice ? inr(h.tokenPrice) : 'Not published'}</td>
+                      <td className="ax-num" style={{ fontWeight: 650 }}>{inr(h.valueINR)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </div>
-      )}
+        </AxCard>
 
-      {/* Settlements */}
-      {!railDown && (
-        <div style={{ ...card, marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Settlement history</h2>
-            <Link to="/ledger" style={{ fontSize: 11.5, color: '#1E3A5F', fontWeight: 600, textDecoration: 'none' }}>
-              Open the ledger →
-            </Link>
-          </div>
-          {settlements.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-              No settlements yet. Run one on the <Link to="/umi" style={{ color: '#1E3A5F', fontWeight: 600 }}>UMI page</Link>.
-            </p>
+        {/* ---------------------------------------------------- allocation */}
+        <AxCard title="Allocation by property" sub="Share of your property value, at the same valuation.">
+          {allocation.length === 0 ? (
+            <p className="ax-body">Nothing to allocate yet.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
-              {settlements.slice(0, 12).map(s => {
-                const st = STATUS[s.status] || STATUS.CREATED
-                const side = s.buyer === identityId ? 'Bought' : 'Sold'
+            <div style={{ display: 'grid', gap: 14 }}>
+              {allocation.map((a) => {
+                const pct = allocTotal ? (a.value / allocTotal) * 100 : 0
                 return (
-                  <div key={s.instructionId} style={{ display: 'flex', justifyContent: 'space-between', gap: 10,
-                    flexWrap: 'wrap', alignItems: 'center', border: '1px solid #F3F4F6', borderRadius: 9, padding: '9px 12px' }}>
-                    <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-                        color: st.color, background: st.bg, border: `1px solid ${st.border}` }}>{st.label}</span>
-                      <span style={{ fontSize: 12.5, color: '#111827' }}>
-                        <b>{side}</b> {Number(s.tokens).toLocaleString('en-IN')} tokens for <b>{money(s.cashINR)}</b>
-                      </span>
+                  <div key={a.assetId || a.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13.5 }}>
+                      <span style={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>{a.label}</span>
+                      <span className="ax-num" style={{ color: 'var(--ax-muted)' }}>{pct.toFixed(1)}%</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'monospace' }}>
-                      {s.status === 'SETTLED' && s.blockHeight ? `block #${s.blockHeight}` : s.failureReason || ''}
-                    </span>
+                    <div style={{ marginTop: 6 }}><Progress value={pct} label={`${a.label}: ${pct.toFixed(1)} percent`} /></div>
+                    <p className="ax-hint" style={{ marginTop: 5 }}>
+                      <Num>{inr(a.value)}</Num> · <Num>{a.tokens.toLocaleString('en-IN')}</Num> tokens
+                    </p>
                   </div>
                 )
               })}
+              {allocation.length === 1 && (
+                <p className="ax-hint">
+                  Everything you hold is in one property. Concentration is a risk the number above cannot show.
+                </p>
+              )}
             </div>
           )}
-          <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 10, lineHeight: 1.6 }}>
-            {settled.length} settled · every one moved tokens and cash together, or neither.
+        </AxCard>
+      </div>
+
+      {/* --------------------------------------------------------- pending */}
+      {!railDown && pending.length > 0 && (
+        <AxCard
+          title="In flight"
+          sub="Instructions that have not reached a final state. Nothing here has settled."
+          style={{ marginTop: 18 }}
+          right={<Badge tone="pending">{pending.length} pending</Badge>}
+        >
+          <div style={{ display: 'grid', gap: 8 }}>
+            {pending.map((s2) => {
+              const st = STATUS[s2.status] || STATUS.CREATED
+              return (
+                <div key={s2.instructionId} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', border: '1px solid var(--ax-line)', borderRadius: 10, padding: '10px 13px' }}>
+                  <span style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Badge tone="pending">{st.label}</Badge>
+                    <span style={{ fontSize: 13.5 }}>
+                      <Num>{Number(s2.tokens).toLocaleString('en-IN')}</Num> tokens for <Num>{inr(s2.cashINR)}</Num>
+                    </span>
+                  </span>
+                  <Mono>{s2.instructionId}</Mono>
+                </div>
+              )
+            })}
           </div>
-        </div>
+        </AxCard>
       )}
-    </div>
+
+      {/* ---------------------------------------------------------- income */}
+      {!railDown && (
+        <AxCard
+          title="Rent and coupon income"
+          sub="Paid into your wallet when an issuer runs a servicing payout. Realised, not projected."
+          style={{ marginTop: 18 }}
+        >
+          {!income || income.count === 0 ? (
+            <EmptyState
+              title="No distributions yet"
+              body="When an issuer runs a payout, your share is credited automatically and appears here with the block that recorded it."
+            />
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="ax-table">
+                <caption className="ax-sr">Income distributions</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Asset</th>
+                    <th scope="col">Settled</th>
+                    <th scope="col" className="ax-num">On tokens</th>
+                    <th scope="col">Block</th>
+                    <th scope="col" className="ax-num">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {income.payouts.map((p2) => (
+                    <tr key={p2.servicingId + p2.holder}>
+                      <td style={{ overflowWrap: 'anywhere' }}>{p2.assetId}{p2.isin ? <><br /><span className="ax-hint">ISIN {p2.isin}</span></> : null}</td>
+                      <td className="ax-hint" style={{ whiteSpace: 'nowrap' }}>{new Date(p2.settledAt).toLocaleString('en-IN')}</td>
+                      <td className="ax-num">{Number(p2.tokens).toLocaleString('en-IN')}</td>
+                      <td>{p2.blockHeight ? <Mono>#{p2.blockHeight}</Mono> : <span className="ax-hint">not recorded</span>}</td>
+                      <td className="ax-num" style={{ fontWeight: 650, color: 'var(--ax-success)' }}>+{inr(p2.amountINR)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </AxCard>
+      )}
+
+      {/* ----------------------------------------------------- settlements */}
+      {!railDown && (
+        <AxCard
+          title="Settlement history"
+          sub="Every one moved tokens and cash together, or neither."
+          style={{ marginTop: 18 }}
+          right={<Button to="/ledger" variant="secondary" size="sm">Open the ledger</Button>}
+        >
+          {settlements.length === 0 ? (
+            <EmptyState
+              title="No settlements yet"
+              body="A purchase settles tokens against cash in one operation. When that happens, it is listed here with its block."
+              action={<Button to="/umi" size="sm" variant="secondary">Open the settlement rail</Button>}
+            />
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="ax-table">
+                <caption className="ax-sr">Recent settlement instructions</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Status</th>
+                    <th scope="col">Side</th>
+                    <th scope="col" className="ax-num">Tokens</th>
+                    <th scope="col" className="ax-num">Cash</th>
+                    <th scope="col">Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {settlements.slice(0, 12).map((s2) => {
+                    const st = STATUS[s2.status] || STATUS.CREATED
+                    const tone = s2.status === 'SETTLED' ? 'success' : s2.status === 'FAILED' ? 'error' : 'pending'
+                    return (
+                      <tr key={s2.instructionId}>
+                        <td><Badge tone={tone}>{st.label}</Badge></td>
+                        <td>{s2.buyer === identityId ? 'Bought' : 'Sold'}</td>
+                        <td className="ax-num">{Number(s2.tokens).toLocaleString('en-IN')}</td>
+                        <td className="ax-num">{inr(s2.cashINR)}</td>
+                        <td>
+                          {s2.status === 'SETTLED' && s2.blockHeight
+                            ? <Mono>block #{s2.blockHeight}</Mono>
+                            : <span className="ax-hint">{s2.failureReason || 'not settled'}</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="ax-hint" style={{ marginTop: 12 }}>
+            <Num>{settled.length}</Num> settled. The cash leg of each one is simulated wholesale digital
+            rupee, not a bank transfer.
+          </p>
+        </AxCard>
+      )}
+    </main>
   )
 }

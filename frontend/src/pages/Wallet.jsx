@@ -5,6 +5,10 @@ import api from '../lib/api.js'
 import UMIPortfolioPanel from '../components/UMIPortfolioPanel.jsx'
 import TransactionHistory from '../components/TransactionHistory.jsx'
 import { useLocalCache } from '../hooks/useLocalCache.js'
+import {
+  Button, Badge, SimBadge, Card as AxCard, Metric as AxMetric, Num, Mono,
+  EmptyState, ErrorState, Skeleton, inr, InfoTip,
+} from '../components/ui.jsx'
 
 // SOLID: Single Responsibility Only wallet display + transfer for layman
 
@@ -16,47 +20,28 @@ function SimpleHoldingCard({ holding }) {
 
   return (
     <div style={{
-      background: 'white',
-      border: '1px solid #E5E7EB',
-      borderRadius: 12,
-      padding: 16,
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: 12,
-      minWidth: 0
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14,
+      flexWrap: 'wrap', border: '1px solid var(--ax-line)', borderRadius: 'var(--ax-r)',
+      padding: '14px 16px', background: '#fff', minWidth: 0,
     }}>
-      <div style={{ minWidth: 0, flex: '1 1 180px' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{propertyTitle}</div>
-        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-          {(balance.balance || 0).toLocaleString('en-IN')} tokens • ₹{tokenPrice.toLocaleString('en-IN')} each
-        </div>
-        {holding.fromDevice && (
-          <div style={{ fontSize: 10, color: '#92400E', marginTop: 2 }}>
-            syncing to cloud…
-          </div>
-        )}
+      <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+        <Link
+          to={`/property/${encodeURIComponent(balance.assetId)}`}
+          style={{ fontSize: 15, fontWeight: 650, color: 'var(--ax-ink)', textDecoration: 'none', overflowWrap: 'anywhere' }}
+        >{propertyTitle}</Link>
+        <p className="ax-hint" style={{ marginTop: 3 }}>
+          <Num>{Number(balance.balance || 0).toLocaleString('en-IN')}</Num> tokens
+          {tokenPrice ? <> · <Num>{inr(tokenPrice)}</Num> each</> : null}
+        </p>
       </div>
-      <div style={{ textAlign: 'right', marginLeft: 'auto', minWidth: 120 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#111827', overflowWrap: 'anywhere' }}>{money(value)}</div>
-        <div style={{ fontSize: 11, color: '#6B7280' }}>Value</div>
-        <Link to={`/property/${balance.assetId}`} style={{
-          fontSize: 11,
-          color: '#1E3A5F',
-          textDecoration: 'none',
-          fontWeight: 600,
-          marginTop: 4,
-          display: 'inline-block'
-        }}>
-          View →
-        </Link>
+      <div style={{ textAlign: 'right' }}>
+        <div className="ax-metric-value" style={{ fontSize: 19, marginTop: 0 }}><Num>{inr(value)}</Num></div>
+        <p className="ax-hint" style={{ marginTop: 2 }}>at last valuation</p>
       </div>
     </div>
   )
 }
 
-// Layman-friendly transfer error messages (Open/Closed: add new codes to the map)
 const TRANSFER_ERRORS = {
   ERR_BALANCE_NOT_FOUND: 'We could not find your tokens on the server just now. Tap Refresh and try again in a few seconds.',
   ERR_INSUFFICIENT_BALANCE: 'Not enough tokens for that amount. Check how many you own above.',
@@ -224,99 +209,76 @@ export default function Wallet({ user }) {
   }
 
   return (
-    <div className="pg pg-narrow" style={{ minWidth: 0 }}>
-      <h1 className="pg-title">My Wallet</h1>
-      <p style={{ color: '#6B7280', fontSize: 14, marginTop: 6 }}>
-        Your property tokens and portfolio value
+    <main className="ax ax-wrap" style={{ maxWidth: 980, paddingTop: 26, paddingBottom: 64, minWidth: 0 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap' }}>
+        <div>
+          <p className="ax-eyebrow">Wallet</p>
+          <h1 className="ax-display ax-h2">Your holdings and cash</h1>
+          <p className="ax-lede" style={{ fontSize: 15.5 }}>
+            Property tokens you hold, their value at the last recorded price, and the payment record
+            behind each movement.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Button to="/marketplace" variant="secondary" size="sm">Browse properties</Button>
+          <Button size="sm" onClick={fetchWallet} disabled={loading}>{loading ? 'Refreshing' : 'Refresh'}</Button>
+        </div>
+      </header>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginTop: 22 }}>
+        <AxMetric
+          label="Token value held"
+          value={loading ? <Skeleton h={26} w="70%" /> : <Num>{inr(totalValue)}</Num>}
+          foot={<><Num>{holdings.length}</Num> {holdings.length === 1 ? 'property' : 'properties'} · valuation, not a quoted price</>}
+          tip="Tokens valued at the price recorded against each property. Nobody has offered to buy them at this price."
+        />
+        <AxMetric
+          label="Portfolio net asset value"
+          value={nav ? <Num>{inr(nav.navINR)}</Num> : 'Not available'}
+          foot={nav ? 'Marked to the last trade price, after loans' : 'The valuation service did not answer'}
+        />
+        <AxMetric
+          label="Credit outstanding"
+          value={nav ? <Num>{inr(nav.outstandingDebtINR)}</Num> : 'Not available'}
+          foot={nav ? <><Num>{nav.activeLoans}</Num> active loan(s) against pledged tokens</> : 'Unknown while the valuation service is down'}
+        />
+      </section>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+        <SimBadge>Cash legs are simulated</SimBadge>
+        <Badge tone="info">Test payment providers only</Badge>
+      </div>
+      <p className="ax-hint" style={{ marginTop: 8, maxWidth: '84ch' }}>
+        The digital rupee balance below is simulated central bank money on this rail. Card and UPI
+        flows run against test providers. No real money moves anywhere in this product, and a payment
+        marked settled here is a settled simulation.
       </p>
 
-      <div style={{
-        background: 'white',
-        border: '1px solid #E5E7EB',
-        borderRadius: 12,
-        padding: 20,
-        marginTop: 20,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 10,
-        minWidth: 0
-      }}>
-        <div style={{ minWidth: 0, flex: '1 1 220px' }}>
-          <div style={{ fontSize: 12, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Total Portfolio Value</div>
-          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6, color: '#111827', overflowWrap: 'anywhere' }}>{money(totalValue)}</div>
-          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>{holdings.length} properties owned</div>
-        </div>
-        <button onClick={fetchWallet} style={{
-          padding: '8px 14px',
-          border: '1px solid #E5E7EB',
-          borderRadius: 8,
-          background: 'white',
-          fontSize: 13,
-          cursor: 'pointer'
-        }}>
-          Refresh
-        </button>
-      </div>
-
       {error && (
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: 10, fontSize: 12, color: '#991B1B', marginTop: 12 }}>
-          {error}
+        <div style={{ marginTop: 16 }}>
+          <ErrorState title="The wallet did not load fully" detail={error} onRetry={fetchWallet} />
         </div>
       )}
 
-      <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>My Properties</h3>
-
+      <AxCard
+        title="Properties you hold"
+        sub="Each one links to its property page, where the register and the verification checks live."
+        style={{ marginTop: 20 }}
+      >
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <div style={{
-              width: 32, height: 32,
-              border: '3px solid #E5E7EB',
-              borderTopColor: '#1E3A5F',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-              margin: '0 auto'
-            }}></div>
-            <p style={{ color: '#6B7280', fontSize: 14, marginTop: 12 }}>Loading your properties...</p>
-          </div>
+          <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2].map((i) => <Skeleton key={i} h={62} />)}</div>
         ) : holdings.length === 0 ? (
-          <div style={{
-            background: 'white',
-            border: '1px solid #E5E7EB',
-            borderRadius: 12,
-            padding: '40px 20px',
-            textAlign: 'center',
-            marginTop: 12
-          }}>
-            <div style={{ fontSize: 32 }}>🏠</div>
-            <p style={{ fontSize: 16, fontWeight: 600, marginTop: 12, color: '#111827' }}>No properties yet</p>
-            <p style={{ fontSize: 13, color: '#6B7280', marginTop: 6, maxWidth: '40ch', margin: '6px auto 0' }}>
-              Start investing from ₹500. Browse properties and buy tokens via UPI.
-            </p>
-            <Link to="/marketplace" style={{
-              display: 'inline-block',
-              marginTop: 16,
-              padding: '10px 20px',
-              background: '#1E3A5F',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600
-            }}>
-              Explore Properties →
-            </Link>
-          </div>
+          <EmptyState
+            title="No properties yet"
+            body="Fractional ownership starts at ₹500. When you buy tokens, they appear here with their valuation and the settlement that created them."
+            action={<Button to="/marketplace" size="sm">Explore properties</Button>}
+          />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-            {holdings.map((h, i) => (
-              <SimpleHoldingCard key={i} holding={h} />
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {holdings.map((h, i) => <SimpleHoldingCard key={i} holding={h} />)}
           </div>
         )}
-      </div>
+      </AxCard>
 
       <UMIPortfolioPanel identityId={identityId} />
 
@@ -486,6 +448,6 @@ export default function Wallet({ user }) {
           )}
         </form>
       </div>
-    </div>
+    </main>
   )
 }
