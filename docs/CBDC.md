@@ -139,3 +139,43 @@ published pilot behaviour. It issues no central bank money, holds no settlement
 account, is designated under no statute, and nothing in it is a legal opinion.
 It is a demonstration of how the mechanics can work, with the limits written
 down where they bind.
+
+## Interoperability: paying somebody who holds a different kind of money
+
+A digital rupee that can only pay another digital rupee wallet is a closed loop, and a closed loop
+is why most pilots stay pilots. The design here follows what the pilot actually did: rather than
+asking merchants to accept a new instrument, the money was made payable against the QR codes the
+country already has. The shopkeeper does not opt in to a new rail; the payer chooses the
+instrument.
+
+Every instrument pair raises the same three questions, and the usual failure is answering none of
+them and calling the result instant.
+
+**Which leg is final, and when.** A digital rupee leg settles on this ledger in the block it lands
+in. A bank leg settles on the scheme's own cycle, which is later. A payment crossing the two is
+final on one side before the other, so a payment to a bank account is reported as
+`AWAITING_SCHEME_SETTLEMENT` with the ledger leg final and the payment provisional, naming the
+window.
+
+**Who holds the claim in the gap.** Between the two legs somebody is exposed, and it is never
+nobody. The money sits in a named interop suspense account whose balance is published, so the gap
+is a place rather than a feeling. It empties when the far leg is recorded.
+
+**Whether the total changed.** Interoperability is the easiest place in a system like this to
+create money by accident, so moving between a tokenised deposit and central bank money is a
+conversion rather than a payment: one operation destroys the deposit and creates the money, and the
+conservation identity is returned with the response. Attempting that through the payment path is
+refused with the reason.
+
+| From | To | Supported | Finality |
+| --- | --- | --- | --- |
+| e-rupee | e-rupee | yes | final on both legs, one movement |
+| e-rupee | bank account over the retail scheme | yes | ledger leg final, bank leg provisional |
+| bank account | e-rupee | **no** | needs a rail this deployment is not connected to and an authorisation it does not hold |
+| tokenised deposit | e-rupee | yes, as a conversion | both final, one operation |
+| e-rupee | tokenised deposit | yes, as a conversion | both final, one operation |
+| e-rupee | another central bank's money | yes, through the corridor layer | atomic on one ledger, hash time-locked across two |
+
+Recording that the far scheme settled is a supervisor's act and the block names who did it, because
+nothing in this deployment can observe a payment scheme settling. The tokenised deposit is a
+balance this process keeps, not a claim on any real institution, and every response says so.

@@ -3,8 +3,8 @@
 An audit against the keyword list, checked against the code rather than from
 memory. Status is one of **done**, **partial** or **not started**, and
 "partial" always says what is missing. The keyword list splits into 25 rows
-because several keywords carry more than one item: 16 are done, 7 are
-partial, 1 has not been started, and 1 was a question rather than a feature.
+because several keywords carry more than one item: 17 are done, 7 are partial,
+none is untouched, and 1 was a question rather than a feature.
 
 | # | Keyword | Status | Where it lives | What is missing |
 | --- | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 | 2 | eKYC | done | `kyc.go`, `/umi/kyc/*`, `docs/KYC.md`, tiers in `cbdc.go` | Five identification routes with the ceilings each one carries, video identification enforced against all four of its conditions, offline file freshness, periodic updation by risk band, and a wallet tier written by the verification rather than asserted. Aadhaar numbers are refused outright, not stored. The external steps (UIDAI call, registry upload, the video session itself) are simulated and say so. |
 | 3 | Better offline protocol | done | `IssueOffline` / `RedeemOffline`, `tests/cbdc.test.mjs` | Reserved value, signed voucher, bounded exposure, deterministic double-spend detection. Noted limit: symmetric signing, where production needs per-device keys. |
 | 4a | Programmable CBDC | done | `Grant` / `Spend`, `ProgramCondition` | Expiry, merchant category, named merchants, geography, all enforced on the rail with refusals committed. |
-| 4b | Interoperability of CBDC with other systems | not started | - | e₹ against UPI, against a tokenised deposit, against another CBDC. Planned as phase 3 in `docs/CBDC.md`. |
+| 4b | Interoperability of CBDC with other systems | done | `cbdcinterop.go`, `/umi/cbdc/interop/*`, the matrix in `docs/CBDC.md`, plus `corridors.go` for the foreign leg | e₹ to a bank account over the retail scheme (ledger leg final, bank leg provisional, money visibly in suspense), two-way conversion with a tokenised deposit in one operation, and the foreign CBDC case handled by the corridor layer. Pulling from a bank account is declared unsupported with the reason. Far legs are simulated and say so. |
 | 5 | Anti money laundering | done | `aml.go`, `/umi/aml/*`, `docs/AML.md`, plus `screenLocked` in `cbdc.go`, `fraud.go`, `riskmodel.go` | Sanctions and PEP screening against a named list with transliteration-tolerant matching, two published thresholds, case management with attributed clearance, and a suspicious transaction report artefact hashed onto the ledger. The shipped list is synthetic and says so; there is still no customer risk rating, no typology library and no counterparty network view. |
 | 6 | Law of the land | partial | Disclaimers throughout, FEMA and nationality refusals in `crossborder.go`, PA-CB and finality notes in `docs/CBDC.md` | The statutory basis is described in prose but not modelled: no designation state, no per-jurisdiction rule set that a transaction is actually tested against. |
 | 7 | Risk management | done | `fraud.go` rules, the trained model, KYC caps, offline caps, supply conservation, backing gate | Decisions stay with the published rules; the model is advisory. |
@@ -36,10 +36,9 @@ partial, 1 has not been started, and 1 was a question rather than a feature.
 
 ## The honest summary
 
-The CBDC half and the cross-border half are both built now. What is left is
-mostly what a person would see or verify rather than the mechanics. CBDC
-interoperability with other systems is the one item with no code at all, and
-the open partials are the speed of the CBDC and corridor paths specifically
+The CBDC half and the cross-border half are both built now, and every keyword
+raised has code behind it. What is left is depth rather than absence: the open
+partials are the speed of the CBDC and corridor paths specifically
 (the settlement engine is measured and published), and the older modules that
 still keep state in Go maps while writing blocks about it.
 

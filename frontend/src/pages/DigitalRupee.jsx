@@ -866,6 +866,81 @@ function Verification({ kyc, user, reload }) {
   )
 }
 
+// Interoperability. The matrix is the content: which instrument can pay
+// which, and what each pair costs in finality. A payment that crosses rails
+// is final on one side before the other, and saying "instant" would be a lie
+// about the half nobody can see.
+function Interop({ interop, user, reload }) {
+  if (!interop) return null
+  const act = run(reload)
+
+  return (
+    <Card
+      title="Paying somebody who holds a different kind of money"
+      sub="A digital rupee that can only pay another digital rupee wallet is a closed loop. The shopkeeper keeps the QR code they already have; the payer chooses the instrument. What changes is which leg is final, and when."
+      right={<Tag tone="sim">far legs simulated</Tag>}
+    >
+      <div className="pg-table">
+        {(interop.routes || []).map((r) => (
+          <div key={r.from + r.to} className="pg-row" style={{ padding: '10px 0', borderTop: '1px solid #E2E8F0' }}>
+            <div>
+              <b>{r.from.replace(/_/g, ' ').toLowerCase()} to {r.to.replace(/_/g, ' ').toLowerCase()}</b>{' '}
+              <Tag tone={r.supported ? 'live' : 'bad'}>{r.supported ? 'supported' : 'not supported'}</Tag>{' '}
+              {r.supported && (
+                <Tag tone={r.farLegFinality === 'FINAL' ? 'live' : 'sim'}>
+                  {r.farLegFinality === 'FINAL' ? 'final on both legs' : 'far leg provisional'}
+                </Tag>
+              )}
+            </div>
+            <p className="pg-card-sub" style={{ marginTop: 4 }}>{r.how}</p>
+            {r.whoHoldsTheGap && <p className="pg-card-sub"><b>In the gap:</b> {r.whoHoldsTheGap}</p>}
+          </div>
+        ))}
+      </div>
+
+      <div className="pg-kv" style={{ marginTop: 14 }}>
+        <div>In suspense now</div>
+        <div>{interop.suspense?.balance} ({interop.payments?.awaitingSchemeSettlement || 0} payment(s) awaiting the scheme)</div>
+        <div>Tokenised deposits</div>
+        <div>{interop.tokenisedDeposits?.total} across {interop.tokenisedDeposits?.holders} holder(s)</div>
+      </div>
+
+      {user && (
+        <div className="pg-grid" style={{ gap: 16, marginTop: 14 }}>
+          <ActionForm
+            hint="Pay a bank account from an e-rupee wallet. The ledger leg is final at once; the bank leg is not, and the money sits in suspense until somebody records that the scheme settled."
+            fields={[
+              { name: 'payer', label: 'Payer wallet', placeholder: 'investor1' },
+              { name: 'payee', label: 'Payee handle', placeholder: 'shopkeeper@bank' },
+              { name: 'amount', label: 'Amount in rupees', placeholder: '2500' },
+            ]}
+            submitLabel="Pay a bank account"
+            onSubmit={(f) => act('/cbdc/interop/pay', {
+              payer: f.payer, payee: f.payee, fromInstrument: 'E_RUPEE', toInstrument: 'BANK_ACCOUNT_UPI',
+              amountPaise: Math.round(Number(f.amount || 0) * 100),
+              acceptedVia: 'the existing QR code',
+            }, (d) => `${d.payment.paymentId}: ledger leg final, bank leg provisional. ${d.payment.note}`)}
+          />
+          <ActionForm
+            hint="Swap a bank claim for central bank money. One operation destroys the deposit and creates the money, so the total cannot drift."
+            fields={[
+              { name: 'holder', label: 'Holder', placeholder: 'investor1' },
+              { name: 'amount', label: 'Amount in rupees', placeholder: '3000' },
+            ]}
+            submitLabel="Convert deposit to e-rupee"
+            onSubmit={(f) => act('/cbdc/interop/convert', {
+              holder: f.holder, direction: 'DEPOSIT_TO_E_RUPEE',
+              amountPaise: Math.round(Number(f.amount || 0) * 100),
+            }, (d) => `${d.meaning} Conservation still holds: ${d.conservation?.conserved}.`)}
+          />
+        </div>
+      )}
+
+      <p className="pg-card-sub" style={{ marginTop: 14, opacity: 0.85 }}>{interop.disclaimer}</p>
+    </Card>
+  )
+}
+
 export default function DigitalRupee({ user = null }) {
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -878,6 +953,7 @@ export default function DigitalRupee({ user = null }) {
   const [amlCases, setAmlCases] = useState([])
   const [agent, setAgent] = useState(null)
   const [kyc, setKyc] = useState(null)
+  const [interop, setInterop] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -887,7 +963,7 @@ export default function DigitalRupee({ user = null }) {
       const { ok, data } = await umiFetch(path)
       return ok ? data : fallback
     }
-    const [st, acc, gr, co, mv, cor, tr, aml, agent, kyc, amlCases] = await Promise.all([
+    const [st, acc, gr, co, mv, cor, tr, aml, agent, kyc, interop, amlCases] = await Promise.all([
       get('/cbdc', null),
       get('/cbdc/accounts', {}),
       get('/cbdc/grants', {}),
@@ -898,6 +974,7 @@ export default function DigitalRupee({ user = null }) {
       get('/aml', null),
       get('/proposals', null),
       get('/kyc', null),
+      get('/cbdc/interop', null),
       get('/aml/cases?limit=10', {}),
     ])
     if (!st) setErr('This deployment does not have the digital rupee layer mounted.')
@@ -912,6 +989,7 @@ export default function DigitalRupee({ user = null }) {
     setAmlCases(amlCases.cases || [])
     setAgent(agent)
     setKyc(kyc)
+    setInterop(interop)
     setLoading(false)
   }, [])
 
@@ -934,6 +1012,7 @@ export default function DigitalRupee({ user = null }) {
       <Corridors corridors={(corridors && corridors.corridors) || []} blocked={corridors && corridors.blockedCorridors} />
       <Transfers transfers={transfers} user={user} reload={load} />
       <Screening aml={aml} cases={amlCases} user={user} reload={load} />
+      <Interop interop={interop} user={user} reload={load} />
       <Verification kyc={kyc} user={user} reload={load} />
       <Proposals agent={agent} user={user} reload={load} />
       <Movements movements={movements} />

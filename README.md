@@ -266,6 +266,23 @@ the world. And it is advisory: the published rules make the decision, the model 
 them, and where the two disagree the disagreement is shown. Every score comes back with the
 features that moved it: [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md).
 
+## Money that can pay money of a different kind
+
+A digital rupee that can only pay another digital rupee wallet is a closed loop, which is why
+pilots stay pilots. Here the shopkeeper keeps the QR code they already have and the payer chooses
+what to pay with, and the interesting part is what that costs rather than that it works.
+
+Three questions get separate answers instead of being averaged into the word instant. Which leg is
+final and when: paying a bank account is final on this ledger immediately and provisional on the
+bank side until the scheme settles, and it says so rather than showing a tick. Who holds the claim
+in between: a named suspense account whose balance is published, because the gap always has
+somebody in it. And whether the total changed: swapping a bank claim for central bank money is one
+operation that destroys one and creates the other, with the conservation check returned alongside.
+
+Pulling money out of a bank account is listed as not supported, with the reason, because that needs
+a connection and an authorisation this deployment does not have. Recording that the far scheme
+settled is a person's act and the ledger names them: [`docs/CBDC.md`](docs/CBDC.md).
+
 ## Verification that produces the tier, instead of trusting it
 
 A wallet's KYC tier used to be a word in the request that opened it, which made every ceiling built
@@ -486,7 +503,7 @@ there to read.
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 144 checks across 99 suite files
+make test         # the full sweep: 145 checks across 100 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

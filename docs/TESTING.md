@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  144 checks, 0 failed
+make test       # integration sweep:  145 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,8 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **99** in `tests/` |
-| Reported result | **144 passed, 0 failed** |
+| Suite files | **100** in `tests/` |
+| Reported result | **145 passed, 0 failed** |
 
 `tests/credentials.test.mjs` is worth running on its own when touching the rail proxy. It
 verifies a credential's Ed25519 signature inside the test process, using only the issuer's
@@ -144,7 +144,7 @@ drift into fiction, then replays each suite's requests against it.
 | possible | a suite reaches the path, but the method is not provable from the source |
 | not covered | nothing in the suite reaches it |
 
-As measured: **58.1%** of 86 rail actions are certainly covered, 18.6% are possible, and the rest
+As measured: **61.3%** of 93 rail actions are certainly covered, 17.2% are possible, and the rest
 are reached by nothing. `tests/coverage.test.mjs` recomputes this on every run and fails if the
 published figure drifts from the measured one, if coverage falls below its floor, or if a declared
 route stops being served.
@@ -153,7 +153,7 @@ The measurement earned its keep immediately. It showed that `POST /umi/cbdc/tran
 `POST /umi/cbdc/redeem` were exercised by nothing at all: the conservation identity was being
 asserted without either of the two paths that can break it. The Travel Rule refusal and the
 corridor dry run were in the same state. Those now have tests, which is how the figure moved from
-51.2% to 58.1%.
+51.2% to 58.1%, and the interoperability layer arrived with its own suite.
 
 ## Does the suite catch anything? Planted defects
 

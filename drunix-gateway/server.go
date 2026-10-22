@@ -63,12 +63,13 @@ type Server struct {
 	// Anchors publishes the head of this ledger to a public Solana cluster
 	// so an outsider can check the history was not rewritten (solana.go).
 	// Nil leaves the routes unmounted.
-	Anchors   *SolanaAnchor
-	CBDC      *CBDCLedger
-	Corridors *CorridorDesk
-	AML       *AMLDesk
-	Agent     *AgentDesk
-	KYC       *KYCDesk
+	Anchors     *SolanaAnchor
+	CBDC        *CBDCLedger
+	Corridors   *CorridorDesk
+	AML         *AMLDesk
+	Agent       *AgentDesk
+	KYC         *KYCDesk
+	CBDCInterop *CBDCInteropDesk
 
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
@@ -171,6 +172,7 @@ func (s *Server) Router() http.Handler {
 	s.registerAgentRoutes(mux)
 	s.registerProposalRoutes(mux)
 	s.registerKYCRoutes(mux)
+	s.registerCBDCInteropRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }
