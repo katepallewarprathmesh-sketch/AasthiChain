@@ -42,6 +42,8 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -208,6 +210,10 @@ type AnchorRecord struct {
 	SentAt      string `json:"sentAt"`
 	ConfirmedAt string `json:"confirmedAt,omitempty"`
 	Explorer    string `json:"explorer"`
+	// Recovered marks a record this process did not publish itself but read
+	// back off the cluster after a restart. Worth distinguishing: one is
+	// something we did, the other is something we found.
+	Recovered bool `json:"recovered,omitempty"`
 }
 
 // NewSolanaAnchor wires the layer. A nil chain disables it. Without a secret
@@ -233,6 +239,11 @@ func NewSolanaAnchor(chain *DrunixChain, rpcURL, cluster, secretB58 string) *Sol
 			a.priv = ed25519.NewKeyFromSeed(seed[:ed25519.SeedSize])
 			a.address = Base58Encode(a.priv.Public().(ed25519.PublicKey))
 		}
+	}
+	// A deployment that only reads can still say which account's anchors it
+	// is reading, which is what makes recovery possible without a key.
+	if a.address == "" {
+		a.address = strings.TrimSpace(os.Getenv("SOLANA_ANCHOR_ADDRESS"))
 	}
 	return a
 }
@@ -585,4 +596,104 @@ func explorerURL(signature, cluster string) string {
 		return ""
 	}
 	return "https://explorer.solana.com/tx/" + signature + "?cluster=" + cluster
+}
+
+// --------------------------------------------------------------- recovery
+
+// Recover rebuilds the list of published anchors by reading them back off the
+// cluster.
+//
+// WHY THIS EXISTS. The anchor records were held in memory. The hosted rail
+// sleeps when nobody is using it, and on the next request it starts fresh, so
+// a published anchor vanished from the page while the transaction itself sat
+// permanently on Solana. The screen said nothing had ever been anchored,
+// which was false, and it said it about the one feature whose entire purpose
+// is durability outside this process.
+//
+// The fix follows the same principle as the rest of the system: the record
+// is not the database, the chain is. getSignaturesForAddress returns every
+// transaction this account has signed, with the memo attached, so the
+// anchors can be reconstructed from the public cluster with nothing trusted
+// in between. A restart now loses nothing, and the recovered entries are
+// marked as recovered rather than passed off as this session's work.
+func (a *SolanaAnchor) Recover(ctx context.Context) (int, error) {
+	if a == nil {
+		return 0, nil
+	}
+	addr := a.Address()
+	if addr == "" {
+		return 0, fmt.Errorf("no anchor address is known, so there is nothing to look up")
+	}
+
+	var sigs []struct {
+		Signature string  `json:"signature"`
+		Slot      int64   `json:"slot"`
+		Memo      *string `json:"memo"`
+		BlockTime *int64  `json:"blockTime"`
+		Err       any     `json:"err"`
+	}
+	if err := a.call(ctx, "getSignaturesForAddress",
+		[]interface{}{addr, map[string]interface{}{"limit": 25}}, &sigs); err != nil {
+		return 0, err
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	known := make(map[string]bool, len(a.records))
+	for _, r := range a.records {
+		known[r.Signature] = true
+	}
+
+	added := 0
+	// The RPC answers newest first; append oldest first so the list reads in
+	// the same order as one built by publishing.
+	for i := len(sigs) - 1; i >= 0; i-- {
+		sg := sigs[i]
+		if sg.Err != nil || sg.Memo == nil || known[sg.Signature] {
+			continue
+		}
+		rec, ok := parseAnchorMemo(*sg.Memo)
+		if !ok {
+			continue // somebody else's memo, or ours from another chain id
+		}
+		rec.Signature = sg.Signature
+		rec.Slot = sg.Slot
+		rec.Cluster = a.cluster
+		rec.Status = "CONFIRMED"
+		rec.Explorer = explorerURL(sg.Signature, a.cluster)
+		rec.Recovered = true
+		if sg.BlockTime != nil {
+			rec.SentAt = time.Unix(*sg.BlockTime, 0).UTC().Format(time.RFC3339)
+			rec.ConfirmedAt = rec.SentAt
+		}
+		a.records = append(a.records, rec)
+		known[sg.Signature] = true
+		added++
+	}
+	return added, nil
+}
+
+// parseAnchorMemo reads a memo this system wrote and refuses anything else.
+//
+// The RPC prefixes the memo with its length, as "[283] aasthi|v1|…", which is
+// stripped here. A memo from another application, or one of ours carrying a
+// different chain id, is not an anchor of this ledger and is skipped rather
+// than half-parsed into a record that looks real.
+func parseAnchorMemo(memo string) (AnchorRecord, bool) {
+	m := strings.TrimSpace(memo)
+	if i := strings.Index(m, "] "); strings.HasPrefix(m, "[") && i > 0 {
+		m = m[i+2:]
+	}
+	m = strings.Trim(m, `"`)
+	parts := strings.Split(m, "|")
+	if len(parts) != 6 || parts[0] != "aasthi" || parts[1] != "v1" || parts[2] != DrunixChainID {
+		return AnchorRecord{}, false
+	}
+	height, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		return AnchorRecord{}, false
+	}
+	return AnchorRecord{
+		Height: height, BlockHash: parts[4], TxnsRoot: parts[5], Memo: m,
+	}, true
 }

@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "16dfa012060dbbbaa596f0a7e405630b93408f53913bc679a53ffdddbd4926aa",
+  "sourceDigest": "0346ebd0e2c6cdc5d1eb0b8482824138b6902aff2228916f75590965523a8d7d",
   "sections": [
     {
       "doc": "README",
@@ -470,6 +470,12 @@
       "file": "docs/ANCHORING.md",
       "heading": "This has been done, and here is the transaction",
       "text": "On 23 October 2026 the anchor key was funded with devnet SOL and block 7 of a\nrail instance was anchored for real:\n \n --- --- \n Signature 5osTE53sn8qNj1EYwTxcFkhkPtrcghJtn1ERWtGHkTd7oTQoUGGLFyc8Bq6ahgVBxULMeV5DfFjFf3j1kGSZQ3dZ \n Cluster devnet, slot 514315980 \n Fee 5,000 lamports \n Explorer https://explorer.solana.com/tx/5osTE53sn8qNj1EYwTxcFkhkPtrcghJtn1ERWtGHkTd7oTQoUGGLFyc8Bq6ahgVBxULMeV5DfFjFf3j1kGSZQ3dZ?cluster=devnet \n Payer BBAZAv3KaJdKJaho2jtJi3FZAr2fRyomLeMmb4rAF6sB \n\nThe memo in that transaction is the chain id, the height, the block hash and\nthe transaction root, and GET /umi/anchors/<signature reads it back off the\ncluster and reports matches: true . Nothing about this needs to be taken on\ntrust: open the explorer link and compare the memo yourself.\n\nUntil that date this page described a mechanism that had never been used,\nbecause the key held nothing and the devnet faucet refused every request from\nthis IP. That is worth recording. A capability nobody has exercised is a\nclaim, and the difference between a claim and a fact here cost 0.5 SOL."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "A restart must not lose the anchor",
+      "text": "The hosted rail sleeps when nobody is using it. The anchor records lived in\nmemory, so after a restart the page said no anchor had ever been published\nfrom this instance, while the transaction sat permanently on Solana. False,\nand said about the one feature whose entire purpose is to survive this\nprocess.\n\nThe record is not the database. It is the cluster. Recover lists this\naccount's own transactions with getSignaturesForAddress , reads the memo\nattached to each, and rebuilds the anchor list from them. It runs at boot and\nis exposed at POST /umi/anchors/recover , which needs no key, because\nsomebody checking whether we anchored what we claim should not have to ask\nour permission to make us look.\n\nThree things are skipped rather than half-parsed: a transaction that failed,\na memo belonging to another application, and one of ours carrying a different\nchain id. A recovered entry is marked recovered: true , because something we\nfound and something we did are not the same claim.\n\nA read-only deployment can do this too. Set SOLANA ANCHOR ADDRESS to the\naccount whose anchors it should read, and it rebuilds the history with no\nsigning key anywhere near it."
     },
     {
       "doc": "ANCHORING",

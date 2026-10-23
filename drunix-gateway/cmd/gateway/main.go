@@ -17,6 +17,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	drunix "github.com/katepallewarprathmesh-sketch/AasthiChain/drunix-gateway"
 )
@@ -241,6 +242,26 @@ func main() {
 		// funded SOLANA_SECRET_B58 and is off until it has one.
 		srv.Anchors = drunix.NewSolanaAnchor(chain,
 			os.Getenv("SOLANA_RPC_URL"), os.Getenv("SOLANA_CLUSTER"), os.Getenv("SOLANA_SECRET_B58"))
+		// Read back what this account has already anchored. The hosted rail
+		// sleeps when it is idle, and anchors were held in memory, so a
+		// published anchor disappeared from the page while the transaction
+		// sat permanently on the cluster. In a goroutine because a slow
+		// public RPC must never hold up the boot.
+		// Only worth looking when an address is known. A deployment with
+		// neither a key nor SOLANA_ANCHOR_ADDRESS has nothing to recover,
+		// and logging that as a failure every boot trains people to ignore
+		// the log.
+		if srv.Anchors != nil && srv.Anchors.Address() != "" {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				if n, err := srv.Anchors.Recover(ctx); err != nil {
+					log.Printf("anchor recovery: %v", err)
+				} else if n > 0 {
+					log.Printf("anchor recovery: %d anchor(s) read back off the cluster", n)
+				}
+			}()
+		}
 		// CBDC settlement layer: e₹ accounts, programmable grants, the
 		// offline voucher path and conditional release. Additive: nothing
 		// else on the rail depends on it.

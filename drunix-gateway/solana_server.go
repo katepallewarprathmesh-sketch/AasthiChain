@@ -23,6 +23,7 @@ func (s *Server) registerAnchorRoutes(mux *http.ServeMux) {
 		return
 	}
 	mux.HandleFunc("/umi/anchors", s.durabilityGate(s.handleAnchorCollection))
+	mux.HandleFunc("/umi/anchors/recover", s.durabilityGate(s.handleAnchorRecover))
 	mux.HandleFunc("/umi/anchors/", s.durabilityGate(s.handleAnchorItem))
 }
 
@@ -104,5 +105,33 @@ func (s *Server) handleAnchorItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"verification": res,
 		"disclaimer":   SolanaDisclaimer,
+	})
+}
+
+// handleAnchorRecover rebuilds the published-anchor list from the cluster.
+//
+// Open to anyone, like the other reads here, because it writes nothing and
+// creates nothing: it looks up an account's own transactions on a public
+// chain. Somebody checking whether we really anchored what we say we did
+// should not need a key to make us go and look.
+func (s *Server) handleAnchorRecover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		umiErr(w, http.StatusMethodNotAllowed, "ERR_METHOD", "POST re-reads this account's anchors from the cluster.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	added, err := s.Anchors.Recover(ctx)
+	if err != nil {
+		status, code := anchorStatusFor(err)
+		umiErr(w, status, code, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"recovered": added,
+		"anchors":   s.Anchors.Records(queryLimit(r, 50, 200)),
+		"note": "Read back from the public cluster by listing this account's own transactions and " +
+			"parsing their memos. Nothing here is taken from local storage, which is why a restart " +
+			"cannot lose it.",
 	})
 }

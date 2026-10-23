@@ -5,12 +5,18 @@
 // decentralized trust with a clearly-labeled SIMULATION.
 // The read endpoints are an open layer: no auth, no PII usable by agents & DPI.
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge, Button, CopyButton, Mono, Num } from '../components/ui.jsx'
 import { prettifyAssetId } from '../lib/assetNames.js'
 import { useLocation } from 'react-router-dom'
 import api from '../lib/api.js'
 import useLedgerStream from '../lib/useLedgerStream.js'
+
+// Where the last answer is kept so a return visit paints immediately. Bump
+// the suffix if the shape of what is stored ever changes, so an old entry
+// cannot be read as a new one.
+const LEDGER_CACHE = 'aasthi:ledger:v1'
+const ANCHOR_CACHE = 'aasthi:anchors:v1'
 
 const TYPE_STYLES = {
   GENESIS: { label: 'Genesis', color: '#64748B', bg: '#F1F5F9', border: '#E2E8F0' },
@@ -174,14 +180,22 @@ function txnSummary(t) {
 
 
 function PublicAnchor() {
-  const [state, setState] = React.useState(null)
+  // Cached like the chain is, for the same reason: this panel used to spend
+  // the first second of every visit as an empty rectangle.
+  const [state, setState] = React.useState(() => {
+    try { const raw = sessionStorage.getItem(ANCHOR_CACHE); return raw ? JSON.parse(raw) : null } catch { return null }
+  })
 
   React.useEffect(() => {
     let alive = true
     fetch('/api/umi/anchors?limit=3')
       .then(r => r.json())
-      .then(d => alive && setState(d))
-      .catch(() => alive && setState({ error: true }))
+      .then(d => {
+        if (!alive) return
+        setState(d)
+        try { sessionStorage.setItem(ANCHOR_CACHE, JSON.stringify(d)) } catch { /* no cache available */ }
+      })
+      .catch(() => alive && setState(s => s || { error: true }))
     return () => { alive = false }
   }, [])
 
@@ -231,10 +245,15 @@ function PublicAnchor() {
           </a>
         </div>
       ) : (
-        <div style={{ marginTop: 12, fontSize: 12, color: '#92400E', background: '#FFFBEB',
-          border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 12px', lineHeight: 1.6 }}>
-          {st.writeDisabledBecause || 'No anchor has been published from this instance yet.'} Reads and
-          verification against the public cluster work regardless.
+        // Nothing has been anchored yet from this process. That is a state,
+        // not a fault, so it reads as a quiet line rather than as the amber
+        // warning box it used to be: a reader should not be alarmed by a
+        // feature that is simply idle, and the useful half of the sentence
+        // is that reading and verification work either way.
+        <div style={{ marginTop: 12, fontSize: 12, color: '#6B7280', lineHeight: 1.6 }}>
+          {st.writeEnabled
+            ? 'Nothing anchored since this instance last restarted. Reading and verification against the public cluster are unaffected.'
+            : 'Publishing is off on this deployment, so the cluster is read only from here. Verification of anchors already published still works.'}
         </div>
       )}
     </div>
@@ -258,37 +277,60 @@ export default function LedgerExplorer() {
   // and there was no way to tell that from the screen.
   const [oldest, setOldest] = useState(0)
   const [more, setMore] = useState(false)
+  const chainRef = useRef(null)
+
+  // Paint from the last answer, then go and check.
+  //
+  // This page used to start blank and fetch twice on every single visit: one
+  // request for a 60-block window, then a second for the same window with an
+  // explicit cursor, because an older rail build answered a cursor-less
+  // request with the OLDEST blocks. The rail has returned the tail by default
+  // for a while now, so the second request was fetching the identical 59 KB
+  // again and costing a second and a half of staring at nothing. It is gone.
+  //
+  // What replaces it: the last successful answer is kept in sessionStorage
+  // and rendered immediately on the next visit, while a fresh copy is
+  // fetched behind it. Navigating back to the ledger is instant, and the
+  // numbers are never more than one request stale. A ledger is append-only,
+  // so a cached view can be behind but it cannot be wrong, which is what
+  // makes this safe to do here.
+  const applyChain = useCallback((d) => {
+    setUmi(d)
+    // the Go rail returns its blocks oldest-first; this view is latest-first
+    setChain({
+      chainId: d.chainId, height: d.height, blocks: d.totalBlocks,
+      blocksList: [...(d.blocks || [])].reverse(), contract: 'aasthi.umi-v1'
+    })
+    setOldest(Number(d.from || 0))
+    setVerify({ ...d.verification, blocks: d.totalBlocks })
+  }, [])
 
   const load = useCallback(async () => {
     try {
-      const WINDOW = 60
-      let d = await api.getUmiChain(WINDOW)
+      const d = await api.getUmiChain(60)
       if (d && d.error) throw new Error(d.message || d.error)
-      // Older rail builds answer a cursor-less request with the OLDEST blocks,
-      // so once the chain outgrew this window the page showed genesis-era
-      // history forever and a just-settled purchase never appeared. Ask again
-      // with an explicit cursor at the tip, which both the old and the fixed
-      // rail honour. Harmless on the fixed rail: it already returns the tail.
-      const total = Number(d.totalBlocks || 0)
-      const got = Number(d.returned || (d.blocks || []).length)
-      if (total > got) {
-        const tail = await api.getUmiChain(WINDOW, Math.max(0, total - WINDOW))
-        if (tail && !tail.error && (tail.blocks || []).length) d = tail
-      }
-      setUmi(d)
-      // the Go rail returns its blocks oldest-first; this view is latest-first
-      setChain({
-        chainId: d.chainId, height: d.height, blocks: d.totalBlocks,
-        blocksList: [...(d.blocks || [])].reverse(), contract: 'aasthi.umi-v1'
-      })
-      setOldest(Number(d.from || 0))
-      setVerify({ ...d.verification, blocks: d.totalBlocks })
+      applyChain(d)
       setLabMsg(null)
+      try { sessionStorage.setItem(LEDGER_CACHE, JSON.stringify(d)) } catch { /* private mode, no cache */ }
     } catch (e) {
-      setUmi(null); setChain(null); setVerify(null)
+      // Only blank the screen if there was nothing on it. A cached view with
+      // a refresh failure is more useful than an empty page with an error.
+      if (!chainRef.current) {
+        setUmi(null); setChain(null); setVerify(null)
+      }
       setLabMsg({ kind: 'err', text: 'UMI settlement rail (Go) not reachable: ' + e.message })
     }
-  }, [])
+  }, [applyChain])
+
+  // Hydrate from the cache before the first request goes out.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(LEDGER_CACHE)
+      if (raw) applyChain(JSON.parse(raw))
+    } catch { /* unreadable cache is simply no cache */ }
+  }, [applyChain])
+
+  useEffect(() => { chainRef.current = chain }, [chain])
 
   useEffect(() => { load() }, [load])
 

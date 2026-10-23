@@ -83,6 +83,30 @@ because the key held nothing and the devnet faucet refused every request from
 this IP. That is worth recording. A capability nobody has exercised is a
 claim, and the difference between a claim and a fact here cost 0.5 SOL.
 
+## A restart must not lose the anchor
+
+The hosted rail sleeps when nobody is using it. The anchor records lived in
+memory, so after a restart the page said no anchor had ever been published
+from this instance, while the transaction sat permanently on Solana. False,
+and said about the one feature whose entire purpose is to survive this
+process.
+
+The record is not the database. It is the cluster. `Recover` lists this
+account's own transactions with `getSignaturesForAddress`, reads the memo
+attached to each, and rebuilds the anchor list from them. It runs at boot and
+is exposed at `POST /umi/anchors/recover`, which needs no key, because
+somebody checking whether we anchored what we claim should not have to ask
+our permission to make us look.
+
+Three things are skipped rather than half-parsed: a transaction that failed,
+a memo belonging to another application, and one of ours carrying a different
+chain id. A recovered entry is marked `recovered: true`, because something we
+found and something we did are not the same claim.
+
+A read-only deployment can do this too. Set `SOLANA_ANCHOR_ADDRESS` to the
+account whose anchors it should read, and it rebuilds the history with no
+signing key anywhere near it.
+
 ## The mistake this makes easy, and the guard against it
 
 `SOLANA_SECRET_B58` was once set, on a hosted deployment, to the account's

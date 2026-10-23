@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -245,5 +246,89 @@ func TestSolanaLiveCluster(t *testing.T) {
 	}
 	if res.Found || res.Matches {
 		t.Fatal("a signature that does not exist must not verify")
+	}
+}
+
+// Recovery: the published anchors are rebuilt from the cluster rather than
+// from anything this process stored.
+//
+// The bug behind these tests: the hosted rail sleeps when it is idle, the
+// anchor records lived in memory, and so a real published anchor vanished
+// from the page while its transaction sat permanently on Solana. The screen
+// then said nothing had ever been anchored, which was false, about the one
+// feature whose whole purpose is to outlive this process.
+func TestParseAnchorMemoAcceptsOnlyOurOwn(t *testing.T) {
+	good := "[283] aasthi|v1|" + DrunixChainID + "|407|aabb|ccdd"
+	rec, ok := parseAnchorMemo(good)
+	if !ok {
+		t.Fatal("a memo this system wrote was not recognised")
+	}
+	if rec.Height != 407 || rec.BlockHash != "aabb" || rec.TxnsRoot != "ccdd" {
+		t.Fatalf("parsed wrongly: %+v", rec)
+	}
+	// The length prefix the RPC adds must not end up inside the record.
+	if strings.HasPrefix(rec.Memo, "[") {
+		t.Fatalf("the length prefix was kept: %q", rec.Memo)
+	}
+	for _, bad := range []string{
+		"",
+		"hello world",
+		"aasthi|v1|some-other-chain|1|a|b", // ours, but not this ledger
+		"aasthi|v2|" + DrunixChainID + "|1|a|b",
+		"aasthi|v1|" + DrunixChainID + "|not-a-number|a|b",
+		"aasthi|v1|" + DrunixChainID + "|1|a", // truncated
+	} {
+		if _, ok := parseAnchorMemo(bad); ok {
+			t.Fatalf("accepted a memo that is not an anchor of this ledger: %q", bad)
+		}
+	}
+}
+
+func TestRecoverRebuildsAnchorsFromTheCluster(t *testing.T) {
+	memo := "[90] aasthi|v1|" + DrunixChainID + "|407|aabb|ccdd"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		switch req.Method {
+		case "getSignaturesForAddress":
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":[
+				{"signature":"SIG-ANCHOR","slot":514321992,"memo":` + strconv.Quote(memo) + `,"blockTime":1792000000,"err":null},
+				{"signature":"SIG-FAILED","slot":514321000,"memo":` + strconv.Quote(memo) + `,"blockTime":1792000000,"err":{"InstructionError":[0,"Custom"]}},
+				{"signature":"SIG-OTHER","slot":514320000,"memo":"[5] hello","blockTime":1792000000,"err":null},
+				{"signature":"SIG-NOMEMO","slot":514319000,"memo":null,"blockTime":1792000000,"err":null}
+			]}`))
+		default:
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":1}`))
+		}
+	}))
+	defer srv.Close()
+
+	a := NewSolanaAnchor(NewChain(), srv.URL, "devnet", "")
+	a.address = "BBAZtest" // read-only recovery needs no key at all
+	n, err := a.Recover(context.Background())
+	if err != nil {
+		t.Fatalf("recover: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("recovered %d anchors, want 1: a failed transaction, somebody else's memo and a memoless transfer must all be skipped", n)
+	}
+	recs := a.Records(0)
+	if len(recs) != 1 || recs[0].Signature != "SIG-ANCHOR" || recs[0].Height != 407 {
+		t.Fatalf("wrong record: %+v", recs)
+	}
+	if !recs[0].Recovered {
+		t.Fatal("a recovered anchor is not marked as recovered; found and published are different things")
+	}
+	if recs[0].Status != "CONFIRMED" || recs[0].Explorer == "" {
+		t.Fatalf("recovered record is incomplete: %+v", recs[0])
+	}
+
+	// Running it twice must not duplicate anything: this is called at every
+	// boot, and on a rail that never slept it should be a no-op.
+	again, err := a.Recover(context.Background())
+	if err != nil || again != 0 {
+		t.Fatalf("second recovery added %d records (err %v); it should be idempotent", again, err)
 	}
 }
