@@ -147,4 +147,7 @@ a capability, and the panel in the UI says so.
 - `GET /umi/pathspeed`: the live per-path figures.
 - `drunix-gateway/throughput_test.go`: the tests and both benchmarks.
 - `GET /umi/throughput`: the live figures.
-- Card 10 on `/umi`: the same figures with the caveats attached.
+- Card 10 on `/umi`: the engine figures with the caveats attached.
+- Card 11 on `/umi`: the per-path table, one row per money path, completions
+  and refusals in separate columns, and what each path does behind a tap. A
+  path nobody has exercised is absent rather than zero.

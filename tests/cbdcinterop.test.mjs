@@ -122,18 +122,31 @@ async function main() {
     pulling.status === 409 && /authorisation it does not hold/i.test(String(pulling.body.message)));
 
   // 6. The conversion itself: the total must not move.
+  //
+  // This section uses a holder of its own. The rail outlives a single run
+  // and other suites credit the shared demo accounts, so an absolute
+  // balance here would be asserting about state this test did not create.
+  // A fresh holder makes every figure below a consequence of this run.
+  // The holder is fresh, the caller is the supervisor: only five demo
+  // identities can authenticate against the app, so a new account cannot
+  // speak for itself, and a conversion on behalf of a holder is a
+  // supervisory act the rail already allows.
+  const converter = 'investor-convert-' + Date.now().toString(36);
+  // The tier has to exist before a conversion will create money into the
+  // account, so issue a token amount first and read the supply after it.
+  await post('/cbdc/issue', 'regulator1', 'Regulator', { holder: converter, amountPaise: 100, kycTier: 'FULL_KYC' });
   const supplyBefore = (await get('/cbdc')).body.conservation;
-  const credited = await post('/cbdc/interop/deposits', 'regulator1', 'Regulator', { holder: payer, amountPaise: 400000 });
+  const credited = await post('/cbdc/interop/deposits', 'regulator1', 'Regulator', { holder: converter, amountPaise: 400000 });
   ok('a tokenised deposit can be credited for the demonstration', credited.status === 201, String(credited.status));
   ok('and it says no bank was involved', /No bank was involved/i.test(String(credited.body.note)));
 
-  const tooMuch = await post('/cbdc/interop/convert', payer, 'Investor', {
-    holder: payer, direction: 'DEPOSIT_TO_E_RUPEE', amountPaise: 900000,
+  const tooMuch = await post('/cbdc/interop/convert', 'regulator1', 'Regulator', {
+    holder: converter, direction: 'DEPOSIT_TO_E_RUPEE', amountPaise: 900000,
   });
   ok('converting more deposit than exists is refused', tooMuch.status === 409, String(tooMuch.status));
 
-  const converted = await post('/cbdc/interop/convert', payer, 'Investor', {
-    holder: payer, direction: 'DEPOSIT_TO_E_RUPEE', amountPaise: 300000,
+  const converted = await post('/cbdc/interop/convert', 'regulator1', 'Regulator', {
+    holder: converter, direction: 'DEPOSIT_TO_E_RUPEE', amountPaise: 300000,
   });
   ok('a deposit converts into central bank money', converted.status === 200,
     `${converted.status} ${JSON.stringify(converted.body).slice(0, 140)}`);
@@ -145,8 +158,8 @@ async function main() {
     converted.body.conservation.issuedPaise === supplyBefore.issuedPaise + 300000,
     `${supplyBefore.issuedPaise} -> ${converted.body.conservation.issuedPaise}`);
 
-  const back = await post('/cbdc/interop/convert', payer, 'Investor', {
-    holder: payer, direction: 'E_RUPEE_TO_DEPOSIT', amountPaise: 300000,
+  const back = await post('/cbdc/interop/convert', 'regulator1', 'Regulator', {
+    holder: converter, direction: 'E_RUPEE_TO_DEPOSIT', amountPaise: 300000,
   });
   ok('and it converts back the other way', back.status === 200, String(back.status));
   ok('the deposit is restored', back.body.depositBalancePaise === 400000, String(back.body.depositBalancePaise));

@@ -38,6 +38,7 @@ boundary*: what they must never do is imply the boundary is somewhere else.
 | Private data collections | `/umi` | Hash on the chain, value by role |
 | Work desk escrow | `/umi` | Released against an anchored deliverable |
 | Throughput and latency | `/umi` | Measured from served traffic, with the lock named |
+| Per-path speed | `/umi` | Every money path timed separately, refusals counted apart, nothing shown as zero |
 | Document anchoring and verification | `/verify` | Digest only, retrieval refused by design |
 | Audience analytics | `/admin/insights` | Added 23 Oct, with its limits printed |
 

@@ -24,6 +24,7 @@ import { umiFetch as umi } from '../lib/umiFetch'
 const WorkDeskPanel = lazy(() => import('../components/WorkDeskPanel'))
 const CarbonPanel = lazy(() => import('../components/CarbonPanel'))
 const ThroughputPanel = lazy(() => import('../components/ThroughputPanel'))
+const PathSpeedPanel = lazy(() => import('../components/PathSpeedPanel'))
 const PrivateDataPanel = lazy(() => import('../components/PrivateDataPanel'))
 const InteropPanel = lazy(() => import('../components/InteropPanel'))
 
@@ -897,6 +898,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         <WorkDeskPanel properties={properties} participants={participants} propLabel={propLabel} />
         <CarbonPanel participants={participants} />
         <ThroughputPanel />
+        <PathSpeedPanel />
         <PrivateDataPanel />
         <InteropPanel participants={participants} properties={properties} />
       </Suspense>

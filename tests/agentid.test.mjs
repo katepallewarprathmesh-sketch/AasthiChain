@@ -74,8 +74,14 @@ const run = async () => {
   const list = await rail('/umi/agents');
   ok('the register is readable without a session', list.status === 200 && Array.isArray(list.body.agents),
     JSON.stringify(list.body).slice(0, 160));
-  ok('no passport in the register names a principal',
-    (list.body.agents || []).every((a) => !a.principal), JSON.stringify(list.body.agents || []).slice(0, 200));
+  // A principal may legitimately appear once custodians have opened an
+  // identity, and other suites sharing this rail do exactly that. The claim
+  // is narrower and stronger: a passport that has not been opened names
+  // nobody, and a passport that names somebody has been opened on the
+  // record.
+  ok('no unopened passport in the register names a principal',
+    (list.body.agents || []).every((a) => a.revealed || !a.principal),
+    JSON.stringify((list.body.agents || []).filter((a) => !a.revealed && a.principal)).slice(0, 200));
 
   // 4. Nobody opens an identity on their own.
   const strangerAsks = await asStranger('/umi/agents/' + agentId + '/reveal', { reason: 'I am curious about this' });

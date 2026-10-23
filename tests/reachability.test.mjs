@@ -64,6 +64,7 @@ const MODULES = [
   ['work', 'work desk'],
   ['private', 'private data collections'],
   ['throughput', 'throughput and latency'],
+  ['pathspeed', 'per-path speed'],
   ['carbon', 'carbon credits'],
   ['jurisdictions', 'per-jurisdiction rule sets'],
   ['cards', 'card economics and disputes'],
