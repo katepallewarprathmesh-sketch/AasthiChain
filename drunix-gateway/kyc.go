@@ -186,7 +186,47 @@ type KYCDesk struct {
 }
 
 func NewKYCDesk(chain *DrunixChain, cbdc *CBDCLedger) *KYCDesk {
-	return &KYCDesk{chain: chain, cbdc: cbdc, records: map[string]*KYCRecord{}}
+	k := &KYCDesk{chain: chain, cbdc: cbdc, records: map[string]*KYCRecord{}}
+	if cbdc != nil {
+		// Screening asks the desk who the payer is, rather than assuming.
+		cbdc.identityOf = k.IdentityFor
+	}
+	return k
+}
+
+// IdentityFor reports the identity half of a screening input: the tier, the
+// route that produced it, how long ago, and whether it has lapsed.
+//
+// Everything here is what the desk recorded. A holder with no record comes
+// back as unknown, which the model reads as no tier at all. That is the point
+// of the function: before it existed, the screening path asserted that every
+// payer was verified, and an assumption like that is invisible until it is
+// wrong.
+func (k *KYCDesk) IdentityFor(holder string) HistorySummary {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	rec := k.records[holder]
+	if rec == nil {
+		return HistorySummary{}
+	}
+
+	h := HistorySummary{
+		KYCTier:     rec.Tier,
+		KYCRoute:    rec.Route,
+		KYCVerified: rec.Tier != "",
+		FaceToFace:  rec.FaceToFaceEquivalent,
+	}
+	now := time.Now().UTC()
+	if at, err := time.Parse(time.RFC3339, rec.VerifiedAt); err == nil {
+		if d := int(now.Sub(at).Hours() / 24); d >= 0 {
+			h.KYCAgeDays = d
+		}
+	}
+	if exp, err := time.Parse(time.RFC3339, rec.ExpiresAt); err == nil && now.After(exp) {
+		h.KYCExpired = true
+	}
+	return h
 }
 
 // Verify runs the flow. It returns a record on success and a refusal that

@@ -20,7 +20,7 @@ that has to show its working.
 
 ## What it is
 
-A logistic regression over ten features, fitted by batch gradient descent with
+A logistic regression over fourteen features, fitted by batch gradient descent with
 L2 regularisation. Ten coefficients, one bias, one mean and one standard
 deviation per feature. Inference is a dot product: microseconds, no service
 call, no key, nothing to be unavailable.
@@ -75,6 +75,10 @@ defect in the evaluation.
 | `near_threshold` | how far under a 50k / 2L / 10L reporting line the amount sits, 0 to 1 |
 | `repeat_amount_share` | share of recent payments within five percent of this amount |
 | `odd_hour` | 1 when the payment lands between midnight and five, Indian time |
+| `kyc_tier_strength` | 0 unknown or lapsed, 0.5 minimum KYC, 1 full KYC |
+| `kyc_face_to_face` | 1 when the route that granted the tier was face-to-face equivalent |
+| `log_kyc_age_days` | log of the days since the identity was verified |
+| `cap_pressure` | this amount against the tier's per-payment ceiling, capped at 2 |
 
 Training and inference call the same extraction function. A feature computed
 one way during training and another way in production is the most common way a
@@ -88,21 +92,73 @@ training split only:
 
 | Metric | Value |
 | --- | --- |
-| AUC | 0.824 |
-| Accuracy | 0.860 |
-| Precision | 0.626 |
-| Recall | 0.719 |
-| F1 | 0.670 |
+| AUC | 0.866 |
+| Accuracy | 0.870 |
+| Precision | 0.629 |
+| Recall | 0.790 |
+| F1 | 0.700 |
 | Held-out rows | 3,600 |
 | Base rate | about 18 percent |
 
-Read that honestly. Catching roughly seven in ten of the generated fraud at
+Read that honestly. Catching roughly eight in ten of the generated fraud at
 about six in ten precision is a useful second opinion and nothing like a
 finished anti-fraud system. It is also a number about the generator, not about
 Indian payments.
 
 The live figures are served from the weights file rather than copied by hand,
 so this table cannot drift away from the model without a test noticing.
+
+## Does identity actually help?
+
+The four identity features were added to close a gap that had been recorded
+against this project: KYC was reported beside the model rather than being part
+of it. Adding inputs is easy; showing they earn their place is the part worth
+doing, so the trainer carries an ablation switch that blanks the four identity
+features and refits on exactly the same rows.
+
+```bash
+go run ./cmd/trainrisk -ablate-identity   # reports, writes nothing
+```
+
+| | AUC | Accuracy | Precision | Recall | F1 |
+| --- | --- | --- | --- | --- | --- |
+| with identity | 0.866 | 0.870 | 0.629 | 0.790 | 0.700 |
+| identity blanked | 0.862 | 0.843 | 0.561 | 0.831 | 0.670 |
+
+The ranking barely moves: 0.004 of AUC is noise, and saying otherwise would be
+overclaiming. What moves is precision at the operating threshold, from 0.561 to
+0.629, with recall trading down from 0.831 to 0.790. In plain terms the model
+stops flagging as many ordinary payments, because it can now tell a long-held
+full-KYC identity from a wallet verified by one-time password this morning.
+
+Two things about that result have to be said plainly:
+
+Identity only pays off because the generator contains a pattern that behaviour
+cannot see. A first version of this change left the existing archetypes alone
+and gained 0.002 of AUC, which is nothing: every fraudulent row already carried
+a behavioural tell, so the tier was redundant. The generator now also produces
+a mule archetype, a payment that moves ordinary money in an ordinary rhythm and
+is wrong only about who is making it, pressed against the ceiling of a small
+tier. That archetype is a statement about a known fraud pattern, not evidence
+about its prevalence in India.
+
+And the comparison is between two models trained on the same synthetic data. It
+shows the features are used, not that the model would help on real payments.
+
+## The input used to be a constant
+
+Worth recording, because it is the kind of defect that hides for a long time.
+Before this change, the screening path built its model input with
+`KYCVerified: true` and an account age of ten thousand minutes for every payer,
+regardless of who was paying. The model therefore had one identity input and it
+never varied, which is the same as having none, and nothing in the output said
+so.
+
+Identity now comes from the KYC desk: the tier it granted, the route that
+granted it, how long ago, and whether periodic updation has lapsed. A holder
+with no record reads as unknown, and unknown is not verified. A lapsed
+verification scores as no tier at all rather than a weaker one, because an
+expired check is not a cheaper check.
 
 ## What it is not allowed to do
 

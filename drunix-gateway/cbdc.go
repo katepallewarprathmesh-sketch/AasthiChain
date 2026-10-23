@@ -299,6 +299,12 @@ type CBDCLedger struct {
 	conds    map[string]*CBDCCondition
 	moves    []CBDCMovement
 
+	// identityOf reports what the KYC desk holds for a payer, so screening
+	// can use the real tier instead of assuming one. The desk registers it
+	// when it is created; nil means no desk, and screening then says the
+	// identity is unknown rather than inventing a verified one.
+	identityOf func(holder string) HistorySummary
+
 	issuedPaise   int64
 	redeemedPaise int64
 }
@@ -588,10 +594,33 @@ func (l *CBDCLedger) screenLocked(payer string, amountPaise int64) AMLCheck {
 		}
 	}
 	in := PaymentInput{PaymentID: cbdcID("AML"), PayerID: payer, AmountINR: amount, CreatedAt: time.Now().UTC()}
-	h := HistorySummary{
-		TxnCount10m: count10m, TxnCount24h: count24h, TotalINR24h: total24h + amount,
-		RecentINR: recent, AccountAgeMin: 10000, KYCVerified: true,
+
+	// Identity first, then the behaviour on top of it. This used to read
+	// KYCVerified: true and AccountAgeMin: 10000 regardless of who was
+	// paying, which meant the model's identity input was a constant and
+	// the screen could not tell a fresh minimum-KYC wallet from a
+	// long-standing verified one.
+	h := HistorySummary{}
+	if l.identityOf != nil {
+		h = l.identityOf(payer)
 	}
+	if h.KYCTier == "" {
+		// Fall back to what the wallet itself records, which the desk sets
+		// on verification. Still never a guess: an absent tier stays absent.
+		if w := l.wallets[payer]; w != nil {
+			h.KYCTier = w.KYCTier
+			h.KYCVerified = w.KYCTier != ""
+		}
+	}
+	if h.PerPaymentCapINR == 0 && h.KYCTier != "" {
+		if w := l.wallets[payer]; w != nil {
+			if _, perPayment := capsFor(w); perPayment > 0 {
+				h.PerPaymentCapINR = float64(perPayment) / 100
+			}
+		}
+	}
+	h.TxnCount10m, h.TxnCount24h = count10m, count24h
+	h.TotalINR24h, h.RecentINR = total24h+amount, recent
 	a := AssessPayment(in, h, DefaultThresholds())
 
 	out := AMLCheck{

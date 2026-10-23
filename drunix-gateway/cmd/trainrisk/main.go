@@ -46,6 +46,8 @@ func main() {
 	lr := flag.Float64("lr", 0.12, "learning rate")
 	l2 := flag.Float64("l2", 0.001, "L2 regularisation")
 	seed := flag.Int64("seed", 20261021, "generator seed: fixed so training is reproducible")
+	ablate := flag.Bool("ablate-identity", false,
+		"blank the identity features and report the result without writing weights")
 	flag.Parse()
 
 	rng := rand.New(rand.NewSource(*seed))
@@ -58,6 +60,22 @@ func main() {
 	train, holdout := data[:cut], data[cut:]
 
 	n := len(drunix.RiskFeatureNames)
+
+	// The ablation answers the only question that matters about adding
+	// identity to the model: does it change anything, on the same rows?
+	// Blanking the four identity features and refitting gives the
+	// comparison. Claiming an improvement without this is just asserting it.
+	if *ablate {
+		for _, r := range data {
+			for i, name := range drunix.RiskFeatureNames {
+				switch name {
+				case "kyc_tier_strength", "kyc_face_to_face", "log_kyc_age_days", "cap_pressure":
+					r.x[i] = 0
+				}
+			}
+		}
+	}
+
 	means, sds := standardise(train, n)
 	applyScaling(train, means, sds)
 	applyScaling(holdout, means, sds)
@@ -101,7 +119,7 @@ func main() {
 			"Trained on synthetic data, so the metrics describe the generator and not the world.",
 			"Advisory only: the published rules in fraud.go make the decision.",
 			"Linear and small on purpose, so every coefficient and every contribution is readable.",
-			"Ten features from the payment and the payer's recent history. It sees nothing else.",
+			"Fourteen features: the payment, the payer's recent history, and the identity the KYC desk recorded. It sees nothing else.",
 		},
 	}
 
@@ -144,7 +162,45 @@ func generate(rng *rand.Rand, n int) []row {
 			shape = true
 		}
 
-		if shape {
+		// The mule archetype: a payment that behaves perfectly normally and
+		// is wrong about who is making it. A rented or freshly opened
+		// account, thin or lapsed verification, an amount pressed against
+		// the ceiling of a small tier. Behaviour alone cannot see this one,
+		// which is the whole reason identity belongs in the model.
+		//
+		// Worth being blunt about what this is: the generator decides what
+		// is learnable, so adding this archetype is what makes identity
+		// useful here. It is a statement about a known fraud pattern, not
+		// evidence that the pattern has this weight in the real world.
+		mule := fraud && !shape && rng.Float64() < 0.55
+
+		if mule {
+			// Ordinary-looking money movement.
+			norm := 3000 + rng.Float64()*9000
+			in.AmountINR = norm * (0.8 + rng.Float64()*0.6)
+			h.TxnCount10m = pickSmall(rng)
+			h.TxnCount24h = h.TxnCount10m + rng.Intn(3)
+			h.RecentINR = jitterAround(rng, norm, 2+rng.Intn(5), 0.3)
+			h.AccountAgeMin = 1440 + rng.Intn(20000)
+			in.CreatedAt = base.Add(time.Duration(8+rng.Intn(12)) * time.Hour)
+
+			// The tell is entirely in the identity.
+			switch rng.Intn(3) {
+			case 0:
+				h.KYCTier, h.KYCRoute, h.KYCAgeDays = drunix.KYCMinimal, "AADHAAR_OTP_EKYC", 0
+			case 1:
+				h.KYCTier, h.KYCRoute, h.KYCAgeDays = drunix.KYCMinimal, "AADHAAR_OFFLINE_XML", rng.Intn(2)
+				h.KYCExpired = true
+			default:
+				h.KYCTier, h.KYCRoute, h.KYCAgeDays = "", "", 0
+			}
+			h.FaceToFace = false
+			h.KYCVerified = h.KYCTier != ""
+			// Pressed against the minimum-KYC per-payment ceiling.
+			if h.KYCTier == drunix.KYCMinimal {
+				in.AmountINR = 10000 * (0.82 + rng.Float64()*0.17)
+			}
+		} else if shape {
 			switch rng.Intn(4) {
 			case 0: // structuring under a reporting threshold
 				t := []float64{50000, 200000, 1000000}[rng.Intn(3)]
@@ -175,7 +231,25 @@ func generate(rng *rand.Rand, n int) []row {
 			if h.AccountAgeMin == 0 {
 				h.AccountAgeMin = rng.Intn(4000)
 			}
-			h.KYCVerified = rng.Float64() < 0.35
+			// Identity for the shaped population. Weak tiers dominate,
+			// verification is often hours old, and the route is usually
+			// one of the remote ones. The overlap is deliberate: a
+			// patient launderer holds full KYC on a face-to-face route
+			// and waits, and roughly a fifth of these do.
+			switch {
+			case rng.Float64() < 0.22:
+				h.KYCTier, h.FaceToFace = drunix.KYCFull, true
+				h.KYCRoute, h.KYCAgeDays = "VCIP", 30+rng.Intn(900)
+			case rng.Float64() < 0.45:
+				h.KYCTier = ""
+				h.KYCRoute, h.KYCAgeDays = "", 0
+			default:
+				h.KYCTier, h.FaceToFace = drunix.KYCMinimal, false
+				h.KYCRoute = []string{"AADHAAR_OTP_EKYC", "AADHAAR_OFFLINE_XML", "DIGILOCKER_OVD"}[rng.Intn(3)]
+				h.KYCAgeDays = rng.Intn(4)
+			}
+			h.KYCExpired = h.KYCTier != "" && rng.Float64() < 0.18
+			h.KYCVerified = h.KYCTier != ""
 			if rng.Float64() < 0.45 {
 				in.CreatedAt = base.Add(time.Duration(rng.Intn(5)) * time.Hour) // early morning IST
 			} else {
@@ -190,7 +264,23 @@ func generate(rng *rand.Rand, n int) []row {
 			h.TxnCount24h = h.TxnCount10m + rng.Intn(4)
 			h.RecentINR = jitterAround(rng, norm, 2+rng.Intn(7), 0.35)
 			h.AccountAgeMin = 1440 + rng.Intn(600000)
-			h.KYCVerified = rng.Float64() < 0.9
+			// Ordinary identity: mostly full KYC on a face-to-face route,
+			// held for months. A minority are genuinely new, because a
+			// first-time buyer verifying yesterday is not suspicious by
+			// itself, and the model should not be taught that it is.
+			switch {
+			case rng.Float64() < 0.72:
+				h.KYCTier, h.FaceToFace = drunix.KYCFull, true
+				h.KYCRoute, h.KYCAgeDays = "VCIP", 20+rng.Intn(1200)
+			case rng.Float64() < 0.85:
+				h.KYCTier, h.FaceToFace = drunix.KYCMinimal, false
+				h.KYCRoute, h.KYCAgeDays = "DIGILOCKER_OVD", 5+rng.Intn(700)
+			default:
+				h.KYCTier, h.FaceToFace = drunix.KYCMinimal, false
+				h.KYCRoute, h.KYCAgeDays = "AADHAAR_OTP_EKYC", rng.Intn(3)
+			}
+			h.KYCExpired = rng.Float64() < 0.03
+			h.KYCVerified = h.KYCTier != ""
 			if rng.Float64() < 0.08 {
 				in.CreatedAt = base.Add(time.Duration(rng.Intn(5)) * time.Hour)
 			} else {
@@ -204,6 +294,15 @@ func generate(rng *rand.Rand, n int) []row {
 			if rng.Float64() < 0.05 {
 				h.AccountAgeMin = rng.Intn(300)
 			}
+		}
+
+		// The ceiling the tier implies, so cap_pressure means the same
+		// thing in training as it does in production.
+		switch h.KYCTier {
+		case drunix.KYCFull:
+			h.PerPaymentCapINR = 100000
+		case drunix.KYCMinimal:
+			h.PerPaymentCapINR = 10000
 		}
 
 		for _, v := range h.RecentINR {

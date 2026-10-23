@@ -215,3 +215,104 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// The identity half of the model, added when AMA item 13 was closed. Until
+// then the screening path sent KYCVerified: true for every payer, so these
+// tests exist to stop that from quietly coming back.
+
+func featureIndex(t *testing.T, name string) int {
+	t.Helper()
+	for i, n := range RiskFeatureNames {
+		if n == name {
+			return i
+		}
+	}
+	t.Fatalf("no feature called %q", name)
+	return -1
+}
+
+func TestIdentityFeaturesReflectTheTier(t *testing.T) {
+	in := PaymentInput{AmountINR: 9000, CreatedAt: time.Date(2026, 6, 1, 11, 0, 0, 0, time.UTC)}
+
+	full := ExtractRiskFeatures(in, HistorySummary{
+		KYCTier: KYCFull, KYCVerified: true, FaceToFace: true, KYCAgeDays: 400,
+		PerPaymentCapINR: 100000,
+	})
+	minimal := ExtractRiskFeatures(in, HistorySummary{
+		KYCTier: KYCMinimal, KYCVerified: true, KYCAgeDays: 0, PerPaymentCapINR: 10000,
+	})
+	unknown := ExtractRiskFeatures(in, HistorySummary{})
+
+	ti := featureIndex(t, "kyc_tier_strength")
+	if !(full[ti] > minimal[ti] && minimal[ti] > unknown[ti]) {
+		t.Fatalf("tier strength should order full > minimum > unknown, got %v %v %v",
+			full[ti], minimal[ti], unknown[ti])
+	}
+
+	fi := featureIndex(t, "kyc_face_to_face")
+	if full[fi] != 1 || minimal[fi] != 0 {
+		t.Fatalf("face-to-face flag wrong: full=%v minimal=%v", full[fi], minimal[fi])
+	}
+
+	ai := featureIndex(t, "log_kyc_age_days")
+	if !(full[ai] > minimal[ai]) {
+		t.Fatalf("an identity held for 400 days should read older than one verified today")
+	}
+
+	// The same rupees press much harder against the smaller ceiling, which
+	// is the point of combining KYC with the model rather than reporting
+	// them side by side.
+	ci := featureIndex(t, "cap_pressure")
+	if !(minimal[ci] > full[ci]) {
+		t.Fatalf("cap pressure should be higher under the minimum-KYC ceiling, got %v vs %v",
+			minimal[ci], full[ci])
+	}
+	if unknown[ci] != 0 {
+		t.Fatalf("an unknown tier implies no ceiling, so no pressure, got %v", unknown[ci])
+	}
+}
+
+func TestExpiredVerificationCountsAsNone(t *testing.T) {
+	in := PaymentInput{AmountINR: 9000, CreatedAt: time.Date(2026, 6, 1, 11, 0, 0, 0, time.UTC)}
+	live := ExtractRiskFeatures(in, HistorySummary{KYCTier: KYCFull, KYCVerified: true, FaceToFace: true})
+	lapsed := ExtractRiskFeatures(in, HistorySummary{KYCTier: KYCFull, KYCVerified: true, FaceToFace: true, KYCExpired: true})
+
+	ti, fi := featureIndex(t, "kyc_tier_strength"), featureIndex(t, "kyc_face_to_face")
+	if lapsed[ti] != 0 {
+		t.Fatalf("a lapsed verification is not a weaker one, it is none: got %v", lapsed[ti])
+	}
+	if lapsed[fi] != 0 {
+		t.Fatalf("a lapsed verification cannot still count as face-to-face")
+	}
+	if live[ti] == 0 {
+		t.Fatal("a live full-KYC identity should carry tier strength")
+	}
+}
+
+func TestUnknownIdentityIsNotTreatedAsVerified(t *testing.T) {
+	// The defect this closes: the screening path used to assert
+	// KYCVerified: true for every payer, so the model's identity input was
+	// a constant. An empty summary must read as unknown.
+	in := PaymentInput{AmountINR: 9000, CreatedAt: time.Date(2026, 6, 1, 11, 0, 0, 0, time.UTC)}
+	x := ExtractRiskFeatures(in, HistorySummary{})
+	ti := featureIndex(t, "kyc_tier_strength")
+	if x[ti] != 0 {
+		t.Fatalf("an unknown identity must score zero tier strength, got %v", x[ti])
+	}
+}
+
+func TestScreeningReadsTheDeskRatherThanAssuming(t *testing.T) {
+	chain := NewChain()
+	rail := NewUMIRail(NewMemorySecurities(), chain)
+	ledger := NewCBDCLedger(rail, chain)
+	desk := NewKYCDesk(chain, ledger)
+	if ledger.identityOf == nil {
+		t.Fatal("creating the desk must give the ledger a way to ask who a payer is")
+	}
+
+	// A holder the desk has never seen comes back unknown, not verified.
+	h := desk.IdentityFor("nobody")
+	if h.KYCVerified || h.KYCTier != "" {
+		t.Fatalf("an unknown holder must not come back verified, got %+v", h)
+	}
+}

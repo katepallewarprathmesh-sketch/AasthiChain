@@ -2,100 +2,128 @@
   "name": "aasthi-payment-risk",
   "version": "v1",
   "kind": "logistic regression, fitted by batch gradient descent with L2",
-  "trainedAt": "2026-10-21",
+  "trainedAt": "2026-10-23",
   "seed": 20261021,
   "epochs": 3000,
   "learningRate": 0.12,
   "l2": 0.001,
-  "bias": -1.880778,
+  "bias": -2.051755,
   "features": [
     {
       "name": "log_amount",
       "description": "log of the payment amount in rupees",
-      "mean": 11.072077,
-      "stdDev": 1.161134,
-      "weight": -0.202869
+      "mean": 11.042448,
+      "stdDev": 1.176949,
+      "weight": -0.008468
     },
     {
       "name": "amount_vs_recent_mean",
       "description": "this amount divided by the payer's recent average, capped at 10",
-      "mean": 1.938201,
-      "stdDev": 2.588009,
-      "weight": 0.464677
+      "mean": 1.930794,
+      "stdDev": 2.561542,
+      "weight": 0.219055
     },
     {
       "name": "txn_count_10m",
       "description": "payments by this payer in the last ten minutes",
-      "mean": 1.268452,
-      "stdDev": 2.429473,
-      "weight": 0.288345
+      "mean": 1.283452,
+      "stdDev": 2.462724,
+      "weight": 0.239075
     },
     {
       "name": "txn_count_24h",
       "description": "payments by this payer in the last day",
-      "mean": 4.095595,
-      "stdDev": 5.867711,
-      "weight": 0.221999
+      "mean": 4.065,
+      "stdDev": 5.870208,
+      "weight": 0.095722
     },
     {
       "name": "log_total_24h",
       "description": "log of the payer's rupee total over the last day",
-      "mean": 12.702224,
-      "stdDev": 1.148461,
-      "weight": 0.106889
+      "mean": 12.665639,
+      "stdDev": 1.159337,
+      "weight": -0.294606
     },
     {
       "name": "log_account_age_min",
       "description": "log of the account age in minutes",
-      "mean": 10.7997,
-      "stdDev": 2.866902,
-      "weight": -0.558142
+      "mean": 10.719293,
+      "stdDev": 2.870477,
+      "weight": -0.649193
     },
     {
       "name": "kyc_verified",
       "description": "1 when KYC is complete, 0 otherwise",
-      "mean": 0.785595,
-      "stdDev": 0.410409,
-      "weight": -0.108618
+      "mean": 0.917857,
+      "stdDev": 0.274582,
+      "weight": 0.159014
     },
     {
       "name": "near_threshold",
       "description": "how close the amount sits under a reporting threshold, 0 to 1",
-      "mean": 0.0684,
-      "stdDev": 0.195781,
-      "weight": 0.106322
+      "mean": 0.067287,
+      "stdDev": 0.196516,
+      "weight": 0.084528
     },
     {
       "name": "repeat_amount_share",
       "description": "share of recent payments within 5 percent of this amount",
-      "mean": 0.198218,
-      "stdDev": 0.319459,
-      "weight": 0.279268
+      "mean": 0.199216,
+      "stdDev": 0.322488,
+      "weight": 0.256401
     },
     {
       "name": "odd_hour",
       "description": "1 when the payment lands between midnight and five in the morning",
-      "mean": 0.161905,
-      "stdDev": 0.368363,
-      "weight": -0.013351
+      "mean": 0.156786,
+      "stdDev": 0.363599,
+      "weight": -0.101309
+    },
+    {
+      "name": "kyc_tier_strength",
+      "description": "0 unknown or expired, 0.5 minimum KYC, 1 full KYC",
+      "mean": 0.717143,
+      "stdDev": 0.361368,
+      "weight": -0.498291
+    },
+    {
+      "name": "kyc_face_to_face",
+      "description": "1 when the route that granted the tier was face-to-face equivalent",
+      "mean": 0.572619,
+      "stdDev": 0.494698,
+      "weight": 0.512537
+    },
+    {
+      "name": "log_kyc_age_days",
+      "description": "log of the days since the identity was verified",
+      "mean": 4.785471,
+      "stdDev": 2.460044,
+      "weight": -0.671654
+    },
+    {
+      "name": "cap_pressure",
+      "description": "this amount against the tier's per-payment ceiling, capped at 2",
+      "mean": 1.052309,
+      "stdDev": 0.752308,
+      "weight": -0.066071
     }
   ],
   "metrics": {
-    "auc": 0.8236,
-    "accuracy": 0.8603,
-    "precision": 0.6265,
-    "recall": 0.7193,
-    "f1": 0.6697,
-    "threshold": 0.33,
+    "auc": 0.8659,
+    "accuracy": 0.87,
+    "precision": 0.6287,
+    "recall": 0.7905,
+    "f1": 0.7004,
+    "threshold": 0.31,
     "trainRows": 8400,
     "holdoutRows": 3600,
-    "positiveRate": 0.1969
+    "positiveRate": 0.1922
   },
   "dataSource": "Synthetic. 12,000 payments from the seeded generator in cmd/trainrisk, 70/30 split. No real payment data was used, because none is available to this project.",
   "limits": [
     "Trained on synthetic data, so the metrics describe the generator and not the world.",
     "Advisory only: the published rules in fraud.go make the decision.",
     "Linear and small on purpose, so every coefficient and every contribution is readable.",
-    "Ten features from the payment and the payer's recent history. It sees nothing else."
+    "Fourteen features: the payment, the payer's recent history, and the identity the KYC desk recorded. It sees nothing else."
   ]
 }

@@ -78,6 +78,18 @@ type HistorySummary struct {
 	RecentINR     []float64 `json:"recentINR"` // amounts of last 10 txns, newest first
 	AccountAgeMin int       `json:"accountAgeMin"`
 	KYCVerified   bool      `json:"kycVerified"`
+
+	// Identity, as the KYC desk actually recorded it. These were absent
+	// for a long time, and their absence was not neutral: the screening
+	// path passed KYCVerified: true as a constant, so the one identity
+	// input the model had was a lie told in good faith. An empty tier now
+	// means unknown and is treated as unknown, never as verified.
+	KYCTier          string  `json:"kycTier,omitempty"`          // "", MIN_KYC or FULL_KYC
+	KYCRoute         string  `json:"kycRoute,omitempty"`         // the route that produced the tier
+	KYCAgeDays       int     `json:"kycAgeDays,omitempty"`       // days since verification, 0 when unknown
+	KYCExpired       bool    `json:"kycExpired,omitempty"`       // periodic updation lapsed
+	FaceToFace       bool    `json:"faceToFace,omitempty"`       // the route was face-to-face equivalent
+	PerPaymentCapINR float64 `json:"perPaymentCapINR,omitempty"` // the tier ceiling this payment sits under
 }
 
 // RiskFactor is one contributing signal with its weight (explainability).

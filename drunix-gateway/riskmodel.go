@@ -138,6 +138,10 @@ var RiskFeatureNames = []string{
 	"near_threshold",
 	"repeat_amount_share",
 	"odd_hour",
+	"kyc_tier_strength",
+	"kyc_face_to_face",
+	"log_kyc_age_days",
+	"cap_pressure",
 }
 
 // RiskFeatureDescriptions explain each one in a sentence, for the model card
@@ -153,6 +157,10 @@ var RiskFeatureDescriptions = map[string]string{
 	"near_threshold":        "how close the amount sits under a reporting threshold, 0 to 1",
 	"repeat_amount_share":   "share of recent payments within 5 percent of this amount",
 	"odd_hour":              "1 when the payment lands between midnight and five in the morning",
+	"kyc_tier_strength":     "0 unknown or expired, 0.5 minimum KYC, 1 full KYC",
+	"kyc_face_to_face":      "1 when the route that granted the tier was face-to-face equivalent",
+	"log_kyc_age_days":      "log of the days since the identity was verified",
+	"cap_pressure":          "this amount against the tier's per-payment ceiling, capped at 2",
 }
 
 // ExtractRiskFeatures turns a payment and the payer's history into the vector
@@ -219,6 +227,51 @@ func ExtractRiskFeatures(in PaymentInput, h HistorySummary) []float64 {
 		}
 	}
 
+	// Identity. The tier is the output of a verification route, so it
+	// carries more than a yes or no: the route that produced it, how long
+	// ago, and the ceiling it implies. A payment pressed hard against that
+	// ceiling is the shape of someone using the whole of a small tier,
+	// which is why cap_pressure is a feature rather than only a rule.
+	tier := 0.0
+	switch h.KYCTier {
+	case KYCFull:
+		tier = 1
+	case KYCMinimal:
+		tier = 0.5
+	default:
+		if h.KYCVerified {
+			// An older caller that knows only the boolean. Treat it as the
+			// weaker tier rather than the stronger one.
+			tier = 0.5
+		}
+	}
+	if h.KYCExpired {
+		// A lapsed verification is not a weaker verification, it is none.
+		tier = 0
+	}
+
+	f2f := 0.0
+	if h.FaceToFace && !h.KYCExpired {
+		f2f = 1
+	}
+
+	cap := h.PerPaymentCapINR
+	if cap <= 0 {
+		switch {
+		case tier >= 1:
+			cap = float64(fullKYCTransferCapPaise) / 100
+		case tier > 0:
+			cap = float64(minKYCTransferCapPaise) / 100
+		}
+	}
+	pressure := 0.0
+	if cap > 0 {
+		pressure = amount / cap
+		if pressure > 2 {
+			pressure = 2
+		}
+	}
+
 	return []float64{
 		math.Log1p(amount),
 		ratio,
@@ -230,6 +283,10 @@ func ExtractRiskFeatures(in PaymentInput, h HistorySummary) []float64 {
 		near,
 		repeat,
 		odd,
+		tier,
+		f2f,
+		math.Log1p(float64(h.KYCAgeDays)),
+		pressure,
 	}
 }
 

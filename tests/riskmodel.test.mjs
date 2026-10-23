@@ -126,6 +126,48 @@ const run = async () => {
   ok('the weights file records the seed and epochs that produced it',
     typeof weights.seed === 'number' && weights.epochs > 0);
 
+  // 10. Identity is an input, not a constant. This is the AMA item 13 gap:
+  //     screening used to send kycVerified: true for every payer, so the
+  //     model's only identity feature never varied.
+  const idCard = await rail('/fraud/model');
+  const names = (idCard.body?.weights || []).map((f) => f.feature);
+  for (const f of ['kyc_tier_strength', 'kyc_face_to_face', 'log_kyc_age_days', 'cap_pressure']) {
+    ok('the model card declares the identity feature ' + f, names.includes(f), names.join(', '));
+  }
+
+  // The same payment, scored twice, differing only in who is paying. A
+  // thin, freshly verified identity pressed against its ceiling must not
+  // score the same as a long-held full-KYC one.
+  const basePayment = { paymentId: 'PAY-T-ID', payerId: 'investor1', amountINR: 9000, createdAt: '2026-06-01T11:00:00Z' };
+  const baseHistory = { txnCount10m: 1, txnCount24h: 2, totalINR24h: 18000, recentINR: [8600, 9200], accountAgeMin: 9000 };
+  const strong = await post('/fraud/assess', {
+    payment: basePayment,
+    history: { ...baseHistory, kycVerified: true, kycTier: 'FULL_KYC', faceToFace: true, kycAgeDays: 420, perPaymentCapINR: 100000 },
+  });
+  const thin = await post('/fraud/assess', {
+    payment: basePayment,
+    history: { ...baseHistory, kycVerified: true, kycTier: 'MIN_KYC', faceToFace: false, kycAgeDays: 0, perPaymentCapINR: 10000 },
+  });
+  ok('identity changes the model score for an otherwise identical payment',
+    strong.status === 200 && thin.status === 200 &&
+    typeof strong.body?.model?.score === 'number' &&
+    strong.body.model.score !== thin.body.model.score,
+    JSON.stringify({ strong: strong.body?.model?.score, thin: thin.body?.model?.score }));
+  ok('the thinner identity is the one scored higher',
+    (thin.body?.model?.score ?? 0) > (strong.body?.model?.score ?? 0),
+    JSON.stringify({ strong: strong.body?.model?.score, thin: thin.body?.model?.score }));
+
+  // An unknown holder must not be scored as a verified one.
+  const unknown = await post('/fraud/assess', { payment: basePayment, history: { ...baseHistory } });
+  ok('an unstated identity is not treated as a verified one',
+    unknown.status === 200 &&
+    (unknown.body?.model?.score ?? 0) >= (strong.body?.model?.score ?? 0),
+    JSON.stringify({ unknown: unknown.body?.model?.score, strong: strong.body?.model?.score }));
+
+  ok('the published limits state the real feature count',
+    /Fourteen features/.test(JSON.stringify(idCard.body?.limits || [])),
+    JSON.stringify(idCard.body?.limits || []));
+
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
 };
