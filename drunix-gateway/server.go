@@ -75,6 +75,10 @@ type Server struct {
 	// /umi/keys/* routes are not mounted and nothing else changes.
 	Keys *KeyRegistry
 
+	// Oracle is the signed-feed registry. Nil means the routes are absent
+	// rather than present and empty.
+	Oracle *OracleRegistry
+
 	// Agents holds agent passports: a pseudonym per software actor with the
 	// principal behind it split across custodians (agentid.go). nil leaves
 	// the routes unmounted.
@@ -178,6 +182,7 @@ func (s *Server) Router() http.Handler {
 	s.registerKYCRoutes(mux)
 	s.registerCBDCInteropRoutes(mux)
 	s.registerKeyRoutes(mux)
+	s.registerOracleRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

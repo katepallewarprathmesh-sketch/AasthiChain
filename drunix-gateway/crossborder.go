@@ -156,19 +156,25 @@ type CBXRequest struct {
 
 // CBXIntent is one funding attempt, from quote to rupees in a wallet.
 type CBXIntent struct {
-	ID          string  `json:"id"`
-	Buyer       string  `json:"buyer"`
-	AssetID     string  `json:"assetId"`
-	Status      string  `json:"status"`
-	AmountINR   float64 `json:"amountINR"`
-	Stablecoin  string  `json:"stablecoin"`
-	Network     string  `json:"network"`
-	AmountCoin  float64 `json:"amountCoin"`
-	Rate        float64 `json:"rateINRPerUnit"`
-	RateSource  string  `json:"rateSource"`
-	BuyerStatus string  `json:"buyerStatus"`
-	Nationality string  `json:"nationality"`
-	KYCRef      string  `json:"kycRef"`
+	ID         string  `json:"id"`
+	Buyer      string  `json:"buyer"`
+	AssetID    string  `json:"assetId"`
+	Status     string  `json:"status"`
+	AmountINR  float64 `json:"amountINR"`
+	Stablecoin string  `json:"stablecoin"`
+	Network    string  `json:"network"`
+	AmountCoin float64 `json:"amountCoin"`
+	Rate       float64 `json:"rateINRPerUnit"`
+	RateSource string  `json:"rateSource"`
+
+	// RateProvenance says where the number came from: a signed feed with
+	// its freshness and publishers, or the indicative constant. A quote
+	// that does not say which one it used invites the reader to assume the
+	// better of the two.
+	RateProvenance map[string]interface{} `json:"rateProvenance,omitempty"`
+	BuyerStatus    string                 `json:"buyerStatus"`
+	Nationality    string                 `json:"nationality"`
+	KYCRef         string                 `json:"kycRef"`
 
 	PayTo       string          `json:"payTo"`
 	PayToIs     string          `json:"payToIs"`
@@ -246,8 +252,15 @@ type CBXRegistry struct {
 	offramp Offramp
 	rate    float64
 	intents map[string]*CBXIntent
-	order   []string
-	seq     int64
+
+	// rateFeed, when set, is a signed feed the quote prefers over the
+	// indicative constant. A quote says which of the two it used, because
+	// "88.50" from a signed reading two minutes old and "88.50" because
+	// somebody typed it into a setter are not the same number.
+	rateFeed   *OracleRegistry
+	rateFeedID string
+	order      []string
+	seq        int64
 }
 
 // NewCBXRegistry wires the layer. A nil rail or chain disables it, which is
@@ -266,6 +279,58 @@ func NewCBXRegistry(rail *UMIRail, chain *DrunixChain, offramp Offramp) *CBXRegi
 		rate:    cbxDefaultRate,
 		intents: map[string]*CBXIntent{},
 	}
+}
+
+// UseRateFeed points the quote at a signed feed. When the feed has a usable
+// value the quote uses it and reports its provenance; when it is stale, short
+// of quorum or unpublished, the quote falls back to the indicative constant
+// and says so rather than quietly carrying on with a number nobody signed.
+func (c *CBXRegistry) UseRateFeed(o *OracleRegistry, feedID string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.rateFeed, c.rateFeedID = o, feedID
+	c.mu.Unlock()
+}
+
+// rateNow returns the rate to quote at and where it came from.
+func (c *CBXRegistry) rateNow() (float64, map[string]interface{}) {
+	c.mu.RLock()
+	fallback, feed, feedID := c.rate, c.rateFeed, c.rateFeedID
+	c.mu.RUnlock()
+
+	source := map[string]interface{}{
+		"source": "INDICATIVE_CONSTANT",
+		"signed": false,
+		"note":   "No signed rate feed is usable, so this is the rail's published indicative constant. Nobody attested it.",
+	}
+	if feed == nil || feedID == "" {
+		return fallback, source
+	}
+	v := feed.Value(feedID)
+	if !v.Usable {
+		source["feedId"] = feedID
+		source["feedState"] = v.State
+		source["note"] = "The signed rate feed is not usable (" + v.State + "), so this is the indicative constant: " + v.Reason
+		return fallback, source
+	}
+	return v.Value, map[string]interface{}{
+		"source": "SIGNED_FEED", "signed": true, "feedId": feedID,
+		"observedAt": v.ObservedAt.Format(time.RFC3339), "ageSec": v.AgeSec,
+		"observers": v.Observers, "sources": v.Sources, "block": v.Block,
+		"disagreed": v.Disagreed,
+		"note":      "Signed by a registered key and inside the feed's freshness contract.",
+	}
+}
+
+// rateSourceLine is the one-line version of the provenance, for surfaces that
+// show a sentence rather than a structure.
+func rateSourceLine(p map[string]interface{}) string {
+	if signed, _ := p["signed"].(bool); signed {
+		return "signed feed " + fmt.Sprint(p["feedId"]) + ", observed " + fmt.Sprint(p["ageSec"]) + "s ago"
+	}
+	return "indicative, configured on the rail; not a live quote"
 }
 
 // SetRate overrides the indicative rate. Still not an oracle.
@@ -360,9 +425,7 @@ func (c *CBXRegistry) Quote(req CBXRequest, buyer string, now time.Time) (*CBXIn
 		network = "base-sepolia"
 	}
 
-	c.mu.RLock()
-	rate := c.rate
-	c.mu.RUnlock()
+	rate, rateSource := c.rateNow()
 	amountCoin := float64(int64(req.AmountINR/rate*100)) / 100
 
 	travelRule := amountCoin >= cbxTravelRuleUSD
@@ -385,7 +448,8 @@ func (c *CBXRegistry) Quote(req CBXRequest, buyer string, now time.Time) (*CBXIn
 		Network:          network,
 		AmountCoin:       amountCoin,
 		Rate:             rate,
-		RateSource:       "indicative, configured on the rail; not a live quote",
+		RateSource:       rateSourceLine(rateSource),
+		RateProvenance:   rateSource,
 		BuyerStatus:      strings.ToUpper(strings.TrimSpace(req.BuyerStatus)),
 		Nationality:      strings.ToUpper(strings.TrimSpace(req.Nationality)),
 		KYCRef:           strings.TrimSpace(req.KYCRef),
@@ -582,9 +646,7 @@ func (c *CBXRegistry) Intents(buyer string, limit int, now time.Time) []CBXInten
 
 // Rules is the readable statement of what this leg will and will not do.
 func (c *CBXRegistry) Rules() map[string]interface{} {
-	c.mu.RLock()
-	rate := c.rate
-	c.mu.RUnlock()
+	rate, rateSource := c.rateNow()
 	coins := make([]string, 0, len(cbxPermittedCoins))
 	for k := range cbxPermittedCoins {
 		coins = append(coins, k)
@@ -606,7 +668,8 @@ func (c *CBXRegistry) Rules() map[string]interface{} {
 		"travelRuleThresholdUSD": cbxTravelRuleUSD,
 		"travelRuleFields":       []string{"name", "address", "country", "accountRef", "lei (entities)"},
 		"quoteLifeMinutes":       int(cbxQuoteLife / time.Minute),
-		"indicativeRateINRPerUS": rate,
+		"rateINRPerUSD":          rate,
+		"rateProvenance":         rateSource,
 		"taxNote": fmt.Sprintf("Indian tax on a virtual digital asset transfer is a flat %.0f%% on gains plus cess, "+
 			"with %.0f%% TDS withheld at source and no loss set-off. Shown for information; nothing is withheld here.",
 			cbxVDATaxRate*100, cbxTDSRate*100),

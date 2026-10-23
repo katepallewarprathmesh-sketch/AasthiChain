@@ -256,6 +256,31 @@ func main() {
 		srv.KYC = drunix.NewKYCDesk(chain, srv.CBDC)
 		srv.CBDCInterop = drunix.NewCBDCInteropDesk(chain, srv.CBDC)
 		srv.Keys = drunix.NewKeyRegistry(chain)
+
+		// Signed feeds: the one supported way an outside fact enters the
+		// rail. The cross-border quote is its first consumer, and falls
+		// back to the published indicative constant, saying so, whenever
+		// no signed reading is fresh enough to use.
+		srv.Oracle = drunix.NewOracleRegistry(chain, srv.Keys)
+		// Declared at boot, deliberately with no reading in it. The rate
+		// the quote actually uses is then an honest "declared, nothing
+		// published yet, falling back to the indicative constant" rather
+		// than the feed simply not existing.
+		if _, err := srv.Oracle.RegisterFeed(drunix.Feed{
+			FeedID:          drunix.FeedINRUSD,
+			Description:     "Indian rupees per US dollar, for the cross-border funding leg",
+			Unit:            "INR per USD",
+			Publishers:      []string{"registrar1", "regulator1"},
+			MaxStalenessSec: 900,
+			MinPublishers:   1,
+			MaxDeviationPct: 2,
+		}, "system"); err != nil {
+			log.Printf("signed feeds: could not declare %s: %v", drunix.FeedINRUSD, err)
+		}
+		if srv.CrossBorder != nil {
+			srv.CrossBorder.UseRateFeed(srv.Oracle, drunix.FeedINRUSD)
+		}
+		log.Printf("Signed feeds mounted at /umi/oracle/*: every reading signed by a registered key, every feed declaring the age at which it stops being usable")
 		log.Printf("Corridors mounted at /umi/corridors/*: simulated, this deployment holds no payment licence")
 		log.Printf("AML screening mounted at /umi/aml/*: %s", drunix.AMLListDescription(srv.AML))
 		log.Printf("CBDC interoperability mounted at /umi/cbdc/interop/*: e-rupee to bank and tokenised deposit, far legs simulated")
