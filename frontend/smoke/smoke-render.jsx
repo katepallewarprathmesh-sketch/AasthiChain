@@ -29,6 +29,7 @@ import KeyRegister from '../src/pages/KeyRegister.jsx'
 import Feeds from '../src/pages/Feeds.jsx'
 import Cards from '../src/pages/Cards.jsx'
 import ChainState from '../src/pages/ChainState.jsx'
+import PublicToken from '../src/pages/PublicToken.jsx'
 import Admin from '../src/pages/Admin.jsx'
 import AdminOps from '../src/pages/AdminOps.jsx'
 import SecondaryMarket from '../src/pages/SecondaryMarket.jsx'
@@ -70,6 +71,7 @@ const ROUTES = [
   ['/feeds', <Feeds />],
   ['/cards', <Cards />],
   ['/chainstate', <ChainState />],
+  ['/token', <PublicToken />],
   ['/admin', <Admin user={user} />],
   ['/admin/ops', <AdminOps user={{ ...user, role: 'Registrar' }} />],
   ['/market', <SecondaryMarket user={user} />],

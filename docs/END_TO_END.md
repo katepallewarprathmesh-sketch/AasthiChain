@@ -82,8 +82,7 @@ nobody mistakes them for unfinished work.
 | Card scheme corridor | No scheme membership; interchange and chargeback described, not implemented |
 | Paying a seller in tokens | Prohibited under FEMA for Indian immovable property. Not a gap, a rule |
 | Real Fabric network | `DRUNIX_MODE=real` and `-tags real` exist; no network is deployed |
-| Public chain settlement | `PropertyToken.sol` passes 66 checks, never deployed to a public testnet; the public leg is a mirror by design |
-| Solana anchoring | Code proven correct; the devnet key holds 0 SOL and the faucet is rate limited per IP |
+| Public chain **settlement** | Mirroring is done and works; settling title on a public chain is not a software gap. Indian immovable property cannot be transferred by a blockchain entry, so the public leg stays a mirror by design |
 
 ## What this standard implies going forward
 

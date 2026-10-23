@@ -157,6 +157,12 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://aasthi-chain.vercel.app/token</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://aasthi-chain.vercel.app/tools</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>monthly</changefreq>

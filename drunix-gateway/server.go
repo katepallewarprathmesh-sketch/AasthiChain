@@ -100,6 +100,13 @@ type Server struct {
 	// check behind the claim that the ledger is the state rather than a
 	// description of it. Nil leaves the routes unmounted.
 	ChainState *ChainState
+
+	// TokenMirror writes the ERC-20/ERC-7943 property token on a public
+	// EVM chain from rail positions (tokenmirror.go). Nil leaves the
+	// routes unmounted; a configured-but-unfunded mirror still mounts,
+	// because "configured and out of gas" is a thing a reader should be
+	// able to see rather than guess at.
+	TokenMirror *TokenMirror
 }
 
 // NewServer wires dependencies (DIP).
@@ -203,6 +210,7 @@ func (s *Server) Router() http.Handler {
 	s.registerJurisdictionRoutes(mux)
 	s.registerCardRoutes(mux)
 	s.registerChainStateRoutes(mux)
+	s.registerTokenMirrorRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

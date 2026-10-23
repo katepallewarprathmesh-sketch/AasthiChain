@@ -60,11 +60,34 @@ swallowed.
 
 Reads need no account, no key and no funds. Any public RPC endpoint works.
 
+## This has been done, and here is the transaction
+
+On 23 October 2026 the anchor key was funded with devnet SOL and block 7 of a
+rail instance was anchored for real:
+
+| | |
+| --- | --- |
+| Signature | `5osTE53sn8qNj1EYwTxcFkhkPtrcghJtn1ERWtGHkTd7oTQoUGGLFyc8Bq6ahgVBxULMeV5DfFjFf3j1kGSZQ3dZ` |
+| Cluster | devnet, slot 514315980 |
+| Fee | 5,000 lamports |
+| Explorer | https://explorer.solana.com/tx/5osTE53sn8qNj1EYwTxcFkhkPtrcghJtn1ERWtGHkTd7oTQoUGGLFyc8Bq6ahgVBxULMeV5DfFjFf3j1kGSZQ3dZ?cluster=devnet |
+| Payer | `BBAZAv3KaJdKJaho2jtJi3FZAr2fRyomLeMmb4rAF6sB` |
+
+The memo in that transaction is the chain id, the height, the block hash and
+the transaction root, and `GET /umi/anchors/<signature>` reads it back off the
+cluster and reports `matches: true`. Nothing about this needs to be taken on
+trust: open the explorer link and compare the memo yourself.
+
+Until that date this page described a mechanism that had never been used,
+because the key held nothing and the devnet faucet refused every request from
+this IP. That is worth recording. A capability nobody has exercised is a
+claim, and the difference between a claim and a fact here cost 0.5 SOL.
+
 ## Turning writing on
 
 ```bash
 node scripts/anchor-key.mjs     # prints an address to fund and the secret to export
-# fund the address with devnet SOL at https://faucet.solana.com
+# fund the address with devnet SOL (a faucet, or a transfer from a funded wallet)
 export SOLANA_SECRET_B58=<secret>
 make dev
 curl -s -X POST localhost:21100/umi/anchors \

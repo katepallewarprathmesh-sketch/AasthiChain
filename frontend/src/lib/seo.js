@@ -46,6 +46,11 @@ export const ROUTE_SEO = {
     description:
       'Each module state replayed from committed blocks and compared with what the rail is serving. Agreement means the ledger is the state rather than a description of it, and every projection names the fields it cannot rebuild.',
   },
+  '/token': {
+    title: 'The Property Token on a Public Chain | AasthiChain',
+    description:
+      'An ERC-20 with the ERC-7943 restriction interface, arranged the way ERC-3643 arranges one, written to a public chain by the rail itself. The on-chain balance never exceeds the holder position on the register, and the drift between the two is reported rather than reconciled.',
+  },
   '/trust': {
     title: 'What Is Real and What Is Simulated | AasthiChain',
     description:

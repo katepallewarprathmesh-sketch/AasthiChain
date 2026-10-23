@@ -317,6 +317,12 @@ func main() {
 		// from the chain instead of starting empty while the blocks that
 		// created them sit there unread.
 		srv.ChainState = drunix.NewChainState(chain, srv.UMI, srv.Docs, srv.Work)
+		srv.TokenMirror = drunix.OpenTokenMirrorFromEnv(chain, srv.UMI, srv.KYC)
+		if st := srv.TokenMirror.Status(); st["configured"] == true {
+			log.Printf("token mirror: %v on %v, signer %v", st["tokenAddress"], st["network"], st["signer"])
+		} else {
+			log.Printf("token mirror: mounted read-only, missing %v", st["missing"])
+		}
 		if srv.ChainState != nil {
 			if n := srv.ChainState.RestoreOffers(); n > 0 {
 				log.Printf("Chain-first restore: %d offer(s) rebuilt from the ledger", n)

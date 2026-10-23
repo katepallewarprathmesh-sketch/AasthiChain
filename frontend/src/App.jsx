@@ -73,6 +73,7 @@ const KeyRegister = lazy(() => import('./pages/KeyRegister.jsx')) // proving a s
 const Feeds = lazy(() => import('./pages/Feeds.jsx')) // signed rate feeds and backing attestations
 const Cards = lazy(() => import('./pages/Cards.jsx')) // card interchange economics and the dispute ladder
 const ChainState = lazy(() => import('./pages/ChainState.jsx')) // module state replayed from the ledger
+const PublicToken = lazy(() => import('./pages/PublicToken.jsx')) // the ERC-20/ERC-7943 mirror on a public chain
 const Explore = lazy(() => import('./pages/Explore.jsx'))
 const DigitalRupee = lazy(() => import('./pages/DigitalRupee.jsx')) // the CBDC layer and its corridors
 // Public free tools. No auth, no API calls - they exist to be found in search
@@ -421,6 +422,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
         { path: '/feeds', label: 'Feeds and backing' },
         { path: '/cards', label: 'Card rail and disputes' },
         { path: '/chainstate', label: 'Chain-first state' },
+        { path: '/token', label: 'Public-chain token' },
         { path: '/trust', label: 'Trust' },
         { path: '/support', label: 'Support' },
       ],
@@ -823,6 +825,7 @@ function AppContent({ user, setUser }) {
           <Route path="/feeds" element={<Feeds />} />
           <Route path="/cards" element={<Cards />} />
           <Route path="/chainstate" element={<ChainState />} />
+          <Route path="/token" element={<PublicToken />} />
           <Route path="/cbdc" element={<DigitalRupee user={effectiveUser} />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/trust" element={<Trust />} />
