@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "823c485d3b127ad95dd1dae91318c55c89919ce8f63de0edb85ccb0d0b22bfa3",
+  "sourceDigest": "16dfa012060dbbbaa596f0a7e405630b93408f53913bc679a53ffdddbd4926aa",
   "sections": [
     {
       "doc": "README",
@@ -470,6 +470,12 @@
       "file": "docs/ANCHORING.md",
       "heading": "This has been done, and here is the transaction",
       "text": "On 23 October 2026 the anchor key was funded with devnet SOL and block 7 of a\nrail instance was anchored for real:\n \n --- --- \n Signature 5osTE53sn8qNj1EYwTxcFkhkPtrcghJtn1ERWtGHkTd7oTQoUGGLFyc8Bq6ahgVBxULMeV5DfFjFf3j1kGSZQ3dZ \n Cluster devnet, slot 514315980 \n Fee 5,000 lamports \n Explorer https://explorer.solana.com/tx/5osTE53sn8qNj1EYwTxcFkhkPtrcghJtn1ERWtGHkTd7oTQoUGGLFyc8Bq6ahgVBxULMeV5DfFjFf3j1kGSZQ3dZ?cluster=devnet \n Payer BBAZAv3KaJdKJaho2jtJi3FZAr2fRyomLeMmb4rAF6sB \n\nThe memo in that transaction is the chain id, the height, the block hash and\nthe transaction root, and GET /umi/anchors/<signature reads it back off the\ncluster and reports matches: true . Nothing about this needs to be taken on\ntrust: open the explorer link and compare the memo yourself.\n\nUntil that date this page described a mechanism that had never been used,\nbecause the key held nothing and the devnet faucet refused every request from\nthis IP. That is worth recording. A capability nobody has exercised is a\nclaim, and the difference between a claim and a fact here cost 0.5 SOL."
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "The mistake this makes easy, and the guard against it",
+      "text": "SOLANA SECRET B58 was once set, on a hosted deployment, to the account's\n address instead of its secret. Both are base58, both decode to 32 bytes,\nso the address was accepted as a seed, derived a completely different and\nempty account, and the status page cheerfully reported writeEnabled: true .\nThe only way to discover it would have been to press the button.\n\n GET /umi/anchors now reports writeEnabled: false when the key funds\nnothing, names the address the key actually derives, and says in as many\nwords that a public address pasted into the secret variable is accepted and\nsilently produces a different account. Telling somebody to fund an address\nthey never meant to use is worse than saying nothing, because they will, and\nthe account they care about stays untouched.\n\nThe quick check, whatever the deployment:\n\n \n\nIf that is not the address holding your SOL, the secret is wrong."
     },
     {
       "doc": "ANCHORING",

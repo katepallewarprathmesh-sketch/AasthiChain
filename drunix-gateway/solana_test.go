@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -166,8 +169,57 @@ func TestAnchorLoadsAKeyAndDerivesTheAddress(t *testing.T) {
 	if a.Address() != want {
 		t.Fatalf("address = %q, want %q", a.Address(), want)
 	}
-	if a.Status(context.Background())["writeEnabled"] != true {
-		t.Fatal("status should report the write path as enabled")
+	// CanWrite is about the key. The status goes further and asks whether
+	// a write would actually succeed, so an unfunded key reports false
+	// there even though the key itself is perfectly valid. Both are
+	// checked, because conflating them is what produced the deployment
+	// mistake the next test covers.
+	st := a.Status(context.Background())
+	if st["writeEnabled"] == true && st["balanceLamports"] == int64(0) {
+		t.Fatal("status reported an unfunded key as able to write")
+	}
+}
+
+// TestStatusWillNotCallAnEmptyKeyWritable comes from a real deployment
+// mistake. SOLANA_SECRET_B58 was set to the account's ADDRESS rather than its
+// secret. Both are base58 and both decode to 32 bytes, so the seed was
+// accepted, it derived a different and completely empty account, and the
+// status page reported writeEnabled: true. The first anchor attempt would
+// have been the only way to find out.
+func TestStatusWillNotCallAnEmptyKeyWritable(t *testing.T) {
+	_, priv, _ := ed25519.GenerateKey(nil)
+	// A stub cluster that answers every balance query with zero.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Method string `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		switch req.Method {
+		case "getBalance":
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"context":{"slot":1},"value":0}}`))
+		default:
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":1}`))
+		}
+	}))
+	defer srv.Close()
+
+	a := NewSolanaAnchor(NewChain(), srv.URL, "devnet", Base58Encode(priv.Seed()))
+	st := a.Status(context.Background())
+	if st["writeEnabled"] != false {
+		t.Fatal("a key that funds nothing was reported as able to write")
+	}
+	why, _ := st["writeDisabledBecause"].(string)
+	if !strings.Contains(why, "holds no SOL") {
+		t.Fatalf("the reason does not say the account is empty: %q", why)
+	}
+	// The explanation has to name the mistake, because "fund this address"
+	// sends somebody to a faucet to top up an account they never meant to
+	// use, and the real account stays unused with its balance intact.
+	if !strings.Contains(why, "SECRET and not the public") {
+		t.Fatalf("the reason does not mention the address-for-secret mix-up: %q", why)
+	}
+	if !strings.Contains(why, a.Address()) {
+		t.Fatal("the reason does not name the address the key actually derives")
 	}
 }
 

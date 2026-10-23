@@ -566,8 +566,15 @@ func (a *SolanaAnchor) Status(ctx context.Context) map[string]interface{} {
 		out["balanceLamports"] = bal
 		out["balanceSOL"] = float64(bal) / 1e9
 		if bal == 0 {
-			out["writeDisabledBecause"] = "The anchor account holds no SOL, so a fee cannot be paid. Fund " +
-				a.Address() + " on " + a.cluster + "."
+			// A key that is loaded but funds nothing cannot write, and
+			// saying writeEnabled: true here would be a lie that only
+			// comes apart when somebody presses the button.
+			out["writeEnabled"] = false
+			out["writeDisabledBecause"] = "A signing key is loaded and it derives " + a.Address() +
+				", which holds no SOL on " + a.cluster + ", so the fee cannot be paid. Either fund " +
+				"that address, or check that SOLANA_SECRET_B58 holds the SECRET and not the public " +
+				"address: both are base58 and both are 32 bytes, so pasting the address is accepted " +
+				"and silently derives a different, empty account."
 		}
 	}
 	return out

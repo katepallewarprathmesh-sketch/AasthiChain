@@ -83,6 +83,29 @@ because the key held nothing and the devnet faucet refused every request from
 this IP. That is worth recording. A capability nobody has exercised is a
 claim, and the difference between a claim and a fact here cost 0.5 SOL.
 
+## The mistake this makes easy, and the guard against it
+
+`SOLANA_SECRET_B58` was once set, on a hosted deployment, to the account's
+**address** instead of its secret. Both are base58, both decode to 32 bytes,
+so the address was accepted as a seed, derived a completely different and
+empty account, and the status page cheerfully reported `writeEnabled: true`.
+The only way to discover it would have been to press the button.
+
+`GET /umi/anchors` now reports `writeEnabled: false` when the key funds
+nothing, names the address the key actually derives, and says in as many
+words that a public address pasted into the secret variable is accepted and
+silently produces a different account. Telling somebody to fund an address
+they never meant to use is worse than saying nothing, because they will, and
+the account they care about stays untouched.
+
+The quick check, whatever the deployment:
+
+```bash
+curl -s <rail>/umi/anchors | grep -o '"address":"[^"]*"'
+```
+
+If that is not the address holding your SOL, the secret is wrong.
+
 ## Turning writing on
 
 ```bash
