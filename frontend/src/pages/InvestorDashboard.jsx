@@ -10,14 +10,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../lib/api.js'
-import {
-  Button, Badge, Card as AxCard, Metric as AxMetric, Progress, Num, Mono,
-  EmptyState, Skeleton, inr, inrShort, InfoTip,
-} from '../components/ui.jsx'
+import { Button, Badge, Card as AxCard, Metric as AxMetric, Progress, Num, Mono, EmptyState, Skeleton, inr } from '../components/ui.jsx'
 import BasketPanel from '../components/BasketPanel.jsx'
 
-const money = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
-const card = { background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 18, minWidth: 0 }
 
 const STATUS = {
   SETTLED: { bg: '#ECFDF5', border: '#A7F3D0', color: '#065F46', label: 'Settled' },
@@ -27,15 +22,6 @@ const STATUS = {
   LOCKED: { bg: '#FFFBEB', border: '#FDE68A', color: '#92400E', label: 'Locked' }
 }
 
-function Metric({ label, value, sub, color }) {
-  return (
-    <div style={card}>
-      <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.08em' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#111827', marginTop: 5, overflowWrap: 'anywhere' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11.5, color: '#6B7280', marginTop: 3 }}>{sub}</div>}
-    </div>
-  )
-}
 
 export default function InvestorDashboard({ user }) {
   const identityId = user?.identityId || 'investor1'

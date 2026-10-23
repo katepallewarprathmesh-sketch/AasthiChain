@@ -2,6 +2,28 @@
 
 Go + Gin + Mock Fabric Client (pluggable to real Fabric Gateway SDK)
 
+## Authentication, and the flag that decides how much it trusts you
+
+By default this gateway accepts only a token it signed itself at
+`POST /api/auth/login`. Three older acceptance paths remain for the demo, an
+unverified JWT carrying an `identityId` claim, a base64 blob of JSON, and a
+bare `X-Fabric-Identity` header, and every one of them will hand the caller
+`RegulatorMSP`, the MSP that can freeze an asset. They are off unless you set:
+
+    API_GATEWAY_DEMO_AUTH=true
+
+Set it for a local demo where the role switcher is the point. Do not set it
+anywhere a stranger can reach, and read the refusal message if you are
+wondering why a token stopped working.
+
+## Tests
+
+    cd api-gateway && go test ./...
+
+Covers the authentication middleware including both sides of the flag above,
+the idempotency store across a simulated restart, and the mock Fabric client
+lifecycle with its refusals.
+
 ## Features
 - JWT auth (mock login returns token with identityId, mspId, role)
 - MSP-based authorization middleware (RequireMSP)

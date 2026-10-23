@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "73c208d38d0698f35410a755525c573cb8aa2daa46cc3fcfd2b6623820653120",
+  "sourceDigest": "d142fed49f80f0612c35b8b80c4d81eb21f34cac0f5fb0a1f48f452009243fc9",
   "sections": [
     {
       "doc": "README",
@@ -1453,7 +1453,7 @@
       "doc": "TESTING",
       "file": "docs/TESTING.md",
       "heading": "What each command actually covers",
-      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 113 in tests/ \n Reported result 158 passed, 0 failed \n\nOne hazard worth knowing before a repeat run: anything already listening on :8080 or :21100 \nis the enemy of a trustworthy result. A leftover app answers with a different admin key and a\ndozen suites fail for reasons that have nothing to do with the code. make test-fresh now clears\nthose strays rather than starting a process that cannot bind, and scripts/dev-stack.sh refuses\nto report a healthy stack it did not actually start.\n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant."
+      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 114 in tests/ \n Reported result 159 passed, 0 failed \n\nOne hazard worth knowing before a repeat run: anything already listening on :8080 or :21100 \nis the enemy of a trustworthy result. A leftover app answers with a different admin key and a\ndozen suites fail for reasons that have nothing to do with the code. make test-fresh now clears\nthose strays rather than starting a process that cannot bind, and scripts/dev-stack.sh refuses\nto report a healthy stack it did not actually start.\n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant."
     },
     {
       "doc": "TESTING",

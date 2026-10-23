@@ -17,11 +17,24 @@ const root = new URL('../', import.meta.url)
 const read = f => readFileSync(new URL(f, root), 'utf8')
 
 const suites = readdirSync(new URL('tests/', root)).filter(f => f.endsWith('.test.mjs')).length
+// Walk each module. api-gateway keeps its code in middleware/, store/ and
+// fabric/, and a flat read of the module directory counted none of them, so
+// this check was comparing the published number against a wrong one.
+const goTestsIn = (dir) => {
+  let found = []
+  let entries = []
+  try { entries = readdirSync(new URL(dir + '/', root), { withFileTypes: true }) }
+  catch { return found }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      if (e.name === 'vendor' || e.name === 'node_modules' || e.name.startsWith('.')) continue
+      found = found.concat(goTestsIn(dir + '/' + e.name))
+    } else if (e.name.endsWith('_test.go')) found.push(dir + '/' + e.name)
+  }
+  return found
+}
 const goTests = ['drunix-gateway', 'chaincode', 'payment-gateway', 'api-gateway']
-  .flatMap(d => {
-    try { return readdirSync(new URL(d + '/', root)).filter(f => f.endsWith('_test.go')) }
-    catch { return [] }
-  }).length
+  .flatMap(goTestsIn).length
 
 check('docs/DEMO.md states the real suite and Go test counts', () => {
   const demo = read('docs/DEMO.md')

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -12,6 +13,23 @@ import (
 )
 
 var jwtSecret = []byte("aasthichain-hackathon-secret-key-change-in-prod")
+
+// demoAuth decides whether this process will accept an identity that nobody
+// signed.
+//
+// Three of the paths below take a caller's word for who they are: an
+// unverified JWT carrying an identityId claim, a base64 blob of JSON, and a
+// bare X-Fabric-Identity header. Any of them will hand out RegulatorMSP,
+// which is the MSP that can freeze an asset. That is acceptable in a demo
+// where the role switcher is the point and worth nothing behind it, and it
+// is a straightforward privilege escalation anywhere else.
+//
+// So it is opt-in. Unset, this gateway only accepts a token it signed
+// itself, and says what to set if you wanted the demo behaviour.
+func demoAuth() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("API_GATEWAY_DEMO_AUTH")))
+	return v == "true" || v == "1" || v == "yes"
+}
 
 // role mapping for Clerk + X-Fabric-Identity header
 var clerkRoleMap = map[string]struct {
@@ -120,6 +138,16 @@ func JWTAuth() gin.HandlerFunc {
 				c.Next()
 				return
 			}
+		}
+
+		// Everything past this point trusts an unsigned claim.
+		if !demoAuth() {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "ERR_UNAUTHORIZED",
+				"message": "this token is not signed by this gateway. Set API_GATEWAY_DEMO_AUTH=true to accept unsigned demo identities, which also lets any caller claim RegulatorMSP.",
+			})
+			c.Abort()
+			return
 		}
 
 		// Try Clerk token path

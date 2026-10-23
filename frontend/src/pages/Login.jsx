@@ -212,7 +212,6 @@ function ClerkLogin({ onLogin }) {
 }
 
 function SimpleLogin({ onLogin }) {
-  const navigate = useNavigate()
 
   return (
     <div style={{maxWidth:520, margin:'40px auto', padding:'0 16px'}}>

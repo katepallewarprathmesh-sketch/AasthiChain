@@ -17,12 +17,12 @@ const isClerkConfigured = clerkPubKey &&
 const isDev = import.meta.env.DEV
 if (isDev) {
   if (isClerkConfigured) {
-    console.log('[Clerk] Enabled key:', clerkPubKey.slice(0, 20) + '... domain:', window.location.hostname)
+    console.warn('[Clerk] Enabled key:', clerkPubKey.slice(0, 20) + '... domain:', window.location.hostname)
     if (window.location.hostname.includes('vercel.app')) {
-      console.log('[Clerk] Production Vercel domain detected:', window.location.hostname, 'ensure this domain is in Clerk Dashboard → Domains → Allowed Origins')
+      console.warn('[Clerk] Production Vercel domain detected:', window.location.hostname, 'ensure this domain is in Clerk Dashboard → Domains → Allowed Origins')
     }
   } else {
-    console.log('[Clerk] Not configured using mock auth fallback. Set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk.')
+    console.warn('[Clerk] Not configured using mock auth fallback. Set VITE_CLERK_PUBLISHABLE_KEY to enable Clerk.')
   }
 }
 

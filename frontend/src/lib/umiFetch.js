@@ -25,7 +25,7 @@ export async function umiFetch(path, options = {}) {
     method: options.body ? (options.method || 'POST') : (options.method || 'GET'),
   })
   const text = await res.text()
-  let data = {}
+  let data
   try { data = text ? JSON.parse(text) : {} } catch { data = { error: 'ERR_BAD_RESPONSE', message: text.slice(0, 200) } }
   return { ok: res.ok, status: res.status, data }
 }

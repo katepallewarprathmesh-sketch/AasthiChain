@@ -5257,7 +5257,6 @@ export default async function handler(req, res) {
         if (!identityId) return res.status(400).json({ error: 'identityId required' });
         const state = 'digi-' + safeUUID().slice(0,8);
         const clientId = process.env.DIGILOCKER_CLIENT_ID || 'mock-client-id';
-        const redirectUri = process.env.DIGILOCKER_REDIRECT_URI || 'https://aasthi-chain.vercel.app/api/kyc/digilocker/callback';
         // Real: https://api.digitallocker.gov.in/public/oauth2/1/authorize?response_type=code&client_id=...&redirect_uri=...&state=...
         // DIGILOCKER_MODE=real used to point this at the genuine DigiLocker
         // authorize endpoint. The callback below never had a matching real
@@ -5763,17 +5762,18 @@ export default async function handler(req, res) {
         // Try to get real counts from realDB if postgres/github
         let realCounts = null
         try {
-          if (realMode === 'github') {
-            const all = await githubDB.getAll()
-            realCounts = all.count
-          } else if (realMode === 'postgres') {
+          // githubDB was referenced here but never imported, so this
+          // diagnostic threw a ReferenceError in GitHub mode and reported no
+          // counts at all. realDB already fronts whichever backend is
+          // configured, so one branch answers for both.
+          if (realMode === 'github' || realMode === 'postgres') {
             const props = await realDB.getProperties()
             const bals = await realDB.getBalances()
             const trans = await realDB.getTransfers()
             realCounts = {
-              properties: Object.keys(props).length,
-              balances: Object.keys(bals).length,
-              transfers: Object.keys(trans).length
+              properties: Object.keys(props || {}).length,
+              balances: Object.keys(bals || {}).length,
+              transfers: Object.keys(trans || {}).length
             }
           }
         } catch (e) {

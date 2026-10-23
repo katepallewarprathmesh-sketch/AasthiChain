@@ -45,6 +45,11 @@ function StepTrack({ current, doneCount }) {
 }
 
 export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, propertyTitle, valuationINR, totalTokens, availableTokens, onSuccess }) {
+  // useLocalCache was imported but never called, so recordBuy below was an
+  // undefined reference inside a try/catch that swallowed it: the local
+  // holdings cache this flow claims to write was never written, and the
+  // self-heal path it feeds never had anything to heal from.
+  const { recordBuy } = useLocalCache()
   const [amount, setAmount] = useState(10)
   const [vpa, setVpa] = useState(user?.identityId ? `${user.identityId}@aasthichain` : 'demo.investor@aasthichain')
   const [step, setStep] = useState('form') // form, paying, payu, pending, confirming, transferring, success, error
@@ -286,14 +291,14 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
           originatorId: recipient || 'originator1',
           tokenAmount: moveAmount,
           receipt: {
-            paymentId: released.paymentId || collectData.paymentId,
+            paymentId: released.paymentId || confirmed.paymentId,
             assetId,
             payerId: user?.identityId || 'investor1',
             tokenAmount: moveAmount,
             amountINR: confirmed.amountINR ?? total,
             status: released.status || 'RELEASED',
-            upiTxnId: released.upiTxnId || collectData.upiTxnId || '',
-            createdAt: collectData.createdAt || new Date().toISOString(),
+            upiTxnId: released.upiTxnId || confirmed.upiTxnId || '',
+            createdAt: confirmed.createdAt || new Date().toISOString(),
             utr: released.utr || ''
           }
         })

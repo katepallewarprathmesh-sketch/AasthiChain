@@ -8,6 +8,7 @@
     "build": "node scripts/gen-sitemap.mjs && vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
     "smoke": "vite build --config vite.smoke.config.js --logLevel error && node node_modules/.smoke/smoke-render.js",
+    "lint": "eslint .",
     "sitemap": "node scripts/gen-sitemap.mjs",
     "indexnow": "node scripts/indexnow.mjs"
   },
@@ -24,9 +25,13 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
     "vite": "^6.4.4"
   }
 }

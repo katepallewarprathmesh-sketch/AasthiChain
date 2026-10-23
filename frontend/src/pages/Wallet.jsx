@@ -5,10 +5,7 @@ import api from '../lib/api.js'
 import UMIPortfolioPanel from '../components/UMIPortfolioPanel.jsx'
 import TransactionHistory from '../components/TransactionHistory.jsx'
 import { useLocalCache } from '../hooks/useLocalCache.js'
-import {
-  Button, Badge, SimBadge, Card as AxCard, Metric as AxMetric, Num, Mono,
-  EmptyState, ErrorState, Skeleton, inr, InfoTip,
-} from '../components/ui.jsx'
+import { Button, Badge, SimBadge, Card as AxCard, Metric as AxMetric, Num, EmptyState, ErrorState, Skeleton, inr } from '../components/ui.jsx'
 
 // SOLID: Single Responsibility Only wallet display + transfer for layman
 

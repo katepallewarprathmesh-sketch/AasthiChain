@@ -3,7 +3,7 @@
 // No login, no network calls - everything below is arithmetic in the browser.
 
 import React, { useState, useMemo } from 'react'
-import ToolShell, { card, C, Field, Stat, inr, pct } from './ToolShell'
+import ToolShell, { card, C, Field, inr, pct } from './ToolShell'
 
 const num = (v) => {
   const n = parseFloat(v)

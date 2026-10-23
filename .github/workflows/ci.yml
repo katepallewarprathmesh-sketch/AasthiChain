@@ -98,6 +98,12 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm ci
+      # Lint before build: the build only catches a syntax error, while this
+      # catches the undefined reference and the conditionally called hook
+      # that compile perfectly and fail in front of a person.
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
       - name: Build
         working-directory: frontend
         run: npm run build

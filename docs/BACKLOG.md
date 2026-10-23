@@ -74,8 +74,8 @@ property, carbon credits and work orders. No code change is implied; an honest d
 
 | Id | Finding | Done looks like |
 | --- | --- | --- |
-| D1 | `api-gateway` has no tests | A test file for its routing and error paths, counted in the census. |
-| D2 | No ESLint configuration | A config the existing code actually passes, wired into the sweep. |
+| D1 | ~~`api-gateway` has no tests~~ **done 23 Oct** | Three test files over middleware, store and the mock client. Found and closed an unsigned-identity escalation. |
+| D2 | ~~No ESLint configuration~~ **done 23 Oct** | Flat config, zero errors, in `make lint`, the sweep and CI. Found five real defects on its first run. |
 | D4 | No compose file for the app itself | One file that brings up the app and the rail together, or a clear statement that `make dev` is the supported path. Do not add infrastructure for appearance. |
 | D5 | Two hand-maintained API implementations | Either a shared contract test both must pass, or a documented statement of which is authoritative. |
 | D6 | Junk demo listings in the seeded data | Remove the probe listings; fix the two with wrong city and pincode pairings. |

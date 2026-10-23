@@ -19,7 +19,7 @@ export function runningBuild() {
 
 export async function checkFreshness({ onStale } = {}) {
   if (STAMP === 'dev') return { stale: false, reason: 'dev build' }
-  let served = ''
+  let served
   try {
     const res = await fetch('/api/admin/insights/status', { cache: 'no-store' })
     if (!res.ok) return { stale: false, reason: `status ${res.status}` }

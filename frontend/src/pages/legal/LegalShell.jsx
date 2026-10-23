@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { C, card } from '../tools/ToolShell'
+import { C } from '../tools/ToolShell'
 
 export const UPDATED = '4 October 2026'
 

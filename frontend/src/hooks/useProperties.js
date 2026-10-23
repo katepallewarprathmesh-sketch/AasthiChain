@@ -72,7 +72,7 @@ export function useProperties(filterStatus = '') {
     setError('')
     try {
       const data = await api.listProperties(filterStatus)
-      let backendProps = data.properties || []
+      const backendProps = data.properties || []
       
       // Merge with local cache for persistence fix
       const cached = loadLocalCache()

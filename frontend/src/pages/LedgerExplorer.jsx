@@ -6,7 +6,7 @@
 // The read endpoints are an open layer: no auth, no PII usable by agents & DPI.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Badge, Button, CopyButton, Mono, Num } from '../components/ui.jsx'
+import { Badge, CopyButton, Mono, Num } from '../components/ui.jsx'
 import { prettifyAssetId } from '../lib/assetNames.js'
 import { useLocation } from 'react-router-dom'
 import api from '../lib/api.js'

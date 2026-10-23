@@ -157,7 +157,7 @@ export function getDB() {
     // Migration helper init tables
     async init() {
       if (!isPostgres) {
-        console.log('[DB] Using file-backed store (hackathon mode) /tmp/aasthi_*.json + globalThis')
+        console.warn('[DB] Using file-backed store (hackathon mode) /tmp/aasthi_*.json + globalThis')
         return { mode: 'file-backed', message: 'File-backed persistence survives warm instances, use Postgres for production' }
       }
       try {
@@ -178,7 +178,7 @@ export function getDB() {
           CREATE INDEX IF NOT EXISTS idx_npcipayments_status ON npci_payments ((data->>'status'));
           CREATE INDEX IF NOT EXISTS idx_npcipayments_utr ON npci_payments ((data->>'utr'));
         `)
-        console.log('[DB] Postgres initialized tables created')
+        console.warn('[DB] Postgres initialized tables created')
         return { mode: 'postgres', message: 'Postgres persistent production ready' }
       } catch (e) {
         console.error('[DB] Postgres init failed', e.message)
@@ -191,7 +191,7 @@ export function getDB() {
 }
 
 // For API routes get store with globalThis fallback (existing behavior, no break)
-export function getStoreWithFallback(name, globalKey, defaultValue) {
+export function getStoreWithFallback(name, globalKey, _defaultValue) {
   const db = getDB()
   const store = db[name]
   // If file-backed, also sync with globalThis for backward compatibility

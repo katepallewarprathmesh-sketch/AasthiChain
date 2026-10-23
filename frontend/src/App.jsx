@@ -45,7 +45,7 @@ class ErrorBoundary extends React.Component {
     return this.props.children
   }
 }
-import { useUser, useAuth, useClerk, UserButton, SignInButton, ClerkLoading, ClerkLoaded } from '@clerk/react'
+import { useUser, useAuth, useClerk, UserButton, ClerkLoading, ClerkLoaded } from '@clerk/react'
 
 // Landing is the first screen for almost every visitor, so it stays in the
 // initial bundle. Everything else is fetched on demand, which keeps the first
@@ -286,7 +286,7 @@ function Footer() {
 // ancestor's overflow can cut it off. The trigger also has to line up with
 // the links beside it, so it carries their exact font size, padding and line
 // height rather than a button's defaults.
-function MoreMenu({ groups, mut, text, dark, chipBg, chipBorder, isMobile }) {
+function MoreMenu({ groups, mut, text, dark, chipBorder, isMobile }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState(null)
   const btnRef = useRef(null)
@@ -552,10 +552,29 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
   )
 }
 
-function AppContent({ user, setUser }) {
-  const clerk = isClerkConfigured ? useClerk() : null
-  const { isLoaded, isSignedIn, user: clerkUser } = isClerkConfigured ? useUser() : { isLoaded: true, isSignedIn: false, user: null }
-  const { getToken } = isClerkConfigured ? useAuth() : { getToken: async () => null }
+// Clerk's hooks used to be called behind `isClerkConfigured ? useX() : ...`
+// inside this component. It worked, because the flag is a module constant
+// that cannot change after load, but it is a rules-of-hooks violation and
+// the kind that stops being harmless the moment the flag becomes stateful.
+// The decision is made once, here, by choosing between two wrappers; each
+// one calls its hooks unconditionally and hands the session down as plain
+// props.
+function AppContentWithClerk(props) {
+  const clerk = useClerk()
+  const { isLoaded, isSignedIn, user: clerkUser } = useUser()
+  const { getToken } = useAuth()
+  return <AppContentInner {...props} clerk={clerk} isLoaded={isLoaded} isSignedIn={isSignedIn} clerkUser={clerkUser} getToken={getToken} />
+}
+
+function AppContentWithoutClerk(props) {
+  return <AppContentInner {...props} clerk={null} isLoaded isSignedIn={false} clerkUser={null} getToken={noClerkToken} />
+}
+
+const noClerkToken = async () => null
+
+const AppContent = isClerkConfigured ? AppContentWithClerk : AppContentWithoutClerk
+
+function AppContentInner({ user, setUser, clerk, isLoaded, isSignedIn, clerkUser, getToken }) {
 
   const [internalUser, setInternalUser] = useState(user)
   const location = useLocation()
@@ -610,7 +629,7 @@ function AppContent({ user, setUser }) {
     fetchToken()
 
     const storedDemoId = (() => { try { return localStorage.getItem('aasthi_clerk_demo_identity') || 'investor1' } catch { return 'investor1' } })()
-    let selectedRole = ROLES.find(r=>r.id===storedDemoId) || ROLES[2]
+    const selectedRole = ROLES.find(r=>r.id===storedDemoId) || ROLES[2]
 
     const aasthiUser = {
       token: localStorage.getItem('aasthi_token') || 'clerk-' + clerkUser.id,
@@ -666,7 +685,7 @@ function AppContent({ user, setUser }) {
         setUser(resolved)
       } catch { /* leave the local guess in place */ }
     })()
-  }, [isClerkConfigured, isLoaded, isSignedIn, clerkUser])
+  }, [isLoaded, isSignedIn, clerkUser])
 
   const handleLogout = async () => {
     try {

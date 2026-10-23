@@ -27,11 +27,27 @@ const fix = args.includes('--fix')
 const checksArg = args.includes('--checks') ? Number(args[args.indexOf('--checks') + 1]) : null
 
 const suites = readdirSync(new URL('tests/', root)).filter((f) => f.endsWith('.test.mjs')).length
+// Walk each module rather than reading its top directory: api-gateway keeps
+// its code in middleware/, store/ and fabric/, so a flat read counted zero
+// test files there and the published census was wrong by however many lived
+// one level down.
+const goTestsIn = (dir) => {
+  let found = []
+  let entries = []
+  try { entries = readdirSync(new URL(dir + '/', root), { withFileTypes: true }) }
+  catch { return found }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      if (e.name === 'vendor' || e.name === 'node_modules' || e.name.startsWith('.')) continue
+      found = found.concat(goTestsIn(dir + '/' + e.name))
+    } else if (e.name.endsWith('_test.go')) {
+      found.push(dir + '/' + e.name)
+    }
+  }
+  return found
+}
 const goTests = ['drunix-gateway', 'chaincode', 'payment-gateway', 'api-gateway']
-  .flatMap((d) => {
-    try { return readdirSync(new URL(d + '/', root)).filter((f) => f.endsWith('_test.go')) }
-    catch { return [] }
-  }).length
+  .flatMap(goTestsIn).length
 
 // Each edit is a narrow pattern with a named reason, so a --fix can never
 // rewrite a number that happens to look similar somewhere else in the prose.

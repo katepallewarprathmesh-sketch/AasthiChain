@@ -230,17 +230,36 @@ real difference from stock Fabric with LevelDB.
 
 ## Open findings, not fixed in this pass
 
-### D1. `api-gateway` has no tests
+### D1. `api-gateway` has no tests ~ CLOSED 23 October 2026
 
-Four Go modules, 293 test functions between three of them, and zero in the fourth. It is not on the
-demo path, which is why it has survived untested, but it is in CI's build matrix and in the
-repository layout. Listed as a good first issue.
+Four Go modules, 293 test functions between three of them, and zero in the fourth. Closed with
+three test files covering the authentication middleware, the idempotency store and the mock
+Fabric client: the lifecycle in order, a refusal for each step, KYC on both sides of a transfer,
+a frozen asset, pagination that does not repeat itself, and a restart that does not forget an
+answer.
 
-### D2. There is no ESLint configuration
+Writing them found a real hole. Three of the four paths in `JWTAuth` take the caller's word for
+who they are, an unverified JWT claim, a base64 blob of JSON, or a bare `X-Fabric-Identity`
+header, and any of them will hand out `RegulatorMSP`, which is the MSP that can freeze an asset.
+That is fine in a demo and a privilege escalation anywhere else, so those paths are now behind
+`API_GATEWAY_DEMO_AUTH=true`. Unset, the gateway accepts only a token it signed itself and the
+refusal says what to set if the demo behaviour was wanted.
 
-ESLint 10 will not run without one, so the frontend has no lint or type gate; `npm run build` is
-the proxy. Adding a flat config that passes on the existing code is contained work. Listed as a
-good first issue.
+### D2. There is no ESLint configuration ~ CLOSED 23 October 2026
+
+Closed with a flat config at `frontend/eslint.config.js`, wired into `make lint`, into the
+`lint` suite in the sweep, and into CI ahead of the build. Nothing in it is about formatting, so
+future diffs stay about the change rather than about quotes; everything in it is an error rather
+than a warning, because a warning in CI is a thing people learn to scroll past. The four React
+Compiler rules that would have needed a refactor are off with the reason and the hit count
+recorded in the config, so the next person can turn one on deliberately.
+
+The first run reported 293 errors, and five of them were live defects rather than untidiness:
+`recordBuy` and `collectData` referenced but never defined in the buy flow, inside a `catch {}`
+that swallowed the resulting ReferenceError, so the local holdings cache it claims to write was
+never written; `properties` read out of a sibling component's scope in the secondary market,
+which is a crash on the first rendered offer row; `githubDB` used but never imported in the
+database diagnostic; and three React hooks called conditionally in `App.jsx`. All fixed.
 
 ### D3. List endpoints are unbounded
 

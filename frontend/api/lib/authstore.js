@@ -306,7 +306,7 @@ export class AuthStore {
       try {
         await this.pool.query(`INSERT INTO organization (id, name, slug, logo, client_id, metadata) VALUES ($1,$2,$3,$4,$5,$6)`, [row.id, row.name, row.slug, row.logo, row.client_id, JSON.stringify(row.metadata)])
       } catch (e) {
-        if (String(e.message).includes('duplicate key')) throw new Error('organization slug already exists: ' + row.slug)
+        if (String(e.message).includes('duplicate key')) throw new Error('organization slug already exists: ' + row.slug, { cause: e })
         throw e
       }
     } else {

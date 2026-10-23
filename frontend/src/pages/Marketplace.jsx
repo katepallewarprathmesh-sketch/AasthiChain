@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import {  } from 'react-router-dom'
 import { useProperties } from '../hooks/useProperties.js'
 import {
   Button, Badge, Card, Field, Input, Select, Segmented, PropertyCard, SkeletonCard,
@@ -20,7 +20,7 @@ import {
  * primary offerings; resale prices and depth come from the market API on
  * /market, and inventing either would be inventing liquidity.
  */
-export default function Marketplace({ user }) {
+export default function Marketplace() {
   const [filter, setFilter] = useState('')
   const [cityFilter, setCityFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')

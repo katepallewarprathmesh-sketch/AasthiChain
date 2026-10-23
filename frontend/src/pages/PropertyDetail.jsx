@@ -6,10 +6,7 @@ import PropertyDocuments from '../components/PropertyDocuments.jsx'
 import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
 import { applySeo, propertySeo } from '../lib/seo.js'
-import {
-  Button, Badge, Card as AxCard, Metric, Progress, Breadcrumbs, ArchPlaceholder,
-  Num, Mono, InfoTip, inr, inrShort,
-} from '../components/ui.jsx'
+import { Badge, Card as AxCard, Metric, Progress, Breadcrumbs, ArchPlaceholder, Num, Mono, inr, inrShort } from '../components/ui.jsx'
 import { propertyImage, REPRESENTATIVE_NOTE } from '../lib/propertyImages.js'
 import { registryStatus } from '../lib/registryStatus.js'
 

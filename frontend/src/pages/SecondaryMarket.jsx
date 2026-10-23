@@ -184,14 +184,18 @@ export default function SecondaryMarket({ user }) {
         </p>
         )
       ) : offers.map(o => (
-        <OfferRow key={o.offerId} offer={o} me={me} busy={busy}
+        <OfferRow key={o.offerId} offer={o} me={me} busy={busy} properties={properties}
           onTake={take} onCheck={check} onCancel={cancel} />
       ))}
     </div>
   )
 }
 
-function OfferRow({ offer: o, me, busy, onTake, onCheck, onCancel }) {
+// properties has to be passed in. It was read straight out of the parent's
+// scope, which is a ReferenceError the moment a row renders, and the row
+// only renders once somebody lists an offer: a crash hiding behind an empty
+// order book.
+function OfferRow({ offer: o, me, busy, properties, onTake, onCheck, onCancel }) {
   const [qty, setQty] = useState('')
   const mine = o.seller === me
   const n = Number(qty)

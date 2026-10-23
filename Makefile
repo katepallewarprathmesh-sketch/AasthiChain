@@ -1,4 +1,4 @@
-.PHONY: help counts dev stop test test-fresh test-go test-all smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
+.PHONY: help counts dev stop test test-fresh test-go test-all lint smoke secret-scan build umi frontend api chaincode-test umi-test network clean demo
 
 # Default target: say what is available rather than doing something surprising.
 help:
@@ -10,6 +10,7 @@ help:
 	@echo "  make test-fresh   restart the stack first, then the sweep (use for a repeat run)"
 	@echo "  make test-go      every Go module: gofmt, vet, race tests"
 	@echo "  make test-all     dev, then both of the above"
+	@echo "  make lint         ESLint over the frontend and the serverless handlers"
 	@echo "  make smoke        build the frontend and render every route"
 	@echo "  make secret-scan  refuse tracked files that look like live credentials"
 	@echo "  make counts       report (and with FIX=1 repair) the published test census"
@@ -58,6 +59,9 @@ test-go:
 	bash scripts/go-tests.sh
 
 test-all: dev test test-go
+
+lint:
+	cd frontend && npm run lint
 
 smoke:
 	cd frontend && npm run smoke

@@ -191,7 +191,7 @@ export function getDB() {
 }
 
 // For API routes — get store with globalThis fallback (existing behavior, no break)
-export function getStoreWithFallback(name, globalKey, defaultValue) {
+export function getStoreWithFallback(name, globalKey, _defaultValue) {
   const db = getDB()
   const store = db[name]
   // If file-backed, also sync with globalThis for backward compatibility
