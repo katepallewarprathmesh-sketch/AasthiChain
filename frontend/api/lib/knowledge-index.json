@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "d9f840980e6de39e76d4b70c8ae7687fceaf9c229e1ad010fbada015109cae3a",
+  "sourceDigest": "82866604f1e2e322759e73efc6da5cf8c7e98301d13ad6db6e902993723b3f1a",
   "sections": [
     {
       "doc": "README",
@@ -427,7 +427,13 @@
       "doc": "ANCHORING",
       "file": "docs/ANCHORING.md",
       "heading": "fund the address with devnet SOL at https://faucet.solana.com",
-      "text": "export SOLANA SECRET B58=<secret \nmake dev\ncurl -s -X POST localhost:21100/umi/anchors \\\n -H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator'\n \n\nEnvironment: SOLANA RPC URL (default the public devnet endpoint), SOLANA CLUSTER (default\n devnet ), SOLANA SECRET B58 (no default, and no key means no writing).\n\nPublishing is restricted to a supervisor because it spends a fee and cannot be undone. A successful\nanchor commits a UMI CHAIN ANCHORED block locally carrying the signature and the explorer link, so\nthe local ledger records its own publication."
+      "text": "export SOLANA SECRET B58=<secret \nmake dev\ncurl -s -X POST localhost:21100/umi/anchors \\\n -H 'X-Fabric-Identity: regulator1' -H 'X-Identity-Role: Regulator'\n \n\nEnvironment: SOLANA RPC URL (default the public devnet endpoint), SOLANA CLUSTER (default\n devnet ), SOLANA SECRET B58 (no default, and no key means no writing).\n\n On a hosted rail\n\nThe same variable, set wherever the Go rail runs (for this project that is the Render service, not\nthe Vercel frontend): Dashboard, the service, Environment, Add Environment Variable, key\n SOLANA SECRET B58 , then redeploy so the process restarts with it.\n\n SOLANA SECRET B58 is a server secret and belongs only to the process that signs. It must never be\nset as a VITE -prefixed variable or added to the frontend project, because anything Vite can read\nis compiled into the bundle and served to every visitor. The browser never needs it: the frontend\nreads anchors through the rail.\n\n Checking it took\n\n GET /umi/anchors answers in one of three ways, and the distinction is the useful part:\n writeDisabledBecause What it means \n --- --- \n \"No signing key is configured...\" the variable is absent or did not reach the process \n \"The anchor account holds no SOL...\" the key is loaded and valid, funding is the only thing left \n absent, with writeEnabled true ready to publish"
+    },
+    {
+      "doc": "ANCHORING",
+      "file": "docs/ANCHORING.md",
+      "heading": "fund the address with devnet SOL at https://faucet.solana.com (continued)",
+      "text": "The second line is the good news case on a fresh key: it proves the secret parsed, the address\nderived from it, and the cluster is reachable. The address in that message is the one to fund, and\nit is derived from the secret rather than configured separately, so the two cannot drift apart.\n\nPublishing is restricted to a supervisor because it spends a fee and cannot be undone. A successful\nanchor commits a UMI CHAIN ANCHORED block locally carrying the signature and the explorer link, so\nthe local ledger records its own publication."
     },
     {
       "doc": "ANCHORING",

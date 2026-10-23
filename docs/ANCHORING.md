@@ -74,6 +74,31 @@ curl -s -X POST localhost:21100/umi/anchors \
 Environment: `SOLANA_RPC_URL` (default the public devnet endpoint), `SOLANA_CLUSTER` (default
 `devnet`), `SOLANA_SECRET_B58` (no default, and no key means no writing).
 
+### On a hosted rail
+
+The same variable, set wherever the Go rail runs (for this project that is the Render service, not
+the Vercel frontend): Dashboard, the service, Environment, Add Environment Variable, key
+`SOLANA_SECRET_B58`, then redeploy so the process restarts with it.
+
+`SOLANA_SECRET_B58` is a server secret and belongs only to the process that signs. It must never be
+set as a `VITE_`-prefixed variable or added to the frontend project, because anything Vite can read
+is compiled into the bundle and served to every visitor. The browser never needs it: the frontend
+reads anchors through the rail.
+
+### Checking it took
+
+`GET /umi/anchors` answers in one of three ways, and the distinction is the useful part:
+
+| `writeDisabledBecause` | What it means |
+| --- | --- |
+| "No signing key is configured..." | the variable is absent or did not reach the process |
+| "The anchor account holds no SOL..." | the key is loaded and valid, funding is the only thing left |
+| absent, with `writeEnabled` true | ready to publish |
+
+The second line is the good news case on a fresh key: it proves the secret parsed, the address
+derived from it, and the cluster is reachable. The address in that message is the one to fund, and
+it is derived from the secret rather than configured separately, so the two cannot drift apart.
+
 Publishing is restricted to a supervisor because it spends a fee and cannot be undone. A successful
 anchor commits a `UMI_CHAIN_ANCHORED` block locally carrying the signature and the explorer link, so
 the local ledger records its own publication.
