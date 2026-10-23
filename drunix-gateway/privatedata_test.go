@@ -44,8 +44,12 @@ func TestPrivateValueNeverReachesTheChain(t *testing.T) {
 		t.Fatalf("marshal chain: %v", err)
 	}
 	ledger := string(raw)
+	// Search the leaf values, not the raw JSON. A hash is 64 hex characters,
+	// so a short secret like "4417" turns up inside one by chance often
+	// enough to fail this test for no reason. A hash containing those four
+	// characters is not a leak; a field holding them is.
 	for _, secret := range []string{"Asha Kulkarni", "4417", "AADHAAR"} {
-		if strings.Contains(ledger, secret) {
+		if leaksSecret(t, raw, secret) {
 			t.Fatalf("%q is on the public chain; the collection leaked its value", secret)
 		}
 	}
@@ -62,6 +66,58 @@ func TestPrivateValueNeverReachesTheChain(t *testing.T) {
 	if proof.BlockHeight == 0 {
 		t.Fatal("a write must be anchored to a block")
 	}
+}
+
+// A hex digest carries no information an attacker can read back, so a
+// coincidental match inside one is not a disclosure. Everything else is.
+func isHexDigest(s string) bool {
+	if len(s) < 32 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// Walks the decoded ledger and reports whether any string that is not a hash
+// contains the secret, keys included: a map key can leak as readily as a
+// value.
+func leaksSecret(t *testing.T, raw []byte, secret string) bool {
+	t.Helper()
+	var doc interface{}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("decode chain: %v", err)
+	}
+	found := false
+	var walk func(interface{})
+	walk = func(node interface{}) {
+		if found {
+			return
+		}
+		switch v := node.(type) {
+		case string:
+			if !isHexDigest(v) && strings.Contains(v, secret) {
+				found = true
+			}
+		case []interface{}:
+			for _, item := range v {
+				walk(item)
+			}
+		case map[string]interface{}:
+			for key, item := range v {
+				if strings.Contains(key, secret) {
+					found = true
+					return
+				}
+				walk(item)
+			}
+		}
+	}
+	walk(doc)
+	return found
 }
 
 // Membership, from four angles: the member role, the subject, a stranger,
