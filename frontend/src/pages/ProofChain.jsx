@@ -452,6 +452,92 @@ function Delivery() {
   )
 }
 
+/* ---------------- agent passports ---------------- */
+
+/**
+ * A pseudonymous actor with a recoverable principal.
+ *
+ * The honest problem with an autonomous agent is accountability: if it acts,
+ * somebody must be answerable, but publishing who that is for every action
+ * destroys the pseudonymity that makes agent identity useful at all. The
+ * passport resolves it by splitting the question in two. The agent acts under
+ * an opaque identifier; the principal behind it is held by custodians and can
+ * only be revealed when a threshold of them agree, on the record.
+ *
+ * This had rail code, blocks and a passing suite, and no screen.
+ */
+function Passports() {
+  const [list, setList] = useState(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    j('/agents?limit=50').then(({ ok, body, status }) => {
+      if (!alive) return
+      if (!ok) {
+        setErr(status === 401 || status === 403
+          ? 'Sign in to see the passport register.'
+          : (body.message || 'The passport register did not answer.'))
+        return
+      }
+      setList(body.agents || [])
+    }).catch(() => alive && setErr('The passport register is unreachable.'))
+    return () => { alive = false }
+  }, [])
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <Card
+        title="Agent passports"
+        sub="An agent acts under an opaque identifier. Who stands behind it is recoverable only when a threshold of custodians agree, and the request itself is recorded."
+      >
+        <Tag tone="sim">No autonomous agent runs on this deployment</Tag>
+        <p className="pg-card-sub" style={{ marginTop: 10 }}>
+          Pseudonymity without recoverability is a way to avoid accountability; naming the principal on every
+          action is a way to avoid using agents at all. This is the middle: opaque by default, attributable by
+          due process.
+        </p>
+      </Card>
+
+      {err && <Card title="Not available"><p className="pg-card-sub">{err}</p></Card>}
+      {!err && list && list.length === 0 && (
+        <Card title="No passports"><p className="pg-card-sub">No agent has been issued a passport yet.</p></Card>
+      )}
+
+      {(list || []).map(a => (
+        <Card
+          key={a.agentId}
+          title={a.agentId}
+          sub={a.purpose}
+          right={<Tag tone={a.revealed ? 'bad' : 'live'}>{a.revealed ? 'principal revealed' : String(a.status || '').toLowerCase()}</Tag>}
+        >
+          <div className="pg-kv">
+            <div>Version</div>
+            <div>{a.version || '-'}</div>
+            <div>Custodians</div>
+            <div>
+              {(a.custodians || []).join(', ')}
+              <div className="pg-card-sub">
+                {a.threshold} of {(a.custodians || []).length} must agree before the principal can be named
+              </div>
+            </div>
+            <div>Reveal</div>
+            <div>
+              {a.revealRequested
+                ? <>Requested, {a.approvals || 0} of {a.threshold} approvals{(a.approvedBy || []).length ? ` (${a.approvedBy.join(', ')})` : ''}</>
+                : 'Not requested. The principal is not published.'}
+            </div>
+            {a.revealed && a.principal ? (<><div>Principal</div><div><b>{a.principal}</b></div></>) : null}
+            <div>Sponsored</div>
+            <div>{a.sponsored ? 'Yes: a named party vouched for this agent' : 'No'}</div>
+            {a.registeredBlock ? (<><div>Block</div><div>{a.registeredBlock}</div></>) : null}
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 /* ---------------- page ---------------- */
 
 const TABS = [
@@ -459,6 +545,7 @@ const TABS = [
   { id: 'impact', label: 'What rests on it' },
   { id: 'attestor', label: 'Attestor record' },
   { id: 'mandates', label: 'Agent authority' },
+  { id: 'passports', label: 'Agent passports' },
   { id: 'delivery', label: 'Verified delivery' },
 ]
 
@@ -493,6 +580,7 @@ export default function ProofChain() {
       {tab === 'impact' && <Impact credentialId={credentialId} setCredentialId={setCredentialId} />}
       {tab === 'attestor' && <Attestor />}
       {tab === 'mandates' && <Mandates />}
+      {tab === 'passports' && <Passports />}
       {tab === 'delivery' && <Delivery />}
     </PageShell>
   )

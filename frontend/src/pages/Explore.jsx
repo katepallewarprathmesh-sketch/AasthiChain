@@ -35,6 +35,8 @@ const SECTIONS = [
       { path: '/umi', title: 'Settlement interface', what: 'Atomic delivery versus payment: the property leg and the cash leg commit in one block or neither moves.' },
       { path: '/cbdc', title: 'Digital rupee', what: 'Money bound to a purpose, value carried offline, and refunds that pay themselves when an event is attested.' },
       { path: '/crossborder', title: 'Cross-border', what: 'Paying in from outside India, with the tax and reporting rules applied rather than assumed.' },
+      { path: '/keys', title: 'Key register', what: 'Prove a signing key is yours, and watch it screened for the entropy failures that have broken real certificate authorities.' },
+      { path: '/feeds', title: 'Feeds and backing', what: 'Signed rate feeds that refuse when stale, and backing attestations that stop issuance when withdrawn.' },
       { path: '/ledger', title: 'Ledger explorer', what: 'Every block, its hash linkage and its merkle root, verifiable in the browser.' },
       { path: '/proof', title: 'Proof', what: 'What has been anchored to a public chain and how to check it yourself.' },
     ],

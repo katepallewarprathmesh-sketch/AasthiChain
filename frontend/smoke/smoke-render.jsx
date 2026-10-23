@@ -25,6 +25,8 @@ import Explore from '../src/pages/Explore.jsx'
 import Support from '../src/pages/Support.jsx'
 import Trust from '../src/pages/Trust.jsx'
 import VerifyDocument from '../src/pages/VerifyDocument.jsx'
+import KeyRegister from '../src/pages/KeyRegister.jsx'
+import Feeds from '../src/pages/Feeds.jsx'
 import Admin from '../src/pages/Admin.jsx'
 import AdminOps from '../src/pages/AdminOps.jsx'
 import SecondaryMarket from '../src/pages/SecondaryMarket.jsx'
@@ -62,6 +64,8 @@ const ROUTES = [
   ['/support', <Support />],
   ['/trust', <Trust />],
   ['/verify', <VerifyDocument />],
+  ['/keys', <KeyRegister />],
+  ['/feeds', <Feeds />],
   ['/admin', <Admin user={user} />],
   ['/admin/ops', <AdminOps user={{ ...user, role: 'Registrar' }} />],
   ['/market', <SecondaryMarket user={user} />],

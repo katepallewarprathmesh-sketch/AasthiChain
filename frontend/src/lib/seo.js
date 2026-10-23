@@ -26,6 +26,16 @@ export const ROUTE_SEO = {
     description:
       'Browse fractional property investments across Indian cities. Compare rental yield, token price and minimum investment on residential and commercial real estate. Free to browse.',
   },
+  '/keys': {
+    title: 'Key Register and Weak Key Screening | AasthiChain',
+    description:
+      'Register a signing key by proving possession, and watch it screened for the entropy failures that have broken real certificate authorities: small scalars, repeated bytes, low-order points and reuse.',
+  },
+  '/feeds': {
+    title: 'Signed Rate Feeds and Backing Attestations | AasthiChain',
+    description:
+      'Every rate reading signed by a registered key, with the age at which it stops being usable. Every token backed by a dated attestation, with issuance refused once it goes stale or is withdrawn.',
+  },
   '/trust': {
     title: 'What Is Real and What Is Simulated | AasthiChain',
     description:

@@ -43,23 +43,24 @@ boundary*: what they must never do is imply the boundary is somewhere else.
 
 ### Built and tested, but a person cannot reach it
 
-These are the real failures against the team's standard. Each one has rail
-code, chain blocks and a passing suite, and **no screen at all**.
+**None, as of 23 October 2026.** The four that were unreachable now have
+screens:
 
-| Feature | Rail | What is missing |
+| Feature | Screen | What it shows |
 | --- | --- | --- |
-| Key register | `/umi/keys/*` | No UI. Registration, weak-key screening and the retroactive-void state are invisible to a user. This is the strongest security story in the repo and it cannot be demonstrated without curl. |
-| Signed oracle feeds | `/umi/oracle/*` | No UI. Publishers, quorum, staleness and the five refusal states are unreachable. |
-| Backing attestations | `/umi/backing/*` | No UI. Issuance is refused past the attested figure, and nothing shows that. |
-| Agent passports | `/umi/agents/*` | No UI. Pseudonymous actors with threshold recovery of the principal. |
-| Mandates | `/umi/mandates/*` | No UI. Bounded agent authority with spend counted on the ledger. |
-| Proposing agent | `/umi/agent/*` | No UI. Drafts actions for a person to approve. |
-| Credentials | `/umi/credentials/*` | No UI. Ed25519 signed, hash anchored. |
-| Attestations | `/umi/attestations/*` | No UI. Downstream exposure view exists only as JSON. |
+| Key register | `/keys` | Generate a key in the browser, prove possession against a server challenge, watch the entropy screen pass it or refuse it. Includes a deliberate weak key, the small integer 4, one of the values recovered from the eMudhra CAs. |
+| Signed feeds | `/feeds` | Every reading, its signing key, its age, and which of the five refusal states it is in. |
+| Backing attestations | `/feeds` | Coverage, attestor, as-of date, and whether issuance is still allowed. |
+| Agent passports | `/proof`, passports tab | Opaque agent identifier, custodians, and the threshold needed before the principal can be named. |
 
-Eight features. The pattern is consistent: the hard part was built and the
-last mile was not. Against a rubric that gives 15% to usability and clarity
-in a live demo, an unreachable feature scores as if it does not exist.
+**A correction to the first version of this audit.** It listed eight
+unreachable features. Four of them (credentials, attestations, mandates and
+the proposing agent) were already reachable through `/proof` and `/cbdc`; the
+audit grep looked for one call style and missed a helper that used another.
+The real number was four. The method has been replaced with
+`tests/reachability.test.mjs`, which searches for the rail path itself rather
+than for a particular way of calling it, and which fails if any mounted
+module has no screen.
 
 ### Chain-first gaps (AMA items 8 and 20)
 
