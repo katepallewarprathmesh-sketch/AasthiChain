@@ -1,13 +1,23 @@
 // The picture beside a listing has to be the right kind of building.
 //
-// This suite exists because it was missing. Six images were being spread
-// across nine demo listings by a seeded pick over a keyword pool, and three
-// separate things went wrong without anything failing: three listings shared
-// one warehouse photograph, an office block rendered as a retail street, and
-// "Aravali Residency Plots", which is vacant land, rendered as a warehouse.
+// This suite exists because it was missing, and its first version then tested
+// the wrong thing, which is worth recording.
 //
-// A wrong photograph beside a valuation and a ledger id is not a cosmetic
-// bug. It is the record saying something false about the asset.
+// The first bug: six images were spread across nine seeded listings by a hash
+// of the id, so three listings shared one warehouse photograph and vacant
+// land rendered as a warehouse.
+//
+// The second bug, found only by looking at the deployed rail: every listing
+// created through the app has NO propertyType at all. The field is absent.
+// The fallback treated "no type" as "any type" and drew from the whole set,
+// so "Sunshine Villa" rendered as a logistics shed and "Mahesh Society"
+// rendered as bare land outside Jaipur. The first version of this suite
+// passed throughout, because it only ever fed in catalogue.json records,
+// which all carry a type. A fixture that is tidier than production is not a
+// fixture, it is a way of not finding out.
+//
+// So the primary fixture here is the shape the live rail actually returns:
+// a title, an id, and nothing else.
 //
 //   node tests/propertyimages.test.mjs
 
@@ -25,81 +35,116 @@ const ok = (name, cond, detail) => {
   else { failed++; console.log('  FAIL ' + name + (detail ? '\n       ' + detail : '')) }
 }
 
-const { propertyImage, REPRESENTATIVE_NOTE } =
+const { propertyImage, imageChoice, REPRESENTATIVE_NOTE } =
   await import(join(FRONTEND, 'src', 'lib', 'propertyImages.js'))
 const catalogue = JSON.parse(readFileSync(join(FRONTEND, 'api', 'lib', 'catalogue.json'), 'utf8'))
 
 const fileOf = (src) => String(src || '').replace('/property-images/', '')
+const INDUSTRIAL = /warehouse|logistic|cold-chain/i
+const VACANT = /plots|land/i
 
-// 1. Every listing resolves to an image that is actually on disk. A 404 here
-// renders as a broken frame on the marketplace, which no build step catches.
+// The shape the deployed rail actually returns: no propertyType, no imageUrl.
+// Titles taken from the live listings, plus the kinds of name a person types.
+const LIVE_SHAPED = [
+  { assetId: 'PROP-d984ad9e-6ebe-4fb3-867a-dad03e31a8b1', title: 'Mahesh Society' },
+  { assetId: 'PROP-1e8596fe-7a93-4c25-877c-e757226f3171', title: 'Mint Scope Probe' },
+  { assetId: 'PROP-129270ce-d109-4313-aba2-8de03f14465a', title: 'Sunshine Villa' },
+  { assetId: 'PROP-a1d23e7b-290f-442e-9820-8d3fadabc884', title: 'Shanti Residency' },
+  { assetId: 'PROP-bd5be28a-34df-490c-9c75-311d572e2595', title: 'Lake View Heights' },
+  { assetId: 'PROP-11111111-0000-0000-0000-000000000001', title: 'Flat 302, Kothrud' },
+  { assetId: 'PROP-22222222-0000-0000-0000-000000000002', title: '' },
+  { assetId: 'PROP-33333333-0000-0000-0000-000000000003', title: 'Untitled' },
+]
+
+// 1. THE RULE THAT WAS MISSING. A record that does not say it is industrial
+// or vacant must never be shown as either. This is the check that would have
+// caught what shipped.
+for (const p of LIVE_SHAPED) {
+  const f = fileOf(propertyImage(p).src)
+  ok(`a listing with no type is not shown as a shed or a field: ${p.title || '(no title)'}`,
+    !INDUSTRIAL.test(f) && !VACANT.test(f), f)
+}
+
+// 2. The name is used when the type is absent, because it is all there is.
+const byName = [
+  ['Sunshine Villa', /row-houses/],
+  ['Mahesh Society', /low-rise-residences/],
+  ['Lake View Heights', /residential-tower/],
+  ['Nirman Business Plaza', /commercial-office/],
+  ['Ganesh Retail Arcade', /retail-high-street/],
+]
+for (const [title, want] of byName) {
+  const c = imageChoice({ assetId: 'PROP-NAME-TEST', title })
+  ok(`"${title}" is read as what it says it is`,
+    want.test(c.file) && c.basis === 'name', c.file + ' (' + c.basis + ')')
+}
+
+// 3. Industrial and vacant are still reachable, but only on an explicit word.
+// A rule that can never fire is not a rule, it is dead code.
+ok('an explicitly industrial listing still gets an industrial image',
+  INDUSTRIAL.test(imageChoice({ assetId: 'X', propertyType: 'Industrial' }).file),
+  imageChoice({ assetId: 'X', propertyType: 'Industrial' }).file)
+ok('an explicitly vacant plot still gets vacant land',
+  VACANT.test(imageChoice({ assetId: 'X', propertyType: 'Land' }).file),
+  imageChoice({ assetId: 'X', propertyType: 'Land' }).file)
+ok('a warehouse named in the title is recognised without a type',
+  INDUSTRIAL.test(imageChoice({ assetId: 'X', title: 'Bhiwandi Warehouse Unit 3' }).file))
+ok('plots named in the title are recognised without a type',
+  VACANT.test(imageChoice({ assetId: 'X', title: 'NA Plots at Wagholi' }).file))
+
+// 4. A declared type outranks the name, because it is the stronger claim.
+const conflicting = imageChoice({ assetId: 'X', propertyType: 'Land', title: 'Sunshine Villa' })
+ok('a declared type beats a name that disagrees with it',
+  VACANT.test(conflicting.file) && conflicting.basis === 'type',
+  conflicting.file + ' (' + conflicting.basis + ')')
+
+// 5. The seeded catalogue: one image each, all present on disk.
 const resolved = catalogue.map((p) => ({ p, r: propertyImage(p) }))
 const missing = resolved.filter(({ r }) => !existsSync(join(IMAGE_DIR, fileOf(r.src))))
 ok('every catalogue listing resolves to an image file that exists',
   catalogue.length > 0 && missing.length === 0,
   missing.map(({ p, r }) => p.assetId + ' -> ' + r.src).join(', '))
 
-// 2. Distinct listings get distinct pictures. Nine cards showing the same
-// three buildings reads as placeholder art, not as a catalogue.
 const counts = new Map()
 for (const { r } of resolved) counts.set(fileOf(r.src), (counts.get(fileOf(r.src)) || 0) + 1)
 const shared = [...counts].filter(([, n]) => n > 1)
 ok('no two catalogue listings share the same image',
-  shared.length === 0,
-  shared.map(([f, n]) => f + ' used ' + n + ' times').join(', '))
+  shared.length === 0, shared.map(([f, n]) => f + ' used ' + n + ' times').join(', '))
 
-// 3. The specific failure that shipped: vacant land shown as a warehouse.
-// Asserted positively, on the filename, rather than as "not a warehouse".
-// A negative check here passes by accident whenever the pool happens to pick
-// something else, which is exactly how the original bug survived.
-const landLike = (t) => /LAND|PLOT|SITE/.test(String(t).toUpperCase())
-const looksLikeLand = (f) => /plot|land/i.test(f)
-const builtLike = /warehouse|office|tower|retail|residences|houses|villas|plaza|apartment|chain/i
-for (const { p, r } of resolved.filter(({ p }) => landLike(p.propertyType))) {
-  ok(`vacant land is shown as vacant land: ${p.assetId}`,
-    looksLikeLand(fileOf(r.src)) && !builtLike.test(fileOf(r.src)),
-    p.propertyType + ' -> ' + r.src)
-}
+ok('vacant land in the catalogue is shown as vacant land',
+  VACANT.test(fileOf(propertyImage(catalogue.find((p) => /PLOTS/.test(p.assetId))).src)))
 
-// 4. And the same rule for a listing type invented at runtime, which is where
-// the keyword pool is still in charge.
-const runtimeLand = propertyImage({ assetId: 'PROP-RUNTIME-LAND-1', propertyType: 'Land' })
-ok('a runtime land listing falls back to land, not to a warehouse',
-  looksLikeLand(fileOf(runtimeLand.src)) && !builtLike.test(fileOf(runtimeLand.src)),
-  runtimeLand.src)
+// 6. Every fallback file the resolver can emit actually exists. A rule that
+// points at a missing file renders as a broken frame.
+const everyFile = new Set()
+for (const p of [...LIVE_SHAPED, ...catalogue]) everyFile.add(fileOf(propertyImage(p).src))
+for (const t of ['Land', 'Industrial', 'Retail', 'Office', 'Villa', 'Tower', 'Apartment', 'Houseboat'])
+  everyFile.add(imageChoice({ assetId: 'PROP-T-' + t, propertyType: t }).file)
+const absent = [...everyFile].filter((f) => !existsSync(join(IMAGE_DIR, f)))
+ok('every image the resolver can choose is on disk', absent.length === 0, absent.join(', '))
 
-const runtimeOffice = propertyImage({ assetId: 'PROP-RUNTIME-OFFICE-1', propertyType: 'Office' })
-ok('a runtime office listing falls back to an office',
-  /office/i.test(fileOf(runtimeOffice.src)), runtimeOffice.src)
-
-// 5. The honesty rule. A generic image must be labelled; a real photograph
+// 7. The honesty rule. A generic image must be labelled; a real photograph
 // supplied by the owner must not be, because it is the building.
 ok('every generic image is marked representative, so the UI labels it',
-  resolved.every(({ r }) => r.isRepresentative === true),
-  resolved.filter(({ r }) => !r.isRepresentative).map(({ p }) => p.assetId).join(', '))
+  [...LIVE_SHAPED, ...catalogue].every((p) => propertyImage(p).isRepresentative === true))
 
 const withOwnPhoto = propertyImage({
   assetId: 'PROP-GREEN-VALLEY-PUNE-001',
-  propertyType: 'Residential',
+  title: 'Green Valley Villas - Pune',
   imageUrl: 'https://example.invalid/the-actual-building.jpg',
 })
 ok("a listing's own photograph wins over the pinned image",
-  withOwnPhoto.src === 'https://example.invalid/the-actual-building.jpg',
-  withOwnPhoto.src)
+  withOwnPhoto.src === 'https://example.invalid/the-actual-building.jpg', withOwnPhoto.src)
 ok("a listing's own photograph is not labelled representative",
   withOwnPhoto.isRepresentative === false, String(withOwnPhoto.isRepresentative))
-
 ok('the representative label says the building shown is not the building sold',
-  /not a photograph of this building/i.test(REPRESENTATIVE_NOTE), REPRESENTATIVE_NOTE)
+  /not a photograph of this building/i.test(REPRESENTATIVE_NOTE))
 
-// 6. The picture has to stay put between renders, or the page looks broken.
-const twice = [propertyImage(catalogue[0]), propertyImage(catalogue[0])]
+// 8. Stability and safety.
 ok('the same listing resolves to the same image every time',
-  twice[0].src === twice[1].src, twice.map((t) => t.src).join(' vs '))
-
-// 7. Nothing renders without a picture at all.
-ok('an unknown property type still gets an image rather than an empty frame',
-  !!propertyImage({ assetId: 'PROP-RUNTIME-ODD-1', propertyType: 'Houseboat' }).src)
+  propertyImage(LIVE_SHAPED[0]).src === propertyImage(LIVE_SHAPED[0]).src)
+ok('an unrecognised name still gets an image rather than an empty frame',
+  !!propertyImage({ assetId: 'PROP-ODD', title: 'Houseboat' }).src)
 ok('a missing property is handled rather than throwing',
   propertyImage(null).src === null)
 
