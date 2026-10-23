@@ -16,7 +16,25 @@ import (
 func newStoreIn(t *testing.T, dir string) *IdempotencyStore {
 	t.Helper()
 	t.Setenv("IDEMPOTENCY_DATA_DIR", dir)
-	return NewIdempotencyStore()
+	s := NewIdempotencyStore()
+	// Set and Delete persist in a goroutine, so a write can still be in flight
+	// when the test returns. TempDir's own cleanup then races it and fails the
+	// test with "directory not empty" for a reason that has nothing to do with
+	// what was being tested. Drain first: remove the file until it stays gone.
+	t.Cleanup(func() {
+		path := filepath.Join(dir, "idempotency.json")
+		deadline := time.Now().Add(2 * time.Second)
+		gone := 0
+		for time.Now().Before(deadline) && gone < 3 {
+			if err := os.Remove(path); err != nil && os.IsNotExist(err) {
+				gone++
+			} else {
+				gone = 0
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+	return s
 }
 
 // waitForFile gives the asynchronous writer a moment. Set() saves in a
