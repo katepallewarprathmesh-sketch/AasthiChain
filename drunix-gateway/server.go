@@ -83,6 +83,12 @@ type Server struct {
 	// principal behind it split across custodians (agentid.go). nil leaves
 	// the routes unmounted.
 	Agents *AgentRegistry
+
+	// Jurisdictions holds the declared rule set per place, so that a
+	// transaction is tested against law expressed as data rather than
+	// against assertions buried in Go (jurisdiction.go). Nil leaves the
+	// routes unmounted.
+	Jurisdictions *JurisdictionRegistry
 }
 
 // NewServer wires dependencies (DIP).
@@ -183,6 +189,7 @@ func (s *Server) Router() http.Handler {
 	s.registerCBDCInteropRoutes(mux)
 	s.registerKeyRoutes(mux)
 	s.registerOracleRoutes(mux)
+	s.registerJurisdictionRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

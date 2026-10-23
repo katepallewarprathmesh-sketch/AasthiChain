@@ -152,6 +152,14 @@ type CBXRequest struct {
 	KYCRef      string          `json:"kycRef"`
 	Originator  TravelRuleParty `json:"originator"`
 	Beneficiary TravelRuleParty `json:"beneficiary"`
+
+	// Jurisdiction selects the rule set this quote is tested against
+	// (jurisdiction.go). Empty means the registry's default. An
+	// unrecognised code refuses rather than falling through.
+	Jurisdiction string `json:"jurisdiction,omitempty"`
+	// AssetKind lets the agricultural-land rule run. Empty is treated as
+	// residential, which is what the catalogue holds.
+	AssetKind string `json:"assetKind,omitempty"`
 }
 
 // CBXIntent is one funding attempt, from quote to rupees in a wallet.
@@ -259,8 +267,14 @@ type CBXRegistry struct {
 	// somebody typed it into a setter are not the same number.
 	rateFeed   *OracleRegistry
 	rateFeedID string
-	order      []string
-	seq        int64
+
+	// rules is the declared per-jurisdiction rule set a quote is tested
+	// against. Before this existed the law lived in EligibilityOf below,
+	// which is Go rather than a rule set anyone could read or audit.
+	rules     *JurisdictionRegistry
+	rulesCode string
+	order     []string
+	seq       int64
 }
 
 // NewCBXRegistry wires the layer. A nil rail or chain disables it, which is
@@ -343,6 +357,16 @@ func (c *CBXRegistry) SetRate(inrPerUSD float64) {
 	c.mu.Unlock()
 }
 
+// UseRuleSet makes the declared jurisdiction rules authoritative for quotes.
+// defaultCode is applied when a request does not name one. Leaving this unset
+// keeps the previous hardcoded behaviour, so the wiring is additive.
+func (c *CBXRegistry) UseRuleSet(reg *JurisdictionRegistry, defaultCode string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rules = reg
+	c.rulesCode = strings.ToUpper(strings.TrimSpace(defaultCode))
+}
+
 // EligibilityOf reports whether a declared buyer may purchase at all, and why
 // not when they may not. Exported because the answer is useful before anybody
 // asks for a quote.
@@ -410,6 +434,46 @@ func (c *CBXRegistry) Quote(req CBXRequest, buyer string, now time.Time) (*CBXIn
 			return nil, fmt.Errorf("%w: %s", ErrCBXFields, why)
 		}
 		return nil, c.refuse(buyer, assetID, reason, why, sentinel)
+	}
+
+	// Test the transaction against the declared rule set, not only against
+	// the eligibility switch above. The rule set catches what the switch
+	// never could: agricultural land, the consideration channel, a
+	// jurisdiction nobody modelled. Each refusal cites its instrument.
+	c.mu.RLock()
+	rules, defaultCode := c.rules, c.rulesCode
+	c.mu.RUnlock()
+	if rules != nil {
+		code := strings.ToUpper(strings.TrimSpace(req.Jurisdiction))
+		if code == "" {
+			code = defaultCode
+		}
+		assetKind := strings.ToUpper(strings.TrimSpace(req.AssetKind))
+		if assetKind == "" {
+			assetKind = "RESIDENTIAL"
+		}
+		d, err := rules.Evaluate(Transaction{
+			Kind:          TxAcquisition,
+			Jurisdiction:  code,
+			BuyerStatus:   req.BuyerStatus,
+			Nationality:   req.Nationality,
+			AssetKind:     assetKind,
+			AmountPaise:   int64(req.AmountINR * 100),
+			Consideration: "INR_BANKING_CHANNEL", // the off-ramp credits rupees, never tokens
+		}, now)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrCBXFields, err.Error())
+		}
+		if !d.Allowed {
+			first := ""
+			for _, res := range d.Results {
+				if !res.Passed {
+					first = res.Reason + " (" + res.Instrument + ")"
+					break
+				}
+			}
+			return nil, c.refuse(buyer, assetID, "JURISDICTION_RULE_FAILED", first, ErrCBXIneligible)
+		}
 	}
 
 	coin := strings.ToUpper(strings.TrimSpace(req.Stablecoin))

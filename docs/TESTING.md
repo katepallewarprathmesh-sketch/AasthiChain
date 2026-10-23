@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  154 checks, 0 failed
+make test       # integration sweep:  155 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,8 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **109** in `tests/` |
-| Reported result | **154 passed, 0 failed** |
+| Suite files | **110** in `tests/` |
+| Reported result | **155 passed, 0 failed** |
 
 One hazard worth knowing before a repeat run: anything already listening on `:8080` or `:21100`
 is the enemy of a trustworthy result. A leftover app answers with a different admin key and a
@@ -150,9 +150,10 @@ drift into fiction, then replays each suite's requests against it.
 | possible | a suite reaches the path, but the method is not provable from the source |
 | not covered | nothing in the suite reaches it |
 
-As measured: **68.2%** of 107 rail actions are certainly covered, 13.1% are possible, and the rest
-are reached by nothing. (The action count rose from 100 when the signed feeds were added; the
-percentage rose with it because the new suite covers them.) `tests/coverage.test.mjs` recomputes this on every run and fails if the
+As measured: **69.1%** of 110 rail actions are certainly covered, 12.7% are possible, and the rest
+are reached by nothing. (The action count rose from 100 when the signed feeds were added, and again
+to 110 with the jurisdiction rule sets; the percentage rose with it because each new module shipped
+with a suite that covers it.) `tests/coverage.test.mjs` recomputes this on every run and fails if the
 published figure drifts from the measured one, if coverage falls below its floor, or if a declared
 route stops being served.
 

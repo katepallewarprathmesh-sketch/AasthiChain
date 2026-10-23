@@ -112,6 +112,211 @@ function Rules({ rules }) {
   )
 }
 
+const ASSET_KINDS = ['RESIDENTIAL', 'COMMERCIAL', 'AGRICULTURAL', 'PLANTATION', 'FARMHOUSE']
+const CONSIDERATIONS = [
+  { id: 'INR_BANKING_CHANNEL', label: 'Rupees through banking channels' },
+  { id: 'NRE', label: 'NRE account' },
+  { id: 'NRO', label: 'NRO account' },
+  { id: 'FCNR', label: 'FCNR account' },
+  { id: 'CRYPTO', label: 'Pay the seller in tokens' },
+  { id: 'CASH', label: 'Cash' },
+]
+const TX_KINDS = ['ACQUISITION', 'LEASE', 'TRANSFER', 'FUNDING']
+
+// Constants are shouted on the rail and read better in a dropdown as words.
+const prettyKind = (k) => k.charAt(0) + k.slice(1).toLowerCase()
+
+/**
+ * The rule set a transaction is tested against.
+ *
+ * Before this existed the statutory basis lived in prose on this page and in
+ * a Go switch nobody outside the repository could read. Here the rules are
+ * data: each one names the instrument it comes from, the evaluation runs all
+ * of them rather than stopping at the first failure, and an undeclared
+ * jurisdiction refuses rather than falling through to permitted.
+ */
+function Jurisdictions() {
+  const [list, setList] = useState([])
+  const [code, setCode] = useState('IN-MH')
+  const [detail, setDetail] = useState(null)
+  const [decision, setDecision] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [probe, setProbe] = useState({
+    kind: 'ACQUISITION', buyerStatus: 'NRI', nationality: 'INDIA',
+    assetKind: 'RESIDENTIAL', consideration: 'INR_BANKING_CHANNEL', amountINR: 10000000, leaseYears: 5,
+  })
+
+  useEffect(() => {
+    umiFetch('/jurisdictions').then(r => { if (r.ok) setList((r.data && r.data.jurisdictions) || []) })
+  }, [])
+  useEffect(() => {
+    setDecision(null)
+    umiFetch('/jurisdictions/' + encodeURIComponent(code)).then(r => setDetail(r.ok ? r.data : null))
+  }, [code])
+
+  const evaluate = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    const { ok, data } = await umiPost('/jurisdictions/evaluate', {
+      kind: probe.kind,
+      jurisdiction: code,
+      buyerStatus: probe.buyerStatus,
+      nationality: probe.nationality,
+      assetKind: probe.assetKind,
+      consideration: probe.consideration,
+      amountPaise: Math.round(Number(probe.amountINR || 0) * 100),
+      leaseYears: Number(probe.leaseYears || 0),
+    })
+    setBusy(false)
+    setDecision(ok ? data : { error: true, message: (data && data.message) || 'The rail refused the request.' })
+  }
+
+  const set = (k) => (e) => setProbe(p => ({ ...p, [k]: e.target.value }))
+  const j = detail && detail.jurisdiction
+
+  return (
+    <Card
+      title="The rule set this is tested against"
+      sub="Law as data, not as a paragraph. Every rule names the instrument it comes from."
+      right={<Tag tone="sim">Modelled</Tag>}
+    >
+      <div className="pg-kv">
+        <div>Jurisdiction</div>
+        <div>
+          <select className="pg-input" value={code} onChange={(e) => setCode(e.target.value)}>
+            {list.map(x => (
+              <option key={x.code} value={x.code}>{x.code} · {x.name} · {x.designation}</option>
+            ))}
+          </select>
+        </div>
+        {j && (
+          <>
+            <div>Designation</div>
+            <div>
+              <Tag tone={j.designation === 'DESIGNATED' ? 'live' : 'neutral'}>{j.designation}</Tag>
+              {j.designatedSince ? ' since ' + j.designatedSince : ''}
+            </div>
+            <div>Stamp duty</div>
+            <div>{(j.stampDutyBps / 100).toFixed(2)}% of consideration</div>
+            <div>Registration fee</div>
+            <div>
+              {(j.registrationFeeBps / 100).toFixed(2)}%
+              {j.registrationFeeCapPaise ? ', capped at ' + money(j.registrationFeeCapPaise / 100) : ''}
+            </div>
+          </>
+        )}
+      </div>
+      {j && j.note && <p className="pg-card-sub" style={{ marginTop: 10 }}>{j.note}</p>}
+
+      {detail && (detail.rules || []).length > 0 && (
+        <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
+          {detail.rules.map(r => (
+            <div key={r.id} className="pg-card" style={{ padding: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{r.id}</div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>{r.statement}</div>
+              <div className="pg-card-sub" style={{ marginTop: 4 }}>{r.instrument}</div>
+              {r.simplifiedTo && (
+                <div className="pg-card-sub" style={{ marginTop: 4, opacity: 0.85 }}>
+                  Simplified: {r.simplifiedTo}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={evaluate} style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>Test a transaction against it</div>
+        <div className="pg-kv">
+          <div>Transaction</div>
+          <div>
+            <select className="pg-input" value={probe.kind} onChange={set('kind')}>
+              {TX_KINDS.map(k => <option key={k} value={k}>{prettyKind(k)}</option>)}
+            </select>
+          </div>
+          <div>Buyer status</div>
+          <div>
+            <select className="pg-input" value={probe.buyerStatus} onChange={set('buyerStatus')}>
+              {STATUSES.map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
+            </select>
+          </div>
+          <div>Nationality</div>
+          <div><input className="pg-input" value={probe.nationality} onChange={set('nationality')} /></div>
+          <div>Asset kind</div>
+          <div>
+            <select className="pg-input" value={probe.assetKind} onChange={set('assetKind')}>
+              {ASSET_KINDS.map(k => <option key={k} value={k}>{prettyKind(k)}</option>)}
+            </select>
+          </div>
+          <div>Consideration</div>
+          <div>
+            <select className="pg-input" value={probe.consideration} onChange={set('consideration')}>
+              {CONSIDERATIONS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+          <div>Amount</div>
+          <div><input className="pg-input" type="number" value={probe.amountINR} onChange={set('amountINR')} /></div>
+          {probe.kind === 'LEASE' && (
+            <>
+              <div>Lease years</div>
+              <div><input className="pg-input" type="number" value={probe.leaseYears} onChange={set('leaseYears')} /></div>
+            </>
+          )}
+        </div>
+        <div><button className="pg-btn" disabled={busy}>{busy ? 'Evaluating…' : 'Evaluate'}</button></div>
+      </form>
+
+      {decision && decision.error && (
+        <div className="pg-card" style={{ marginTop: 12 }}>
+          <Tag tone="bad">Refused</Tag>
+          <p className="pg-card-sub" style={{ marginTop: 8 }}>{decision.message}</p>
+        </div>
+      )}
+
+      {decision && !decision.error && (
+        <div style={{ marginTop: 14 }}>
+          <Tag tone={decision.allowed ? 'live' : 'bad'}>
+            {decision.allowed ? 'Permitted' : 'Not permitted'}
+          </Tag>
+          <span className="pg-card-sub" style={{ marginLeft: 8 }}>
+            {decision.rulesRun} rules ran, {decision.failed} failed
+            {decision.block ? ', recorded at block ' + decision.block : ''}
+          </span>
+          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+            {(decision.results || []).map(r => (
+              <div key={r.id} className="pg-card" style={{ padding: 12 }}>
+                <Tag tone={r.passed ? 'live' : 'bad'}>{r.passed ? 'Passed' : 'Failed'}</Tag>
+                <div style={{ fontWeight: 600, fontSize: 13, marginTop: 6 }}>{r.id}</div>
+                <div style={{ fontSize: 13, marginTop: 4 }}>{r.statement}</div>
+                {!r.passed && <div style={{ fontSize: 13, marginTop: 6 }}>{r.reason}</div>}
+                <div className="pg-card-sub" style={{ marginTop: 4 }}>{r.instrument}</div>
+              </div>
+            ))}
+          </div>
+          {decision.indicativeCosts && (
+            <div className="pg-kv" style={{ marginTop: 12 }}>
+              <div>Stamp duty</div>
+              <div>{money(decision.indicativeCosts.stampDutyPaise / 100)}</div>
+              <div>Registration</div>
+              <div>{money(decision.indicativeCosts.registrationFeePaise / 100)}</div>
+              <div>Statutory total</div>
+              <div><b>{money(decision.indicativeCosts.totalPaise / 100)}</b></div>
+            </div>
+          )}
+          <p className="pg-card-sub" style={{ marginTop: 10, opacity: 0.85 }}>{decision.disclaimer}</p>
+        </div>
+      )}
+
+      <p className="pg-card-sub" style={{ marginTop: 12, opacity: 0.85 }}>
+        <b>What this is not:</b> a complete statement of the law, legal advice, or a register kept current
+        against a gazette. Charges are indicative, state slabs and buyer-category rebates are not modelled,
+        and the RERA check reads a declared flag rather than any state authority. What it does do is refuse
+        by default: a jurisdiction nobody declared cannot transact here.
+      </p>
+    </Card>
+  )
+}
+
 function Intent({ intent, properties, onChanged }) {
   const [ref, setRef] = useState('')
   const [busy, setBusy] = useState('')
@@ -205,6 +410,8 @@ export default function CrossBorder() {
     buyerStatus: 'NRI',
     nationality: 'INDIA',
     kycRef: 'KYC-7781',
+    jurisdiction: 'IN-MH',
+    assetKind: 'RESIDENTIAL',
   })
 
   const load = async () => {
@@ -247,6 +454,7 @@ export default function CrossBorder() {
     >
       <HowItWorks rules={rules} />
       <Rules rules={rules} />
+      <Jurisdictions />
 
       <Card title="Ask for a funding quote" sub="Eligibility is checked before a quote exists. Try the foreign national option to see the refusal.">
         <form onSubmit={ask} style={{ display: 'grid', gap: 10 }}>
@@ -278,6 +486,23 @@ export default function CrossBorder() {
             <div><input className="pg-input" value={form.nationality} onChange={set('nationality')} /></div>
             <div>KYC reference</div>
             <div><input className="pg-input" value={form.kycRef} onChange={set('kycRef')} /></div>
+            <div>Jurisdiction</div>
+            <div>
+              <select className="pg-input" value={form.jurisdiction} onChange={set('jurisdiction')}>
+                <option value="IN-MH">IN-MH Maharashtra</option>
+                <option value="IN-KA">IN-KA Karnataka</option>
+                <option value="IN-TG">IN-TG Telangana</option>
+                <option value="IN-WB">IN-WB West Bengal</option>
+                <option value="IN">IN, state charges not modelled</option>
+                <option value="XX-NOWHERE">XX-NOWHERE (undeclared, refuses)</option>
+              </select>
+            </div>
+            <div>Asset kind</div>
+            <div>
+              <select className="pg-input" value={form.assetKind} onChange={set('assetKind')}>
+                {ASSET_KINDS.map(k => <option key={k} value={k}>{prettyKind(k)}</option>)}
+              </select>
+            </div>
             <div>Stablecoin</div>
             <div>
               <select className="pg-input" value={form.stablecoin} onChange={set('stablecoin')}>

@@ -98,6 +98,8 @@ const TYPE_STYLES = {
   UMI_AML_CASE_CLEARED: { label: 'AML Case Cleared', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
   UMI_AML_REPORT_FILED: { label: 'Suspicious Transaction Report', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_AML_REFUSED: { label: 'Refused · Sanctions Match', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_JURISDICTION_EVALUATED: { label: 'Jurisdiction · Rules Passed', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_JURISDICTION_REFUSED: { label: 'Jurisdiction · Rule Failed', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_CBX_QUOTED: { label: 'Cross-border · Quoted', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
   UMI_CBX_REFUSED: { label: 'Cross-border · Refused', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_CBX_PAYMENT_RECORDED: { label: 'Cross-border · Transfer Reported', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },

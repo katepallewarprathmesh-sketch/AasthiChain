@@ -296,6 +296,15 @@ func main() {
 		// Agent passports (agentid.go): an automated actor acts under a
 		// pseudonym, and the principal behind it is split across custodians
 		// so that identifying them takes a threshold and leaves a record.
+		// Per-jurisdiction rule sets (jurisdiction.go): the statutory basis
+		// expressed as rules a transaction is actually tested against, each
+		// citing the instrument it comes from.
+		srv.Jurisdictions = drunix.NewJurisdictionRegistry(chain)
+		if srv.CrossBorder != nil {
+			srv.CrossBorder.UseRuleSet(srv.Jurisdictions, "IN-MH")
+		}
+		log.Printf("Jurisdiction rules mounted at /umi/jurisdictions/*: cross-border quotes are tested against the declared rule set, and an undeclared jurisdiction refuses")
+
 		srv.Agents = drunix.NewAgentRegistry(chain)
 		log.Printf("Agent passports mounted at /umi/agents/*: pseudonymous actors, principal recoverable only by a threshold of custodians")
 

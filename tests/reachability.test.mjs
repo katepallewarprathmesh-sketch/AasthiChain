@@ -65,6 +65,7 @@ const MODULES = [
   ['private', 'private data collections'],
   ['throughput', 'throughput and latency'],
   ['carbon', 'carbon credits'],
+  ['jurisdictions', 'per-jurisdiction rule sets'],
 ];
 
 const run = async () => {
