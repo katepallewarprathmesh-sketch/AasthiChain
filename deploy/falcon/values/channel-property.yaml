@@ -1,0 +1,20 @@
+# property-channel: the settlement channel every member joins.
+channel:
+  name: property-channel
+  consortium: AasthiChainConsortium
+  organisations:
+    - { name: OriginatorOrg, mspId: OriginatorMSP, anchor: lp1.originator.aasthichain.net }
+    - { name: RegistrarOrg,  mspId: RegistrarMSP,  anchor: lp1.registrar.aasthichain.net }
+    - { name: InvestorOrg,   mspId: InvestorMSP,   anchor: lp1.investor.aasthichain.net }
+    - { name: RegulatorOrg,  mspId: RegulatorMSP,  anchor: lp1.regulator.aasthichain.net }
+  policies:
+    Readers:      "ANY Readers"
+    Writers:      "ANY Writers"
+    # Channel configuration changes need the registrar and the regulator, not
+    # just the parties with money at stake.
+    Admins:       "AND('RegistrarMSP.admin','RegulatorMSP.admin')"
+    LifecycleEndorsement: "MAJORITY Endorsement"
+  capabilities:
+    application: V2_5
+    orderer: V2_0
+    channel: V2_0

@@ -1,0 +1,21 @@
+# Identity registration for OriginatorOrg, run as a Falcon fabric-ops job against the CAs.
+ca_secret: originator-ca-secret
+organisation:
+  name: OriginatorOrg
+  mspId: OriginatorMSP
+  namespace: originator
+identities:
+  - name: originator-admin
+    type: admin
+    attrs: "hf.Registrar.Roles=client,hf.Revoker=true,role=originator:ecert"
+  - name: lp1.originator
+    type: peer
+  - name: cp1.originator
+    type: peer
+  - name: vs1.originator
+    type: client
+  # Application identities carry the role the chaincode reads. A registrar's
+  # certificate is what makes its title credential verifiable by anyone.
+  - name: originator-app
+    type: client
+    attrs: "role=originator:ecert,orgUnit=originator:ecert"

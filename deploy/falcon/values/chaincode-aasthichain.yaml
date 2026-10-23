@@ -1,0 +1,41 @@
+# Chaincode lifecycle for the settlement contracts.
+chaincode:
+  name: aasthichain
+  version: "1.0"
+  sequence: 1
+  language: golang
+  path: chaincode/
+  channel: property-channel
+  collectionsConfig: collections.json
+  # The default endorsement policy for the package. Individual operations are
+  # tightened inside the chaincode with state-based endorsement, below.
+  endorsementPolicy: "AND('OriginatorMSP.peer','RegistrarMSP.peer')"
+  installOn:
+    - { org: OriginatorOrg, peers: [lp1.originator, lp2.originator] }
+    - { org: RegistrarOrg,  peers: [lp1.registrar, lp2.registrar] }
+    - { org: InvestorOrg,   peers: [lp1.investor, lp2.investor, lp3.investor, lp4.investor] }
+    - { org: RegulatorOrg,  peers: [lp1.regulator, lp2.regulator] }
+  approvals:
+    - OriginatorOrg
+    - RegistrarOrg
+    - InvestorOrg
+    - RegulatorOrg
+
+# State-based endorsement, applied per key prefix at commit time. This is where
+# the business rules become network rules rather than application rules.
+stateBasedEndorsement:
+  - prefix: "PROP-"
+    policy: "OR('OriginatorMSP.peer','RegistrarMSP.peer')"
+    note: "A listing is the owner's assertion; a validation is the registrar's."
+  - prefix: "TOKEN-"
+    policy: "AND('OriginatorMSP.peer','RegistrarMSP.peer')"
+    note: "Fractions cannot be issued without a validated title."
+  - prefix: "DVP-"
+    policy: "AND('InvestorMSP.peer','OriginatorMSP.peer')"
+    note: "Both sides of a trade must execute and sign the same result."
+  - prefix: "COND-"
+    policy: "AND('InvestorMSP.peer','OriginatorMSP.peer')"
+    note: "A conditional settlement moves the same two legs, so it binds the same two parties."
+  - prefix: "CRED-"
+    policy: "'RegistrarMSP.peer'"
+    note: "Only an issuer can issue or revoke its own credential."

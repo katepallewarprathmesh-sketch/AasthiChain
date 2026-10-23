@@ -1,0 +1,57 @@
+# OriginatorOrg peers.
+# Property owners and developers. Endorses listings and, jointly with the registrar, issuance.
+organisation:
+  name: OriginatorOrg
+  mspId: OriginatorMSP
+  namespace: originator
+  domain: originator.aasthichain.net
+
+ca_secret: originator-ca-secret
+tls_ca_secret: tlsca-secret
+
+# DRUNIX splits the Fabric peer into three roles. Each scales on its own axis:
+# Lite Peers with endorsement and query load, Validation Services with
+# signature and policy checking throughput, Committing Peers with state size.
+peers:
+  lite:
+    count: 2
+    resources:
+      requests: { cpu: "1", memory: 2Gi }
+      limits: { cpu: "2", memory: 4Gi }
+    # Lite Peers hold no ledger, so they are cheap to add and cheap to lose.
+    persistence:
+      enabled: false
+  committing:
+    count: 1
+    resources:
+      requests: { cpu: "2", memory: 8Gi }
+      limits: { cpu: "4", memory: 16Gi }
+    persistence:
+      size: 500Gi
+      storageClass: standard
+  validation:
+    count: 2
+    stateless: true
+    resources:
+      requests: { cpu: "1", memory: 1Gi }
+      limits: { cpu: "2", memory: 2Gi }
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+
+transientStore:
+  keydb:
+    enabled: true
+    replicas: 2
+    maxmemoryPolicy: noeviction
+
+stateDatabase:
+  yugabytedb:
+    enabled: true
+    schema: originator_state
+
+anchorPeers:
+  - host: lp1.originator.aasthichain.net
+    port: 443

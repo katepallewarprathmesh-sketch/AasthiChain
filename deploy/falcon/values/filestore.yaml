@@ -1,0 +1,10 @@
+# Shared artefact store: block files, chaincode packages, collection config.
+global:
+  hlf_domain: aasthichain.net
+ingress:
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: "false"
+persistence:
+  size: 20Gi
+  storageClass: standard

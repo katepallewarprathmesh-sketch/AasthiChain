@@ -1,0 +1,12 @@
+# Separate TLS CA, so transport identity and membership identity are not the
+# same credential.
+ca_server:
+  name: tls-ca
+  admin_secret: tlsca-secret
+  tls_domain: aasthichain.net
+  csr:
+    cn: AasthiChain TLS CA
+    names:
+      - { C: IN, ST: Maharashtra, L: Pune, O: AasthiChain, OU: tls }
+persistence:
+  size: 10Gi

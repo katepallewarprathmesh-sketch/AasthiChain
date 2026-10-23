@@ -1,0 +1,21 @@
+# Identity registration for InvestorOrg, run as a Falcon fabric-ops job against the CAs.
+ca_secret: investor-ca-secret
+organisation:
+  name: InvestorOrg
+  mspId: InvestorMSP
+  namespace: investor
+identities:
+  - name: investor-admin
+    type: admin
+    attrs: "hf.Registrar.Roles=client,hf.Revoker=true,role=investor:ecert"
+  - name: lp1.investor
+    type: peer
+  - name: cp1.investor
+    type: peer
+  - name: vs1.investor
+    type: client
+  # Application identities carry the role the chaincode reads. A registrar's
+  # certificate is what makes its title credential verifiable by anyone.
+  - name: investor-app
+    type: client
+    attrs: "role=investor:ecert,orgUnit=investor:ecert"

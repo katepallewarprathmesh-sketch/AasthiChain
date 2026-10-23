@@ -1,0 +1,21 @@
+# Identity registration for RegulatorOrg, run as a Falcon fabric-ops job against the CAs.
+ca_secret: regulator-ca-secret
+organisation:
+  name: RegulatorOrg
+  mspId: RegulatorMSP
+  namespace: regulator
+identities:
+  - name: regulator-admin
+    type: admin
+    attrs: "hf.Registrar.Roles=client,hf.Revoker=true,role=regulator:ecert"
+  - name: lp1.regulator
+    type: peer
+  - name: cp1.regulator
+    type: peer
+  - name: vs1.regulator
+    type: client
+  # Application identities carry the role the chaincode reads. A registrar's
+  # certificate is what makes its title credential verifiable by anyone.
+  - name: regulator-app
+    type: client
+    attrs: "role=regulator:ecert,orgUnit=regulator:ecert"

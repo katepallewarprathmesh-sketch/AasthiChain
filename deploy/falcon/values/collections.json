@@ -1,0 +1,32 @@
+[
+  {
+    "name": "consideration",
+    "policy": "OR('OriginatorMSP.member','InvestorMSP.member','RegulatorMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 3,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "comment": "What was actually paid. Counterparties and the supervisor only; the hash is on the shared ledger."
+  },
+  {
+    "name": "valuation",
+    "policy": "OR('OriginatorMSP.member','RegistrarMSP.member','RegulatorMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 3,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "comment": "Valuation inputs and comparables. Commercially sensitive, never network-wide."
+  },
+  {
+    "name": "kycEvidence",
+    "policy": "OR('InvestorMSP.member','RegulatorMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "comment": "KYC attributes held by the custodian and the supervisor. Aadhaar numbers are refused upstream and never reach here."
+  }
+]

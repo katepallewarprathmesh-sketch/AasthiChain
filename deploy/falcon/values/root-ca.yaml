@@ -1,0 +1,19 @@
+# Root CA for the consortium. Member identities chain to this.
+ca_server:
+  name: root-ca
+  admin_secret: rca-secret
+  tls_domain: aasthichain.net
+  csr:
+    cn: AasthiChain Root CA
+    names:
+      - { C: IN, ST: Maharashtra, L: Pune, O: AasthiChain, OU: consortium }
+  # Certificate lifetime is deliberately short for application identities:
+  # a registrar that leaves the consortium stops being able to sign.
+  signing:
+    default:
+      expiry: 8760h
+    profiles:
+      ca:
+        expiry: 43800h
+persistence:
+  size: 10Gi

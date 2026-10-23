@@ -1,0 +1,57 @@
+# RegulatorOrg peers.
+# Supervisory access. Reads everything on the channel, endorses nothing that issues or moves value.
+organisation:
+  name: RegulatorOrg
+  mspId: RegulatorMSP
+  namespace: regulator
+  domain: regulator.aasthichain.net
+
+ca_secret: regulator-ca-secret
+tls_ca_secret: tlsca-secret
+
+# DRUNIX splits the Fabric peer into three roles. Each scales on its own axis:
+# Lite Peers with endorsement and query load, Validation Services with
+# signature and policy checking throughput, Committing Peers with state size.
+peers:
+  lite:
+    count: 2
+    resources:
+      requests: { cpu: "1", memory: 2Gi }
+      limits: { cpu: "2", memory: 4Gi }
+    # Lite Peers hold no ledger, so they are cheap to add and cheap to lose.
+    persistence:
+      enabled: false
+  committing:
+    count: 1
+    resources:
+      requests: { cpu: "2", memory: 8Gi }
+      limits: { cpu: "4", memory: 16Gi }
+    persistence:
+      size: 500Gi
+      storageClass: standard
+  validation:
+    count: 2
+    stateless: true
+    resources:
+      requests: { cpu: "1", memory: 1Gi }
+      limits: { cpu: "2", memory: 2Gi }
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+
+transientStore:
+  keydb:
+    enabled: true
+    replicas: 2
+    maxmemoryPolicy: noeviction
+
+stateDatabase:
+  yugabytedb:
+    enabled: true
+    schema: regulator_state
+
+anchorPeers:
+  - host: lp1.regulator.aasthichain.net
+    port: 443
