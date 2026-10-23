@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "715e11d708d54f5210331f04890a47f0de5d5690c2f87de53a316857597346fb",
+  "sourceDigest": "a1e015a95329f2cb89fc04ca0410b9e1eab23c07ad8f291ed174a740c6ba49cb",
   "sections": [
     {
       "doc": "README",
@@ -643,7 +643,7 @@
       "doc": "CARDS",
       "file": "docs/CARDS.md",
       "heading": "The economics",
-      "text": "Instrument Rate Ceiling Authority \n --- --- --- --- \n RuPay debit nil : Payment and Settlement Systems Act 2007, section 10A; notification S.O. 5067(E) of 14 September 2026 \n Other debit, small merchant 0.40% POS and online, 0.30% QR ₹200 RBI circular DPSS.CO.PD.No.1633/02.14.003/2017-18, 6 December 2017 \n Other debit 0.90% POS and online, 0.80% QR ₹1,000 the same circular \n Credit 2.00% declared default none no regulatory cap; priced between merchant, acquirer and network, usually 150 to 250 bps \n Credit, cross-border 2.50% declared default none no regulatory cap \n\nA small merchant is one whose turnover in the preceding financial year did not\nexceed ₹20 lakh.\n\n The split. Interchange goes to the issuer, the scheme fee to the network,\nand the acquirer keeps the residual. The modelled shares are 1.50% interchange\nand 0.15% scheme on credit, and 0.15% and 0.02% on debit, following the\nproportion in the NPCI circular operative since October 2022, which puts\nRuPay credit on UPI at roughly 1.5% issuer against 0.5% network and acquirer."
+      "text": "Instrument Rate Ceiling Authority \n --- --- --- --- \n RuPay debit nil none Payment and Settlement Systems Act 2007, section 10A; notification S.O. 5067(E) of 14 September 2026 \n Other debit, small merchant 0.40% POS and online, 0.30% QR ₹200 RBI circular DPSS.CO.PD.No.1633/02.14.003/2017-18, 6 December 2017 \n Other debit 0.90% POS and online, 0.80% QR ₹1,000 the same circular \n Credit 2.00% declared default none no regulatory cap; priced between merchant, acquirer and network, usually 150 to 250 bps \n Credit, cross-border 2.50% declared default none no regulatory cap \n\nA small merchant is one whose turnover in the preceding financial year did not\nexceed ₹20 lakh.\n\n The split. Interchange goes to the issuer, the scheme fee to the network,\nand the acquirer keeps the residual. The modelled shares are 1.50% interchange\nand 0.15% scheme on credit, and 0.15% and 0.02% on debit, following the\nproportion in the NPCI circular operative since October 2022, which puts\nRuPay credit on UPI at roughly 1.5% issuer against 0.5% network and acquirer."
     },
     {
       "doc": "CARDS",
