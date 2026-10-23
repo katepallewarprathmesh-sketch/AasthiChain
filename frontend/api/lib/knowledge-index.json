@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "8ebeb84a98a5cbcec6d6cbdfcdf58c3eeb92a00bd17ce3791e4808552294c208",
+  "sourceDigest": "4e46be9f83122fee1f6c0af4e120996270546d85a46073de06cd8f57c58fd02c",
   "sections": [
     {
       "doc": "README",
@@ -1363,7 +1363,7 @@
       "doc": "ROADMAP",
       "file": "docs/ROADMAP.md",
       "heading": "P0 · Correctness and credibility",
-      "text": "1. Close the conditional settlement loop on the cash leg: SHIPPED\nThe work desk now pays on a verified result. The DvP cash leg still cannot: it settles atomically\nor fails, with nothing in between. The missing shape is cash locked at settlement and released\nwhen a named condition is met, where the condition is the presentation of a valid credential and\nthe party allowed to assert it may be an agent under a mandate. This is the piece that makes the\nthree layers (credential, mandate, escrow) one mechanism rather than three demos.\n\nDone looks like: a UMI CONDITION block family, the reconciliation check proving conservation\nwhile cash sits conditional, a timeout that cannot strand money, and a failure test for every way\nthe condition can fail to arrive."
+      "text": "1. Close the conditional settlement loop on the cash leg (SHIPPED)\nThe work desk now pays on a verified result. The DvP cash leg still cannot: it settles atomically\nor fails, with nothing in between. The missing shape is cash locked at settlement and released\nwhen a named condition is met, where the condition is the presentation of a valid credential and\nthe party allowed to assert it may be an agent under a mandate. This is the piece that makes the\nthree layers (credential, mandate, escrow) one mechanism rather than three demos.\n\nDone looks like: a UMI CONDITION block family, the reconciliation check proving conservation\nwhile cash sits conditional, a timeout that cannot strand money, and a failure test for every way\nthe condition can fail to arrive."
     },
     {
       "doc": "ROADMAP",
