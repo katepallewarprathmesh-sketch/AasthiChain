@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "e5693348e963cb2f733dfeac2c503e954197a1f0d61406a6b6a02dc4b90c2aa5",
+  "sourceDigest": "27b9302c8f937533566273344ce370741289b7424a88f285048674a272bd1add",
   "sections": [
     {
       "doc": "README",
@@ -890,6 +890,36 @@
       "file": "docs/DRUNIX.md",
       "heading": "supplies the plugin; add the hyphenated name if it is missing: (continued)",
       "text": "for\ntype json (SQLSTATE 22P02)\npanic: error during commit to txmgr\n bash\ncd ~/drunix-lab/drunix/drunix-network/test-network\n./network.sh down\ncd ~/AasthiChain && git pull\nbash scripts/drunix-testnet.sh\nbash scripts/drunix-business-msps.sh --scripts-only\n bash\nmake network compose up, create channel, deploy chaincode\n \n\nThe enrolment it generates lands under network/crypto-config/... , which is what the\n DRUNIX CERT FILE and DRUNIX KEY FILE paths above should point at. For a plaintext local\nnetwork, set DRUNIX TLS INSECURE=true rather than leaving the TLS variable empty and hoping."
+    },
+    {
+      "doc": "END_TO_END",
+      "file": "docs/END_TO_END.md",
+      "heading": "End to end, or not shipped",
+      "text": "A feature counts as end to end here when all five of these are true:\n\n1. A person can reach it. There is a screen, and a route to that screen\n that does not require knowing a URL or holding a key.\n2. The rail owns the logic. The API layers stay proxies; no business rule\n lives in JavaScript.\n3. It writes to the chain. Every state transition lands as a typed block,\n so the ledger explains what happened without consulting a Go map.\n4. It is covered. An integration suite drives the real path, including at\n least one refusal, not only the happy case.\n5. It declares its own boundary. A simulated leg says so on the surface a\n user reads, not only in a comment.\n\nThe fifth is the one that keeps the other four honest. Several features here\nare deliberately simulated because the real version needs a licence this\ndeployment does not hold. Those can still be end to end within the declared\nboundary : what they must never do is imply the boundary is somewhere else."
+    },
+    {
+      "doc": "END_TO_END",
+      "file": "docs/END_TO_END.md",
+      "heading": "Status today",
+      "text": "Complete: reachable, railed, blocked, chained, covered\n Feature Screen Notes \n --- --- --- \n Tokenisation and listings /marketplace , /property/:id \n Atomic DvP settlement /umi The core path, with the cash leg \n Wallets and e-rupee balances /wallet , /digital-rupee Caps and reserves enforced on the rail \n Secondary market and baskets /market , /umi \n Servicing and income /dashboard \n Ledger explorer /ledger Every block type rendered with a label \n Cross-ledger transfer /umi Lock, commit, abort, with custody counts \n Cross-border funding /cross-border Quote, payment, off-ramp, rupee credit \n Carbon credits and retirement /umi Second asset class on one rail \n Corridors /umi Refusals name the missing licence \n AML screening /umi Velocity cap, Travel Rule threshold \n Private data collections /umi Hash on the chain, value by role \n Work desk escrow /umi Released against an anchored deliverable \n Throughput and latency /umi Measured from served traffic, with the lock named \n Document anchoring and verification /verify Digest only, retrieval refused by design \n Audience analytics /admin/insights Added 23 Oct, with its limits printed \n\n Built and tested, but a person cannot reach it"
+    },
+    {
+      "doc": "END_TO_END",
+      "file": "docs/END_TO_END.md",
+      "heading": "Status today (continued)",
+      "text": "These are the real failures against the team's standard. Each one has rail\ncode, chain blocks and a passing suite, and no screen at all .\n Feature Rail What is missing \n --- --- --- \n Key register /umi/keys/ No UI. Registration, weak-key screening and the retroactive-void state are invisible to a user. This is the strongest security story in the repo and it cannot be demonstrated without curl. \n Signed oracle feeds /umi/oracle/ No UI. Publishers, quorum, staleness and the five refusal states are unreachable. \n Backing attestations /umi/backing/ No UI. Issuance is refused past the attested figure, and nothing shows that. \n Agent passports /umi/agents/ No UI. Pseudonymous actors with threshold recovery of the principal. \n Mandates /umi/mandates/ No UI. Bounded agent authority with spend counted on the ledger. \n Proposing agent /umi/agent/ No UI. Drafts actions for a person to approve. \n Credentials /umi/credentials/ No UI. Ed25519 signed, hash anchored. \n Attestations /umi/attestations/ No UI. Downstream exposure view exists only as JSON. \n\nEight features. The pattern is consistent: the hard part was built and the\nlast mile was not. Against a rubric that gives 15% to usability and clarity\nin a live demo, an unreachable feature scores as if it does not exist.\n\n Chain-first gaps (AMA items 8 and 20)"
+    },
+    {
+      "doc": "END_TO_END",
+      "file": "docs/END_TO_END.md",
+      "heading": "Status today (continued)",
+      "text": "Listings, documents, work orders and the marketplace keep their state in Go\nmaps and write blocks about that state. The CBDC layer is the counter\nexample: there the money itself is on the ledger. Making the older modules\nchain-first is the real version of criterion 3 above, and it is the largest\nsingle piece of unfinished architecture.\n\n Blocked by something outside the code\n\nThese cannot be completed by writing more software. The blocker is named so\nnobody mistakes them for unfinished work.\n Feature Blocker \n --- --- \n Real e-rupee settlement Access to CBDC rails is restricted to RBI pilot participants \n Cross-border payment rail No PA-CB licence; the off-ramp leg is simulated \n Card scheme corridor No scheme membership; interchange and chargeback described, not implemented \n Paying a seller in tokens Prohibited under FEMA for Indian immovable property. Not a gap, a rule \n Real Fabric network DRUNIX MODE=real and -tags real exist; no network is deployed \n Public chain settlement PropertyToken.sol passes 66 checks, never deployed to a public testnet; the public leg is a mirror by design \n Solana anchoring Code proven correct; the devnet key holds 0 SOL and the faucet is rate limited per IP"
+    },
+    {
+      "doc": "END_TO_END",
+      "file": "docs/END_TO_END.md",
+      "heading": "What this standard implies going forward",
+      "text": "For every new feature, in the same change: rail logic, typed blocks, a screen\nreachable from Explore , a suite with a refusal case, and a visible statement\nof what is simulated. A feature that lands without the screen is not half\ndone, it is not done , and it will not be counted as shipped.\n\nThe backlog this creates, in the order that serves the rubric best:\n\n1. Key register UI. Security sits inside the 25% technical band and this\n is the best security work in the repo.\n2. Oracle feeds UI. Staleness and quorum refusals are visually legible and\n make the point about honest data.\n3. Backing attestations UI. Directly answers \"is this token backed\".\n4. Agent passports, mandates and the proposing agent. One screen can carry\n all three, since they are one story about bounded agent authority.\n5. Chain-first migration for listings, documents and work orders."
     },
     {
       "doc": "GOVERNANCE",
