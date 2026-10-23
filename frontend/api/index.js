@@ -8,7 +8,7 @@ import { realDB } from './lib/db_real.js';
 // ESM serverless handler and the CommonJS local server, and so it lives
 // INSIDE the Vercel project root (frontend/) and actually gets bundled.
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
-import { recordHit, trafficSummary } from './lib/traffic.mjs';
+import { recordHit, trafficSummary, allTimeSummary, livePresence, accountRegister, recordAccountSighting } from './lib/traffic.mjs';
 import { validateChatRequest, rateLimit as aiRateLimit, buildPropertyContext, askGroq, isConfigured as aiConfigured, LIMITS as AI_LIMITS } from './lib/ai.mjs';
 import { buildKnowledgeContext, buildRailContext, readRail, lookupRecords } from './lib/knowledge.mjs';
 import { authStore, verificationLockedOut } from './lib/authstore.js';
@@ -2456,6 +2456,22 @@ export default async function handler(req, res) {
     const path = url.pathname;
     const method = req.method;
     const user = getUser(req);
+
+    // Register the account behind an identified request: first seen, last
+    // seen, active days, request count. Only a real signed-in session counts.
+    // A demo-auth header, the operator key and anonymous traffic are all
+    // skipped, because filing those as "users" would inflate the register
+    // with fixtures and with ourselves. Fire and forget: analytics must never
+    // delay or fail a request.
+    if (user && user.clerk && user.clerkId) {
+      recordAccountSighting({
+        key: 'clerk:' + user.clerkId,
+        email: user.email || null,
+        name: user.identityId || null,
+        role: user.role || null,
+        provider: 'clerk',
+      }).catch(() => {});
+    }
 
     // From here on every failing response is recorded against this request id.
     instrumentResponse(req, res, requestId, user, startedAt);
@@ -6088,6 +6104,27 @@ export default async function handler(req, res) {
       } catch (e) {
         report.traffic = { unavailable: true, message: e.message };
       }
+      // The audience block answers three separate questions that the
+      // fortnight chart cannot: who is here now, what the lifetime totals
+      // are, and which accounts have ever signed in. Each degrades on its
+      // own, so one failing storage read cannot blank the other two.
+      report.audience = {};
+      try { report.audience.live = await livePresence(5); }
+      catch (e) { report.audience.live = { unavailable: true, message: e.message }; }
+      try { report.audience.allTime = await allTimeSummary(); }
+      catch (e) { report.audience.allTime = { unavailable: true, message: e.message }; }
+      try { report.audience.accounts = await accountRegister(500); }
+      catch (e) { report.audience.accounts = { unavailable: true, message: e.message }; }
+      report.audience.limits = [
+        'Anonymous visitors are counted, never identified: no IP address is stored, no cookie is set, ' +
+        'and the visitor token is re-salted daily so the same person cannot be linked across days.',
+        'There is no per-visit event log, so a browsing history for one person cannot be produced ' +
+        'from this data by anyone, including us.',
+        'The account register starts from the day it was deployed. Sign-ins before that were never ' +
+        'recorded here; the identity provider holds the authoritative list.',
+        'Do Not Track and Global Privacy Control are honoured in the browser, so a visitor who sends ' +
+        'either is absent from every figure above.',
+      ];
       return res.status(200).json(report);
     }
     // ===== END PRIVATE OPERATOR INSIGHTS =====

@@ -81,6 +81,135 @@ function RankList({ title, rows, labelKey, empty }) {
   )
 }
 
+const ago = (iso) => {
+  if (!iso) return '-'
+  const ms = Date.now() - Date.parse(iso)
+  if (!Number.isFinite(ms)) return '-'
+  const m = Math.round(ms / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return m + ' min ago'
+  const h = Math.round(m / 60)
+  if (h < 24) return h + ' h ago'
+  return Math.round(h / 24) + ' d ago'
+}
+
+const dt = (iso) => {
+  try { return new Date(iso).toLocaleString('en-IN') } catch { return String(iso || '-') }
+}
+
+/**
+ * Audience: who is here now, the lifetime totals, and every account that has
+ * signed in.
+ *
+ * The limits are printed on the panel rather than kept in a design document,
+ * because the honest answer to "show me every visitor" is that this system
+ * deliberately cannot produce one, and a dashboard that quietly omits that
+ * invites the reader to believe the opposite.
+ */
+function AudienceSection({ a }) {
+  if (!a) return null
+  const live = a.live || {}
+  const all = a.allTime || {}
+  const acc = a.accounts || {}
+  const rows = acc.accounts || []
+  return (
+    <>
+      <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 19, color: '#1E3A5F', margin: '26px 0 2px' }}>
+        Audience
+      </h2>
+      <p style={{ fontSize: 12, color: '#6B7280', margin: '0 0 12px' }}>
+        Live presence, lifetime totals and the register of accounts that have signed in.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+        <Metric label="On the site now" value={Number(live.onlineNow || 0).toLocaleString('en-IN')}
+          sub={`last ${live.windowMinutes || 5} min`} color="#047857" />
+        <Metric label="Accounts ever signed in" value={Number(acc.totalAccounts || 0).toLocaleString('en-IN')} color="#1E3A5F" />
+        <Metric label="Accounts active 24h" value={Number(acc.activeLast24h || 0).toLocaleString('en-IN')} />
+        <Metric label="Pageviews all time" value={Number(all.totalViews || 0).toLocaleString('en-IN')} color="#0E7490" />
+        <Metric label="Visitor-days all time" value={Number(all.visitorDays || 0).toLocaleString('en-IN')}
+          sub="not distinct people" color="#B45309" />
+        <Metric label="Measuring since" value={all.firstDay || '-'} sub={`${all.daysRecorded || 0} days recorded`} />
+      </div>
+
+      <div style={{ ...card, marginTop: 14 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Here right now</h2>
+        {(live.pages || []).length === 0 ? (
+          <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8 }}>
+            {live.note || 'Nobody is on the site at the moment.'}
+          </p>
+        ) : (
+          <>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {live.pages.map(pg => (
+                <div key={pg.path} style={{ display: 'flex', justifyContent: 'space-between', gap: 10,
+                  fontSize: 12.5, border: '1px solid #F3F4F6', borderRadius: 8, padding: '7px 11px' }}>
+                  <span style={{ color: '#374151', overflowWrap: 'anywhere' }}>{pg.path}</span>
+                  <b style={{ color: '#047857', whiteSpace: 'nowrap' }}>{pg.visitors}</b>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8 }}>{live.note}</p>
+          </>
+        )}
+      </div>
+
+      <div style={{ ...card, marginTop: 14, overflowX: 'auto' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>
+          Accounts that have signed in ({rows.length})
+        </h2>
+        {rows.length === 0 ? (
+          <p style={{ fontSize: 12.5, color: '#6B7280', marginTop: 8 }}>
+            {acc.note || 'No signed-in account has made a request yet.'}
+          </p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 10 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: '#6B7280' }}>
+                {['Account', 'Email', 'Role', 'First seen', 'Last seen', 'Active days', 'Requests'].map(h => (
+                  <th key={h} style={{ padding: '6px 8px', borderBottom: '1px solid #E5E7EB', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.accountKey}>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6', overflowWrap: 'anywhere' }}>
+                    {r.name || r.accountKey}
+                    <div style={{ fontSize: 10.5, color: '#9CA3AF' }}>{r.accountKey}</div>
+                  </td>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6', overflowWrap: 'anywhere' }}>{r.email || '-'}</td>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6' }}>{r.role || '-'}</td>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6', whiteSpace: 'nowrap' }}>{dt(r.firstSeen)}</td>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6', whiteSpace: 'nowrap' }}>{ago(r.lastSeen)}</td>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6' }}>{r.daysActive}</td>
+                  <td style={{ padding: '7px 8px', borderBottom: '1px solid #F3F4F6' }}>{Number(r.requests).toLocaleString('en-IN')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {(all.topPages || []).length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 12, marginTop: 14 }}>
+          <RankList title="Top pages, all time" rows={all.topPages.slice(0, 15)} labelKey="path" empty="Nothing recorded yet." />
+          <RankList title="Where they came from, all time" rows={(all.topReferrers || []).slice(0, 15)} labelKey="source" empty="Nothing recorded yet." />
+        </div>
+      )}
+
+      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10,
+        padding: '12px 14px', marginTop: 14 }}>
+        <b style={{ fontSize: 12.5, color: '#92400E' }}>What this cannot tell you, and why</b>
+        <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12, color: '#92400E', lineHeight: 1.7 }}>
+          {(a.limits || []).map((l, i) => <li key={i}>{l}</li>)}
+        </ul>
+        {all.caveat && <p style={{ fontSize: 11.5, color: '#92400E', margin: '8px 0 0' }}>{all.caveat}</p>}
+      </div>
+    </>
+  )
+}
+
 function TrafficSection({ t }) {
   if (!t || t.unavailable) {
     return (
@@ -388,6 +517,7 @@ export default function Insights() {
       </div>
 
       <TrafficSection t={data.traffic} />
+      <AudienceSection a={data.audience} />
 
       <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 16, lineHeight: 1.7 }}>
         {(data.notes || []).map((n, i) => <div key={i}>{n}</div>)}

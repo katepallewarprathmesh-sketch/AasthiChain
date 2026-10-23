@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "82866604f1e2e322759e73efc6da5cf8c7e98301d13ad6db6e902993723b3f1a",
+  "sourceDigest": "e5693348e963cb2f733dfeac2c503e954197a1f0d61406a6b6a02dc4b90c2aa5",
   "sections": [
     {
       "doc": "README",
@@ -398,6 +398,42 @@
       "file": "docs/AML.md",
       "heading": "What this is not",
       "text": "It is not a compliance programme. There is no customer risk rating, no transaction monitoring\ntypology library, no ongoing screening of existing customers against list updates, and no\nregulatory filing. The screening is name-only: no date of birth, no identity document, no\nsecondary-identifier scoring, all of which a real screening system uses to cut false positives.\nNothing here is a regulatory determination, and the list designates nobody."
+    },
+    {
+      "doc": "ANALYTICS",
+      "file": "docs/ANALYTICS.md",
+      "heading": "Analytics: what is measured, and what cannot be",
+      "text": "This deployment measures its own audience with first-party code only. There is\nno Google Analytics, no Plausible, no pixel and no third-party script of any\nkind. The browser posts a small beacon to /api/track and that is the whole\ndata path.\n\nEverything below is readable on the private dashboard at /admin/insights ,\nwhich needs the operator key or a signed-in regulator session."
+    },
+    {
+      "doc": "ANALYTICS",
+      "file": "docs/ANALYTICS.md",
+      "heading": "What you can see",
+      "text": "Who is on the site right now. A count of browsers that have loaded a page\nin the last five minutes, and which pages they are on. It refreshes with the\ndashboard.\n\n Lifetime totals. Pageviews since measurement began, the first day\nrecorded, the number of days with any activity, the busiest day, and the full\nper-day series. Top pages and referrers are ranked over the whole period, not\njust the recent window.\n\n The last fortnight , separately, as a chart. This is the older view and it\nstays because a trend is easier to read over two weeks than over months.\n\n Every account that has signed in. For each one: the account key from the\nidentity provider, email, the identity and role they acted as, when they were\nfirst seen, when they were last seen, how many distinct days they have been\nactive, and how many authenticated requests they have made."
+    },
+    {
+      "doc": "ANALYTICS",
+      "file": "docs/ANALYTICS.md",
+      "heading": "What you cannot see, and why",
+      "text": "These are not gaps waiting to be filled. They are consequences of decisions\nalready made and published on the privacy page, and closing any of them would\nmake that page untrue.\n\n Anonymous visitors cannot be named. No IP address is stored: not in full,\nnot truncated, not hashed. No cookie is set. The visitor identifier lives in\n sessionStorage , dies when the tab closes, and is hashed with a server secret\nplus the calendar date before it is written. Yesterday's token and today's\ntoken for the same person do not match.\n\n There is no per-visit history. Events are aggregated as they arrive into\nday, path and referrer counters. No event log exists, so a page-by-page\njourney for one person cannot be produced, by anyone, including whoever runs\nthe server.\n\n \"Unique visitors\" is not a count of people. It is the count of distinct\ndaily tokens. One person visiting on ten days counts ten times. The dashboard\nlabels this visitor-days in the lifetime view for exactly that reason. There\nis no transformation that recovers a true person count from this data, because\nthe information was never collected.\n\n Visitors who opt out are absent entirely. Do Not Track and Global Privacy\nControl are honoured in the browser, so those visits are never sent."
+    },
+    {
+      "doc": "ANALYTICS",
+      "file": "docs/ANALYTICS.md",
+      "heading": "What you cannot see, and why (continued)",
+      "text": "The account register begins the day it was deployed. Sign-ins completed\nbefore that were never written to this database. They are not lost in the\nsense of being deleted; they were never recorded. The identity provider holds\nthe authoritative account list and its own sign-in log, and that console is\nthe place to audit anything earlier."
+    },
+    {
+      "doc": "ANALYTICS",
+      "file": "docs/ANALYTICS.md",
+      "heading": "If you need more than this",
+      "text": "Two things would materially change the picture, and both are decisions rather\nthan tasks:\n\n1. A per-visit event log with stable visitor ids. This makes funnels,\n return-visit analysis and per-person journeys possible. It also means\n building a record that can be subpoenaed, leaked or joined against other\n data, and the privacy page would have to be rewritten to say so.\n2. Storing IP addresses , which adds rough geography and bot filtering. In\n India the IP of an identified person is personal data under the DPDP Act,\n so this brings notice, purpose limitation and retention obligations with\n it.\n\nNeither is implemented. Neither should be switched on quietly."
+    },
+    {
+      "doc": "ANALYTICS",
+      "file": "docs/ANALYTICS.md",
+      "heading": "Where the code is",
+      "text": "Concern File \n --- --- \n Browser beacon, opt-out frontend/src/lib/track.js \n Collection, aggregation, presence, account register frontend/api/lib/traffic.mjs \n Dashboard report assembly frontend/api/index.js , frontend/api/lib/insights.mjs \n Dashboard UI frontend/src/pages/Insights.jsx \n Checks tests/audience.test.mjs \n\nStorage is Postgres when DATABASE URL is set, otherwise a temp file that\nresets on a cold start. The dashboard states which mode is live, so a\ndeployment is never quietly losing counts."
     },
     {
       "doc": "ANCHORING",
@@ -1279,7 +1315,7 @@
       "doc": "TESTING",
       "file": "docs/TESTING.md",
       "heading": "What each command actually covers",
-      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 107 in tests/ \n Reported result 152 passed, 0 failed \n\nOne hazard worth knowing before a repeat run: anything already listening on :8080 or :21100 \nis the enemy of a trustworthy result. A leftover app answers with a different admin key and a\ndozen suites fail for reasons that have nothing to do with the code. make test-fresh now clears\nthose strays rather than starting a process that cannot bind, and scripts/dev-stack.sh refuses\nto report a healthy stack it did not actually start.\n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant."
+      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 108 in tests/ \n Reported result 153 passed, 0 failed \n\nOne hazard worth knowing before a repeat run: anything already listening on :8080 or :21100 \nis the enemy of a trustworthy result. A leftover app answers with a different admin key and a\ndozen suites fail for reasons that have nothing to do with the code. make test-fresh now clears\nthose strays rather than starting a process that cannot bind, and scripts/dev-stack.sh refuses\nto report a healthy stack it did not actually start.\n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant."
     },
     {
       "doc": "TESTING",

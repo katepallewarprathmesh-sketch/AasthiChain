@@ -8,7 +8,7 @@ please open an issue rather than assuming your machine is wrong.
 
 ```bash
 make dev        # start the stack first: most suites talk to a running server
-make test       # integration sweep:  152 checks, 0 failed
+make test       # integration sweep:  153 checks, 0 failed
 make test-fresh # the same sweep, on a restarted stack (use for a repeat run)
 make test-go    # four Go modules:     gofmt, go vet, go test -race
 make smoke      # every frontend route renders real content
@@ -31,8 +31,8 @@ rail, and then every file matching `tests/*.test.mjs`.
 |---|---|
 | Command | `bash regression.sh` |
 | Needs | the app on `:8080` and the rail on `:21100` (`make dev`) |
-| Suite files | **107** in `tests/` |
-| Reported result | **152 passed, 0 failed** |
+| Suite files | **108** in `tests/` |
+| Reported result | **153 passed, 0 failed** |
 
 One hazard worth knowing before a repeat run: anything already listening on `:8080` or `:21100`
 is the enemy of a trustworthy result. A leftover app answers with a different admin key and a

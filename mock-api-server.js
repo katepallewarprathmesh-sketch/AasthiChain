@@ -3459,6 +3459,30 @@ app.get('/api/admin/insights', async (req, res) => {
   } catch (e) {
     report.traffic = { unavailable: true, message: e.message };
   }
+  // Parity with frontend/api/index.js: live presence, lifetime totals and the
+  // register of accounts that have signed in. Each degrades on its own.
+  report.audience = {};
+  try {
+    const { livePresence, allTimeSummary, accountRegister } = await trafficReady;
+    try { report.audience.live = await livePresence(5); }
+    catch (e) { report.audience.live = { unavailable: true, message: e.message }; }
+    try { report.audience.allTime = await allTimeSummary(); }
+    catch (e) { report.audience.allTime = { unavailable: true, message: e.message }; }
+    try { report.audience.accounts = await accountRegister(500); }
+    catch (e) { report.audience.accounts = { unavailable: true, message: e.message }; }
+  } catch (e) {
+    report.audience.unavailable = e.message;
+  }
+  report.audience.limits = [
+    'Anonymous visitors are counted, never identified: no IP address is stored, no cookie is set, ' +
+    'and the visitor token is re-salted daily so the same person cannot be linked across days.',
+    'There is no per-visit event log, so a browsing history for one person cannot be produced ' +
+    'from this data by anyone, including us.',
+    'The account register starts from the day it was deployed. Sign-ins before that were never ' +
+    'recorded here; the identity provider holds the authoritative list.',
+    'Do Not Track and Global Privacy Control are honoured in the browser, so a visitor who sends ' +
+    'either is absent from every figure above.',
+  ];
   res.json(report);
 });
 
