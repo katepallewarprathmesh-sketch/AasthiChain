@@ -37,6 +37,7 @@ const SECTIONS = [
       { path: '/crossborder', title: 'Cross-border', what: 'Paying in from outside India, with the tax and reporting rules applied rather than assumed.' },
       { path: '/keys', title: 'Key register', what: 'Prove a signing key is yours, and watch it screened for the entropy failures that have broken real certificate authorities.' },
       { path: '/feeds', title: 'Feeds and backing', what: 'Signed rate feeds that refuse when stale, and backing attestations that stop issuance when withdrawn.' },
+      { path: '/cards', title: 'Card rail and disputes', what: 'The split a merchant never sees, and the chargeback ladder that can reverse a settled payment four months later.' },
       { path: '/ledger', title: 'Ledger explorer', what: 'Every block, its hash linkage and its merkle root, verifiable in the browser.' },
       { path: '/proof', title: 'Proof', what: 'What has been anchored to a public chain and how to check it yourself.' },
     ],

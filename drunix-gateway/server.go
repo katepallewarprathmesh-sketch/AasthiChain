@@ -89,6 +89,11 @@ type Server struct {
 	// against assertions buried in Go (jurisdiction.go). Nil leaves the
 	// routes unmounted.
 	Jurisdictions *JurisdictionRegistry
+
+	// Cards models the card rail: who takes what out of a payment before
+	// the merchant sees it, and the dispute ladder that can take it all
+	// back months later (cardscheme.go). Nil leaves the routes unmounted.
+	Cards *CardDesk
 }
 
 // NewServer wires dependencies (DIP).
@@ -190,6 +195,7 @@ func (s *Server) Router() http.Handler {
 	s.registerKeyRoutes(mux)
 	s.registerOracleRoutes(mux)
 	s.registerJurisdictionRoutes(mux)
+	s.registerCardRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

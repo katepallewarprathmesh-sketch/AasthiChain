@@ -155,7 +155,9 @@ func corridorCatalogue() []Corridor {
 			PurposeCodes: []string{"IMPORT_GOODS", "IMPORT_SERVICES"},
 			Window:       "authorisation is instant and settlement is not: the scheme clears later, and a chargeback can reverse it afterwards",
 			Precedent:    "The networks run their own rails under their own rules, which is a different corridor rather than a variant of the others.",
-			Note:         "The merchant sees an approval, which is a guarantee of payment and not a payment.",
+			Note: "The merchant sees an approval, which is a guarantee of payment and not a payment. " +
+				"The economics of that rail, and the dispute ladder that can reverse the payment months " +
+				"later, are modelled on the card desk at /umi/cards.",
 		},
 		{
 			ID: "MULTI-CBDC-PVP", Name: "Multi-CBDC, both legs on this ledger",

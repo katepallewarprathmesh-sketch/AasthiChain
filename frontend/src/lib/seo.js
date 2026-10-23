@@ -36,6 +36,11 @@ export const ROUTE_SEO = {
     description:
       'Every rate reading signed by a registered key, with the age at which it stops being usable. Every token backed by a dated attestation, with issuance refused once it goes stale or is withdrawn.',
   },
+  '/cards': {
+    title: 'Card Interchange and the Dispute Ladder | AasthiChain',
+    description:
+      'Where a card payment actually goes: interchange to the issuer, the scheme fee, and what is left for the acquirer under the RBI caps. Then every rung of the chargeback ladder, with the deadline that governs it and the liability shift that decides who loses.',
+  },
   '/trust': {
     title: 'What Is Real and What Is Simulated | AasthiChain',
     description:

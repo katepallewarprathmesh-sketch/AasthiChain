@@ -305,6 +305,12 @@ func main() {
 		}
 		log.Printf("Jurisdiction rules mounted at /umi/jurisdictions/*: cross-border quotes are tested against the declared rule set, and an undeclared jurisdiction refuses")
 
+		// Card rail economics and disputes (cardscheme.go): the split a
+		// merchant never sees, and the reversibility that makes card money
+		// behave unlike ledger money.
+		srv.Cards = drunix.NewCardDesk(chain)
+		log.Printf("Card rail mounted at /umi/cards/*: interchange split and the full dispute ladder, modelled; this deployment holds no scheme membership so nothing is authorised or cleared")
+
 		srv.Agents = drunix.NewAgentRegistry(chain)
 		log.Printf("Agent passports mounted at /umi/agents/*: pseudonymous actors, principal recoverable only by a threshold of custodians")
 
