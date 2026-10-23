@@ -33,12 +33,61 @@ const STEP_TONE = {
 
 const money = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
 
-function Rules({ rules }) {
-  if (!rules) return null
+/**
+ * The route that works, stated before the route that does not.
+ *
+ * The page used to open with the prohibition, which read as "this feature is
+ * not supported" when the opposite is true: funding an Indian property
+ * purchase from a stablecoin held abroad is supported end to end here. What
+ * is prohibited is one particular shape of it, paying the seller in tokens.
+ * Leading with the refusal made a working leg look ornamental.
+ */
+function HowItWorks({ rules }) {
+  const steps = [
+    {
+      t: 'You send the stablecoin outside India',
+      d: 'The quote names an address belonging to the off-ramp provider, never a seller and never an Indian account. Above the transfer-information threshold the originator and beneficiary record travels with it.',
+    },
+    {
+      t: 'The provider converts and remits rupees through banking channels',
+      d: 'Conversion happens outside India. What comes back is a bank advice reference and an RBI purpose code: the evidence that money entered the country the way the law requires.',
+    },
+    {
+      t: 'Your rupee wallet is credited, and the purchase settles in rupees',
+      d: 'Nothing is credited without that attestation. From there the purchase runs down the ordinary delivery-versus-payment path, identical to a domestic buyer.',
+    },
+  ]
   return (
     <Card
-      title="What this leg will and will not do"
-      sub="Read before filling anything in. The constraint is the law, not the technology."
+      title="How the money actually arrives"
+      sub="Three steps, all of them available on this screen. The leg is simulated, not absent."
+      right={<Tag tone="live">Supported route</Tag>}
+    >
+      <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 10 }}>
+        {steps.map((s) => (
+          <li key={s.t}>
+            <b>{s.t}</b>
+            <div className="pg-card-sub" style={{ marginTop: 2 }}>{s.d}</div>
+          </li>
+        ))}
+      </ol>
+      {rules && (
+        <p className="pg-card-sub" style={{ marginTop: 12 }}>
+          Eligible buyers: {(rules.eligibleBuyers || []).join(', ')}. A foreign national of non-Indian origin is
+          refused at the first step, and that refusal is a restriction on the buyer rather than on the payment method.
+        </p>
+      )}
+    </Card>
+  )
+}
+
+function Rules({ rules }) {
+  if (!rules) return null
+  const rate = rules.rateINRPerUSD != null ? rules.rateINRPerUSD : rules.indicativeRateINRPerUS
+  return (
+    <Card
+      title="The limits on that route"
+      sub="The constraint is the law, not the technology."
       right={<Tag tone="sim">Simulated</Tag>}
     >
       <div className="pg-kv">
@@ -53,7 +102,7 @@ function Rules({ rules }) {
         <div>Transfer information</div>
         <div>Full originator and beneficiary record above ${rules.travelRuleThresholdUSD}</div>
         <div>Quote holds for</div>
-        <div>{rules.quoteLifeMinutes} minutes at an indicative {money(rules.indicativeRateINRPerUS)} per dollar</div>
+        <div>{rules.quoteLifeMinutes} minutes at an indicative {money(rate)} per dollar</div>
       </div>
       <p className="pg-card-sub" style={{ marginTop: 12 }}>{rules.paymentChannel}</p>
       <p className="pg-card-sub" style={{ marginTop: 8 }}><b>Not possible here:</b> {rules.prohibited}</p>
@@ -130,9 +179,13 @@ function Intent({ intent, properties, onChanged }) {
       )}
 
       {intent.status === 'OFFRAMPED' && (
-        <p className="pg-card-sub" style={{ marginTop: 12 }}>
-          Funded. The purchase now settles through the ordinary delivery-versus-payment path, in rupees.
-        </p>
+        <div style={{ marginTop: 12 }}>
+          <a className="pg-btn" href={'/property/' + encodeURIComponent(intent.assetId)}>Go to the property and buy</a>
+          <p className="pg-card-sub" style={{ marginTop: 8 }}>
+            Funded. The rupees are in your wallet and the purchase now settles through the ordinary
+            delivery-versus-payment path, exactly as it would for a domestic buyer.
+          </p>
+        </div>
       )}
     </Card>
   )
@@ -189,9 +242,10 @@ export default function CrossBorder() {
     <PageShell
       eyebrow="Cross-border funding"
       title="Paying from outside India"
-      lede="Tokens cross a border easily; the money for Indian property does not. The law wants rupees through banking channels, and a foreign national of non-Indian origin cannot buy here whatever they pay with. So the stablecoin is converted outside India and your rupee wallet is credited only against a remittance attestation."
+      lede="An NRI, OCI or person of Indian origin holding USDC or EURC abroad can fund a purchase here: quote, send the coin to the off-ramp provider, and the rail credits rupees against the remittance attestation that comes back. What the law forbids is paying the seller in tokens, so that single step happens off-chain and outside India, and the rupees arrive through banking channels like any other inward remittance."
       badge={<Tag tone="sim">Simulated leg: no chain is connected, no custody is held and no money moves</Tag>}
     >
+      <HowItWorks rules={rules} />
       <Rules rules={rules} />
 
       <Card title="Ask for a funding quote" sub="Eligibility is checked before a quote exists. Try the foreign national option to see the refusal.">

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { umiFetch as umi, umiPost, explainRail } from '../lib/umiFetch'
+import { labelForProperty, prettifyAssetId } from '../lib/assetNames'
 
 // Cross-ledger transfer, Cacti-framed.
 //
@@ -34,12 +35,14 @@ const field = {
   fontSize: 12.5, color: C.navy, background: 'white', minWidth: 0,
 }
 
-export default function InteropPanel({ participants = [], assetIds = [] }) {
+export default function InteropPanel({ participants = [], properties = [] }) {
+  const assetIds = properties.map((p) => p.assetId || p.id).filter(Boolean)
   const [d, setD] = useState(null)
   const [rows, setRows] = useState([])
   const [err, setErr] = useState(false)
 
   const [assets, setAssets] = useState([])
+  const [railNames, setRailNames] = useState({})
   const [assetId, setAssetId] = useState('')
   const [holders, setHolders] = useState([])
   const [holder, setHolder] = useState('')
@@ -73,6 +76,14 @@ export default function InteropPanel({ participants = [], assetIds = [] }) {
     umi('/assets').then((r) => {
       if (!live || !r.ok || !r.data || !Array.isArray(r.data.assets)) return
       const fromRail = r.data.assets.map((a) => (a.profile && a.profile.assetId)).filter(Boolean)
+      // A carbon profile carries its own name; a property does not, and is
+      // named from the listing catalogue instead.
+      const named = {}
+      r.data.assets.forEach((a) => {
+        const p = a.profile
+        if (p && p.assetId && p.name) named[p.assetId] = p.name
+      })
+      setRailNames(named)
       setAssets(Array.from(new Set([...fromRail, ...assetIds])))
     }).catch(() => {})
     return () => { live = false }
@@ -96,6 +107,17 @@ export default function InteropPanel({ participants = [], assetIds = [] }) {
     }).catch(() => { if (live) setHolders([]) })
     return () => { live = false }
   }, [assetId])
+
+  // A ledger key is not a name. The key stays the value of every control and
+  // every request, because the rail, the chain and the ISIN all refer to it;
+  // what a person reads is the listing title, or the profile name for a
+  // non-property asset, with the key kept beside it for traceability.
+  const nameOf = useCallback((id) => {
+    const pr = properties.find((p) => (p.assetId || p.id) === id)
+    if (pr) return labelForProperty(pr)
+    if (railNames[id]) return railNames[id]
+    return prettifyAssetId(id)
+  }, [properties, railNames])
 
   const remoteLedgers = useMemo(
     () => ((d && d.connectors) || []).filter((c) => c.ledger !== 'drunix'),
@@ -211,8 +233,9 @@ export default function InteropPanel({ participants = [], assetIds = [] }) {
             Asset
             <select style={field} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
               <option value="">Choose an asset</option>
-              {assets.map((a) => <option key={a} value={a}>{a}</option>)}
+              {assets.map((a) => <option key={a} value={a}>{nameOf(a)}</option>)}
             </select>
+            {assetId && <span style={{ fontSize: 10.5, color: C.mut }}>{assetId}</span>}
           </label>
 
           <label style={{ display: 'grid', gap: 3, fontSize: 11, color: C.mut }}>
@@ -291,7 +314,10 @@ export default function InteropPanel({ participants = [], assetIds = [] }) {
               {rows.map((t) => (
                 <tr key={t.transferId}>
                   <td style={{ padding: '7px 8px', borderBottom: `1px solid ${C.line}`, fontWeight: 600, color: C.navy }}>{t.transferId}</td>
-                  <td style={{ padding: '7px 8px', borderBottom: `1px solid ${C.line}` }}>{t.assetId}</td>
+                  <td style={{ padding: '7px 8px', borderBottom: `1px solid ${C.line}` }}>
+                    {nameOf(t.assetId)}
+                    <div style={{ fontSize: 10.5, color: C.mut }}>{t.assetId}</div>
+                  </td>
                   <td style={{ padding: '7px 8px', borderBottom: `1px solid ${C.line}` }}>{n(t.tokens)}</td>
                   <td style={{ padding: '7px 8px', borderBottom: `1px solid ${C.line}` }}>{t.remoteLedger}</td>
                   <td style={{ padding: '7px 8px', borderBottom: `1px solid ${C.line}` }}>

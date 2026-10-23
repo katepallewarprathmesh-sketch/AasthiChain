@@ -77,6 +77,37 @@ const run = async () => {
       /labelFor|propLabel|prettifyAssetId/.test(text));
   }
 
+  // 4b. A dropdown that offers assets must offer names, not keys. The
+  //     generic shape of the bug is an option whose label is the same
+  //     identifier as its value, which is how the cross-ledger transfer
+  //     panel ended up listing raw PROP-<uuid> keys long after the pages
+  //     had been fixed. Components were never scanned, only pages.
+  const srcDirs = ['frontend/src/pages/', 'frontend/src/components/'];
+  const rawOptions = [];
+  for (const dir of srcDirs) {
+    const d = new URL('../' + dir, import.meta.url);
+    for (const f of readdirSync(d)) {
+      if (!f.endsWith('.jsx')) continue;
+      const text = readFileSync(new URL(f, d), 'utf8');
+      // <option key={a} value={a}>{a}</option>: value and label identical.
+      const re = /<option[^>]*value=\{(\w+)\}[^>]*>\{\1\}</g;
+      let m;
+      while ((m = re.exec(text))) {
+        // Participant identifiers, cities and type filters are shown as
+        // themselves everywhere (investor1 is the name, Pune is the name),
+        // so only asset collections are held to this rule.
+        const before = text.slice(Math.max(0, m.index - 160), m.index);
+        if (/participants|holders|roles|members|counterparty|investor1|cities|types|statuses|currencies|coins/.test(before)) continue;
+        rawOptions.push(dir + f + ': option labelled by {' + m[1] + '}');
+      }
+    }
+  }
+  ok('no dropdown labels an asset with its own ledger key', rawOptions.length === 0,
+    rawOptions.join('\n       '));
+
+  ok('the cross-ledger transfer panel names assets through the shared helper',
+    /labelForProperty|prettifyAssetId/.test(src('frontend/src/components/InteropPanel.jsx')));
+
   // 5. No real third-party company is used as a property name.
   const banned = ['indiabulls', 'godrej', 'dlf', 'lodha', 'prestige estates'];
   const hits = [];

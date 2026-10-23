@@ -35,6 +35,19 @@ else
          GOMODCACHE="$HOME/.cache/gomod" GOCACHE="$HOME/.cache/go-build" GOFLAGS=-mod=mod
 fi
 
+# --- git repository repair --------------------------------------------------
+# A snapshot restore can take .git/config and the whole of .git/refs with it,
+# leaving .git/objects intact. The symptom is "fatal: not a git repository"
+# with every object still present, and a Go build that dies on "error
+# obtaining VCS status: exit status 128". Both are recoverable here: the
+# minimal config and the two refs directories are enough for git to open the
+# repository again, and packed-refs still carries the branch.
+if [ -d "$REPO/.git" ] && [ ! -f "$REPO/.git/config" ]; then
+  echo "[devup] repairing .git/config and .git/refs lost in a restore ..."
+  printf '[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n' > "$REPO/.git/config"
+fi
+mkdir -p "$REPO/.git/refs/heads" "$REPO/.git/refs/tags" 2>/dev/null
+
 # --- git identity -----------------------------------------------------------
 # .git/config is excluded from workspace snapshots, so the repo loses its
 # author identity between sessions and commits fall back to a placeholder.
@@ -59,7 +72,7 @@ git -C "$REPO" remote get-url origin >/dev/null 2>&1 || \
 # cache), and the frontend bundle hides underneath it instead of adding to it.
 # Logs are kept in files rather than interleaved on the terminal.
 echo "[devup] building drunix-gateway + frontend bundle ..."
-(cd "$REPO/drunix-gateway" && go build -o /tmp/umigw ./cmd/gateway) >/tmp/devup-go.log 2>&1 &
+(cd "$REPO/drunix-gateway" && go build -buildvcs=false -o /tmp/umigw ./cmd/gateway) >/tmp/devup-go.log 2>&1 &
 GO_PID=$!
 # npm run build, not npx vite build: the real build also generates the
 # sitemap and prerenders a head per route. Calling vite directly left dist

@@ -361,7 +361,7 @@ export default function UMISettlement() {
   const PropertyPicker = ({ value, onChange }) => (
     properties.length
       ? <select style={input} value={value} onChange={e => onChange(e.target.value)}>
-          {!properties.some(x => x.assetId === value) && <option value={value}>{value}</option>}
+          {!properties.some(x => x.assetId === value) && <option value={value}>{propLabel(value)}</option>}
           {properties.map(pr => <option key={pr.assetId} value={pr.assetId}>{propLabel(pr.assetId)}</option>)}
         </select>
       : <input style={input} value={value} onChange={e => onChange(e.target.value)} />
@@ -898,7 +898,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         <CarbonPanel participants={participants} />
         <ThroughputPanel />
         <PrivateDataPanel />
-        <InteropPanel participants={participants} assetIds={properties.map((p) => p.assetId || p.id).filter(Boolean)} />
+        <InteropPanel participants={participants} properties={properties} />
       </Suspense>
       </>)}
     </div>
