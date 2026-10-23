@@ -3,9 +3,9 @@
  *
  * A page of property cards with no photographs looks unfinished, and the
  * drawn placeholder that was here before looked deliberate but empty. So
- * there is now a small set of architectural images in `public/property-images`.
+ * there is now a set of architectural images in `public/property-images`.
  *
- * Three decisions behind this file, in order of importance.
+ * Four decisions behind this file, in order of importance.
  *
  * **They are labelled, always.** These are generic images, not photographs of
  * the listed buildings. A stock photograph presented silently beside a real
@@ -18,20 +18,52 @@
  * `imageUrl`, that is used and no label appears, because it is the real
  * thing.
  *
+ * **Each demo listing has its own picture.** The first version of this file
+ * had six images and a seeded pick over a type pool, which went wrong in two
+ * ways at once. Three of the nine demo listings landed on the same warehouse,
+ * and the pool keywords were loose enough that `LAND` resolved to that
+ * warehouse and an office block resolved to a retail street. A named listing
+ * beside a picture of the wrong kind of building reads as carelessness about
+ * the record itself. `BY_ASSET` now pins one image per demo listing, matched
+ * to its type and its city, and the type pool below is only a fallback for
+ * listings created at runtime.
+ *
  * **They were generated, not scraped.** Image search returned thumbnails from
- * architecture publications: copyrighted work, at 320 pixels, into a public
- * repository. These were generated instead, so the licence position is clean
- * and the resolution is usable. Replace them with real photography of the
- * actual properties whenever that exists: nothing else needs to change.
+ * architecture publications: copyrighted work, at low resolution, into a
+ * public repository. These were generated instead, so the licence position is
+ * clean. A real photograph of a real identifiable building would also be the
+ * more misleading choice here, because these demo listings are invented:
+ * attaching a genuine Pune building to a listing called "Green Valley Villas"
+ * asserts something false about a real address. Replace any of them with real
+ * photography of the actual property whenever that exists, by setting
+ * `imageUrl` on the record: nothing else needs to change.
  */
 
+// One image per demo listing. Keyed by the ledger id, because the title can
+// be edited and the id cannot.
+const BY_ASSET = {
+  'PROP-GREEN-VALLEY-PUNE-001': 'green-valley-villas-pune.jpg',
+  'PROP-MARINE-HEIGHTS-MUM-002': 'marine-heights-mumbai.jpg',
+  'PROP-CYBER-TOWERS-BLR-003': 'cyber-towers-bengaluru.jpg',
+  'PROP-SALTLAKE-RETAIL-KOL-004': 'saltlake-retail-kolkata.jpg',
+  'PROP-LOGIPARK-WH-CHN-005': 'logipark-warehouse-chennai.jpg',
+  'PROP-ARAVALI-PLOTS-JAI-006': 'aravali-plots-jaipur.jpg',
+  'PROP-HITEC-SERVICED-HYD-007': 'hitec-serviced-hyderabad.jpg',
+  'PROP-RIVERFRONT-COMM-AHM-008': 'riverfront-plaza-ahmedabad.jpg',
+  'PROP-COLD-CHAIN-NSK-009': 'cold-chain-nashik.jpg',
+}
+
+// The fallback pool, for listings this file has never heard of. Keywords are
+// deliberately narrow now: an entry claims a kind only if the picture would
+// actually pass for it. Vacant land gets vacant land, not a warehouse.
 const IMAGES = [
-  { file: 'residential-tower.jpg', kinds: ['APARTMENT', 'RESIDENTIAL', 'FLAT', 'TOWER'] },
-  { file: 'low-rise-residences.jpg', kinds: ['APARTMENT', 'RESIDENTIAL', 'PLOT'] },
+  { file: 'residential-tower.jpg', kinds: ['APARTMENT', 'FLAT', 'TOWER', 'RESIDENTIAL'] },
+  { file: 'low-rise-residences.jpg', kinds: ['APARTMENT', 'RESIDENTIAL'] },
   { file: 'row-houses.jpg', kinds: ['VILLA', 'HOUSE', 'ROWHOUSE', 'BUNGALOW', 'RESIDENTIAL'] },
   { file: 'commercial-office.jpg', kinds: ['OFFICE', 'COMMERCIAL', 'IT_PARK'] },
-  { file: 'retail-high-street.jpg', kinds: ['RETAIL', 'SHOP', 'COMMERCIAL', 'MIXED_USE'] },
-  { file: 'warehouse-logistics.jpg', kinds: ['WAREHOUSE', 'INDUSTRIAL', 'LOGISTICS', 'LAND'] },
+  { file: 'retail-high-street.jpg', kinds: ['RETAIL', 'SHOP', 'MIXED_USE'] },
+  { file: 'warehouse-logistics.jpg', kinds: ['WAREHOUSE', 'INDUSTRIAL', 'LOGISTICS', 'FACTORY'] },
+  { file: 'aravali-plots-jaipur.jpg', kinds: ['LAND', 'PLOT', 'PLOTS', 'SITE'] },
 ]
 
 const BASE = '/property-images/'
@@ -53,6 +85,9 @@ function seedOf(s) {
 export function propertyImage(p) {
   if (!p) return { src: null, isRepresentative: false }
   if (p.imageUrl) return { src: p.imageUrl, isRepresentative: false }
+
+  const pinned = BY_ASSET[p.assetId]
+  if (pinned) return { src: BASE + pinned, isRepresentative: true }
 
   const kind = String(p.propertyType || '').toUpperCase().replace(/[\s-]/g, '_')
   const matching = IMAGES.filter((img) => img.kinds.includes(kind))
