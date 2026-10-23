@@ -363,6 +363,24 @@ func main() {
 		}
 		log.Printf("Mandates mounted at /umi/mandates/*: bounded agent authority, spend counted on the ledger")
 
+		// Conditional settlement: cash locked against a named credential
+		// and released when it is presented, by the party entitled to
+		// assert it or by an agent under a mandate (conditional.go).
+		srv.Conditions = drunix.NewConditionDesk(srv.UMI, srv.Credentials, srv.Mandates)
+		// A deadline that only runs when somebody asks is not a deadline.
+		// Sweep at boot, then every minute, so money cannot sit locked
+		// against a condition whose window closed while the process was
+		// down.
+		if n := srv.Conditions.Tick(time.Now().UTC()); len(n) > 0 {
+			log.Printf("Conditional settlement: refunded %d condition(s) whose deadline had passed", len(n))
+		}
+		go func(desk *drunix.ConditionDesk) {
+			for range time.Tick(time.Minute) {
+				desk.Tick(time.Now().UTC())
+			}
+		}(srv.Conditions)
+		log.Printf("Conditional settlement mounted at /umi/conditions/*: cash reserved on the buyer's own wallet, released against a verified credential, refunded automatically at the deadline")
+
 		// Work desk — escrowed property upkeep paid on accepted delivery
 		// (work.go), with a pluggable adapter at the talent boundary.
 		// WORK_ENABLED=false removes the routes and changes nothing else.

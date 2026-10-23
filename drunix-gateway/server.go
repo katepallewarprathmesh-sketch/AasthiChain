@@ -49,6 +49,10 @@ type Server struct {
 	// Nil means the /umi/mandates/* routes are not mounted and the settlement
 	// path ignores the agent header entirely.
 	Mandates *MandateRegistry
+	// Conditions holds conditional settlements: cash locked against a named
+	// credential, released when it is presented (see conditional.go). Nil
+	// means the /umi/conditions/* routes are not mounted.
+	Conditions *ConditionDesk
 	// Work is the escrowed work-order desk (see work.go). Nil means the
 	// /umi/work/* routes are not mounted and nothing else changes.
 	Work *WorkDesk
@@ -194,6 +198,7 @@ func (s *Server) Router() http.Handler {
 	s.registerUMIRoutes(mux) // UMI rail (/umi/*): additive, no-op when s.UMI is nil
 	s.registerCredentialRoutes(mux)
 	s.registerMandateRoutes(mux)
+	s.registerConditionRoutes(mux)
 	s.registerAttestationRoutes(mux)
 	s.registerBackingRoutes(mux)
 	s.registerCrossBorderRoutes(mux)

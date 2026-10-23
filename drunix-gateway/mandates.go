@@ -71,10 +71,15 @@ const (
 	// ActionDeliverWork lets an agent hand in a deliverable on an escrowed
 	// work order. It moves no money by itself: the escrow still releases
 	// only through the agreed verification path.
-	ActionDeliverWork  = "DELIVER_WORK"
-	MandateCredential  = CredentialDelegated
-	MandateDisclaimer  = "No autonomous agent runs on this deployment. This is the authority a software agent would act under, enforced by the rail."
-	mandateMaxLifetime = 365 * 24 * time.Hour
+	ActionDeliverWork = "DELIVER_WORK"
+	// ActionReleaseCondition lets an agent present the credential that
+	// releases a conditional settlement (conditional.go). It is the one
+	// action on this list that moves somebody else's money directly, so the
+	// amount of the settlement is charged against the mandate's limit.
+	ActionReleaseCondition = "RELEASE_CONDITION"
+	MandateCredential      = CredentialDelegated
+	MandateDisclaimer      = "No autonomous agent runs on this deployment. This is the authority a software agent would act under, enforced by the rail."
+	mandateMaxLifetime     = 365 * 24 * time.Hour
 )
 
 var (
@@ -139,7 +144,7 @@ func (r *MandateRegistry) now() time.Time { return r.nowFunc() }
 
 func knownAction(a string) bool {
 	switch strings.ToUpper(strings.TrimSpace(a)) {
-	case ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc, ActionDeliverWork:
+	case ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc, ActionDeliverWork, ActionReleaseCondition:
 		return true
 	}
 	return false
@@ -506,7 +511,7 @@ func (r *MandateRegistry) Summary() map[string]interface{} {
 		"granted":    len(r.order),
 		"active":     active,
 		"revoked":    revoked,
-		"actions":    []string{ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc, ActionDeliverWork},
+		"actions":    []string{ActionSettleDvP, ActionPlaceOffer, ActionAnchorDoc, ActionDeliverWork, ActionReleaseCondition},
 		"enforcedBy": "the settlement path, before anything moves",
 		"disclaimer": MandateDisclaimer,
 	}

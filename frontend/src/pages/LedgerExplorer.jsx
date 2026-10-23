@@ -127,6 +127,10 @@ const TYPE_STYLES = {
   UMI_BACKING_WITHDRAWN: { label: 'Backing · Withdrawn', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_ISSUE_BLOCKED: { label: 'Issuance · Refused, Backing Short', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   // Work orders (escrowed engagements)
+  UMI_CONDITION_OPENED: { label: 'Conditional · Cash Reserved', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
+  UMI_CONDITION_RELEASED: { label: 'Conditional · Released on Credential', color: '#047857', bg: '#ECFDF5', border: '#A7F3D0' },
+  UMI_CONDITION_REFUSED: { label: 'Conditional · Presentation Refused', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+  UMI_CONDITION_REFUNDED: { label: 'Conditional · Cash Returned', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
   WORK_CREATED: { label: 'Work · Created', color: '#334155', bg: '#F8FAFC', border: '#E2E8F0' },
   WORK_FUNDED: { label: 'Work · Escrow Funded', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
   WORK_ASSIGNED: { label: 'Work · Assigned', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },

@@ -21,6 +21,7 @@ import { umiFetch as umi } from '../lib/umiFetch'
 // anyone opens this page. Loading them up front made the first paint wait
 // for code most visitors scroll past, so they are split out and fetched
 // when the page renders them rather than when it is requested.
+const ConditionalPanel = lazy(() => import('../components/ConditionalPanel'))
 const WorkDeskPanel = lazy(() => import('../components/WorkDeskPanel'))
 const CarbonPanel = lazy(() => import('../components/CarbonPanel'))
 const ThroughputPanel = lazy(() => import('../components/ThroughputPanel'))
@@ -895,6 +896,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       </Card>
 
       <Suspense fallback={<PanelFallback />}>
+        <ConditionalPanel properties={properties} participants={participants} propLabel={propLabel} />
         <WorkDeskPanel properties={properties} participants={participants} propLabel={propLabel} />
         <CarbonPanel participants={participants} />
         <ThroughputPanel />

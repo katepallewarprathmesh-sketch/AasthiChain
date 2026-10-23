@@ -19,7 +19,7 @@ in it). Those should be fixed before any new feature.
 
 ## P0 · Correctness and credibility
 
-### 1. Close the conditional settlement loop on the cash leg
+### 1. Close the conditional settlement loop on the cash leg (SHIPPED)
 The work desk now pays on a verified result. The DvP cash leg still cannot: it settles atomically
 or fails, with nothing in between. The missing shape is cash locked at settlement and released
 when a named condition is met, where the condition is the presentation of a valid credential and
@@ -29,6 +29,20 @@ three layers (credential, mandate, escrow) one mechanism rather than three demos
 Done looks like: a `UMI_CONDITION_*` block family, the reconciliation check proving conservation
 while cash sits conditional, a timeout that cannot strand money, and a failure test for every way
 the condition can fail to arrive.
+
+Shipped in `drunix-gateway/conditional.go` and mounted at `/umi/conditions/*`. The buyer's cash is
+reserved on the buyer's own wallet, so the money identity (`issued - redeemed == sum(balances)`)
+holds untouched while a settlement is pending: nothing is moved to a desk account and nothing is
+created. A presentation is checked in order: deadline, then authority (the named asserter, or an
+agent holding a `RELEASE_CONDITION` mandate from that asserter covering this asset and this
+amount), then the credential itself (exists, signature valid, anchor matches, not revoked, right
+type, right issuer, names this asset). Only then do both legs move inside one locked section, and
+only then is the mandate's spend counted. Every failure writes `UMI_CONDITION_REFUSED` with the
+reason and leaves the agreement open. A background sweep every minute, and at boot, refunds
+anything whose window closed, so a stopped process cannot strand money. Blocks:
+`UMI_CONDITION_OPENED | RELEASED | REFUSED | REFUNDED`. Tests: `conditional_test.go` (every
+refusal branch, the mandate bounds, the deadline, conservation) and `tests/conditions.test.mjs`
+(28 checks over HTTP). Screen: panel 13 on `/umi`.
 
 ### 2. Test the untested module
 `api-gateway` has no tests at all (`docs/BACKLOG.md` D1). It is the only Go module in that state.
