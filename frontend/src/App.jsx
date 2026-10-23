@@ -72,6 +72,7 @@ const CrossBorder = lazy(() => import('./pages/CrossBorder.jsx')) // funding a p
 const KeyRegister = lazy(() => import('./pages/KeyRegister.jsx')) // proving a signing key is worth trusting
 const Feeds = lazy(() => import('./pages/Feeds.jsx')) // signed rate feeds and backing attestations
 const Cards = lazy(() => import('./pages/Cards.jsx')) // card interchange economics and the dispute ladder
+const ChainState = lazy(() => import('./pages/ChainState.jsx')) // module state replayed from the ledger
 const Explore = lazy(() => import('./pages/Explore.jsx'))
 const DigitalRupee = lazy(() => import('./pages/DigitalRupee.jsx')) // the CBDC layer and its corridors
 // Public free tools. No auth, no API calls - they exist to be found in search
@@ -419,6 +420,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
         { path: '/keys', label: 'Key register' },
         { path: '/feeds', label: 'Feeds and backing' },
         { path: '/cards', label: 'Card rail and disputes' },
+        { path: '/chainstate', label: 'Chain-first state' },
         { path: '/trust', label: 'Trust' },
         { path: '/support', label: 'Support' },
       ],
@@ -820,6 +822,7 @@ function AppContent({ user, setUser }) {
           <Route path="/keys" element={<KeyRegister />} />
           <Route path="/feeds" element={<Feeds />} />
           <Route path="/cards" element={<Cards />} />
+          <Route path="/chainstate" element={<ChainState />} />
           <Route path="/cbdc" element={<DigitalRupee user={effectiveUser} />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/trust" element={<Trust />} />

@@ -41,6 +41,11 @@ export const ROUTE_SEO = {
     description:
       'Where a card payment actually goes: interchange to the issuer, the scheme fee, and what is left for the acquirer under the RBI caps. Then every rung of the chargeback ladder, with the deadline that governs it and the liability shift that decides who loses.',
   },
+  '/chainstate': {
+    title: 'Chain-First State: Rebuilt From the Ledger | AasthiChain',
+    description:
+      'Each module state replayed from committed blocks and compared with what the rail is serving. Agreement means the ledger is the state rather than a description of it, and every projection names the fields it cannot rebuild.',
+  },
   '/trust': {
     title: 'What Is Real and What Is Simulated | AasthiChain',
     description:

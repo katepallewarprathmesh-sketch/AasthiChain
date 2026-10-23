@@ -39,6 +39,17 @@ var (
 	ErrOfferOversold = errors.New("ERR_UMI_OFFER_OVERSOLD")
 )
 
+// Block types. Until these existed the offer book lived only in a Go map:
+// a holder could list tokens, the listing could be taken or cancelled, and
+// the ledger recorded none of it except the settlement itself. That made the
+// book unreconstructable after a restart and unverifiable by anyone who was
+// not holding this process's memory.
+const (
+	BlockOfferListed    = "UMI_OFFER_LISTED"
+	BlockOfferTaken     = "UMI_OFFER_TAKEN"
+	BlockOfferCancelled = "UMI_OFFER_CANCELLED"
+)
+
 // Offer statuses.
 const (
 	OfferOpen      = "OPEN"
@@ -65,6 +76,7 @@ type Offer struct {
 	TokensRemaining  int64       `json:"tokensRemaining"`
 	PricePerTokenINR float64     `json:"pricePerTokenINR"`
 	Status           string      `json:"status"`
+	BlockHeight      int64       `json:"blockHeight,omitempty"`
 	CreatedAt        time.Time   `json:"createdAt"`
 	Fills            []OfferFill `json:"fills"`
 }
@@ -136,6 +148,22 @@ func (r *UMIRail) CreateOffer(assetID, seller string, tokens int64, pricePerToke
 	}
 	r.book.offers[o.OfferID] = o
 	r.book.order = append(r.book.order, o.OfferID)
+
+	// The listing itself is now a block, carrying every field the book needs
+	// to be rebuilt from the ledger alone.
+	if r.chain != nil {
+		if blk := r.chain.Append(BlockOfferListed, []map[string]interface{}{{
+			"kind":             "umi-offer-listed",
+			"offerId":          o.OfferID,
+			"assetId":          o.AssetID,
+			"seller":           o.Seller,
+			"tokens":           o.TokensTotal,
+			"pricePerTokenINR": o.PricePerTokenINR,
+			"createdAt":        o.CreatedAt.Format(time.RFC3339Nano),
+		}}); blk != nil {
+			o.BlockHeight = blk.Height
+		}
+	}
 	return o, nil
 }
 
@@ -195,6 +223,16 @@ func (r *UMIRail) CancelOffer(offerID, who string) (*Offer, error) {
 		return nil, ErrOfferClosed
 	}
 	o.Status = OfferCancelled
+	if r.chain != nil {
+		r.chain.Append(BlockOfferCancelled, []map[string]interface{}{{
+			"kind":            "umi-offer-cancelled",
+			"offerId":         o.OfferID,
+			"assetId":         o.AssetID,
+			"seller":          o.Seller,
+			"tokensWithdrawn": o.TokensRemaining,
+			"by":              who,
+		}})
+	}
 	return cloneOffer(o), nil
 }
 
@@ -276,6 +314,21 @@ func (r *UMIRail) TakeOffer(offerID, buyer string, tokens int64, dryRun bool) (*
 	})
 	if cur.TokensRemaining == 0 {
 		cur.Status = OfferFilled
+	}
+	if r.chain != nil {
+		r.chain.Append(BlockOfferTaken, []map[string]interface{}{{
+			"kind":            "umi-offer-taken",
+			"offerId":         cur.OfferID,
+			"assetId":         cur.AssetID,
+			"seller":          cur.Seller,
+			"buyer":           buyer,
+			"tokens":          tokens,
+			"cashINR":         si.CashINR,
+			"instructionId":   si.InstructionID,
+			"settledAtBlock":  si.BlockHeight,
+			"tokensRemaining": cur.TokensRemaining,
+			"status":          cur.Status,
+		}})
 	}
 	return cloneOffer(cur), si, nil
 }

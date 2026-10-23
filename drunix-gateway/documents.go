@@ -757,6 +757,22 @@ func (dr *DocumentRegistry) ForSubject(subject string) []Document {
 }
 
 // Get returns one document by CID.
+// All returns every anchored document in anchoring order. Added so the
+// chain-state replay (chainstate.go) can compare the register it is serving
+// against the one the ledger describes, which needs the whole set rather
+// than one asset's slice.
+func (dr *DocumentRegistry) All() []Document {
+	dr.mu.RLock()
+	defer dr.mu.RUnlock()
+	out := make([]Document, 0, len(dr.order))
+	for _, cid := range dr.order {
+		if d, ok := dr.docs[cid]; ok {
+			out = append(out, *d)
+		}
+	}
+	return out
+}
+
 func (dr *DocumentRegistry) Get(cid string) (*Document, bool) {
 	dr.mu.RLock()
 	defer dr.mu.RUnlock()

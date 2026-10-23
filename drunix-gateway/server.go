@@ -94,6 +94,12 @@ type Server struct {
 	// the merchant sees it, and the dispute ladder that can take it all
 	// back months later (cardscheme.go). Nil leaves the routes unmounted.
 	Cards *CardDesk
+
+	// ChainState rebuilds module state by replaying committed blocks and
+	// compares it with what the rail is serving (chainstate.go). It is the
+	// check behind the claim that the ledger is the state rather than a
+	// description of it. Nil leaves the routes unmounted.
+	ChainState *ChainState
 }
 
 // NewServer wires dependencies (DIP).
@@ -196,6 +202,7 @@ func (s *Server) Router() http.Handler {
 	s.registerOracleRoutes(mux)
 	s.registerJurisdictionRoutes(mux)
 	s.registerCardRoutes(mux)
+	s.registerChainStateRoutes(mux)
 	s.registerWorkRoutes(mux) // work desk (/umi/work/*): additive, no-op when s.Work is nil
 	return logCORS(s.withMetrics(s.sealedLedgerGate(mux)))
 }

@@ -311,6 +311,19 @@ func main() {
 		srv.Cards = drunix.NewCardDesk(chain)
 		log.Printf("Card rail mounted at /umi/cards/*: interchange split and the full dispute ladder, modelled; this deployment holds no scheme membership so nothing is authorised or cleared")
 
+		// Chain-first state (chainstate.go): replay the ledger into each
+		// module's state and check it against what is being served. Also
+		// restores the offer book at boot, so a restart recovers listings
+		// from the chain instead of starting empty while the blocks that
+		// created them sit there unread.
+		srv.ChainState = drunix.NewChainState(chain, srv.UMI, srv.Docs, srv.Work)
+		if srv.ChainState != nil {
+			if n := srv.ChainState.RestoreOffers(); n > 0 {
+				log.Printf("Chain-first restore: %d offer(s) rebuilt from the ledger", n)
+			}
+			log.Printf("Chain state mounted at /umi/chainstate/*: every projection rebuilt from blocks, and a verify that fails when the ledger and the running process disagree")
+		}
+
 		srv.Agents = drunix.NewAgentRegistry(chain)
 		log.Printf("Agent passports mounted at /umi/agents/*: pseudonymous actors, principal recoverable only by a threshold of custodians")
 

@@ -67,6 +67,7 @@ const MODULES = [
   ['carbon', 'carbon credits'],
   ['jurisdictions', 'per-jurisdiction rule sets'],
   ['cards', 'card economics and disputes'],
+  ['chainstate', 'chain-first state projections'],
 ];
 
 const run = async () => {
@@ -84,7 +85,7 @@ const run = async () => {
   const seo = src('frontend/src/lib/seo.js');
   const smoke = src('frontend/smoke/smoke-render.jsx');
 
-  for (const [route, page] of [['/keys', 'KeyRegister.jsx'], ['/feeds', 'Feeds.jsx'], ['/cards', 'Cards.jsx']]) {
+  for (const [route, page] of [['/keys', 'KeyRegister.jsx'], ['/feeds', 'Feeds.jsx'], ['/cards', 'Cards.jsx'], ['/chainstate', 'ChainState.jsx']]) {
     ok(`${route} has a route`, app.includes(`path="${route}"`), app.includes(route) ? 'mentioned but not routed' : 'absent');
     ok(`${route} is reachable from the navigation`, app.includes(`path: '${route}'`));
     ok(`${route} is listed in the explore index`, explore.includes(`'${route}'`));
