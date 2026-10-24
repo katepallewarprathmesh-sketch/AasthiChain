@@ -46,6 +46,32 @@ can". You will be credited in the fix unless you would rather not be.
 
 Findings in a dependency are welcome, but please check whether it is reachable from our code first.
 
+## Edge and transport
+
+Every response from the app, from the serverless handler and from the static deployment carries the
+same set of headers: HSTS for two years with subdomains, `nosniff`, `X-Frame-Options: DENY`,
+`strict-origin-when-cross-origin`, a `Permissions-Policy` refusing hardware this application has no
+use for, and cross-origin opener and resource policies. They are defined once in
+`frontend/api/lib/edge.mjs` and mirrored into `frontend/vercel.json` because static assets are
+served by the CDN and never reach the handler; `tests/edgesecurity.test.mjs` fails if the two
+copies disagree.
+
+They are sent by the origin rather than configured at a CDN on purpose. An origin that relies on a
+CDN for its security headers loses them the moment someone reaches it directly, and the deployment
+URL of any hosted service is always directly reachable.
+
+**Content-Security-Policy is report-only.** This application sets element styles inline throughout
+and loads Clerk from another origin, so an enforced policy written without measuring would break
+the site for real visitors. Report-only surfaces every violation first. Enforcing it is the next
+step, not a step that has been taken.
+
+**Client addresses come from a declared proxy, never from a header a caller can write.** Set
+`TRUSTED_PROXY` to `vercel`, `cloudflare` or `none`; it defaults to `vercel` when the Vercel runtime
+is detected and to `none` everywhere else. Only that proxy's own header is read
+(`x-vercel-forwarded-for`, `cf-connecting-ip`), because those are overwritten by the edge, whereas
+`X-Forwarded-For` is appended to and may still contain whatever the caller invented. If Cloudflare
+is ever put in front of this deployment, setting `TRUSTED_PROXY=cloudflare` is the whole change.
+
 ## Known weaknesses
 
 Kept here deliberately, so nobody spends time rediscovering them:

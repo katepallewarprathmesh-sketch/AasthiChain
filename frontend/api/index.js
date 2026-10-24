@@ -9,6 +9,7 @@ import { realDB } from './lib/db_real.js';
 // INSIDE the Vercel project root (frontend/) and actually gets bundled.
 import { authorise as insightsAuth, buildInsights } from './lib/insights.mjs';
 import { recordHit, trafficSummary, allTimeSummary, livePresence, accountRegister, recordAccountSighting } from './lib/traffic.mjs';
+import { applySecurityHeaders, clientIp, rateLimitKey } from './lib/edge.mjs';
 import { validateChatRequest, rateLimit as aiRateLimit, buildPropertyContext, askGroq, isConfigured as aiConfigured, LIMITS as AI_LIMITS } from './lib/ai.mjs';
 import { buildKnowledgeContext, buildRailContext, readRail, lookupRecords } from './lib/knowledge.mjs';
 import { authStore, verificationLockedOut } from './lib/authstore.js';
@@ -2408,6 +2409,7 @@ export default async function handler(req, res) {
   const startedAt = Date.now();
   const requestId = newRequestId();
   try { res.setHeader('x-request-id', requestId); } catch { /* headers may be sent */ }
+  applySecurityHeaders(res);
 
   try {
     await initState();
@@ -3736,7 +3738,7 @@ export default async function handler(req, res) {
         const token = mockJWT(identityId, mspId, role);
         // Neon schema lifecycle: user + account + session + memberships (additive — response shape preserved)
         try {
-          const auth = await authStore.login(identityId, { role, mspId, token, userAgent: req.headers['user-agent'], ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress });
+          const auth = await authStore.login(identityId, { role, mspId, token, userAgent: req.headers['user-agent'], ip: clientIp(req) });
           return res.json({ token, identityId, mspId, role, sessionId: auth.session.id, userId: auth.user.id, memberships: auth.memberships, authStoreMode: authStore.getMode() });
         } catch (eA) {
           console.error('authStore login failed (non-fatal)', eA.message);
@@ -3817,9 +3819,11 @@ export default async function handler(req, res) {
 
       // Signed-in people get their own budget; everyone else shares one per
       // address, so one visitor cannot spend the allowance of the next.
-      const callerKey = anonymous
-        ? `ip:${String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown').split(',')[0].trim()}`
-        : `id:${user.identityId}`;
+      // Keyed on an address only a trusted edge can set. Keyed on
+      // X-Forwarded-For, as this was, the limit could be stepped around by
+      // sending a different value on every request, and each one past the
+      // limit is a paid model call.
+      const callerKey = rateLimitKey(req, anonymous ? null : user.identityId);
       const limited = aiRateLimit(callerKey);
       if (limited) {
         res.setHeader('Retry-After', String(limited.body.retryAfterSeconds || 60));

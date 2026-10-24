@@ -199,8 +199,15 @@ async function proxyEvents(req, res) {
 async function main() {
   const mod = await import('./frontend/api/index.js');
   const handler = mod.default;
+  // One definition of the security headers, imported rather than repeated, so
+  // a static file served by this process carries exactly what an API response
+  // carries. The handler applies them to its own responses; everything served
+  // before the handler is reached (static assets, the SPA shell, the SSE
+  // proxy, the early 400s) is covered here.
+  const { applySecurityHeaders } = await import('./frontend/api/lib/edge.mjs');
 
   const server = http.createServer(async (req, res) => {
+    applySecurityHeaders(res);
     let parsed;
     try {
       parsed = new URL(req.url, 'http://localhost');
