@@ -1,0 +1,27 @@
+# Defaults. Per-organisation values live in ../../values/drunix/validation-<org>.yaml.
+nameOverride: ""
+project: aasthichain
+organisation:
+  name: ""
+  mspId: ""
+image:
+  repository: npcioss/drunix-vscc
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+replicaCount: 2
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+service:
+  port: 7071
+  operationsPort: 9464
+identities: []
+resources: {}
+env: []
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

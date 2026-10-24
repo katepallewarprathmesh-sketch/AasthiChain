@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "drunix-validation.name" . }}
+  labels: {{- include "drunix-validation.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: vscc
+      port: {{ .Values.service.port }}
+      targetPort: vscc
+    - name: operations
+      port: {{ .Values.service.operationsPort }}
+      targetPort: operations
+  selector:
+    app.kubernetes.io/name: {{ include "drunix-validation.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}

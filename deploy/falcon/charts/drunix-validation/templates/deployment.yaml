@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "drunix-validation.name" . }}
+  labels: {{- include "drunix-validation.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "drunix-validation.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels: {{- include "drunix-validation.labels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: vscc
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The Validation Service is stateless: it verifies endorsement
+          # policies and signatures and holds no ledger, which is why it can be
+          # scaled by an HPA while the Committing Peer stays a fixed, small set.
+          command: ["vscc", "node", "start"]
+          ports:
+            - name: vscc
+              containerPort: {{ .Values.service.port }}
+            - name: operations
+              containerPort: {{ .Values.service.operationsPort }}
+          env:
+            - name: FABRIC_CFG_PATH
+              value: /etc/hyperledger/peercfg
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            tcpSocket:
+              port: vscc
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: operations
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: msp
+              mountPath: /etc/hyperledger/fabric
+              readOnly: true
+      volumes:
+        - name: msp
+          secret:
+            secretName: {{ .Values.organisation.name }}-vs-msp
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

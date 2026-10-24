@@ -1,0 +1,38 @@
+[
+  {
+    "name": "consideration",
+    "policy": "OR('OriginatorMSP.member','InvestorMSP.member','RegulatorMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 3,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "AND('OriginatorMSP.peer','InvestorMSP.peer')"
+    }
+  },
+  {
+    "name": "valuation",
+    "policy": "OR('OriginatorMSP.member','RegistrarMSP.member','RegulatorMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 3,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('RegistrarMSP.peer')"
+    }
+  },
+  {
+    "name": "kycEvidence",
+    "policy": "OR('InvestorMSP.member','RegulatorMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('InvestorMSP.peer')"
+    }
+  }
+]

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: drunix-validation
+description: >-
+  The DRUNIX stateless Validation Service (VSCC). Falcon's fabric-peer chart
+  deploys Lite Peers and Committing Peers; the Validation Service is a separate
+  DRUNIX role with its own image and entrypoint, so it is deployed from here
+  with the same identities, transient store and state database as the peers.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

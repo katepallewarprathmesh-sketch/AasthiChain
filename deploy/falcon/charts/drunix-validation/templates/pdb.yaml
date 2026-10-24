@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "drunix-validation.name" . }}
+  labels: {{- include "drunix-validation.labels" . | nindent 4 }}
+spec:
+  # Validation is on the commit path: a node drain must not take the whole
+  # service with it, or settlement stops for that organisation.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "drunix-validation.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
