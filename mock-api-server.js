@@ -2260,9 +2260,36 @@ function buildPayUCheckout(payu, pay, req, cbBase) {
     udf1: udf[0], udf2: udf[1], udf3: udf[2], udf4: udf[3], udf5: udf[4]
   };
   // PAYU_PIN_UPI=false → full PayU menu (Cards/Netbanking/Wallets/UPI). Default: pinned UPI (NPCI rail).
+  //
+  // Landing on the UPI ID field in one step, rather than three.
+  //
+  // pg and bankcode alone were not enough. On PayU's hosted page those two
+  // choose the category; the page still asked which UPI app, and only then
+  // offered the UPI ID field, so a payer who had already typed their UPI ID
+  // here had to pass two screens restating the choice this merchant had
+  // already made. PayU's documented levers for the hosted page are different
+  // parameters:
+  //
+  //   enforce_paymethod  which categories the page may show at all
+  //   drop_category      which options inside a category to hide
+  //
+  // So UPI is enforced as the only category, and the app tiles inside it are
+  // dropped, which leaves the UPI ID field as the only thing on the page. The
+  // vpa parameter above prefills it. Neither parameter is part of the request
+  // hash, so none of this touches the signature.
+  //
+  // Both are overridable because they describe PayU's page rather than ours,
+  // and a merchant account with a different set of options enabled may need a
+  // different list. PAYU_DROP_CATEGORY='' restores the app tiles without
+  // giving up the single-category page.
   if (process.env.PAYU_PIN_UPI !== 'false') {
     params.pg = 'UPI';
     params.bankcode = 'UPI';
+    params.enforce_paymethod = process.env.PAYU_ENFORCE_PAYMETHOD || 'upi';
+    const drop = process.env.PAYU_DROP_CATEGORY === undefined
+      ? 'UPI|TEZ,UPI|PHONEPE,UPI|PAYTM,UPI|BHIM,UPI|AMAZONPAY,UPI|CRED,UPI|INTENT'
+      : process.env.PAYU_DROP_CATEGORY;
+    if (drop) params.drop_category = drop;
   }
   params.hash = payuRequestHash(payu.key, pay.paymentId, amount, productinfo, firstname, email, udf, payu.salt);
   return { action: payu.base + '/_payment', params };
