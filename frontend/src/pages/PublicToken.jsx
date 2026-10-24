@@ -134,6 +134,34 @@ export default function PublicToken() {
 
   useEffect(() => { load(assetId) }, [load, assetId])
 
+  // Say beforehand what the rail would refuse afterwards.
+  //
+  // Both writes used to be clickable with an empty address field and no key
+  // loaded, so the first thing a visitor saw was ERR_TOKEN_FIELDS: an error
+  // code as a greeting, for a transaction that could never have been signed.
+  // The rail still enforces all of this, and must: a disabled button is a
+  // courtesy, not a control. This only moves the answer to before the click.
+  const addressShaped = /^0x[0-9a-fA-F]{40}$/.test(wallet.trim())
+  const hasHolder = holder.trim().length > 0
+  const signable = Boolean(st && st.configured && st.fundedForWrites)
+  const canLink = signable && hasHolder && addressShaped
+  const canMirror = signable && hasHolder && assetId.trim().length > 0
+
+  const blocked = (() => {
+    if (st && !st.configured) {
+      return 'No transaction can be signed yet: the rail is missing '
+        + ((st.missing || []).join(', ') || 'its chain settings')
+        + '. Both writes stay disabled until a signer exists, because an unsigned write is not a write.'
+    }
+    if (st && st.configured && !st.fundedForWrites) {
+      return 'The signer ' + short(st.signer) + ' holds no gas, so a transaction would be rejected by the node rather than by this rail.'
+    }
+    if (!hasHolder) return 'Name the rail holder whose position is being mirrored.'
+    if (!wallet.trim()) return 'Registering needs the holder\'s Ethereum address. Mirroring does not, once that address is registered.'
+    if (!addressShaped) return 'That is not an Ethereum address: 0x followed by 40 hexadecimal characters.'
+    return null
+  })()
+
   const run = async (path, body) => {
     setBusy(true)
     const { ok, data } = await umiPost(path, body)
@@ -163,13 +191,16 @@ export default function PublicToken() {
             style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'inherit' }}
           />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="pg-btn" disabled={busy} onClick={() => run('/token/link', { holder, wallet })}>
+            <button className="pg-btn" disabled={busy || !canLink} onClick={() => run('/token/link', { holder, wallet })}>
               {busy ? 'Signing…' : 'Register this address on chain'}
             </button>
-            <button className="pg-btn pg-btn-ghost" disabled={busy} onClick={() => run('/token/mirror', { assetId, holder })}>
+            <button className="pg-btn pg-btn-ghost" disabled={busy || !canMirror} onClick={() => run('/token/mirror', { assetId, holder })}>
               Mirror the rail position
             </button>
           </div>
+          {blocked && (
+            <p className="pg-card-sub" style={{ margin: 0 }}>{blocked}</p>
+          )}
         </div>
 
         {outcome && (

@@ -291,6 +291,16 @@ function MoreMenu({ groups, mut, text, dark, chipBorder, isMobile }) {
   const [rect, setRect] = useState(null)
   const btnRef = useRef(null)
   const close = () => setOpen(false)
+  const { pathname } = useLocation()
+
+  // Close whenever the route changes, not only when a menu item is clicked.
+  // Clicking an item already calls close(), but that alone left the panel
+  // open in the cases that matter: a lazily loaded page that suspends and
+  // remounts this bar, a link followed with the keyboard, a browser back or
+  // forward, and anything else that navigates from outside the menu. The
+  // route is the thing the menu exists to change, so the route is what
+  // should dismiss it.
+  useEffect(() => { setOpen(false) }, [pathname])
 
   const place = useCallback(() => {
     const el = btnRef.current
