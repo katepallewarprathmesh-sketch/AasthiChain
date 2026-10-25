@@ -76,10 +76,10 @@ is ever put in front of this deployment, setting `TRUSTED_PROXY=cloudflare` is t
 
 Kept here deliberately, so nobody spends time rediscovering them:
 
-- **`UMI_PROXY_SECRET` is unset in the live deployment.** Until it is set on *both* the app and the
-  rail, the rail believes the identity headers it is sent, so a caller who can reach the rail
-  directly can claim to be a regulator. The gate is implemented and tested; it is simply not
-  switched on yet. See the deployment notes.
+- **The operator key grants a regulator's view of live operational data.** `x-admin-key` is
+  read-only, but the read includes the work queues with asset identifiers and owner names. Treat it
+  as a credential, rotate it if it is ever pasted anywhere, and do not assume read-only means
+  harmless.
 - **The demo deployment is seeded and public.** Treat every figure on the live site as demonstration
   data.
 - Two legacy assets carry a small supply discrepancy against their register, recorded on the chain
