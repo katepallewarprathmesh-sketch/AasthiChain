@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "9d253ac6ef1b4c689e3ec23fada3a107cb57e546545395513daa7d1a49c71f1d",
+  "sourceDigest": "bb5e576fadb7362596108d6e40c04b5da73de69a82e34f00566b273aa368cb91",
   "sections": [
     {
       "doc": "README",
@@ -1622,6 +1622,66 @@
       "file": "docs/TOKEN.md",
       "heading": "Routes",
       "text": "Route What it does \n --- --- \n GET /umi/token configuration, gas balance, and every write made \n GET /umi/token/compare?assetId= each linked wallet against its rail position \n POST /umi/token/link register a holder's address on chain \n POST /umi/token/mirror mint the shortfall so the chain matches the rail \n\nReads are public. The claim is that an outsider can check our tokens against a\npublic chain, and a status page they need a key to see would undercut it."
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "Interface and type safety: what is worth doing, and what is not",
+      "text": "A plan, not a change. Nothing here has been implemented. It exists so the\ndecision is made deliberately rather than halfway through a refactor.\n\nTwo questions were asked: should the interface look more like the complex\nblockchain products, and should the codebase move to TypeScript. The honest\nanswers are \"partly, and not in the way the phrase suggests\" and \"yes, but\nonly the part that pays for itself\".\n\n Landing.jsx is frozen and its redesign was cancelled. Nothing in this plan\ntouches it."
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "1. What the good crypto interfaces actually do",
+      "text": "The surface reading of Uniswap, Aave, Etherscan or a portfolio dashboard is\n\"dense, dark, lots of numbers\". That is the least important thing about them,\nand copying it produces a screen that looks serious and tells you nothing. The\npatterns that those products are actually praised for are these:\n\n Consequence, not state. Health factor: 1.4 is protocol state. Your\nposition is liquidated if ETH falls 18% is the same number translated into\nwhat it means for the person reading it. The test is whether you can finish\nthe sentence \"so what\". If you cannot, the metric is not ready to ship.\n\n The transaction is a sequence, not a button. Submitted, confirming,\nconfirmed, with an explorer link at the end, and submitted, failed, retry on\nthe other branch. Blocking the screen and then showing a result is the thing\ndApp audits have marked down since 2018.\n\n Approval is separated from action, and both are named. A signature that\ngrants spending permission is a different risk from the payment itself, and\na user who cannot tell them apart cannot consent to either.\n\n Failure is explained in the user's terms. Not \"transaction reverted\" but\nwhich of balance, allowance, slippage or wrong network caused it."
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "1. What the good crypto interfaces actually do (continued)",
+      "text": "Fintech tables have their own rules. One primary figure per screen in the\nlargest type. Tabular numerals, right aligned, consistent decimals, because\nproportional digits make a column of money ragged and slow to compare.\nPending rows visually distinct from settled rows, never silently mixed, since\npeople reconcile these against statements. Progressive disclosure: summary\nrow, expandable detail, full audit trail on demand.\n\n The empty state is onboarding. A first visit should explain the product,\nnot show zeros.\n\n Where AasthiChain already does this\n\nMore than a redesign-minded reading would suggest, and this matters because\nthe gap is narrower than it looks:\n\n- Refusals carry an error code, a reason in plain words, and a block on the\n ledger. That is further than most products go: the refusal is auditable.\n- The public token screen now states why a button is disabled and which\n setting is missing, before the click rather than after it.\n- Empty states explain the mechanism. The token comparison table says that a\n wallet must be in the on-chain identity registry before it can hold\n anything, which is onboarding disguised as an empty state.\n- The drift panel reports disagreement between chain and register instead of\n reconciling it away.\n- The boundary sections say plainly what the product does not claim.\n\n The real gaps"
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "1. What the good crypto interfaces actually do (continued)",
+      "text": "1. No shared transaction-state component , in a product whose entire\n subject is state transitions. Each screen renders progress its own way.\n The settlement rail has the richest status model in the codebase and the\n interface flattens it per page.\n2. No design tokens. All 62 components style inline. Spacing, radius,\n type scale and the status colours are retyped per file, which is why two\n panels that should look identical do not.\n3. Numbers are not typeset as money. No tabular numerals, inconsistent\n decimals, amounts not consistently right aligned in tables.\n4. Pending and settled rows look the same in several tables.\n5. One primary figure per screen is not enforced. Some screens open with\n six equally weighted numbers, which means none of them is the answer."
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "1. What the good crypto interfaces actually do (continued)",
+      "text": "Proposed work, in value order\n Step What Why it is first or last \n --- --- --- \n A tokens.js : spacing, radius, type scale, status colours, money formatting, all exported from one place Every later step depends on it, and it removes the drift that makes the app feel unfinished \n B <Money and <Amount : tabular numerals, right aligned, fixed decimals, paise rendered as paise Highest ratio of perceived quality to effort in any financial interface \n C <TxState : one component for the submitted, pending, settled, refused, expired sequence, reading the rail's own statuses, with the explorer or ledger link at the terminal state The product is a state machine and the interface should show one \n D Pending rows styled distinctly in every table; summary row expanding to detail expanding to the ledger block Reconciliation is what these users do \n E One primary figure per screen, with its change and its timestamp Cheap, and it is what makes a dashboard readable at a glance \n F A \"so what\" pass over every number on /umi and the property pages The highest-value and slowest step, because it is editorial rather than technical"
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "1. What the good crypto interfaces actually do (continued)",
+      "text": "Explicitly not proposed: a dark trading-desk theme, animated charts, a\nconnect-wallet-first home page, or anything that makes the product look like\na DEX. AasthiChain is a register of title with a money leg. A screen that\nlooks like a perpetuals exchange would misrepresent it, and the jury is being\nasked to believe the register."
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "2. TypeScript",
+      "text": "The measurement first\n \n --- --- \n Frontend 20,534 lines, 62 .jsx , 13 .js \n Type annotations today zero propTypes , zero JSDoc types \n Serverless handler one file, about 6,200 lines, plus api/lib/ .mjs \n Test suites 164, all plain Node, none type aware \n\nAt 20k lines the published guidance is unanimous: incremental with\n allowJs , never a rename sweep, and never strict on day one. The failure\nmode is equally well documented, including a team that spent six months and\n50,000 lines and reported no measurable drop in bugs.\n\n The honest case for and against\n\nA renaming migration of 62 components would cost days, break nothing a test\ncatches, and mostly re-encode prop shapes that already work. That is the part\nnot worth doing now.\n\nThe part worth doing is the boundary. The most expensive defects this project\nhas actually had were shape mismatches across a boundary, not inside a\ncomponent:\n\n- two implementations of the same 82 routes drifting, with four defects\n traced to it (the open D5 finding)\n- a rail response consumed with a field that was not always present\n- an environment variable read as one shape and written as another\n\nThose are exactly what a type checker at the boundary catches and what\nrenaming Button.jsx to Button.tsx does not.\n\n Proposed path"
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "2. TypeScript (continued)",
+      "text": "Phase 1, half a day, no file renamed. Add tsconfig.json with\n allowJs: true , checkJs: false , strict: false , noEmit: true . Add\n tsc --noEmit to CI, where it checks nothing yet. The infrastructure exists\nand cannot regress.\n\n Phase 2, the part with the value. Write types/rail.d.ts describing the\nrail's responses and the handler's request and response shapes: one\ndeclaration of what a payment, a wallet, a block, an anchor and a refusal\nlook like. Turn checkJs: true on for frontend/src/lib/ and\n frontend/api/lib/ only. These are the files where the boundary lives.\n\n Phase 3, the contract test, which is D5. With the shapes declared once,\nboth implementations of the 82 routes can be checked against the same\ndeclaration rather than against each other. That closes an open audit finding\nrather than opening a new project.\n\n Phase 4, opportunistic. New components in .tsx . Existing ones converted\nonly when they are being edited anyway. No sweep, no deadline, no sprint\ndedicated to it.\n\n Phase 5, only if phases 2 and 3 paid off. strict one flag at a time,\n strictNullChecks first, since null is what actually bites.\n\n Recommendation"
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "2. TypeScript (continued)",
+      "text": "Do phase 1 and 2 now; they are small, reversible and they aim at a defect\nclass this repository demonstrably has. Do phase 3 next because it is an open\naudit item wearing a different hat. Treat phases 4 and 5 as background work\nwith no completion date. Do not rename 62 components."
+    },
+    {
+      "doc": "UI_AND_TYPES_PLAN",
+      "file": "docs/UI_AND_TYPES_PLAN.md",
+      "heading": "3. Sequencing against everything else",
+      "text": "The interface work and the type work both compete with the open audit items\nand with whatever the next hackathon round asks for. If only one thing gets\ndone, it should be A plus B plus C : tokens, money typesetting, and a\nsingle transaction-state component. That is roughly a day, it is visible in\nthe first ten seconds of a demo, and usability and clarity in the live demo\nis fifteen per cent of the official rubric.\n\nTypeScript is invisible to a jury. It is worth doing for the codebase, not\nfor the score, and it should be said that way rather than dressed up."
     },
     {
       "doc": "WORK_ORDERS",
