@@ -7,6 +7,7 @@
 // cannot repeat that by writing its own.
 
 import api from './api'
+import { needsIdentity, isSignedIn } from './railScopes'
 
 // Mutations must say so. umiFetch infers GET when there is no body, which is
 // right for reads and quietly wrong for an action that needs no arguments:
@@ -17,6 +18,26 @@ import api from './api'
 export const umiPost = (path, body) => umiFetch(path, { method: 'POST', body })
 
 export async function umiFetch(path, options = {}) {
+  // A request whose refusal is already known does not get sent.
+  //
+  // These routes read one participant's own record, so without a signed-in
+  // caller the rail answers ERR_UMI_NO_IDENTITY, correctly. Sending them
+  // anyway cost a visitor a panel full of failures on first load, and cost
+  // the deployment an error rate made of its own front page. The caller sees
+  // the same shape it would have seen from the network, so nothing above
+  // needs to know this happened.
+  if (needsIdentity(path) && !isSignedIn()) {
+    return {
+      ok: false,
+      status: 401,
+      skipped: true,
+      data: {
+        error: 'ERR_UMI_SIGNIN_REQUIRED',
+        message: 'This reads a named participant\'s own record, so it needs a signed-in caller.',
+      },
+    }
+  }
+
   const url = '/api/umi' + path
   const res = await fetch(url, {
     headers: { ...api.getAuthHeaders(), ...api.operatorHeaders(url) },
@@ -33,6 +54,7 @@ export async function umiFetch(path, options = {}) {
 // The rail answers in machine codes. People need a sentence that says what to
 // do next, so the mapping lives beside the caller rather than in each page.
 export const RAIL_ERRORS = {
+  ERR_UMI_SIGNIN_REQUIRED: 'Sign in to see this. It reads your own wallet, orders and instructions, which the rail will not show to an unnamed caller.',
   ERR_UMI_NO_IDENTITY: 'The rail could not tell who is asking. Sign in, then try again — this action is recorded against a named participant.',
   ERR_UMI_NOT_YOURS: 'That record belongs to another participant. Switch to their role, or ask as a regulator.',
   ERR_UMI_NOT_SUPERVISOR: 'Only a regulator or an operator can do this — it creates money rather than moving it.',
