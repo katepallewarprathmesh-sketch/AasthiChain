@@ -43,6 +43,13 @@ import (
 type UMIStore interface {
 	Init(ctx context.Context) error
 	LoadSnapshot(ctx context.Context) (*UMISnapshot, error)
+	// Apply writes every row of one state change in a single database
+	// transaction: all of it lands or none of it does. Money moves between
+	// two wallets and two positions at once, so persisting those rows
+	// independently can leave the durable copy holding a half-settled trade
+	// that no restart could reconcile. Every Save* method below is a
+	// one-row Apply.
+	Apply(m Mutation) error
 	SaveWallet(w CBDCWallet) error
 	SavePosition(assetID, holder string, tokens, rev int64) error
 	SaveISIN(p PilotISIN) error
@@ -52,6 +59,32 @@ type UMIStore interface {
 	Mode() string
 	LastError() string
 	Close() error
+}
+
+// Mutation is the set of rows one logical state change touches. The rail
+// builds it under its settlement mutex and hands it over in one piece, which
+// is what lets the store make the write atomic.
+type Mutation struct {
+	Wallets      []CBDCWallet
+	Positions    []PositionRow
+	ISINs        []PilotISIN
+	Instructions []SettlementInstruction
+	Servicing    []ServicingRecord
+	Meta         *MetaCounters
+}
+
+// MetaCounters are the rail's lifetime totals, the conservation baseline a
+// restart compares against.
+type MetaCounters struct {
+	FundedPaise int64
+	Settled     int64
+	Failed      int64
+}
+
+// Empty reports whether applying this mutation would write nothing.
+func (m Mutation) Empty() bool {
+	return len(m.Wallets) == 0 && len(m.Positions) == 0 && len(m.ISINs) == 0 &&
+		len(m.Instructions) == 0 && len(m.Servicing) == 0 && m.Meta == nil
 }
 
 // UMISnapshot is everything needed to rebuild the rail after a restart.
@@ -331,82 +364,148 @@ func (s *PostgresUMIStore) LoadSnapshot(ctx context.Context) (*UMISnapshot, erro
 	return snap, nil
 }
 
-func (s *PostgresUMIStore) exec(q string, args ...interface{}) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	_, err := s.db.ExecContext(ctx, q, args...)
-	return s.note(err)
-}
+// The write statements. Each one is guarded on rev so that an out-of-order
+// arrival is a no-op rather than a rollback to stale state; the rail stamps
+// rev under its mutex, so "last write wins" means last logical change, not
+// last packet. Held as constants because Apply and the single-row helpers
+// must issue byte-identical SQL, because two copies of an upsert is how the guards
+// drift apart.
+const (
+	sqlSaveWallet = `INSERT INTO umi_wallet (participant, wallet_id, bank, balance_paise, reserved_paise, opened_at, updated_at, rev)
+	                 VALUES ($1,$2,$3,$4,$5,$6,now(),$7)
+	                 ON CONFLICT (participant) DO UPDATE SET
+	                   wallet_id = EXCLUDED.wallet_id, bank = EXCLUDED.bank,
+	                   balance_paise = EXCLUDED.balance_paise, reserved_paise = EXCLUDED.reserved_paise,
+	                   updated_at = now(), rev = EXCLUDED.rev
+	                 WHERE umi_wallet.rev < EXCLUDED.rev`
 
-// SaveWallet upserts one wallet.
-func (s *PostgresUMIStore) SaveWallet(w CBDCWallet) error {
-	// Writes land after the rail's mutex is released, so two concurrent
-	// settlements touching one wallet can arrive out of order. The rev guard
-	// makes the last *logical* state win, not the last packet to arrive.
-	return s.exec(`INSERT INTO umi_wallet (participant, wallet_id, bank, balance_paise, reserved_paise, opened_at, updated_at, rev)
-	               VALUES ($1,$2,$3,$4,$5,$6,now(),$7)
-	               ON CONFLICT (participant) DO UPDATE SET
-	                 wallet_id = EXCLUDED.wallet_id, bank = EXCLUDED.bank,
-	                 balance_paise = EXCLUDED.balance_paise, reserved_paise = EXCLUDED.reserved_paise,
-	                 updated_at = now(), rev = EXCLUDED.rev
-	               WHERE umi_wallet.rev < EXCLUDED.rev`,
-		w.Participant, w.WalletID, w.Bank, w.BalancePaise, w.ReservedPaise, w.OpenedAt, w.Rev)
-}
+	sqlSavePosition = `INSERT INTO umi_position (asset_id, holder, tokens, updated_at, rev)
+	                   VALUES ($1,$2,$3,now(),$4)
+	                   ON CONFLICT (asset_id, holder) DO UPDATE SET
+	                     tokens = EXCLUDED.tokens, updated_at = now(), rev = EXCLUDED.rev
+	                   WHERE umi_position.rev < EXCLUDED.rev`
 
-// SavePosition upserts one securities holding.
-func (s *PostgresUMIStore) SavePosition(assetID, holder string, tokens, rev int64) error {
-	return s.exec(`INSERT INTO umi_position (asset_id, holder, tokens, updated_at, rev)
-	               VALUES ($1,$2,$3,now(),$4)
-	               ON CONFLICT (asset_id, holder) DO UPDATE SET
-	                 tokens = EXCLUDED.tokens, updated_at = now(), rev = EXCLUDED.rev
-	               WHERE umi_position.rev < EXCLUDED.rev`,
-		assetID, holder, tokens, rev)
-}
-
-// SaveISIN upserts one pilot ISIN.
-func (s *PostgresUMIStore) SaveISIN(p PilotISIN) error {
-	return s.exec(`INSERT INTO umi_isin (asset_id, isin, issuer, pilot_flag, depository, assigned_at)
+	sqlSaveISIN = `INSERT INTO umi_isin (asset_id, isin, issuer, pilot_flag, depository, assigned_at)
 	               VALUES ($1,$2,$3,$4,$5,$6)
-	               ON CONFLICT (asset_id) DO NOTHING`,
-		p.AssetID, p.ISIN, p.Issuer, p.PilotFlag, p.Depository, p.AssignedAt)
+	               ON CONFLICT (asset_id) DO NOTHING`
+
+	sqlSaveInstruction = `INSERT INTO umi_instruction (instruction_id, asset_id, seller, buyer, tokens, cash_paise, status, payload, created_at, rev)
+	                      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	                      ON CONFLICT (instruction_id) DO UPDATE SET
+	                        status = EXCLUDED.status, payload = EXCLUDED.payload, rev = EXCLUDED.rev
+	                      WHERE umi_instruction.rev <= EXCLUDED.rev`
+
+	sqlSaveServicing = `INSERT INTO umi_servicing
+	                      (servicing_id, holder, asset_id, isin, payer, tokens, amount_paise, block_height, settled_at, rev)
+	                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	                    ON CONFLICT (servicing_id, holder) DO UPDATE SET
+	                      block_height = EXCLUDED.block_height, rev = EXCLUDED.rev
+	                    WHERE umi_servicing.rev <= EXCLUDED.rev`
+
+	// Monotonic counters: GREATEST makes an out-of-order write a no-op.
+	sqlSaveMeta = `INSERT INTO umi_meta (key, value, updated_at) VALUES
+	                 ('funded_paise',$1,now()), ('settled',$2,now()), ('failed',$3,now())
+	               ON CONFLICT (key) DO UPDATE SET
+	                 value = GREATEST(umi_meta.value, EXCLUDED.value), updated_at = now()`
+)
+
+// execer is satisfied by both *sql.DB and *sql.Tx, so one set of statements
+// serves the autocommit path and the transactional one. The store depends on
+// this narrow capability rather than on a concrete connection type.
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
-// SaveInstruction upserts one settlement instruction (full payload as JSONB so
-// the ISO 20022 trace survives a restart).
-func (s *PostgresUMIStore) SaveInstruction(si SettlementInstruction) error {
-	raw, err := json.Marshal(si)
+// writeMutation issues every statement for m against ex, in dependency order.
+// It does not open or commit anything: the caller decides whether these
+// statements share a transaction.
+func writeMutation(ctx context.Context, ex execer, m Mutation) error {
+	for _, p := range m.ISINs {
+		if _, err := ex.ExecContext(ctx, sqlSaveISIN, p.AssetID, p.ISIN, p.Issuer, p.PilotFlag, p.Depository, p.AssignedAt); err != nil {
+			return err
+		}
+	}
+	for _, w := range m.Wallets {
+		if _, err := ex.ExecContext(ctx, sqlSaveWallet, w.Participant, w.WalletID, w.Bank, w.BalancePaise, w.ReservedPaise, w.OpenedAt, w.Rev); err != nil {
+			return err
+		}
+	}
+	for _, p := range m.Positions {
+		if _, err := ex.ExecContext(ctx, sqlSavePosition, p.AssetID, p.Holder, p.Tokens, p.Rev); err != nil {
+			return err
+		}
+	}
+	for _, si := range m.Instructions {
+		raw, err := json.Marshal(si)
+		if err != nil {
+			return err
+		}
+		if _, err := ex.ExecContext(ctx, sqlSaveInstruction, si.InstructionID, si.AssetID, si.Seller, si.Buyer,
+			si.Tokens, si.CashPaise, si.Status, raw, si.CreatedAt, si.Rev); err != nil {
+			return err
+		}
+	}
+	for _, rec := range m.Servicing {
+		if _, err := ex.ExecContext(ctx, sqlSaveServicing, rec.ServicingID, rec.Holder, rec.AssetID, rec.ISIN,
+			rec.Payer, rec.Tokens, rec.AmountPaise, rec.BlockHeight, rec.SettledAt, rec.Rev); err != nil {
+			return err
+		}
+	}
+	if m.Meta != nil {
+		if _, err := ex.ExecContext(ctx, sqlSaveMeta, m.Meta.FundedPaise, m.Meta.Settled, m.Meta.Failed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Apply implements UMIStore. One settlement, one transaction: the buyer's
+// debit, the seller's credit, both position rows, the instruction and the
+// counters commit together or not at all. A failure here leaves the database
+// exactly as it was, which is the state a restart can safely rebuild from.
+func (s *PostgresUMIStore) Apply(m Mutation) error {
+	if m.Empty() {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return s.note(err)
 	}
-	return s.exec(`INSERT INTO umi_instruction (instruction_id, asset_id, seller, buyer, tokens, cash_paise, status, payload, created_at, rev)
-	               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-	               ON CONFLICT (instruction_id) DO UPDATE SET
-	                 status = EXCLUDED.status, payload = EXCLUDED.payload, rev = EXCLUDED.rev
-	               WHERE umi_instruction.rev <= EXCLUDED.rev`,
-		si.InstructionID, si.AssetID, si.Seller, si.Buyer, si.Tokens, si.CashPaise, si.Status, raw, si.CreatedAt, si.Rev)
+	defer func() { _ = tx.Rollback() }()
+	if err := writeMutation(ctx, tx, m); err != nil {
+		return s.note(err)
+	}
+	return s.note(tx.Commit())
 }
 
-// SaveServicing records one holder's payout from one servicing run.
+// The single-row helpers below are Apply with one row in it. They exist for
+// callers that genuinely change one thing (opening a wallet, assigning an
+// ISIN); anything that moves money should build one Mutation instead.
+
+func (s *PostgresUMIStore) SaveWallet(w CBDCWallet) error {
+	return s.Apply(Mutation{Wallets: []CBDCWallet{w}})
+}
+
+func (s *PostgresUMIStore) SavePosition(assetID, holder string, tokens, rev int64) error {
+	return s.Apply(Mutation{Positions: []PositionRow{{AssetID: assetID, Holder: holder, Tokens: tokens, Rev: rev}}})
+}
+
+func (s *PostgresUMIStore) SaveISIN(p PilotISIN) error {
+	return s.Apply(Mutation{ISINs: []PilotISIN{p}})
+}
+
+func (s *PostgresUMIStore) SaveInstruction(si SettlementInstruction) error {
+	return s.Apply(Mutation{Instructions: []SettlementInstruction{si}})
+}
+
 func (s *PostgresUMIStore) SaveServicing(rec ServicingRecord) error {
-	return s.exec(`INSERT INTO umi_servicing
-	                 (servicing_id, holder, asset_id, isin, payer, tokens, amount_paise, block_height, settled_at, rev)
-	               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-	               ON CONFLICT (servicing_id, holder) DO UPDATE SET
-	                 block_height = EXCLUDED.block_height, rev = EXCLUDED.rev
-	               WHERE umi_servicing.rev <= EXCLUDED.rev`,
-		rec.ServicingID, rec.Holder, rec.AssetID, rec.ISIN, rec.Payer,
-		rec.Tokens, rec.AmountPaise, rec.BlockHeight, rec.SettledAt, rec.Rev)
+	return s.Apply(Mutation{Servicing: []ServicingRecord{rec}})
 }
 
-// SaveMeta persists the rail's lifetime counters (conservation baseline).
 func (s *PostgresUMIStore) SaveMeta(fundedPaise, settled, failed int64) error {
-	// These counters are monotonic, so GREATEST makes an out-of-order write a
-	// no-op rather than a rollback.
-	return s.exec(`INSERT INTO umi_meta (key, value, updated_at) VALUES
-	                 ('funded_paise',$1,now()), ('settled',$2,now()), ('failed',$3,now())
-	               ON CONFLICT (key) DO UPDATE SET
-	                 value = GREATEST(umi_meta.value, EXCLUDED.value), updated_at = now()`,
-		fundedPaise, settled, failed)
+	return s.Apply(Mutation{Meta: &MetaCounters{FundedPaise: fundedPaise, Settled: settled, Failed: failed}})
 }
 
 // ---------- wiring helpers ----------

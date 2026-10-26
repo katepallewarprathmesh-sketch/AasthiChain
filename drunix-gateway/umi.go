@@ -38,6 +38,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -106,6 +107,24 @@ type SecuritiesLedger interface {
 	Holders(assetID string) map[string]int64
 }
 
+// IssuingLedger is a SecuritiesLedger that can also create and destroy
+// supply. Issuance, seeding and retirement need it; settlement must not have
+// it, because a transfer that can mint is not a transfer. Code that needs the
+// extra capability asks for this interface rather than for one concrete
+// implementation, so a Fabric-backed book can be substituted by satisfying it.
+type IssuingLedger interface {
+	SecuritiesLedger
+	// Set makes the holder's position exactly tokens.
+	Set(assetID, holder string, tokens int64)
+	// Credit adds tokens to the holder's position.
+	Credit(assetID, holder string, tokens int64)
+	// Burn destroys tokens, checking and debiting under the ledger's own
+	// lock so a concurrent settlement cannot spend what is being retired.
+	// It returns ErrUMIInsufficientSecurities and changes nothing when the
+	// holder is short.
+	Burn(assetID, holder string, tokens int64) error
+}
+
 // MemorySecurities is a deterministic in-process position book implementing
 // SecuritiesLedger — used by the gateway demo and the tests.
 type MemorySecurities struct {
@@ -159,6 +178,22 @@ func (m *MemorySecurities) Holders(assetID string) map[string]int64 {
 }
 
 // Move implements SecuritiesLedger (all-or-nothing).
+// Burn implements IssuingLedger. Retirement is a debit with no matching
+// credit, so it must be a single checked step: reading the balance and
+// subtracting it in two operations is how a double retirement gets through.
+func (m *MemorySecurities) Burn(assetID, holder string, tokens int64) error {
+	if tokens <= 0 {
+		return ErrUMIInvalidAmount
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.book[assetID] == nil || m.book[assetID][holder] < tokens {
+		return ErrUMIInsufficientSecurities
+	}
+	m.book[assetID][holder] -= tokens
+	return nil
+}
+
 func (m *MemorySecurities) Move(assetID, from, to string, tokens int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -301,7 +336,12 @@ func (si *SettlementInstruction) msg(family, detail string) {
 // UMIRail is the settlement interface between the Drunix securities ledger and
 // wholesale central-bank money. Safe for concurrent use.
 type UMIRail struct {
-	mu           sync.Mutex
+	mu sync.Mutex
+	// persistFailures counts state changes committed in memory that the
+	// durable copy refused. Read with atomics: it is incremented off the
+	// settlement lock, after it has been released.
+	persistFailures int64
+
 	wallets      map[string]*CBDCWallet            // participant -> wallet
 	isins        map[string]*PilotISIN             // assetID -> pilot ISIN
 	instructions map[string]*SettlementInstruction // id -> instruction
@@ -537,7 +577,7 @@ func (r *UMIRail) WithStore(store UMIStore) *UMIRail {
 	r.private.restorePrivateDataFromChain()
 	r.interop.restoreInteropFromChain(r.chain)
 
-	if mem, ok := r.securities.(*MemorySecurities); ok {
+	if mem, ok := r.securities.(IssuingLedger); ok {
 		for _, p := range snap.Positions {
 			mem.Set(p.AssetID, p.Holder, p.Tokens)
 		}
@@ -614,6 +654,40 @@ func (r *UMIRail) pISIN(p PilotISIN) {
 	}
 }
 
+// commit persists one state change as a single database transaction. The rail
+// builds the Mutation under its mutex and applies it after the block is
+// anchored, so the durable copy never holds a settlement whose cash leg
+// landed and whose securities leg did not.
+//
+// A persistence failure does not unwind the settlement. The in-memory ledger
+// and the hash chain are the record of truth, and refusing a committed trade
+// because a serverless database blinked would be worse. It is counted and
+// surfaced instead, because a silent gap between memory and disk is the kind
+// of thing that is only discovered at the next restart.
+func (r *UMIRail) commit(m Mutation) {
+	if r.store == nil || m.Empty() {
+		return
+	}
+	if err := r.store.Apply(m); err != nil {
+		atomic.AddInt64(&r.persistFailures, 1)
+	}
+}
+
+// metaCounters reads the lifetime totals for inclusion in a Mutation.
+func (r *UMIRail) metaCounters() *MetaCounters {
+	if r.store == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return &MetaCounters{FundedPaise: r.fundedPaise, Settled: r.settledCount, Failed: r.failedCount}
+}
+
+// PersistFailures is the number of state changes the rail committed in memory
+// but could not write to the durable copy. Non-zero means the database is
+// behind the ledger and a restart would lose those changes.
+func (r *UMIRail) PersistFailures() int64 { return atomic.LoadInt64(&r.persistFailures) }
+
 func (r *UMIRail) pMeta() {
 	if r.store == nil {
 		return
@@ -635,7 +709,7 @@ func (r *UMIRail) pMeta() {
 // seed itself defines the supply. Either way no seed may push the asset's
 // outstanding total above that cap.
 func (r *UMIRail) SeedPosition(assetID, holder string, tokens, authorisedTokens int64) (int64, error) {
-	mem, ok := r.securities.(*MemorySecurities)
+	mem, ok := r.securities.(IssuingLedger)
 	if !ok {
 		return 0, fmt.Errorf("ERR_UMI_LEDGER_NOT_SEEDABLE")
 	}
@@ -711,7 +785,7 @@ func (r *UMIRail) AuthorisedSupply(assetID string) (authorised, outstanding int6
 	r.mu.Lock()
 	authorised = r.authorised[assetID]
 	r.mu.Unlock()
-	if mem, ok := r.securities.(*MemorySecurities); ok {
+	if mem, ok := r.securities.(IssuingLedger); ok {
 		for _, v := range mem.Holders(assetID) {
 			outstanding += v
 		}
@@ -723,7 +797,7 @@ func (r *UMIRail) AuthorisedSupply(assetID string) (authorised, outstanding int6
 // supply — the conservation check for the securities leg, mirroring what
 // /umi/reconciliation already does for cash.
 func (r *UMIRail) SupplyBreaches() []map[string]interface{} {
-	mem, ok := r.securities.(*MemorySecurities)
+	mem, ok := r.securities.(IssuingLedger)
 	if !ok {
 		return nil
 	}
@@ -783,10 +857,19 @@ func (r *UMIRail) PersistenceStatus() map[string]interface{} {
 			"note": "State resets on restart. Set DATABASE_URL (Neon) to persist wallets, positions, pilot ISINs and instructions.",
 		}
 	}
+	failures := r.PersistFailures()
 	st := map[string]interface{}{
 		"mode":   r.store.Mode(),
 		"tables": []string{"umi_wallet", "umi_position", "umi_isin", "umi_instruction", "umi_meta"},
-		"note":   "Write-through mirror; settlement invariants are enforced in memory under one mutex, the database is the durable copy.",
+		"note":   "Write-through mirror; settlement invariants are enforced in memory under one mutex, the database is the durable copy. Each settlement is written as one transaction: every leg lands or none does.",
+		// Published rather than logged. A gap between the ledger and its
+		// durable copy only becomes visible at the next restart, which is
+		// the worst moment to discover it.
+		"writeFailures": failures,
+		"inSync":        failures == 0,
+	}
+	if failures > 0 {
+		st["warning"] = "Settlements are committed in memory and on the hash chain but did not reach the database. A restart would lose them."
 	}
 	if e := r.store.LastError(); e != "" {
 		st["lastError"] = e
@@ -1148,13 +1231,17 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 	si.Rev = r.nextRev()
 	r.mu.Unlock()
 
-	if autoAssigned != nil {
-		r.pISIN(*autoAssigned)
+	// Built here, written once below. Both wallets, both positions, the
+	// instruction and the counters are one indivisible change: a buyer debited
+	// without the seller credited is not a slow write, it is money destroyed.
+	durable := Mutation{
+		Wallets:   []CBDCWallet{buyerSnapshot, sellerSnapshot},
+		Positions: posSnapshot,
+		Meta:      r.metaCounters(),
 	}
-	r.pWallet(buyerSnapshot)
-	r.pWallet(sellerSnapshot)
-	r.pPosition(posSnapshot)
-	r.pMeta()
+	if autoAssigned != nil {
+		durable.ISINs = append(durable.ISINs, *autoAssigned)
+	}
 	if blk := r.append(BlockUMIDvPSettled, map[string]interface{}{
 		"kind":          "umi-dvp",
 		"instructionId": si.InstructionID,
@@ -1169,8 +1256,10 @@ func (r *UMIRail) SettleDvP(req DvPRequest) (*SettlementInstruction, error) {
 		si.BlockHeight, si.BlockHash = blk.Height, blk.Hash
 	}
 	// Persisted only now: the instruction is not fully described until it knows
-	// which block anchors it, and a restart must restore that link.
-	r.pInstruction(*si)
+	// which block anchors it, and a restart must restore that link. Waiting
+	// also lets it ride in the same transaction as the legs it describes.
+	durable.Instructions = []SettlementInstruction{*si}
+	r.commit(durable)
 	// Raised after the commit, never before: a notification reports what the
 	// ledger already records, so it cannot promise a trade that did not happen.
 	r.notifySettled(si)
@@ -1383,9 +1472,9 @@ func (r *UMIRail) ServicingByBasis(assetID, payer string, grossINR float64, basi
 	}
 	r.servicing = append(r.servicing, records...)
 	r.mu.Unlock()
-	for _, w := range touched {
-		r.pWallet(w)
-	}
+	// The payer's debit and every holder's credit are one change. Written
+	// below, after the block height is known, in a single transaction.
+	durable := Mutation{Wallets: touched, Meta: r.metaCounters()}
 
 	if blk := r.append(BlockUMIServicingPaid, map[string]interface{}{
 		"kind":            "umi-servicing",
@@ -1415,7 +1504,8 @@ func (r *UMIRail) ServicingByBasis(assetID, payer string, grossINR float64, basi
 	}
 	// persisted only once the block anchor is known, so a restart can still
 	// point each payout at the block that proves it
-	r.pServicing(records)
+	durable.Servicing = records
+	r.commit(durable)
 	r.notifyIncome(assetID, res.Payouts, res.BlockHeight)
 	// One coupon/rent advice per holder paid — the document a bondholder
 	// files with their tax return.
@@ -1619,7 +1709,7 @@ var ErrUMIRestateNotPossible = errors.New("ERR_UMI_RESTATE_NOT_POSSIBLE")
 //   - it marks the cap as declared rather than derived, so the next restart
 //     cannot quietly raise it again
 func (r *UMIRail) RestateSupply(assetID, holder string, authorisedTokens int64, reason string) (map[string]interface{}, *DrunixBlock, error) {
-	mem, ok := r.securities.(*MemorySecurities)
+	mem, ok := r.securities.(IssuingLedger)
 	if !ok {
 		return nil, nil, fmt.Errorf("ERR_UMI_LEDGER_NOT_SEEDABLE")
 	}

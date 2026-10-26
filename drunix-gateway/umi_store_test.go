@@ -23,6 +23,7 @@ type fakeStore struct {
 	servicing    []ServicingRecord
 	failWrites   bool
 	writes       int
+	applies      int
 	initCalled   bool
 }
 
@@ -85,6 +86,56 @@ func (f *fakeStore) guard() error {
 	f.writes++
 	if f.failWrites {
 		return errors.New("simulated database outage")
+	}
+	return nil
+}
+
+// Apply implements UMIStore with the same all-or-nothing contract Postgres
+// gives us: the guard is consulted once, before anything is written, so a
+// refused mutation leaves the fake exactly as it was. A fake that applied
+// half a mutation would let a broken rail pass.
+func (f *fakeStore) Apply(m Mutation) error {
+	if m.Empty() {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.applies++
+	if err := f.guard(); err != nil {
+		return err
+	}
+	for _, p := range m.ISINs {
+		if _, exists := f.isins[p.AssetID]; !exists {
+			f.isins[p.AssetID] = p
+		}
+	}
+	for _, w := range m.Wallets {
+		if prev, ok := f.wallets[w.Participant]; ok && prev.Rev > w.Rev {
+			continue
+		}
+		f.wallets[w.Participant] = w
+	}
+	for _, p := range m.Positions {
+		k := p.AssetID + "|" + p.Holder
+		if prev, ok := f.positions[k]; ok && prev.rev > p.Rev {
+			continue
+		}
+		f.positions[k] = posRow{tokens: p.Tokens, rev: p.Rev}
+	}
+	for _, si := range m.Instructions {
+		f.instructions[si.InstructionID] = si
+	}
+	f.servicing = append(f.servicing, m.Servicing...)
+	if m.Meta != nil {
+		if m.Meta.FundedPaise > f.funded {
+			f.funded = m.Meta.FundedPaise
+		}
+		if m.Meta.Settled > f.settled {
+			f.settled = m.Meta.Settled
+		}
+		if m.Meta.Failed > f.failed {
+			f.failed = m.Meta.Failed
+		}
 	}
 	return nil
 }

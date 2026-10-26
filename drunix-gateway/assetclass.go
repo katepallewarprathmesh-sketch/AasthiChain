@@ -252,20 +252,17 @@ func (r *UMIRail) RetireCredits(assetID, holder string, tokens int64, beneficiar
 		return Retirement{}, ErrUMINotRetirable
 	}
 
-	mem, ok := r.securities.(*MemorySecurities)
+	mem, ok := r.securities.(IssuingLedger)
 	if !ok {
 		return Retirement{}, ErrUMINotRetirable
 	}
 
-	// Debit under the securities lock, so a concurrent settlement cannot see
-	// the same tokens as available.
-	mem.mu.Lock()
-	if mem.book[assetID] == nil || mem.book[assetID][holder] < tokens {
-		mem.mu.Unlock()
-		return Retirement{}, ErrUMIInsufficientSecurities
+	// Debited under the ledger's own lock, so a concurrent settlement cannot
+	// see the same tokens as available. The check and the subtraction belong
+	// to the ledger, not to this caller.
+	if err := mem.Burn(assetID, holder, tokens); err != nil {
+		return Retirement{}, err
 	}
-	mem.book[assetID][holder] -= tokens
-	mem.mu.Unlock()
 
 	r.mu.Lock()
 	r.retired[assetID] += tokens

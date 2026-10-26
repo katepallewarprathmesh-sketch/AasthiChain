@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "1b3702e877d1cfe024af3758ca1f552c5ac9bc968be6217fc683bb1b68a61ade",
+  "sourceDigest": "a8bfc9122a23e53779764cb814886968ee15779212299417742f4c972e8578cf",
   "sections": [
     {
       "doc": "README",
@@ -1448,6 +1448,54 @@
       "file": "docs/SEPOLIA.md",
       "heading": "What this still would not be",
       "text": "A verified commit proves the remote chain holds the digest. It does not mint\nanything on Sepolia, and there is no ERC-20 or ERC-721 representing the\nasset over there. The locked tokens are immobilised here against evidence\nrecorded there, which is an anchor, not a bridge. Issuing a real token on the\nremote side, and burning it to release the lock, is the next piece of work\nand is not written."
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "SOLID and ACID in the settlement rail",
+      "text": "This is an audit with the fixes it produced, not a style guide. The rail moves\nmoney, so the two questions worth asking are whether the durable record can\never hold half a trade, and whether the code that moves money is separable\nfrom the code that creates it.\n\nScope of the audit: drunix-gateway/ (49,718 lines of Go), the settlement\ncore. The Node proxy and the React front end are covered only where they\ntouch the same invariants.\n\n---"
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "ACID",
+      "text": "The rail enforces settlement invariants in memory under one mutex and mirrors\nstate into Postgres. That split is deliberate and documented at\n /umi/config . Each ACID property therefore has to be read twice: once for the\nin-memory ledger and once for the durable copy.\n\n Atomicity\n\n In memory: held. A delivery-versus-payment settlement debits the buyer,\ncredits the seller and moves both positions inside a single critical section.\nNothing observes the intermediate state.\n\n On disk: was broken, now fixed. A settlement used to issue six independent\nautocommit statements after the lock was released: two wallets, two positions,\nthe counters, then the instruction. Any failure part-way through left the\ndatabase holding a buyer who had paid and a seller who had not been credited.\nMemory stayed correct, so nothing looked wrong until the next restart, at\nwhich point the rail would rebuild itself from a record that violated the\nconservation rule it advertises.\n\nThe fix is UMIStore.Apply(Mutation) in umi store.go . The rail builds one\n Mutation holding every row a state change touches and hands it over whole;\nthe Postgres implementation writes it inside one BeginTx / Commit . The\nsingle-row Save helpers still exist for changes that genuinely touch one\nthing, and are now implemented as one-row Apply calls, so there is one set\nof SQL statements rather than two that can drift."
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "ACID (continued)",
+      "text": "Persistence also moved to after the block is appended, so the instruction,\nits two legs and the counters commit together with the block height that\nanchors them.\n\nProof: TestSettlementPersistsAsOneMutation counts store mutations per\nsettlement and fails at anything other than exactly one.\n\n Consistency\n\n Held, with one gap left open. Conservation of cash and of token supply is\nenforced in memory before anything is written, and\n TestDurableCopyConservesCash now asserts the same property against the\ndurable copy across repeated settlements.\n\nThe gap: the invariants live in Go, not in the schema. umi wallet has no\n CHECK (balance paise = 0) , and umi position has no check that holdings\nstay within authorised supply. Nothing but this service writes those tables\ntoday, so the risk is theoretical, but a second writer would not be stopped by\nthe database. Adding the constraints is cheap and is listed below as\noutstanding.\n\n Isolation\n\n Held. One mutex serialises every state change, which is the strongest\nisolation level available and the reason the service must run as a single\ninstance. That constraint is real and shapes hosting: anything that scales to\nseveral processes breaks it."
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "ACID (continued)",
+      "text": "Database writes happen after the lock is released, so two settlements touching\none wallet can reach Postgres out of order. Each row carries a rev stamped\nunder the mutex and every upsert is guarded WHERE rev < EXCLUDED.rev , so the\nlast logical state wins rather than the last packet to arrive.\n TestConcurrentSettlementsLeaveStoreConsistent runs eight concurrent\nsettlements and asserts the durable token total still equals issued supply.\n\n Durability\n\n Partially held, and now honest about it. Committed state reaches Postgres,\nand LoadSnapshot rebuilds the rail from it, resuming above MaxRev so new\nwrites are not discarded as stale.\n\nWhat is not true is that a settlement is durable at the moment the API returns\nsuccess: it is committed in memory and on the hash chain first, and written\nafterwards. A database outage therefore cannot unwind a trade, by design. The\nprevious code discarded the write error entirely ( = r.store.SaveWallet(w) ),\nwhich made that window invisible. It is now counted and published:\n\n \n\nNon-zero means the ledger is ahead of its durable copy and a restart would\nlose the difference. TestFailedPersistWritesNothing asserts both halves: the\nsettlement survives the outage, and the database receives none of it.\n\n---"
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "SOLID",
+      "text": "Single responsibility\n\n Mostly held. The package convention is x.go for domain logic and\n x server.go for the HTTP handler, which keeps transport out of the rules.\nSettlement, AML, cards, CBDC, servicing and conditional payments are separate\nfiles with separate state.\n\n Violated by UMIRail . It carries 85 methods across wallets, positions,\nISINs, baskets, servicing, conditional legs, notifications and metrics. It is\na god object, and the reason it survives is that the single mutex protecting\nall of that state is also what guarantees isolation; splitting the type\nwithout splitting the lock would buy nothing, and splitting the lock would\nweaken the property the rail exists to provide. Recorded deliberately as\naccepted, not as unnoticed.\n\n Open/closed\n\n Held at the seams that matter. SecuritiesLedger , UMIStore and the\nchain store are interfaces, so a Fabric-backed position book or a different\ndatabase is an addition rather than an edit. The Postgres store was extended\nwith Apply without touching any caller of SaveWallet .\n\n Liskov substitution"
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "SOLID (continued)",
+      "text": "Was violated, now fixed. Six places asked r.securities.( MemorySecurities) ,\nwhich is code that claims to depend on an interface but in fact requires one\nconcrete implementation, so any substitute would silently lose seeding, issuance and\nretirement. One of those sites went further and manipulated the\nimplementation's private map under its private mutex from outside the type.\n\nBoth are gone. Those capabilities are now a declared interface, and the\nretirement path calls a method instead of reaching into the struct:\n\n \n\n Interface segregation\n\n Held, and the fix above is the reason. Settlement code receives a\n SecuritiesLedger , which can move tokens and cannot create them: a transfer\nthat is able to mint is not a transfer. Only issuance, seeding and retirement\nask for IssuingLedger . The distinction is enforced by the compiler rather\nthan by review.\n\n UMIStore moved the other way on purpose: seven Save methods are now\nfacades over one Apply , because a store implementation should have to get\none write path right, not seven.\n\n Dependency inversion\n\n Held. The rail depends on SecuritiesLedger , UMIStore and the chain\ninterface, never on Postgres or on a concrete ledger. writeMutation takes an\n execer satisfied by both sql.DB and sql.Tx , which is how the\ntransactional and autocommit paths share one set of statements.\n\n---"
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "Outstanding",
+      "text": "Item Why it is not done \n --- --- \n CHECK (balance paise = 0) and a supply ceiling in the schema Cheap, worth doing; no second writer exists today so it is not urgent \n UMIRail is 85 methods Splitting the type means splitting the mutex, which weakens isolation. Accepted \n Two implementations of the same 82 HTTP routes in JavaScript Tracked separately as audit item D5; the proposed route is one shared contract both must satisfy \n Durability is asynchronous to the API response Deliberate. The alternative is refusing committed trades when a serverless database blinks. Now measured via persistence.writeFailures"
+    },
+    {
+      "doc": "SOLID_AND_ACID",
+      "file": "docs/SOLID_AND_ACID.md",
+      "heading": "Tests",
+      "text": "drunix-gateway/umi atomic test.go holds one test per property, each written to\nfail for the reason it names rather than to cover a line:\n\n- TestSettlementPersistsAsOneMutation : atomicity\n- TestFailedPersistWritesNothing : atomicity under failure, plus the failure counter\n- TestDurableCopyConservesCash : consistency\n- TestConcurrentSettlementsLeaveStoreConsistent : isolation\n- TestBurnRefusesOverRetirement : the one path that destroys supply\n- compile-time assertions that MemorySecurities satisfies both ledger interfaces\n\nRun: go test -race -count=1 ./... from drunix-gateway/ ."
     },
     {
       "doc": "TESTING",
