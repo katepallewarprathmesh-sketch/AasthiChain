@@ -48,7 +48,7 @@ make smoke      # every frontend route renders real content, not an error bounda
 
 CI runs the same things plus a Solidity and IPFS job and a container build. `gofmt` is a hard gate.
 
-See [`docs/TESTING.md`](docs/TESTING.md) for what each command covers, what it needs, and what is
+See the command list above for what each target covers, what it needs, and what is
 deliberately not covered.
 
 ## What a good change looks like

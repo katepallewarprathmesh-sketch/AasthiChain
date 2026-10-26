@@ -137,7 +137,7 @@ func (e *evmConnector) Configured() bool { return e.mirror != nil }
 func (e *evmConnector) Describe() string {
 	if e.mirror == nil {
 		return "Not configured. Set EVM_RPC_URL and EVM_REGISTRY_ADDRESS to point this connector at a chain such as " +
-			"Sepolia (docs/SEPOLIA.md is the runbook); until then a commit against this ledger is an attestation, " +
+			"Sepolia; until then a commit against this ledger is an attestation, " +
 			"not an observation."
 	}
 	return e.mirror.Describe()

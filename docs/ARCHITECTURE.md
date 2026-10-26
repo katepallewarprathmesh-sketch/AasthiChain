@@ -253,7 +253,7 @@ Model card, generator description and measured numbers: [`RISK_MODEL.md`](RISK_M
 | `contracts/` | Solidity escrow experiment (public-chain, simulated). |
 | `tests/` | 79 `.mjs` end-to-end suites, driven by `regression.sh`. |
 | `scripts/`, `Makefile`, `regression.sh` | Dev bootstrap, common tasks, the full sweep. |
-| `docs/` | [Deployment](docs/DEPLOYMENT.md) · [Work orders](docs/WORK_ORDERS.md) · [Demo walkthrough](docs/DEMO.md) |
+| `docs/` | [Work orders](WORK_ORDERS.md) · [The ledger](DRUNIX.md) · [Settlement](CBDC.md) |
 | `SECURITY.md` | What is in scope, what is openly simulated, and how to report a flaw privately. |
 
 This is **four independent Go modules** plus a Vite frontend and a Node API, so a root-level
@@ -268,7 +268,7 @@ Everything has a safe default; nothing below is required to boot except where ma
 | Variable | Default | Purpose |
 |---|---|---|
 | `UMI_GATEWAY_URL` | *(none)* | **Required.** Where the app finds the Go rail. |
-| `DATABASE_URL` | *(none)* | Postgres (the project uses Neon) for the ledger and rail state. Absent, both run in memory and reset on restart. Setup: [`docs/NEON.md`](docs/NEON.md). |
+| `DATABASE_URL` | *(none)* | Postgres (the project uses Neon) for the ledger and rail state. Absent, both run in memory and reset on restart. |
 | `DEMO_AUTH` | off | Enables `/api/auth/login` with the demo identities. Without it, login is 404. |
 | `PORT` | `8080` / `21100` | App and rail ports. |
 | `ADMIN_DASHBOARD_KEY` | *(none)* | Unlocks admin insights and the role switcher. Needed by the full suite. |
@@ -280,8 +280,6 @@ Everything has a safe default; nothing below is required to boot except where ma
 | `EVENT_STREAM_BROKERS` | *(none)* | Kafka-protocol brokers for the settlement event stream (Kafka, Redpanda, WarpStream, MSK, Confluent). Absent, events are derived and counted locally. |
 | `EVENT_STREAM_USERNAME` / `_PASSWORD` / `_TLS` | *(none)* | SASL PLAIN credentials and TLS for a hosted broker. |
 
-Full table, deployment topology and failure modes: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-Pointing the stack at your own Neon database, and exactly which data does and does not land there: [`docs/NEON.md`](docs/NEON.md).
 
 ---
 

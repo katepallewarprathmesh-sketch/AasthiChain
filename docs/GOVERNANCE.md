@@ -42,7 +42,7 @@ sharpest version here is the attestor: the party that vouches for an asset is us
 connected to the party that benefits from it trading. The code does not resolve the conflict.
 What it does is make the attestor's record public, countable and tied to outcomes: who
 vouched, how often they withdrew, and who was holding when they did. See
-`docs/BACKLOG.md` and the attestation layer.
+the attestation layer.
 
 **What does exit look like.** A participant cannot leave. There is no offboarding,
 no settlement of open positions on exit, and no rule about what happens to attestations

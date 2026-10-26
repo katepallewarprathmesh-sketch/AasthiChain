@@ -12,7 +12,7 @@
 //
 //   node tests/coverage.test.mjs
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,16 +51,24 @@ ok('no declared route is missing from the registered routes',
 ok(`coverage has not fallen below the floor of ${FLOOR_PERCENT}%`,
   summary.coveredPercent >= FLOOR_PERCENT, `${summary.coveredPercent}% covered`);
 
-// The published figure must be the measured one. docs/TESTING.md carries it.
-const testing = readFileSync(join(ROOT, 'docs/TESTING.md'), 'utf8');
-const stated = testing.match(/\*\*(\d+(?:\.\d+)?)%\*\* of (\d+) rail actions/);
-ok('docs/TESTING.md publishes the coverage figure', !!stated,
-  'expected a line of the form "**58.1%** of 86 rail actions"');
-if (stated) {
-  ok('the published percentage is the measured one',
-    Number(stated[1]) === summary.coveredPercent, `document says ${stated[1]}%, measured ${summary.coveredPercent}%`);
-  ok('the published action count is the measured one',
-    Number(stated[2]) === summary.actions, `document says ${stated[2]}, measured ${summary.actions}`);
+// The published figure must be the measured one. The TESTING note carries it.
+// That note is internal and not in the published repository, so this pair of
+// checks runs where it exists and is skipped where it does not. The coverage
+// floor above is the assertion that must hold everywhere.
+const TESTING_PATH = join(ROOT, '.internal-docs/TESTING.md');
+const testing = existsSync(TESTING_PATH) ? readFileSync(TESTING_PATH, 'utf8') : null;
+if (testing !== null) {
+  const stated = testing.match(/\*\*(\d+(?:\.\d+)?)%\*\* of (\d+) rail actions/);
+  ok('the TESTING note publishes the coverage figure', !!stated,
+    'expected a line of the form "**58.1%** of 86 rail actions"');
+  if (stated) {
+    ok('the published percentage is the measured one',
+      Number(stated[1]) === summary.coveredPercent, `document says ${stated[1]}%, measured ${summary.coveredPercent}%`);
+    ok('the published action count is the measured one',
+      Number(stated[2]) === summary.actions, `document says ${stated[2]}, measured ${summary.actions}`);
+  }
+} else {
+  console.log('       skipped the published-figure checks: .internal-docs/TESTING.md is not in this checkout');
 }
 
 // The honest part: the gaps are named, not just counted.

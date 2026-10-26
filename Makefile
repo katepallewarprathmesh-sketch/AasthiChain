@@ -124,4 +124,3 @@ demo:
 	@echo "Rail      : http://localhost:21100/health"
 	@echo "Vite dev  : http://localhost:5173  (make frontend)"
 	@echo "Identities: originator1, registrar1, investor1, investor2, regulator1"
-	@echo "Walkthrough: docs/DEMO.md"

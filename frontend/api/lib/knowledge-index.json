@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "a8bfc9122a23e53779764cb814886968ee15779212299417742f4c972e8578cf",
+  "sourceDigest": "59176b0c5f874c1d6c9600f19d8db17529084e7a5081fc990904f7dbc3f3e4d9",
   "sections": [
     {
       "doc": "README",
@@ -19,13 +19,13 @@
       "doc": "README",
       "file": "README.md",
       "heading": "Quick start",
-      "text": "Prerequisites: Go 1.25+, Node 20+, and python3 . No credentials, no Docker, no database.\n\n \n\nThe app comes up on http://localhost:8080 , the settlement core on :21100 . Sign in as\n investor1 and buy a fraction of something. make stop stops what it started, make help lists\nthe rest.\n\nOther demo identities: originator1 , registrar1 , regulator1 , investor2 .\n\n \n\nOther ways to run it and every configuration switch: docs/ARCHITECTURE.md .\nDeployment topology and failure modes: docs/DEPLOYMENT.md .\n\n---"
+      "text": "Prerequisites: Go 1.25+, Node 20+, and python3 . No credentials, no Docker, no database.\n\n \n\nThe app comes up on http://localhost:8080 , the settlement core on :21100 . Sign in as\n investor1 and buy a fraction of something. make stop stops what it started, make help lists\nthe rest.\n\nOther demo identities: originator1 , registrar1 , regulator1 , investor2 .\n\n \n\nOther ways to run it and every configuration switch: docs/ARCHITECTURE.md .\n\n---"
     },
     {
       "doc": "README",
       "file": "README.md",
       "heading": "How it fits together",
-      "text": "<div align=\"center\" \n\n<img src=\"docs/architecture.png\" alt=\"AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; every state change is written to an append-only record that the whole system answers to; and a layer of assurance sits under all of it: a register of the keys that sign, a risk layer that judges a payment before it settles, and copies of the proof on public chains that a holder can check without asking the platform.\" width=\"100%\" \n\n</div \n\n<sub Vector source: docs/architecture.svg . Edit the SVG, then re-export the PNG (command in docs/DEPLOYMENT.md ).</sub \n\nFour kinds of people use it: owners list property, registrars validate title, investors buy and\ntrade fractions, regulators supervise. Behind them sit four things:"
+      "text": "<div align=\"center\" \n\n<img src=\"docs/architecture.png\" alt=\"AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; every state change is written to an append-only record that the whole system answers to; and a layer of assurance sits under all of it: a register of the keys that sign, a risk layer that judges a payment before it settles, and copies of the proof on public chains that a holder can check without asking the platform.\" width=\"100%\" \n\n</div \n\n<sub Vector source: docs/architecture.svg . Edit the SVG, then re-export the PNG.</sub \n\nFour kinds of people use it: owners list property, registrars validate title, investors buy and\ntrade fractions, regulators supervise. Behind them sit four things:"
     },
     {
       "doc": "README",
@@ -73,19 +73,19 @@
       "doc": "README",
       "file": "README.md",
       "heading": "Features in depth (continued)",
-      "text": "with evidence hashed, expiry and a trail. Aadhaar numbers are rejected outright, never stored. Verification steps are simulated. docs/KYC.md \n A register of the keys that sign Keys are screened before they enter service, registration proves possession, duplicates are refused, and revocation is a recorded event that distinguishes a compromise from a retirement. Passing the screen means no known-bad pattern was found, not that the key was generated well. docs/KEYS.md \n A token a holder can check A restricted ERC-20 carrying the ERC-7943 interface, arranged the way ERC-3643 arranges a permissioned security token: eligibility, holder caps, lock-ups and freezes are enforced inside the contract rather than around it. It mirrors the rail and never replaces it. Built and tested, not deployed to a public network. docs/ARCHITECTURE.md \n AI agent that proposes, never acts Reads live state and drafts actions (stuck legs, expiring conditions, stale backing) into a queue. A named person approves, facts are re-read at approval time, and the ledger records the approver. docs/AI AGENT.md \n Screening: list, case, report Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. docs/AML.md \n Grounded assistant Answers from the project's own docs and live rail st"
+      "text": "with evidence hashed, expiry and a trail. Aadhaar numbers are rejected outright, never stored. Verification steps are simulated. docs/KYC.md \n A register of the keys that sign Keys are screened before they enter service, registration proves possession, duplicates are refused, and revocation is a recorded event that distinguishes a compromise from a retirement. Passing the screen means no known-bad pattern was found, not that the key was generated well. \n A token a holder can check A restricted ERC-20 carrying the ERC-7943 interface, arranged the way ERC-3643 arranges a permissioned security token: eligibility, holder caps, lock-ups and freezes are enforced inside the contract rather than around it. It mirrors the rail and never replaces it. Built and tested, not deployed to a public network. docs/ARCHITECTURE.md \n AI agent that proposes, never acts Reads live state and drafts actions (stuck legs, expiring conditions, stale backing) into a queue. A named person approves, facts are re-read at approval time, and the ledger records the approver. docs/AI AGENT.md \n Screening: list, case, report Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. docs/AML.md \n Grounded assistant Answers from the project's own docs and live rail state, fetches"
     },
     {
       "doc": "README",
       "file": "README.md",
       "heading": "Features in depth (continued)",
-      "text": "ate, fetches specific records by reference through ordinary code (no tool access), and says \"not documented\" when it has no source. Off if no key is configured. docs/AI AGENT.md \n Measured throughput About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. docs/THROUGHPUT.md \n Measured test coverage A tool maps every rail action against the suites: 64% of 100 actions certainly covered , 16% possible. CI fails if the published figure drifts or coverage falls. docs/TESTING.md \n\n---"
+      "text": "specific records by reference through ordinary code (no tool access), and says \"not documented\" when it has no source. Off if no key is configured. docs/AI AGENT.md \n Measured throughput About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. docs/THROUGHPUT.md \n\n---"
     },
     {
       "doc": "README",
       "file": "README.md",
       "heading": "On a real Drunix network",
-      "text": "The settlement core simulates by default, and the hosted demo is simulating. The chaincode , though,\nhas been deployed to and written to a real NPCI Drunix network (NPCI's Hyperledger Fabric fork).\n\nOn a two-organisation test network, a property registration submitted through the gateway was endorsed\nby both organisations, ordered and committed. The gateway reported the transaction id and block number,\nand the committing peer, which runs none of this repository's code, independently reported the same\nchain head.\n\nGetting there exposed three defects invisible to single-peer tests: values that differed between\nendorsing peers, index entries in a format the state database rejects, and one bug in the test\nnetwork's own tooling. Each now has a regression test and a write-up in\n docs/DRUNIX.md and docs/REPOSITORY AUDIT.md .\n\n Claims: the chaincode and gateway work against Drunix. Non-claims: the hosted demo is not\nconnected to a Drunix network ( /trust says so), and nothing here is an NPCI endorsement or pilot.\n\n---"
+      "text": "The settlement core simulates by default, and the hosted demo is simulating. The chaincode , though,\nhas been deployed to and written to a real NPCI Drunix network (NPCI's Hyperledger Fabric fork).\n\nOn a two-organisation test network, a property registration submitted through the gateway was endorsed\nby both organisations, ordered and committed. The gateway reported the transaction id and block number,\nand the committing peer, which runs none of this repository's code, independently reported the same\nchain head.\n\nGetting there exposed three defects invisible to single-peer tests: values that differed between\nendorsing peers, index entries in a format the state database rejects, and one bug in the test\nnetwork's own tooling. Each now has a regression test and a write-up in\n docs/DRUNIX.md .\n\n Claims: the chaincode and gateway work against Drunix. Non-claims: the hosted demo is not\nconnected to a Drunix network ( /trust says so), and nothing here is an NPCI endorsement or pilot.\n\n---"
     },
     {
       "doc": "README",
@@ -98,12 +98,6 @@
       "file": "README.md",
       "heading": "Guarantees (continued)",
       "text": "ked in a way that says earlier signatures no longer count.\n- A refusal is never a dead end. If the record stops verifying, the platform stops; a supervised\n recovery records what was set aside, why, and on whose authority. It has been used once and the record\n is readable.\n\n---"
-    },
-    {
-      "doc": "README",
-      "file": "README.md",
-      "heading": "Testing",
-      "text": "A mass failure is almost always a dead rail rather than a bug, so check the core is up first. CI runs\nthe Go modules separately, builds the frontend, and treats formatting as a hard gate.\n\nExact commands, prerequisites and deliberate gaps: docs/TESTING.md .\nKnown weak points: docs/REPOSITORY AUDIT.md .\n\n---"
     },
     {
       "doc": "README",
@@ -278,96 +272,6 @@
       "file": "docs/AI_AGENT.md",
       "heading": "What this is not",
       "text": "Not a deal-sourcing pipeline, not lead generation, not voice, not a CRM assistant. Those are real\nproducts and other people are building them. The thing only this repository can offer is an\nassistant whose every answer is backed by a record that a third party can verify independently."
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered",
-      "text": "An audit against the keyword list, checked against the code rather than from\nmemory. Status is one of done , partial or not started , and\n\"partial\" always says what is missing. The keyword list splits into 27 rows\nbecause several keywords carry more than one item: all 26 are done,\nand 1 was a question rather than a feature.\n Keyword Status Where it lives What is missing \n --- --- --- --- --- \n 1 CBDC done cbdc.go , /umi/cbdc/ , docs/CBDC.md Retail and wholesale segments, issue, transfer, redeem, conserved supply. \n 2 eKYC done kyc.go , /umi/kyc/ , docs/KYC.md , tiers in cbdc.go Five identification routes with the ceilings each one carries, video identification enforced against all four of its conditions, offline file freshness, periodic updation by risk band, and a wallet tier written by the verification rather than asserted. Aadhaar numbers are refused outright, not stored. The external steps (UIDAI call, registry upload, the video session itself) are simulated and say so. \n 3 Better offline protocol done IssueOffline / RedeemOffline , tests/cbdc.test.mjs Reserved value, signed voucher, bounded exposure, deterministic double-spend detection. Noted limit: symmetric signing, where production needs per-device keys. \n 4a Programmable CBDC done Grant / Spend , ProgramCondition Expiry, merchant category, named merchants, geography, all enforced on the rail with refusals committed."
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "4b Interoperability of CBDC with other systems done cbdcinterop.go , /umi/cbdc/interop/ , the matrix in docs/CBDC.md , plus corridors.go for the foreign leg e₹ to a bank account over the retail scheme (ledger leg final, bank leg provisional, money visibly in suspense), two-way conversion with a tokenised deposit in one operation, and the foreign CBDC case handled by the corridor layer. Pulling from a bank account is declared unsupported with the reason. Far legs are simulated and say so. \n 5 Anti money laundering done aml.go , /umi/aml/ , docs/AML.md , plus screenLocked in cbdc.go , fraud.go , riskmodel.go Sanctions and PEP screening against a named list with transliteration-tolerant matching, two published thresholds, case management with attributed clearance, and a suspicious transaction report artefact hashed onto the ledger. The shipped list is synthetic and says so; there is still no customer risk rating, no typology library and no counterparty network view. \n 6 Law of the land done jurisdiction.go , /umi/jurisdictions/ , the rule-set section on /crossborder , jurisdiction test.go , tests/jurisdiction.test.mjs Each jurisdiction carries a designation state (DESIGNATED, OBSERVED, SUSPENDED) and a rule set declared as data. Eight rules cite their instrument: FEMA (Non-debt Instruments) Rules 2019 on acquisition eligibility, restricted nationalities, agricultural land and the"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "consideration channel; sections 269ST and 194-IA of the Income-tax Act; the five-year lease route; and RERA 2016 section 3. A cross-border quote is now evaluated against that rule set rather than against a hardcoded Go switch, every applicable rule runs so a caller sees the whole regime rather than the first obstacle, and an undeclared jurisdiction refuses instead of defaulting to permitted. Evaluations and refusals are committed as blocks. Simplified where it says so: stamp duty is a single rate per state with no slabs or buyer-category rebates, and the RERA check reads a declared flag rather than any state register. \n 7 Risk management done fraud.go rules, the trained model, KYC caps, offline caps, supply conservation, backing gate Decisions stay with the published rules; the model is advisory. \n 8 Blockchain as the main hero done cbdc.go for the money; chainstate.go , /umi/chainstate/ , the /chainstate screen, chainstate test.go , tests/chainstate.test.mjs , docs/CHAIN FIRST.md A module is treated as chain-first when its state is a projection: rebuildable by replaying committed blocks and provably equal to what the rail serves. The offer book now commits UMI OFFER LISTED , UMI OFFER TAKEN and UMI OFFER CANCELLED , where previously only the settlement was recorded and the listing lived solely in a Go map, and the rail rebuilds the book from the ledger at boot rather than star"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "ting empty. Offers, documents and work orders are replayed and compared on every call to /umi/chainstate/verify , which reports a divergence as a failure rather than absorbing it. Still honest about the limit: the maps remain as caches of the projection so the read path does not walk the chain, each projection names the fields the blocks cannot rebuild, and modules outside the three are not claimed as covered. \n 9 Speed of the transaction done throughput.go and /umi/throughput for DvP; pathspeed.go and /umi/pathspeed for the CBDC, corridor and conversion paths; two live panels on the settlement page, one for the engine and one per path; figures in README.md and docs/THROUGHPUT.md Every money path is now timed where the work happens, with completions and refusals counted apart, lock wait reported beside the latency, and the work each path does stated next to its figure. A path with no traffic reports nothing rather than zero. The two-core caveat is attached to every published number. \n 10 Smooth end-user experience (flight cancelled, insurer refunds) done OpenCondition , SubmitEvent , automatic refund with no claim, shown on the digital rupee page at /cbdc A person can now see money locked against a named event, who is trusted to attest it, the deadline, and the refund once it releases. The page also opens conditions, attests events, issues and spends purpose-bound money, carrie"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "s value offline and sends across a corridor, so the behaviour can be tried rather than read about. \n 11 Contracts that release on time when rules are fulfilled done OpenCondition / SubmitEvent / SweepConditions , plus the escrow in work.go and outcome settlement Release is automatic on attestation and refund is automatic at the deadline. \n 12 Off chain to on chain done A signed-feed registry at /umi/oracle/ : every feed declares its publishers, the age at which it stops being usable, its quorum and its tolerated spread; every reading is Ed25519 signed under a key already in the key register, with nonce and monotonic timestamp checks. Stale, short of quorum or published under a compromised key means no value, not a last value. The cross-border rate is the first consumer and declares its provenance either way. See docs/ORACLE.md . Trusted publishers named by the operator, not a permissionless staked network; no real rate is published to this deployment. \n 13 KYC plus ML together done The AML check reports rules and model side by side on every movement, and the model now takes four identity inputs: tier strength, whether the route was face-to-face equivalent, how long the identity has been held, and the amount against the tier's per-payment ceiling. drunix-gateway/kyc.go supplies them from the desk's own records Closed 22 October 2026. The gap was worse than the row said. Screenin"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "g did not merely leave the tier out of the model: it built the model input with KYCVerified: true and a fixed account age for every payer, so the single identity feature was a constant, and nothing in the output revealed it. Identity now comes from the KYC desk, an unknown holder reads as unknown rather than verified, and a lapsed verification scores as no tier rather than a weaker one. The features were checked by ablation rather than assumed: refitting on the same rows with the four identity features blanked gives AUC 0.862 against 0.866, which is noise, but precision at the operating threshold falls from 0.629 to 0.561. So they earn their place by flagging fewer ordinary payments, not by ranking better. Both numbers come from synthetic data, and identity only pays off because the generator now contains a mule archetype that behaviour alone cannot see. That archetype was added deliberately and is disclosed in docs/RISK MODEL.md . \n 14a Cross-border: bank to bank done corridors.go , corridor BANK-CORRESPONDENT Authorised dealer status required, purpose codes enforced, provisional until the far leg confirms, three-to-five-day window named. \n 14b Cross-border: card network rails done corridor CARD-SCHEME , cardscheme.go , /umi/cards/ , the /cards screen, cardscheme test.go , tests/cards.test.mjs , docs/CARDS.md Both halves that make a card rail different are now implemented rath"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "er than described. The economics: interchange, scheme fee and acquirer margin split to the paise under the RBI debit caps of 0.40% and 0.90% with their per-transaction ceilings, RuPay debit charge-free under section 10A of the Payment and Settlement Systems Act, credit uncapped and declared as a commercial default, GST charged on top of the fee rather than out of it, and the cross-border case where the issuer's currency markup billed to the cardholder exceeds everything the merchant loses. The dispute ladder: presentment, chargeback, merchant response, pre-arbitration and arbitration, on each network's own clock, with the 120 and 540 day filing windows, the USD 600 and USD 575 case fees, and the 3-D Secure liability shift that protects a merchant against a fraud ground and does nothing against goods not received. Simulated and says so: no scheme membership, no PCI DSS attestation, nothing authorised or cleared, no money moved. \n 14c Cross-border: PA-CB licensing done corridor PACB-ECOM , licence gate in corridors.go The authorisation and intelligence unit registration are required, the ₹25 lakh ceiling is enforced, and a refusal names what is missing. \n 14d Both legs on the same chain, or not done corridors MULTI-CBDC-PVP and HTLC-LINKED Atomic in one block where both legs are here; hash time-locked with a verified preimage and a working refund path where they are not. \n 15 NPC"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "I NIPL peer-to-peer done corridor NIPL-P2P-NP Direct scheme-to-scheme person-to-person link with the published ₹15,000 per transfer and ₹1,00,000 monthly ceilings, and merchant purposes refused. \n 16 Retail to merchant done Grant spending pays a merchant account directly; offline redemption pays a shop Merchant category and identity are first-class in the spend path. \n 17 China, Canada, Singapore precedents done docs/CORRIDORS.md , the two on-ledger corridors mBridge (one platform, atomic PvP, seconds instead of days) and Jasper-Ubin (two platforms joined by hash time-locked contracts) were read, and each produced a corridor rather than a citation. \n 18 Blockchain has no time constraints, an FMI does done Finality.SettlementWindow , the finality section of docs/CBDC.md A provisional leg names the window that closes it instead of reporting the ledger entry as settled. \n 19 Technical and financial finality done Finality on every movement, tested in cbdc test.go Recorded as two separate fields that are never collapsed into one. \n 20 Put as many functions as possible on the blockchain done the same replay machinery, plus the modules added since: jurisdiction evaluations, card disputes, key screening, oracle readings, backing attestations The test is no longer how many functions emit a block but whether the state can be rebuilt from the blocks. /umi/chainstate answers that per modul"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "e and /umi/chainstate/verify fails when the running process has drifted from the ledger, which is the only version of this claim that can be checked by somebody who does not trust the deployment. \n 21 Any suitable language, not only Go answered See below No change needed yet; the reasoning is recorded so it can be revisited per component. \n 26 Key compromise: could an eMudhra happen here done keyregistry.go , /umi/keys/ , docs/KEYS.md Added 22 October 2026, the day after the eMudhra intermediate CA incident. Signing keys are screened before use against the failure family those keys fell into (small integers in both byte orders, repeated bytes, low-order points, guessable seeds), proof of possession is required, duplicates are refused, every registration, refusal, revocation and audit run is written to the chain, and a key can be revoked in one act with the reason deciding whether past signatures stand. Keys already in service can be re-screened on demand, which is the answer to the eighteen months those keys went unexamined. The screen states in writing that it cannot prove good entropy. Open: no scheduled audit, no single rotate operation, no hardware-backed keys, and the rail's own issuer key is reported but not yet registered. \n 27 Solidity and EVM contracts for the token itself done contracts/PropertyToken.sol (ERC-20 plus the ERC-7943 restriction interface, arranged the wa"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "y ERC-3643 arranges one), drunix-gateway/evmsign.go , drunix-gateway/tokenmirror.go , /umi/token/ , the /token screen, tokenmirror test.go , tests/tokenmirror.test.mjs , docs/TOKEN.md Completed 23 October 2026. The contract passed 66 checks from the day it was written and nothing called it, which made it a sample rather than a feature. The rail now writes to it: register a holder's address in the on-chain identity registry with their KYC tier and a hash of their DID, then mirror their rail position by minting the shortfall. Writing to a public chain needed raw transaction signing, because no public node holds your keys, so secp256k1, RFC 6979 nonces, low-s normalisation, RLP and EIP-155 encoding are implemented in the rail and pinned byte-for-byte to the EIP-155 reference vector by a test. The invariant is that an on-chain balance never exceeds the rail position, and every way of breaking it is refused on the ledger. The one-way direction is deliberate: a public-chain transfer is not written back, because a public chain must not reassign Indian property, and the resulting drift is reported per wallet rather than reconciled. Walked end to end against a local chain on 23 October, where it caught a real bug: a mint that mined as a revert had been reported as a success, which is why every write is now simulated first and its receipt confirmed. Not yet run against Sepolia, which nee"
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "AMA keywords: what is actually covered (continued)",
-      "text": "ds only a funded key."
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "The honest summary",
-      "text": "The CBDC half and the cross-border half are both built now, and every keyword\nraised has code behind it. What is left is depth rather than absence. Speed is\nnow measured per path rather than only for DvP. Nothing on the sheet is left\npartial: the last two gaps, module state living in Go maps (items 8 and 20)\nand a token contract nothing called (item 27), were both closed on 23 October.\nWhat remains is not coverage but reach, and it is named in docs/END TO END.md \nas licences and access rather than as code.\n\nTwo rows were added on 22 October 2026. Item 26 came from an incident rather\nthan a question: eight certificate authority private keys turned out to be\nsmall integers, so the same question was asked of this rail and the answer\nwas uncomfortable enough to fix the same day. Item 27 is a requirement rather\nthan a gap being excused: the tokens are real positions in the Go ledger and\na public contract lets a holder prove one without asking us. That contract now\nexists, as a mirror of the rail rather than a replacement for it, and the\nsection below on why not Solidity has been kept because its reasoning is why\nthe public leg mirrors instead of settles."
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "Why not Solidity, and why not Python",
-      "text": "A fair question, and the answer is different for each.\n\n Solidity. Solidity is the language of the EVM, and the EVM is only worth\npaying for when the thing being built needs a public permissionless chain with\nuntrusted participants. The system here is a market infrastructure: the\nparticipants are a registrar, an issuer, a regulator and identified investors,\nsettlement is in central bank money, and the rules are regulatory rather than\neconomic. Putting that on an EVM would mean paying gas per settlement, holding\na key for each participant, exposing an order book to the public mempool, and\naccepting an execution environment where reversing a mistake needs a migration.\nThe regulator's own wholesale pilots do not run on public EVMs either.\n\nWhere a public chain genuinely helps, the project already uses one rather than\npretending a private ledger is the same thing: the head of the chain is\nanchored to Solana, with the transaction encoding written by hand and\nverification open to anyone. That buys the one property a permissioned ledger\ncannot give itself, which is proof it was not rewritten. There is also a\nread-only EVM mirror on Sepolia for document anchors."
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "Why not Solidity, and why not Python (continued)",
-      "text": "So the honest position is: Solidity is the right tool when the trust model is\n\"nobody\", and the wrong tool when the trust model is \"a regulator and named\ninstitutions\". Writing a contract in it to look blockchain-native would be the\nsame mistake as calling a rule sheet AI.\n\nIf you want it anyway, the defensible version is narrow: a small Solidity\ncontract on a testnet that holds the anchor digests and the condition rules,\nso an outside party can verify a release without trusting this rail. That is a\nday of work and I can do it, but it should be built because it adds\nverifiability, not because the word is expected.\n\n Python. Python is the right language for training and nothing in this\nrepository argues otherwise. The reason the trainer is in Go is narrower than\na preference: training and inference must compute features identically, and\nthe cheapest guarantee of that is one function called by both. A Python\ntrainer would need the feature extractor reimplemented, which is the single\nmost common way a model silently stops working in production."
-    },
-    {
-      "doc": "AMA_COVERAGE",
-      "file": "docs/AMA_COVERAGE.md",
-      "heading": "Why not Solidity, and why not Python (continued)",
-      "text": "That reasoning stops holding the moment the model stops being a logistic\nregression. Gradient boosting, sequence models over payment history, or\nanything needing scikit-learn, PyTorch or pandas should be trained in Python,\nexported (ONNX or plain weights), and run in Go behind the same interface,\nwith a conformance test asserting the two implementations of the feature\nvector agree row for row. That is the point at which the language should\nchange, and it is a real one, not a concession."
     },
     {
       "doc": "AML",
@@ -577,19 +481,19 @@
       "doc": "ARCHITECTURE",
       "file": "docs/ARCHITECTURE.md",
       "heading": "Repository layout",
-      "text": "Path What it is \n --- --- \n drunix-gateway/ Go settlement core. UMI/ASI rail, e₹-W wallets, DvP, work escrow, the chain. Port 21100. \n frontend/src/ React 19 + Vite app: marketplace, ledger explorer, dashboards, calculators, explainers. \n frontend/api/index.js Vercel serverless API edge; property register, auth, KYC, payments, rail proxy. \n server.js Local/Render Node server: same surface as the serverless edge, plus SSE and static dist . \n mock-api-server.js Express rig for PayU round-trip testing; a fixture for several suites. \n chaincode/ Hyperledger Fabric chaincode (Go) for the Fabric deployment path. \n api-gateway/ , payment-gateway/ Go services for the Fabric path and the payment leg. \n contracts/ Solidity escrow experiment (public-chain, simulated). \n tests/ 79 .mjs end-to-end suites, driven by regression.sh . \n scripts/ , Makefile , regression.sh Dev bootstrap, common tasks, the full sweep. \n docs/ Deployment · Work orders · Demo walkthrough \n SECURITY.md What is in scope, what is openly simulated, and how to report a flaw privately. \n\nThis is four independent Go modules plus a Vite frontend and a Node API, so a root-level\n go build ./... cannot work. CI builds each module from its own directory.\n\n---"
+      "text": "Path What it is \n --- --- \n drunix-gateway/ Go settlement core. UMI/ASI rail, e₹-W wallets, DvP, work escrow, the chain. Port 21100. \n frontend/src/ React 19 + Vite app: marketplace, ledger explorer, dashboards, calculators, explainers. \n frontend/api/index.js Vercel serverless API edge; property register, auth, KYC, payments, rail proxy. \n server.js Local/Render Node server: same surface as the serverless edge, plus SSE and static dist . \n mock-api-server.js Express rig for PayU round-trip testing; a fixture for several suites. \n chaincode/ Hyperledger Fabric chaincode (Go) for the Fabric deployment path. \n api-gateway/ , payment-gateway/ Go services for the Fabric path and the payment leg. \n contracts/ Solidity escrow experiment (public-chain, simulated). \n tests/ 79 .mjs end-to-end suites, driven by regression.sh . \n scripts/ , Makefile , regression.sh Dev bootstrap, common tasks, the full sweep. \n docs/ Work orders · The ledger · Settlement \n SECURITY.md What is in scope, what is openly simulated, and how to report a flaw privately. \n\nThis is four independent Go modules plus a Vite frontend and a Node API, so a root-level\n go build ./... cannot work. CI builds each module from its own directory.\n\n---"
     },
     {
       "doc": "ARCHITECTURE",
       "file": "docs/ARCHITECTURE.md",
       "heading": "Configuration",
-      "text": "Everything has a safe default; nothing below is required to boot except where marked.\n Variable Default Purpose \n --- --- --- \n UMI GATEWAY URL (none) Required. Where the app finds the Go rail. \n DATABASE URL (none) Postgres (the project uses Neon) for the ledger and rail state. Absent, both run in memory and reset on restart. Setup: docs/NEON.md . \n DEMO AUTH off Enables /api/auth/login with the demo identities. Without it, login is 404. \n PORT 8080 / 21100 App and rail ports. \n ADMIN DASHBOARD KEY (none) Unlocks admin insights and the role switcher. Needed by the full suite. \n UMI PROXY SECRET (none) Shared secret binding identity headers to a trusted proxy. Set on both hosts or neither. \n GROQ API KEY (none) Enables the assistant. Absent, it is cleanly absent, not a button that fails. \n UMI SEED DEMO on Seeds demo wallets/ISINs on an empty rail. Set false for a bare ledger. \n WORK PROVIDER URL / KEY (none) Talent provider adapter. Absent, work orders are marked simulation . \n UMI SEED CARBON ASSET CARB-NSK-AGROFOREST-2024 Asset id for the seeded carbon credits. Registered as asset class CARBON ; the registry behind it is simulated. \n EVENT STREAM BROKERS (none) Kafka-protocol brokers for the settlement event stream (Kafka, Redpanda, WarpStream, MSK, Confluent). Absent, events are derived and counted locally. \n EVENT STREAM USERNAME / PASSWORD / TLS (none) SASL PLAIN credenti"
+      "text": "Everything has a safe default; nothing below is required to boot except where marked.\n Variable Default Purpose \n --- --- --- \n UMI GATEWAY URL (none) Required. Where the app finds the Go rail. \n DATABASE URL (none) Postgres (the project uses Neon) for the ledger and rail state. Absent, both run in memory and reset on restart. \n DEMO AUTH off Enables /api/auth/login with the demo identities. Without it, login is 404. \n PORT 8080 / 21100 App and rail ports. \n ADMIN DASHBOARD KEY (none) Unlocks admin insights and the role switcher. Needed by the full suite. \n UMI PROXY SECRET (none) Shared secret binding identity headers to a trusted proxy. Set on both hosts or neither. \n GROQ API KEY (none) Enables the assistant. Absent, it is cleanly absent, not a button that fails. \n UMI SEED DEMO on Seeds demo wallets/ISINs on an empty rail. Set false for a bare ledger. \n WORK PROVIDER URL / KEY (none) Talent provider adapter. Absent, work orders are marked simulation . \n UMI SEED CARBON ASSET CARB-NSK-AGROFOREST-2024 Asset id for the seeded carbon credits. Registered as asset class CARBON ; the registry behind it is simulated. \n EVENT STREAM BROKERS (none) Kafka-protocol brokers for the settlement event stream (Kafka, Redpanda, WarpStream, MSK, Confluent). Absent, events are derived and counted locally. \n EVENT STREAM USERNAME / PASSWORD / TLS (none) SASL PLAIN credentials and TLS for a host"
     },
     {
       "doc": "ARCHITECTURE",
       "file": "docs/ARCHITECTURE.md",
       "heading": "Configuration (continued)",
-      "text": "als and TLS for a hosted broker. \n\nFull table, deployment topology and failure modes: docs/DEPLOYMENT.md .\nPointing the stack at your own Neon database, and exactly which data does and does not land there: docs/NEON.md .\n\n---"
+      "text": "ed broker. \n\n---"
     },
     {
       "doc": "ARCHITECTURE",
@@ -820,42 +724,6 @@
       "text": "This holds no authorisation, no correspondent relationship and no scheme\nmembership, and it moves simulated central bank money only. Nothing here is a\nlegal opinion, and a corridor working in this repository says nothing about\nwhether it would be permitted in practice."
     },
     {
-      "doc": "CREDENTIALS_PLAN",
-      "file": "docs/CREDENTIALS_PLAN.md",
-      "heading": "Why this and not the other ideas",
-      "text": "Four themes came out of the public writing of the people most likely to review this\nproject: tokenisation as horizontal infrastructure rather than a vertical, self-sovereign\nidentity, outcome-based programmable settlement, and agentic actors. Ranked by what this\nrepository can honestly build:\n Idea Decision \n --- --- \n Verifiable credentials for registrar attestation Build now. Closes the weakest real gap. \n Outcome-based framing of the work desk Do now, documentation only. The behaviour already exists. \n Platform framing rather than real estate framing Do now, documentation only. The code is already asset-class agnostic. \n Agent identity with bounded authority Not now. Large, and easy to overclaim. \n Deeper Cacti interop Not now. A shallow version is worse than the honest simulation already shipped. \n Conditional settlement release After credentials. It composes with them."
-    },
-    {
-      "doc": "CREDENTIALS_PLAN",
-      "file": "docs/CREDENTIALS_PLAN.md",
-      "heading": "The gap being closed",
-      "text": "Today a property page says title was validated by a registrar. The evidence for that is a\nrow in our database and a role check in our code. A reader has to trust the operator.\n\nWith a credential, the registrar signs a statement about a property, and anyone can check\nthat signature without trusting us, including after the platform is gone. That is the\ndifference between \"our server says so\" and \"here is a signed statement you can verify\"."
-    },
-    {
-      "doc": "CREDENTIALS_PLAN",
-      "file": "docs/CREDENTIALS_PLAN.md",
-      "heading": "Design",
-      "text": "Where it lives. The Go settlement core, next to the ledger. The credential is anchored\non the chain and verification reads the chain, so it belongs beside it. The Node edge gets\na pure proxy with no logic, per the standing rule.\n\n Format. A W3C Verifiable Credential shaped document: @context , type , issuer ,\n credentialSubject , issuanceDate , plus a proof object carrying an Ed25519 signature\nover the canonical bytes of the unsigned credential.\n\n Keys. One Ed25519 issuer key per issuing participant, generated on first use and\npersisted with the rest of the rail's durable state. The public key is served from the\nrail so a verifier never needs our database for anything but the key, and the key's\nfingerprint is written into the anchoring block, so a swapped key is detectable.\n\n Canonical bytes. The credential is serialised with sorted keys and no wall-clock\nfield beyond issuanceDate , which is taken from the block the anchor lands in rather\nthan from the local clock. Re-serialising a stored credential must reproduce the same\nbytes, or the signature check is meaningless.\n\n Anchoring. Issuing commits UMI CREDENTIAL ISSUED with the credential id, subject,\nissuer, key fingerprint and the SHA-256 of the signed credential. The credential body\nitself is not written to the chain: it may name a person, and the chain is append-only\nand public. Revocation commits UMI CREDENTIAL REVOKED ."
-    },
-    {
-      "doc": "CREDENTIALS_PLAN",
-      "file": "docs/CREDENTIALS_PLAN.md",
-      "heading": "Design (continued)",
-      "text": "Verification answers four separate questions and never collapses them into one\nboolean:\n\n1. Does the signature verify against the issuer's public key?\n2. Does the hash of the presented credential match the hash anchored on the chain?\n3. Is the credential revoked?\n4. Was the issuer authorised to make this statement at issue time?\n\nA credential can be cryptographically valid and still revoked, and a verifier must be able\nto see which.\n\n Authorisation. Only a Registrar or a supervisor may issue a title credential. Only the\nissuer or a supervisor may revoke. Reads are public, because the point of a credential is\nthat a stranger can check it."
-    },
-    {
-      "doc": "CREDENTIALS_PLAN",
-      "file": "docs/CREDENTIALS_PLAN.md",
-      "heading": "What this does not claim",
-      "text": "The issuer is a demo registrar identity, not a state land-records authority. The\n mechanism is real cryptography and a real anchor; the authority behind the statement is\nsimulated, exactly like every other regulated surface here. /trust and the API response\nboth say so, and the credential itself carries the disclaimer in its subject."
-    },
-    {
-      "doc": "CREDENTIALS_PLAN",
-      "file": "docs/CREDENTIALS_PLAN.md",
-      "heading": "Acceptance",
-      "text": "- Issue, fetch, verify and revoke over HTTP, with authorisation enforced.\n- Tampering with any field of a stored credential fails verification.\n- A credential survives a restart, rebuilt from the chain.\n- Verification of a revoked credential reports valid signature and revoked status.\n- Go tests covering each of the above, plus an integration suite through the proxy.\n- No new money rule in JavaScript."
-    },
-    {
       "doc": "CROSS_BORDER",
       "file": "docs/CROSS_BORDER.md",
       "heading": "The premise, corrected",
@@ -1045,7 +913,7 @@
       "doc": "GOVERNANCE",
       "file": "docs/GOVERNANCE.md",
       "heading": "The five questions",
-      "text": "Who is eligible to join, and what is the process. In the code: nobody joins. The\nidentity set is fixed at five demo participants plus whatever agents a principal delegates\nto. There is no onboarding path, no membership committee and no application. A real\ndeployment needs all three, and the absence is the honest answer rather than an oversight to\nbe papered over.\n\n Who sets fees, and can they change. There are no fees anywhere in this system. No\ntransaction charges a participant, and the settlement asset is simulated wholesale CBDC in\ninteger paise. Any figure a demo shows is a price between two parties, never a network fee.\n\n What happens when a validator's commercial interest conflicts with the network's. The\nsharpest version here is the attestor: the party that vouches for an asset is usually\nconnected to the party that benefits from it trading. The code does not resolve the conflict.\nWhat it does is make the attestor's record public, countable and tied to outcomes: who\nvouched, how often they withdrew, and who was holding when they did. See\n docs/BACKLOG.md and the attestation layer."
+      "text": "Who is eligible to join, and what is the process. In the code: nobody joins. The\nidentity set is fixed at five demo participants plus whatever agents a principal delegates\nto. There is no onboarding path, no membership committee and no application. A real\ndeployment needs all three, and the absence is the honest answer rather than an oversight to\nbe papered over.\n\n Who sets fees, and can they change. There are no fees anywhere in this system. No\ntransaction charges a participant, and the settlement asset is simulated wholesale CBDC in\ninteger paise. Any figure a demo shows is a price between two parties, never a network fee.\n\n What happens when a validator's commercial interest conflicts with the network's. The\nsharpest version here is the attestor: the party that vouches for an asset is usually\nconnected to the party that benefits from it trading. The code does not resolve the conflict.\nWhat it does is make the attestor's record public, countable and tied to outcomes: who\nvouched, how often they withdrew, and who was holding when they did. See\nthe attestation layer."
     },
     {
       "doc": "GOVERNANCE",
@@ -1088,42 +956,6 @@
       "file": "docs/INTEROP.md",
       "heading": "What is real and what is not",
       "text": "Real: the lock, the custody movement, the abort, the expiry rule, the state\nmachine, the refusals, and the blocks behind every step. These all run on\nthis rail and the tests cover them, including an attempt to settle a locked\nposition, which fails.\n\nNot real: anything on a public chain. Nothing here has been bridged to\nSepolia or anywhere else. Pointing the EVM connector at a testnet is a\nconfiguration change rather than new code, but until that is done, a\ncommitted transfer is a claim about another ledger, recorded under the name\nof the person who claimed it."
-    },
-    {
-      "doc": "KEYS",
-      "file": "docs/KEYS.md",
-      "heading": "Signing keys, and what happens when one goes bad",
-      "text": "On 17 October 2026 a researcher reported that the private keys of eight\neMudhra intermediate certificate authorities could be recovered from their\nown public certificates. The keys had not been stolen. They had been\ngenerated with too little randomness, and the private values turned out to\nbe small integers: 4, 56, 66, 115, 155, 156, 230 and 237. Anyone could\ncompute them in under a second and then issue a certificate for any website\nthat browsers would accept. They had been published since April 2025.\n\nThree separate failures stack up in that story, and only the first is about\nrandomness:\n\n1. a key of catastrophically low quality entered service,\n2. nothing checked it again for about eighteen months,\n3. withdrawing it meant persuading every browser vendor on earth to ship a\n block list, and a root removal that breaks legitimate sites along the way."
-    },
-    {
-      "doc": "KEYS",
-      "file": "docs/KEYS.md",
-      "heading": "Could it happen here",
-      "text": "Honestly: parts of it could, and one part already describes us.\n\nThis rail signs credentials, agent passports and attestations with Ed25519.\nBefore the key register existed, there was no screening of a key before use,\nnothing that re-examined it later, and no way to revoke a key at all. A\ncompromised issuer key would have meant revoking every credential it had\never signed, one at a time, assuming anybody noticed.\n\nThe demo issuer key is derived from a seed published in this repository.\nThat is the eMudhra situation exactly, with one difference that matters: it\nis declared. GET /umi/keys/posture says so, credential verification\nreports it, and the summary states that such a credential proves integrity\nand not authority. A public key presented as if it were secret is the\ndangerous case; a public key labelled public is a demo."
-    },
-    {
-      "doc": "KEYS",
-      "file": "docs/KEYS.md",
-      "heading": "What the register does",
-      "text": "GET /umi/keys , and the routes beneath it.\n\n Screens a key before it enters service. The screen derives the public\nkeys of every private value a broken generator is likely to emit and refuses\na match: small integers in both byte orders up to 8,192, single repeated\nbytes, low-order points, short guessable seeds, and structural degeneracy.\nAll eight eMudhra values are caught, and they are the fixture the test suite\nuses.\n\n Will not claim more than it can prove. There is no general test for \"was\nthis generated with enough entropy\". A key derived from a passphrase nobody\nhas guessed yet is indistinguishable from a strong one. Every screening\nverdict carries that limitation in writing.\n\n Requires proof of possession. Registering a public key means signing a\nserver-issued nonce with the private half. Without it, anyone could copy a\npublic key out of the register and claim it.\n\n Refuses a key already registered to somebody else. Two holders with one\nkey is either a copy or a generator repeating itself, and both are the same\nfailure wearing a different hat.\n\n Writes everything to the chain, including refusals and audit runs. A\nregister that records only its successes cannot be audited. This is the\nCertificate Transparency idea, and transparency is the only reason an\noutsider could check eMudhra at all."
-    },
-    {
-      "doc": "KEYS",
-      "file": "docs/KEYS.md",
-      "heading": "What the register does (continued)",
-      "text": "Revokes in one act, effective on the next verification: no block list to\nship, no vendor to wait for. The reason is part of the act, because the\nreason decides what happens to past signatures:\n Reason Effect on signatures already made \n --- --- \n KEY COMPROMISE Void. If the private key could be computed, nothing it signed proves who signed it. Credentials must be reissued under a new key. \n SUPERSEDED Stand. An orderly rotation is not an incident. \n RETIRED Stand. Withdrawn without suspicion. \n\n Re-screens keys already in service, on demand, with the result written to\nthe chain whether it finds anything or not. This is the part that addresses\nthe eighteen months: a weakness class added to the screen tomorrow is applied\nto keys registered today by running one audit, rather than by waiting for an\noutsider to report it."
-    },
-    {
-      "doc": "KEYS",
-      "file": "docs/KEYS.md",
-      "heading": "What is still missing",
-      "text": "- The screen runs at registration and on audit, not on every verification.\n A scheduled audit is not wired; it is a call somebody has to make.\n- Key rotation is modelled as revoke plus register. There is no single\n rotate operation that carries the link between the old key and the new one.\n- Hardware-backed keys are not supported. eMudhra's keys were generated on\n certified hardware modules and were still weak, so this would raise the\n floor rather than settle the question.\n- The rail's own issuer key is not in the register yet: it is reported by\n GET /umi/keys/posture but registering it would need the key ceremony that\n a production deployment has and a demo does not."
-    },
-    {
-      "doc": "KEYS",
-      "file": "docs/KEYS.md",
-      "heading": "Where to look",
-      "text": "- drunix-gateway/keyregistry.go : the screen, the register, revocation, audit.\n- drunix-gateway/keyregistry test.go : the eight real eMudhra values as a fixture.\n- tests/keyregistry.test.mjs : the same story end to end over HTTP.\n- GET /umi/keys , GET /umi/keys/posture ."
     },
     {
       "doc": "KYC",
@@ -1348,228 +1180,6 @@
       "text": "The seed is fixed, so a rerun on the same code produces the same file. Changing\nthe generator, the features or the hyperparameters changes the weights and the\npublished metrics together: the numbers on this page come from the same run\nthat produced the coefficients, and there is no path by which one can be\nupdated without the other."
     },
     {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "What to build next",
-      "text": "Written 19 October 2026, against 774261e plus the proof-page fixes.\n\nThis is a working plan, not a wish list. Everything here is sized, ordered and justified by\nsomething the codebase actually lacks. Items already shipped live in docs/BACKLOG.md under the\nclosed table; deferred audit findings stay there too. If an item below turns out to be wrong when\nit is picked up, the right move is to say so and drop it, not to build it anyway."
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "The one sentence version",
-      "text": "The settlement core is strong and the story above it is now complete (asset, attestor, credential,\ntoken, and conditional payment on a verified result). The two real weaknesses are operational\ncredibility (one untested module, no linting, hand-maintained duplicate APIs) and the first\nninety seconds of a stranger's visit (no screenshots, no hosted walkthrough, demo data with junk\nin it). Those should be fixed before any new feature.\n\n---"
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "P0 · Correctness and credibility",
-      "text": "1. Close the conditional settlement loop on the cash leg (SHIPPED)\nThe work desk now pays on a verified result. The DvP cash leg still cannot: it settles atomically\nor fails, with nothing in between. The missing shape is cash locked at settlement and released\nwhen a named condition is met, where the condition is the presentation of a valid credential and\nthe party allowed to assert it may be an agent under a mandate. This is the piece that makes the\nthree layers (credential, mandate, escrow) one mechanism rather than three demos.\n\nDone looks like: a UMI CONDITION block family, the reconciliation check proving conservation\nwhile cash sits conditional, a timeout that cannot strand money, and a failure test for every way\nthe condition can fail to arrive."
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "P0 · Correctness and credibility (continued)",
-      "text": "Shipped in drunix-gateway/conditional.go and mounted at /umi/conditions/ . The buyer's cash is\nreserved on the buyer's own wallet, so the money identity ( issued - redeemed == sum(balances) )\nholds untouched while a settlement is pending: nothing is moved to a desk account and nothing is\ncreated. A presentation is checked in order: deadline, then authority (the named asserter, or an\nagent holding a RELEASE CONDITION mandate from that asserter covering this asset and this\namount), then the credential itself (exists, signature valid, anchor matches, not revoked, right\ntype, right issuer, names this asset). Only then do both legs move inside one locked section, and\nonly then is the mandate's spend counted. Every failure writes UMI CONDITION REFUSED with the\nreason and leaves the agreement open. A background sweep every minute, and at boot, refunds\nanything whose window closed, so a stopped process cannot strand money. Blocks:\n UMI CONDITION OPENED RELEASED REFUSED REFUNDED . Tests: conditional test.go (every\nrefusal branch, the mandate bounds, the deadline, conservation) and tests/conditions.test.mjs \n(28 checks over HTTP). Screen: panel 13 on /umi ."
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "P0 · Correctness and credibility (continued)",
-      "text": "2. Test the untested module\n api-gateway has no tests at all ( docs/BACKLOG.md D1). It is the only Go module in that state.\nEither cover it or delete it: an untested module in a repository that advertises its test counts\nis worse than no module.\n\n 3. One API implementation, not two\n frontend/api/index.js and mock-api-server.js are maintained by hand in parallel (D5). They\nhave already drifted once. Extract the shared handlers so the test rig and production cannot\ndiverge silently.\n\n 4. Lint\nNo ESLint config exists (D2). The result is inconsistent style and a class of bug (unused state,\nmissing dependency arrays, shadowed variables) that nothing currently catches. Add a config and\nwire it into CI as a non-blocking job first, then make it blocking once the backlog is clear.\n\n---"
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "P1 · Reproducibility",
-      "text": "5. A compose file for the whole app\nThree processes have to be started in the right order by hand (D4). One compose file, one command,\ndocumented ports. This is the single biggest reduction in \"I cloned it and nothing happened\".\n\n 6. A seed that is not embarrassing\nThree probe listings and two broken pincodes are still in the demo data (D6), the attestor record\nreads \"100% withdrawn (8 of 8)\" because the test suite withdraws everything it issues, and demo\nwallets accumulate state across runs. A deterministic, curated seed with a reset command would fix\nall three. Nobody should see a 100% withdrawal rate on the page that argues attestors matter.\n\n 7. Rotate the two credentials still listed as unrotated\nD7. A demo key in a public repository is a small risk and a large credibility cost.\n\n---"
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "P2 · First impression",
-      "text": "8. Screenshots and a recorded walkthrough\nThe README describes screens nobody can see without running the stack. Real screenshots of the\nledger explorer, the settlement rail and the proof chain, plus a two-minute recording of the demo\nscript, would do more for a visitor than any new feature on this list.\n\n 9. A hosted read-only instance that stays seeded\nThe public deployment loses its interesting state. A nightly reseed, or a read-only snapshot\ninstance, means the links in the README show something instead of an empty rail.\n\n 10. Interface consistency, done carefully\nThe signed-in screens are visibly older than the landing page. The first attempt at this (a\ncomponent library across three pages at once) was reverted because it changed too much at once.\nThe right version is: one page, behind a flag, reviewed on the running site, then the next. Start\nwith the ledger explorer, which is the page a sceptic opens first.\n\n---"
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "P3 · Depth, once the above is done",
-      "text": "11. A second interop route\nOne hash-locked transfer pattern is thin cover against the fragmentation criticism. A\nnotary-attested route alongside it would show the asset model is transport independent.\n\n 12. Attestor accountability with teeth\nThe record publishes an attestor's history and states plainly that no penalty is enforced. The\nhonest next step is a staking or bonding model where a withdrawal has a cost, or a clear written\nargument for why that belongs to the legal layer and not the rail.\n\n 13. Make the agent path demonstrable end to end\nAn agent can now hold a mandate, deliver work under it and be paid on verification. Nothing in the\nrepository drives that sequence automatically. A scripted agent (clearly labelled as a script, not\nan autonomous system) that runs the whole loop would make the most topical part of the project\nvisible in thirty seconds.\n\n 14. Pagination in the interface, not just the API\nList reads are bounded server side. The pages still render everything they receive. For a demo\ndataset that is fine; it would not survive a real one.\n\n---"
-    },
-    {
-      "doc": "ROADMAP",
-      "file": "docs/ROADMAP.md",
-      "heading": "Deliberately not doing",
-      "text": "- More asset classes. Five shallow ones would add surface and no credibility.\n- A token, a chain or a listing of any kind. The project's argument is that settlement is the\n interesting part.\n- Claiming any real integration. The rail is a simulation of the UMI pattern, the Fabric fork\n is a fork, the talent provider is a pattern not a vendor. That stays true in every surface."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "Taking the EVM connector live on Sepolia",
-      "text": "The cross-ledger gateway ( docs/INTEROP.md ) ships with its EVM connector\nunconfigured, and says so everywhere it is shown. This is the runbook that\nmoves that boundary from simulated to live. It is configuration plus a\ncontract deployment: no code changes, which is the point of putting the\nconnector behind an interface in the first place.\n\nNothing in this document has been run against Sepolia. It is written from the\ncode that would do it, and the fact that it is untried is exactly why the\ntrust page still says the connector is not configured."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "What you need, and what you do not",
-      "text": "Read and write have very different requirements here, and the first version\nof this document ran them together. They are separate:\n\n To verify cross-ledger commits (the interop connector), you need only an RPC\nURL. The check is eth call against verifyDigest , which is a read. No\naccount, no private key, no Sepolia ETH. Any public Sepolia endpoint works.\n\n To write document anchors (the mirror in evm mirror.go ), you need more,\nand the current code cannot do it through a hosted provider. It calls\n eth sendTransaction , which asks the node to sign. Infura, Alchemy and the\nendpoint behind MetaMask hold no keys for you, so they reject it. Writing\nneeds either a node that holds an unlocked account (anvil, geth, a local\nsigner in front of the provider) or local signing in the mirror, which is not\nwritten yet.\n\nSo for the interop work the sequence is: deploy the registry once from a\nwallet you already control, then give the rail a read-only RPC URL and the\ncontract address. Deployment is the only step that spends gas."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "1. Deploy the registry",
-      "text": "contracts/DocumentRegistry.sol is the contract the connector talks to. It\nstores an anchor per document: the CID key, the SHA-256 digest, the asset id,\na type and a validity window, with a registrar allowlist for writes and\n verifyDigest(bytes32) open to everyone for reads.\n\n contracts/deploy.js and contracts/deploy-local.mjs are the existing\ndeployment paths. Deploy to Sepolia, then note the address.\n\nGive the sending account the registrar role:\n\n \n\nWithout it every anchor reverts, while reads keep working, so a missing\nregistrar role looks like \"writes silently fail and verification always says\nno\"."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "EVM_SENDER_ADDRESS=0x<account with the registrar role>",
-      "text": "Restart. Two things change on their own:\n\n- GET /umi/interop reports the EVM connector as configured: true and the\n status line becomes the RPC URL and contract address.\n- A commit carrying a digest is now checked against Sepolia. If the chain has\n no record of it the commit is refused rather than recorded, and the\n transfer stays LOCKED so the holder can still abort and get their tokens\n back.\n\nThe same variables also switch on the existing document mirror\n( evm mirror.go ). Against a hosted provider its writes will fail, for the\nsigning reason above, and that failure is contained: anchoring to the local\nchain is unaffected and no settlement can fail because of it. KYC evidence is\nexcluded from the mirror by design and stays excluded."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "a digest the chain has never seen must be refused, not recorded",
-      "text": "curl -s -X POST https://<rail-host /umi/interop/XCHAIN-000001/commit \\\n -H 'Content-Type: application/json' -H 'X-Identity-Role: Regulator' -H 'X-Identity-Id: regulator1' \\\n -d '{\"remoteTxRef\":\"0x0\",\"digest\":\"'\"$(printf 'nothing' sha256sum cut -d\" \" -f1)\"'\"}'"
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "want: ERR_UMI_INTEROP_STATE, \"evm has no record of that digest\"",
-      "text": "The refusal is the test that matters. A connector that accepts anything is\nworse than no connector, because it turns an attestation into something that\nreads like a confirmation. Both directions are covered by\n TestConfiguredConnectorVerifiesTheRemoteLeg and\n TestConfiguredConnectorRefusesAnUnbackedCommit , which run against a stub\nJSON-RPC node that speaks the same eth call the real contract answers."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "4. Update the trust page",
-      "text": "/trust reads EVM RPC URL and EVM REGISTRY ADDRESS for the public chain\nmirror row, so that one flips on its own. The cross-ledger row is written as\nsimulated in prose and has to be edited by hand once a transfer has actually\nbeen verified against Sepolia. Do not edit it before that: the row is about\nwhat has happened, not what is configured."
-    },
-    {
-      "doc": "SEPOLIA",
-      "file": "docs/SEPOLIA.md",
-      "heading": "What this still would not be",
-      "text": "A verified commit proves the remote chain holds the digest. It does not mint\nanything on Sepolia, and there is no ERC-20 or ERC-721 representing the\nasset over there. The locked tokens are immobilised here against evidence\nrecorded there, which is an anchor, not a bridge. Issuing a real token on the\nremote side, and burning it to release the lock, is the next piece of work\nand is not written."
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "SOLID and ACID in the settlement rail",
-      "text": "This is an audit with the fixes it produced, not a style guide. The rail moves\nmoney, so the two questions worth asking are whether the durable record can\never hold half a trade, and whether the code that moves money is separable\nfrom the code that creates it.\n\nScope of the audit: drunix-gateway/ (49,718 lines of Go), the settlement\ncore. The Node proxy and the React front end are covered only where they\ntouch the same invariants.\n\n---"
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "ACID",
-      "text": "The rail enforces settlement invariants in memory under one mutex and mirrors\nstate into Postgres. That split is deliberate and documented at\n /umi/config . Each ACID property therefore has to be read twice: once for the\nin-memory ledger and once for the durable copy.\n\n Atomicity\n\n In memory: held. A delivery-versus-payment settlement debits the buyer,\ncredits the seller and moves both positions inside a single critical section.\nNothing observes the intermediate state.\n\n On disk: was broken, now fixed. A settlement used to issue six independent\nautocommit statements after the lock was released: two wallets, two positions,\nthe counters, then the instruction. Any failure part-way through left the\ndatabase holding a buyer who had paid and a seller who had not been credited.\nMemory stayed correct, so nothing looked wrong until the next restart, at\nwhich point the rail would rebuild itself from a record that violated the\nconservation rule it advertises.\n\nThe fix is UMIStore.Apply(Mutation) in umi store.go . The rail builds one\n Mutation holding every row a state change touches and hands it over whole;\nthe Postgres implementation writes it inside one BeginTx / Commit . The\nsingle-row Save helpers still exist for changes that genuinely touch one\nthing, and are now implemented as one-row Apply calls, so there is one set\nof SQL statements rather than two that can drift."
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "ACID (continued)",
-      "text": "Persistence also moved to after the block is appended, so the instruction,\nits two legs and the counters commit together with the block height that\nanchors them.\n\nProof: TestSettlementPersistsAsOneMutation counts store mutations per\nsettlement and fails at anything other than exactly one.\n\n Consistency\n\n Held, with one gap left open. Conservation of cash and of token supply is\nenforced in memory before anything is written, and\n TestDurableCopyConservesCash now asserts the same property against the\ndurable copy across repeated settlements.\n\nThe gap: the invariants live in Go, not in the schema. umi wallet has no\n CHECK (balance paise = 0) , and umi position has no check that holdings\nstay within authorised supply. Nothing but this service writes those tables\ntoday, so the risk is theoretical, but a second writer would not be stopped by\nthe database. Adding the constraints is cheap and is listed below as\noutstanding.\n\n Isolation\n\n Held. One mutex serialises every state change, which is the strongest\nisolation level available and the reason the service must run as a single\ninstance. That constraint is real and shapes hosting: anything that scales to\nseveral processes breaks it."
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "ACID (continued)",
-      "text": "Database writes happen after the lock is released, so two settlements touching\none wallet can reach Postgres out of order. Each row carries a rev stamped\nunder the mutex and every upsert is guarded WHERE rev < EXCLUDED.rev , so the\nlast logical state wins rather than the last packet to arrive.\n TestConcurrentSettlementsLeaveStoreConsistent runs eight concurrent\nsettlements and asserts the durable token total still equals issued supply.\n\n Durability\n\n Partially held, and now honest about it. Committed state reaches Postgres,\nand LoadSnapshot rebuilds the rail from it, resuming above MaxRev so new\nwrites are not discarded as stale.\n\nWhat is not true is that a settlement is durable at the moment the API returns\nsuccess: it is committed in memory and on the hash chain first, and written\nafterwards. A database outage therefore cannot unwind a trade, by design. The\nprevious code discarded the write error entirely ( = r.store.SaveWallet(w) ),\nwhich made that window invisible. It is now counted and published:\n\n \n\nNon-zero means the ledger is ahead of its durable copy and a restart would\nlose the difference. TestFailedPersistWritesNothing asserts both halves: the\nsettlement survives the outage, and the database receives none of it.\n\n---"
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "SOLID",
-      "text": "Single responsibility\n\n Mostly held. The package convention is x.go for domain logic and\n x server.go for the HTTP handler, which keeps transport out of the rules.\nSettlement, AML, cards, CBDC, servicing and conditional payments are separate\nfiles with separate state.\n\n Violated by UMIRail . It carries 85 methods across wallets, positions,\nISINs, baskets, servicing, conditional legs, notifications and metrics. It is\na god object, and the reason it survives is that the single mutex protecting\nall of that state is also what guarantees isolation; splitting the type\nwithout splitting the lock would buy nothing, and splitting the lock would\nweaken the property the rail exists to provide. Recorded deliberately as\naccepted, not as unnoticed.\n\n Open/closed\n\n Held at the seams that matter. SecuritiesLedger , UMIStore and the\nchain store are interfaces, so a Fabric-backed position book or a different\ndatabase is an addition rather than an edit. The Postgres store was extended\nwith Apply without touching any caller of SaveWallet .\n\n Liskov substitution"
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "SOLID (continued)",
-      "text": "Was violated, now fixed. Six places asked r.securities.( MemorySecurities) ,\nwhich is code that claims to depend on an interface but in fact requires one\nconcrete implementation, so any substitute would silently lose seeding, issuance and\nretirement. One of those sites went further and manipulated the\nimplementation's private map under its private mutex from outside the type.\n\nBoth are gone. Those capabilities are now a declared interface, and the\nretirement path calls a method instead of reaching into the struct:\n\n \n\n Interface segregation\n\n Held, and the fix above is the reason. Settlement code receives a\n SecuritiesLedger , which can move tokens and cannot create them: a transfer\nthat is able to mint is not a transfer. Only issuance, seeding and retirement\nask for IssuingLedger . The distinction is enforced by the compiler rather\nthan by review.\n\n UMIStore moved the other way on purpose: seven Save methods are now\nfacades over one Apply , because a store implementation should have to get\none write path right, not seven.\n\n Dependency inversion\n\n Held. The rail depends on SecuritiesLedger , UMIStore and the chain\ninterface, never on Postgres or on a concrete ledger. writeMutation takes an\n execer satisfied by both sql.DB and sql.Tx , which is how the\ntransactional and autocommit paths share one set of statements.\n\n---"
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "Outstanding",
-      "text": "Item Why it is not done \n --- --- \n CHECK (balance paise = 0) and a supply ceiling in the schema Cheap, worth doing; no second writer exists today so it is not urgent \n UMIRail is 85 methods Splitting the type means splitting the mutex, which weakens isolation. Accepted \n Two implementations of the same 82 HTTP routes in JavaScript Tracked separately as audit item D5; the proposed route is one shared contract both must satisfy \n Durability is asynchronous to the API response Deliberate. The alternative is refusing committed trades when a serverless database blinks. Now measured via persistence.writeFailures"
-    },
-    {
-      "doc": "SOLID_AND_ACID",
-      "file": "docs/SOLID_AND_ACID.md",
-      "heading": "Tests",
-      "text": "drunix-gateway/umi atomic test.go holds one test per property, each written to\nfail for the reason it names rather than to cover a line:\n\n- TestSettlementPersistsAsOneMutation : atomicity\n- TestFailedPersistWritesNothing : atomicity under failure, plus the failure counter\n- TestDurableCopyConservesCash : consistency\n- TestConcurrentSettlementsLeaveStoreConsistent : isolation\n- TestBurnRefusesOverRetirement : the one path that destroys supply\n- compile-time assertions that MemorySecurities satisfies both ledger interfaces\n\nRun: go test -race -count=1 ./... from drunix-gateway/ ."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "Testing",
-      "text": "Every number on this page came from running the command next to it on 14 October 2026, on a clean\ncheckout at commit 4e6da94 . If a figure here disagrees with what you get, the page is stale:\nplease open an issue rather than assuming your machine is wrong."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "What each command actually covers",
-      "text": "make test : the integration sweep\n\nRuns regression.sh , which does two things: a direct list of HTTP checks against the app and the\nrail, and then every file matching tests/ .test.mjs .\n \n --- --- \n Command bash regression.sh \n Needs the app on :8080 and the rail on :21100 ( make dev ) \n Suite files 120 in tests/ \n Reported result 165 passed, 0 failed \n\nOne hazard worth knowing before a repeat run: anything already listening on :8080 or :21100 \nis the enemy of a trustworthy result. A leftover app answers with a different admin key and a\ndozen suites fail for reasons that have nothing to do with the code. make test-fresh now clears\nthose strays rather than starting a process that cannot bind, and scripts/dev-stack.sh refuses\nto report a healthy stack it did not actually start.\n\n tests/credentials.test.mjs is worth running on its own when touching the rail proxy. It\nverifies a credential's Ed25519 signature inside the test process, using only the issuer's\npublished key, so it fails if anything between the rail and the client alters a single byte\nof a signed document.\n\n \n\n tests/proofpage.test.mjs guards the proof page: it reads the page source to prove no bare\n fetch has crept back in (one did, and it made the agent authority tab unusable for everybody),\nthen calls each route the page reads as a signed-in participant."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "What each command actually covers (continued)",
-      "text": "tests/outcome.test.mjs covers outcome-based settlement on the work desk: criteria that\ncannot be edited after the engagement opens, a verifier who is neither party, verification\nthat does not move money by itself, a dispute window that only the clock or the funder can\nshorten, and a failed check that freezes the escrow instead of paying it out. It uses a one\nsecond window so the timing path is actually exercised rather than asserted.\n\n tests/mandates.test.mjs covers delegated authority: an agent settling on a principal's\nbehalf. It drives the Go rail directly rather than the web proxy, because the proxy only\nrecognises the five named demo identities and files anything else as investor1 , which\nwould hide the very thing under test. The rail is where every bound is enforced.\n Runtime about 50 seconds \n\n Read the number carefully. The 143 is the count of top-level checks the sweep reports: each\ndirect HTTP assertion counts once, and each suite file counts once however many assertions it\ncontains. Individual suites print their own totals, which are finer grained. For example\n verifyproperty reports 29 assertions and pincodecheck reports 26, but each contributes 1 to the\n143. There is no single meaningful \"total assertions\" figure, and this project does not publish\none."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "What each command actually covers (continued)",
-      "text": "Three suites are skipped by the api CI job and run in the contracts job instead, because they\nneed solc , a local EVM chain and the reference IPFS hasher: contracts , cidconformance ,\n evmmirror . Locally they run if you have the toolchain and are reported as failures if you do not,\nwhich is deliberate. A test that silently skips is worse than one that fails loudly.\n\n make test-go : the Go modules\n\nRuns scripts/go-tests.sh : gofmt -l , go vet and go test -race -count=1 for each module in\nturn. There is no single module graph in this repository, so a root-level go test ./... cannot\nwork.\n Module Test files Test functions Result \n --- --- --- --- \n chaincode 1 6 ok \n drunix-gateway 29 244 ok \n payment-gateway 6 43 ok \n api-gateway 0 0 no test files \n\n api-gateway having no tests is a real gap, not an oversight in this document. It is listed as a\ngood first issue in CONTRIBUTING.md .\n\n make smoke : the frontend renders\n\nBuilds the bundle with vite.smoke.config.js and renders every route in Node, failing if any route\nproduces an error boundary instead of content. This exists because a route can compile perfectly\nand still throw on first paint.\n \n --- --- \n Command cd frontend && npm run smoke \n Needs nothing running \n Catches render-time crashes, missing providers, bad imports \n Does not catch anything that needs a backend, and anything visual"
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "What each command actually covers (continued)",
-      "text": "make secret-scan : tracked credentials\n\n scripts/secret-scan.sh greps every tracked file for things shaped like live credentials: GitHub\ntokens, PayU salts and merchant keys, inline admin keys. Known placeholders ( devkey , testsalt ,\n example ) are allowed. It runs inside the regression sweep as well, so a secret cannot pass\n make test .\n\n npm run build : the lint proxy\n\n There is no ESLint configuration in this repository. ESLint 10 refuses to run without one, so\nthe frontend has no lint gate today. Until one exists, npm run build and node --check are what\ncatch syntax and import errors. Adding a flat config is a good first issue.\n\n---"
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "How much of the rail do these checks actually touch?",
-      "text": "A pass count is not a coverage figure. Ninety-eight suites passing says nothing about how much of\nthe rail they reach, and the honest way to find out is to measure it rather than assume.\n\nThe approach is borrowed from Scapia's write-up of their Argus test lab (October 2026). Their\nsecond tool is the interesting one: map every action a user can take, replay the suite against that\nmap on paper, and give each action one of three verdicts. Their own published answer was\nuncomfortable (24.6% of commerce actions certainly covered, one vertical under 2%) and publishing\nit was the point.\n\n node scripts/coverage-rail.mjs the figure, by area\n node scripts/coverage-rail.mjs --gaps exactly what nothing reaches\n\nThe tool reads source only, starts nothing and executes nothing, so the same commit gives the same\nnumber on any machine. It builds the catalogue from the route table declared at the top of each\nserver file, cross-checks every declared path against the registered routes so the catalogue cannot\ndrift into fiction, then replays each suite's requests against it.\n Verdict Meaning \n --- --- \n covered a suite certainly issues this method against this path \n possible a suite reaches the path, but the method is not provable from the source \n not covered nothing in the suite reaches it"
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "How much of the rail do these checks actually touch? (continued)",
-      "text": "As measured: 74.4% of 133 rail actions are certainly covered, 10.5% are possible, and the rest\nare reached by nothing. (The action count rose from 100 when the signed feeds were added, to 110\nwith the jurisdiction rule sets, to 119 with the card desk, to 123 with the chain-state replay, to\n127 with the public-chain token mirror and to 133 with conditional settlement; the percentage rose with it because each new module\nshipped with a suite that covers it.) tests/coverage.test.mjs recomputes this on every run and fails if the\npublished figure drifts from the measured one, if coverage falls below its floor, or if a declared\nroute stops being served.\n\nThe measurement earned its keep immediately. It showed that POST /umi/cbdc/transfer and\n POST /umi/cbdc/redeem were exercised by nothing at all: the conservation identity was being\nasserted without either of the two paths that can break it. The Travel Rule refusal and the\ncorridor dry run were in the same state. Those now have tests, which is how the figure moved from\n51.2% to 58.1%, and the interoperability layer arrived with its own suite."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "Does the suite catch anything? Planted defects",
-      "text": "A green suite has two possible meanings and no way to tell them apart: the code is correct, or the\nassertions are weak. Argus had the same problem, and settled it by deleting a real feature on a\nbranch to see whether the suite noticed.\n\n node scripts/plant-defect.mjs plant each defect, run the suite that should notice\n node scripts/plant-defect.mjs aml-threshold\n\nEach defect is a mistake somebody could plausibly make in review: a threshold nudged out of reach, a\nguard dropped, a refusal softened. The harness edits the file, rebuilds and restarts the rail, runs\nthe one suite that should fail, then restores the file in a finally block. It refuses to start if\nthe files it touches have uncommitted changes.\n Planted defect Caught \n --- --- \n Screening stops blocking (block threshold raised out of reach) yes, 5 checks \n The Aadhaar refusal is removed, so a twelve digit number is accepted yes, 2 checks \n A video session without liveness is treated as face-to-face yes, 2 checks \n The Travel Rule check passes with the parties unnamed yes, 3 checks \n The proposing agent stops re-reading its evidence before acting no, first time; yes, 3 checks, now \n\nAll five are caught as of the current commit. One was not, and that is the row worth reading."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "Does the suite catch anything? Planted defects (continued)",
-      "text": "The last row is why the harness exists. Removing the agent's freshness check broke nothing any test\ncould see, because the suite accepted either outcome at that point and only the Go unit test\ncovered staleness. Worse, the hole was real in the code as well: the freshness check handled AML\ncases but never conditional payments, so a proposal about a payment that had already been released\nwould have been approved and acted on. Both are fixed, and the scenario is now tested end to end.\n\nThese are five planted defects, not a proof. They say the suite notices these five specific\nmistakes, and nothing about the ones nobody thought of."
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "Continuous integration",
-      "text": ".github/workflows/ci.yml runs on pushes and pull requests to main , with permissions:\ncontents: read and no secrets exposed to any job.\n Job What it proves \n --- --- \n go (matrix of 4 modules) formatting, dependency resolution, build, vet, race tests \n frontend npm ci , production build, render smoke \n api shellcheck on scripts/ , boots the real stack plus a PayU test rig, then runs every file in tests/ by discovery \n contracts compiles the Solidity, runs a local EVM chain, checks our CIDs against the reference IPFS implementation, and reads anchors back from the chain rather than from our own API \n image builds the container Render deploys and checks the binary answers /health \n\nThe api job discovers suites rather than listing them. A new file in tests/ is covered by CI\nthe moment it exists, which was not true before and is why several suites once ran only locally.\n\n---"
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "Writing a test here",
-      "text": "Suites are plain Node, no framework. The shape is consistent across the directory:\n\n \n\nTwo rules that matter more than style:\n\n1. Sabotage your own test before trusting it. Break the code it covers, confirm it fails, and\n confirm it fails for the right reason. A sabotage that does not compile proves nothing. Several\n assertions in this repository were found to be vacuous exactly this way.\n2. Cold-start the stack before believing a single failure. The sweep is not idempotent across\n runs on one long-lived stack, and make test-fresh is that restart in one command. The usual\n cause is the fraud engine rather than drift: the velocity rule counts the demo payer's payments\n over ten minutes, every run uses the same demo identity, so a second run inside that window is\n blocked on purpose and three suites fail with FAILED FRAUD BLOCKED . The sweep now says so when\n it sees that status, instead of leaving the reader to conclude the repository is broken.\n\n---"
-    },
-    {
-      "doc": "TESTING",
-      "file": "docs/TESTING.md",
-      "heading": "Known limitations",
-      "text": "- No end-to-end browser test. The render smoke proves routes mount; it does not click through a\n purchase. The closest thing to a full journey check is the integration sweep plus the manual\n walkthrough in DEMO.md .\n- No coverage measurement is published. None is collected, so no percentage is claimed.\n- No load or soak testing. The throughput figures in THROUGHPUT.md come from\n Go benchmarks on one machine and are labelled measured:false where they are derived rather than\n observed.\n- The Fabric network under network/ is not exercised by CI. It needs Docker and the Fabric\n binaries, and nothing in the demo path depends on it.\n- api-gateway is untested , as noted above."
-    },
-    {
       "doc": "THROUGHPUT",
       "file": "docs/THROUGHPUT.md",
       "heading": "The constraint",
@@ -1670,66 +1280,6 @@
       "file": "docs/TOKEN.md",
       "heading": "Routes",
       "text": "Route What it does \n --- --- \n GET /umi/token configuration, gas balance, and every write made \n GET /umi/token/compare?assetId= each linked wallet against its rail position \n POST /umi/token/link register a holder's address on chain \n POST /umi/token/mirror mint the shortfall so the chain matches the rail \n\nReads are public. The claim is that an outsider can check our tokens against a\npublic chain, and a status page they need a key to see would undercut it."
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "Interface and type safety: what is worth doing, and what is not",
-      "text": "A plan, not a change. Nothing here has been implemented. It exists so the\ndecision is made deliberately rather than halfway through a refactor.\n\nTwo questions were asked: should the interface look more like the complex\nblockchain products, and should the codebase move to TypeScript. The honest\nanswers are \"partly, and not in the way the phrase suggests\" and \"yes, but\nonly the part that pays for itself\".\n\n Landing.jsx is frozen and its redesign was cancelled. Nothing in this plan\ntouches it."
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "1. What the good crypto interfaces actually do",
-      "text": "The surface reading of Uniswap, Aave, Etherscan or a portfolio dashboard is\n\"dense, dark, lots of numbers\". That is the least important thing about them,\nand copying it produces a screen that looks serious and tells you nothing. The\npatterns that those products are actually praised for are these:\n\n Consequence, not state. Health factor: 1.4 is protocol state. Your\nposition is liquidated if ETH falls 18% is the same number translated into\nwhat it means for the person reading it. The test is whether you can finish\nthe sentence \"so what\". If you cannot, the metric is not ready to ship.\n\n The transaction is a sequence, not a button. Submitted, confirming,\nconfirmed, with an explorer link at the end, and submitted, failed, retry on\nthe other branch. Blocking the screen and then showing a result is the thing\ndApp audits have marked down since 2018.\n\n Approval is separated from action, and both are named. A signature that\ngrants spending permission is a different risk from the payment itself, and\na user who cannot tell them apart cannot consent to either.\n\n Failure is explained in the user's terms. Not \"transaction reverted\" but\nwhich of balance, allowance, slippage or wrong network caused it."
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "1. What the good crypto interfaces actually do (continued)",
-      "text": "Fintech tables have their own rules. One primary figure per screen in the\nlargest type. Tabular numerals, right aligned, consistent decimals, because\nproportional digits make a column of money ragged and slow to compare.\nPending rows visually distinct from settled rows, never silently mixed, since\npeople reconcile these against statements. Progressive disclosure: summary\nrow, expandable detail, full audit trail on demand.\n\n The empty state is onboarding. A first visit should explain the product,\nnot show zeros.\n\n Where AasthiChain already does this\n\nMore than a redesign-minded reading would suggest, and this matters because\nthe gap is narrower than it looks:\n\n- Refusals carry an error code, a reason in plain words, and a block on the\n ledger. That is further than most products go: the refusal is auditable.\n- The public token screen now states why a button is disabled and which\n setting is missing, before the click rather than after it.\n- Empty states explain the mechanism. The token comparison table says that a\n wallet must be in the on-chain identity registry before it can hold\n anything, which is onboarding disguised as an empty state.\n- The drift panel reports disagreement between chain and register instead of\n reconciling it away.\n- The boundary sections say plainly what the product does not claim.\n\n The real gaps"
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "1. What the good crypto interfaces actually do (continued)",
-      "text": "1. No shared transaction-state component , in a product whose entire\n subject is state transitions. Each screen renders progress its own way.\n The settlement rail has the richest status model in the codebase and the\n interface flattens it per page.\n2. No design tokens. All 62 components style inline. Spacing, radius,\n type scale and the status colours are retyped per file, which is why two\n panels that should look identical do not.\n3. Numbers are not typeset as money. No tabular numerals, inconsistent\n decimals, amounts not consistently right aligned in tables.\n4. Pending and settled rows look the same in several tables.\n5. One primary figure per screen is not enforced. Some screens open with\n six equally weighted numbers, which means none of them is the answer."
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "1. What the good crypto interfaces actually do (continued)",
-      "text": "Proposed work, in value order\n Step What Why it is first or last \n --- --- --- \n A tokens.js : spacing, radius, type scale, status colours, money formatting, all exported from one place Every later step depends on it, and it removes the drift that makes the app feel unfinished \n B <Money and <Amount : tabular numerals, right aligned, fixed decimals, paise rendered as paise Highest ratio of perceived quality to effort in any financial interface \n C <TxState : one component for the submitted, pending, settled, refused, expired sequence, reading the rail's own statuses, with the explorer or ledger link at the terminal state The product is a state machine and the interface should show one \n D Pending rows styled distinctly in every table; summary row expanding to detail expanding to the ledger block Reconciliation is what these users do \n E One primary figure per screen, with its change and its timestamp Cheap, and it is what makes a dashboard readable at a glance \n F A \"so what\" pass over every number on /umi and the property pages The highest-value and slowest step, because it is editorial rather than technical"
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "1. What the good crypto interfaces actually do (continued)",
-      "text": "Explicitly not proposed: a dark trading-desk theme, animated charts, a\nconnect-wallet-first home page, or anything that makes the product look like\na DEX. AasthiChain is a register of title with a money leg. A screen that\nlooks like a perpetuals exchange would misrepresent it, and the jury is being\nasked to believe the register."
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "2. TypeScript",
-      "text": "The measurement first\n \n --- --- \n Frontend 20,534 lines, 62 .jsx , 13 .js \n Type annotations today zero propTypes , zero JSDoc types \n Serverless handler one file, about 6,200 lines, plus api/lib/ .mjs \n Test suites 164, all plain Node, none type aware \n\nAt 20k lines the published guidance is unanimous: incremental with\n allowJs , never a rename sweep, and never strict on day one. The failure\nmode is equally well documented, including a team that spent six months and\n50,000 lines and reported no measurable drop in bugs.\n\n The honest case for and against\n\nA renaming migration of 62 components would cost days, break nothing a test\ncatches, and mostly re-encode prop shapes that already work. That is the part\nnot worth doing now.\n\nThe part worth doing is the boundary. The most expensive defects this project\nhas actually had were shape mismatches across a boundary, not inside a\ncomponent:\n\n- two implementations of the same 82 routes drifting, with four defects\n traced to it (the open D5 finding)\n- a rail response consumed with a field that was not always present\n- an environment variable read as one shape and written as another\n\nThose are exactly what a type checker at the boundary catches and what\nrenaming Button.jsx to Button.tsx does not.\n\n Proposed path"
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "2. TypeScript (continued)",
-      "text": "Phase 1, half a day, no file renamed. Add tsconfig.json with\n allowJs: true , checkJs: false , strict: false , noEmit: true . Add\n tsc --noEmit to CI, where it checks nothing yet. The infrastructure exists\nand cannot regress.\n\n Phase 2, the part with the value. Write types/rail.d.ts describing the\nrail's responses and the handler's request and response shapes: one\ndeclaration of what a payment, a wallet, a block, an anchor and a refusal\nlook like. Turn checkJs: true on for frontend/src/lib/ and\n frontend/api/lib/ only. These are the files where the boundary lives.\n\n Phase 3, the contract test, which is D5. With the shapes declared once,\nboth implementations of the 82 routes can be checked against the same\ndeclaration rather than against each other. That closes an open audit finding\nrather than opening a new project.\n\n Phase 4, opportunistic. New components in .tsx . Existing ones converted\nonly when they are being edited anyway. No sweep, no deadline, no sprint\ndedicated to it.\n\n Phase 5, only if phases 2 and 3 paid off. strict one flag at a time,\n strictNullChecks first, since null is what actually bites.\n\n Recommendation"
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "2. TypeScript (continued)",
-      "text": "Do phase 1 and 2 now; they are small, reversible and they aim at a defect\nclass this repository demonstrably has. Do phase 3 next because it is an open\naudit item wearing a different hat. Treat phases 4 and 5 as background work\nwith no completion date. Do not rename 62 components."
-    },
-    {
-      "doc": "UI_AND_TYPES_PLAN",
-      "file": "docs/UI_AND_TYPES_PLAN.md",
-      "heading": "3. Sequencing against everything else",
-      "text": "The interface work and the type work both compete with the open audit items\nand with whatever the next hackathon round asks for. If only one thing gets\ndone, it should be A plus B plus C : tokens, money typesetting, and a\nsingle transaction-state component. That is roughly a day, it is visible in\nthe first ten seconds of a demo, and usability and clarity in the live demo\nis fifteen per cent of the official rubric.\n\nTypeScript is invisible to a jury. It is worth doing for the codebase, not\nfor the score, and it should be said that way rather than dressed up."
     },
     {
       "doc": "WORK_ORDERS",

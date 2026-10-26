@@ -2,7 +2,7 @@
 // Keep the published test census honest without hand-editing three files.
 //
 // The counts (integration suites, Go test files, total checks) appear in
-// README.md, docs/TESTING.md and docs/DEMO.md. Adding one suite file makes
+// README.md and the internal TESTING and DEMO notes. Adding one suite file makes
 // all three wrong, tests/doccounts.test.mjs fails, and the fix is a
 // sixty-second full run followed by three edits in three places. That has
 // happened often enough to be worth a tool.
@@ -16,10 +16,15 @@
 // be exactly the dishonesty the census exists to prevent. Pass --checks with
 // the number a real `make test-fresh` reported, or leave it alone.
 
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
 
 const root = new URL('../', import.meta.url)
 const read = (f) => readFileSync(new URL(f, root), 'utf8')
+// Some of the documents these counts live in are internal notes kept out of
+// the repository, so they are present for the owner and absent in CI. A rule
+// whose document is not on disk is skipped rather than failed: the count
+// cannot drift in a file nobody is publishing.
+const present = (f) => existsSync(new URL(f, root))
 const write = (f, s) => writeFileSync(new URL(f, root), s)
 
 const args = process.argv.slice(2)
@@ -59,25 +64,25 @@ const rules = [
     to: (m, checks) => `${checks ?? m[1]} checks across ${suites} suite files`,
   },
   {
-    file: 'docs/TESTING.md',
+    file: '.internal-docs/TESTING.md',
     what: 'the command comment',
     re: /integration sweep:\s+(\d+) checks, 0 failed/,
     to: (m, checks) => `integration sweep:  ${checks ?? m[1]} checks, 0 failed`,
   },
   {
-    file: 'docs/TESTING.md',
+    file: '.internal-docs/TESTING.md',
     what: 'the suite-file row',
     re: /\| Suite files \| \*\*(\d+)\*\* in `tests\/` \|/,
     to: () => `| Suite files | **${suites}** in \`tests/\` |`,
   },
   {
-    file: 'docs/TESTING.md',
+    file: '.internal-docs/TESTING.md',
     what: 'the reported result row',
     re: /\*\*(\d+) passed, 0 failed\*\*/,
     to: (m, checks) => `**${checks ?? m[1]} passed, 0 failed**`,
   },
   {
-    file: 'docs/DEMO.md',
+    file: '.internal-docs/DEMO.md',
     what: 'the closing line read aloud at a demo',
     re: /(\d+) integration\s*\n?>?\s*suites and (\d+) Go test files/,
     to: (m) => m[0].replace(/\d+ integration/, `${suites} integration`)
@@ -93,6 +98,10 @@ console.log()
 let drift = 0
 const edited = new Map()
 for (const rule of rules) {
+  if (!present(rule.file)) {
+    console.log(`  skip    ${rule.file}: not in this checkout (internal note)`)
+    continue
+  }
   const src = edited.get(rule.file) ?? read(rule.file)
   const m = src.match(rule.re)
   if (!m) {

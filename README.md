@@ -70,7 +70,6 @@ curl localhost:21100/health          # the settlement core
 ```
 
 Other ways to run it and every configuration switch: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-Deployment topology and failure modes: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ---
 
@@ -82,7 +81,7 @@ Deployment topology and failure modes: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md
 
 </div>
 
-<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg). Edit the SVG, then re-export the PNG (command in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).</sub>
+<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg). Edit the SVG, then re-export the PNG.</sub>
 
 Four kinds of people use it: owners list property, registrars validate title, investors buy and
 trade fractions, regulators supervise. Behind them sit four things:
@@ -208,13 +207,12 @@ Each of these has its own design document. Every one states what is simulated.
 | **Trained risk model** | A classifier fitted in this repo (AUC 0.866 on held-out data) runs beside the hand-written screening rules, and takes the KYC tier, its route, its age and the ceiling it implies as inputs. Trained on synthetic data and advisory only; the rules decide. | [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md) |
 | **Cross-rail payments** | Paying a bank account or QR with CBDC; reports which leg is final, who holds the claim in between (a published suspense account), and whether the total changed. | [`docs/CBDC.md`](docs/CBDC.md) |
 | **KYC that produces the tier** | Tier is the output of a verification route, with evidence hashed, expiry and a trail. Aadhaar numbers are rejected outright, never stored. Verification steps are simulated. | [`docs/KYC.md`](docs/KYC.md) |
-| **A register of the keys that sign** | Keys are screened before they enter service, registration proves possession, duplicates are refused, and revocation is a recorded event that distinguishes a compromise from a retirement. Passing the screen means no known-bad pattern was found, not that the key was generated well. | [`docs/KEYS.md`](docs/KEYS.md) |
+| **A register of the keys that sign** | Keys are screened before they enter service, registration proves possession, duplicates are refused, and revocation is a recorded event that distinguishes a compromise from a retirement. Passing the screen means no known-bad pattern was found, not that the key was generated well. | |
 | **A token a holder can check** | A restricted ERC-20 carrying the ERC-7943 interface, arranged the way ERC-3643 arranges a permissioned security token: eligibility, holder caps, lock-ups and freezes are enforced inside the contract rather than around it. It mirrors the rail and never replaces it. Built and tested, not deployed to a public network. | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | **AI agent that proposes, never acts** | Reads live state and drafts actions (stuck legs, expiring conditions, stale backing) into a queue. A named person approves, facts are re-read at approval time, and the ledger records the approver. | [`docs/AI_AGENT.md`](docs/AI_AGENT.md) |
 | **Screening: list, case, report** | Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. | [`docs/AML.md`](docs/AML.md) |
 | **Grounded assistant** | Answers from the project's own docs and live rail state, fetches specific records by reference through ordinary code (no tool access), and says "not documented" when it has no source. Off if no key is configured. | [`docs/AI_AGENT.md`](docs/AI_AGENT.md) |
 | **Measured throughput** | About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. | [`docs/THROUGHPUT.md`](docs/THROUGHPUT.md) |
-| **Measured test coverage** | A tool maps every rail action against the suites: **64% of 100 actions certainly covered**, 16% possible. CI fails if the published figure drifts or coverage falls. | [`docs/TESTING.md`](docs/TESTING.md) |
 
 ---
 
@@ -231,7 +229,7 @@ chain head.
 Getting there exposed three defects invisible to single-peer tests: values that differed between
 endorsing peers, index entries in a format the state database rejects, and one bug in the test
 network's own tooling. Each now has a regression test and a write-up in
-[`docs/DRUNIX.md`](docs/DRUNIX.md) and [`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
+[`docs/DRUNIX.md`](docs/DRUNIX.md).
 
 **Claims:** the chaincode and gateway work against Drunix. **Non-claims:** the hosted demo is not
 connected to a Drunix network (`/trust` says so), and nothing here is an NPCI endorsement or pilot.
@@ -267,7 +265,7 @@ connected to a Drunix network (`/trust` says so), and nothing here is an NPCI en
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 165 checks across 120 suite files
+make test         # the full sweep: 160 checks across 120 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials
@@ -276,8 +274,6 @@ make secret-scan  # refuse tracked files that look like live credentials
 A mass failure is almost always a dead rail rather than a bug, so check the core is up first. CI runs
 the Go modules separately, builds the frontend, and treats formatting as a hard gate.
 
-Exact commands, prerequisites and deliberate gaps: [`docs/TESTING.md`](docs/TESTING.md).
-Known weak points: [`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
 
 ---
 

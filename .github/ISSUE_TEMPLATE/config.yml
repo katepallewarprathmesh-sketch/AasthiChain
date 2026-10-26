@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/katepallewarprathmesh-sketch/AasthiChain/blob/main/SECURITY.md
     about: Please report security problems privately, not as a public issue.
   - name: Demo walkthrough and known limitations
-    url: https://github.com/katepallewarprathmesh-sketch/AasthiChain/blob/main/docs/DEMO.md
+    url: https://github.com/katepallewarprathmesh-sketch/AasthiChain/blob/main/docs/ARCHITECTURE.md
     about: What the demo does, and what is simulated rather than live.
