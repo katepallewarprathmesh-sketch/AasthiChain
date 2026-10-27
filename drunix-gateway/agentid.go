@@ -234,6 +234,24 @@ func agentPseudonym(principal, purpose string, at time.Time) string {
 // Revocation
 // ---------------------------------------------------------------------------
 
+// Standing implements AgentStanding. An agent nobody registered is not the
+// register's business: it reports registered=false and lets the caller apply
+// its own rules. A withdrawn registration is reported with who withdrew it,
+// so the refusal can say.
+func (r *AgentRegistry) Standing(agentID string) (bool, bool, string) {
+	id := strings.TrimSpace(agentID)
+	if id == "" {
+		return false, false, ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p, ok := r.book[id]
+	if !ok {
+		return false, false, ""
+	}
+	return true, p.Revoked, p.RevokedBy
+}
+
 // Revoke stops an agent acting. It deliberately does not seal the record any
 // further: revocation is about the future, and who was accountable for what
 // already happened stays recoverable.

@@ -33,6 +33,8 @@ func mandateStatusFor(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrMandateNotFound):
 		return http.StatusNotFound, "ERR_UMI_MANDATE_NOT_FOUND"
+	case errors.Is(err, ErrAgentWithdrawn):
+		return http.StatusForbidden, "ERR_UMI_AGENT_WITHDRAWN"
 	case errors.Is(err, ErrMandateRevoked):
 		return http.StatusForbidden, "ERR_UMI_MANDATE_REVOKED"
 	case errors.Is(err, ErrMandateExpired):

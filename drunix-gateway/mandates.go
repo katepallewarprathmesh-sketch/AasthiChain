@@ -90,6 +90,12 @@ var (
 	ErrMandateExpired   = errors.New("mandate expired")
 	ErrMandateExceeded  = errors.New("mandate spending limit exceeded")
 	ErrMandateAssetward = errors.New("mandate does not cover that asset")
+	// ErrAgentWithdrawn is the answer to "what happens when authority is
+	// withdrawn". A mandate says what an agent may do; the register says
+	// whether that agent may act at all. Revoking the passport has to stop
+	// the agent everywhere, not oblige the principal to find and revoke
+	// every grant they ever made.
+	ErrAgentWithdrawn = errors.New("the agent's registration has been withdrawn")
 )
 
 // Mandate is the grant itself.
@@ -119,14 +125,33 @@ func (m *Mandate) RemainingPaise() int64 {
 	return m.LimitPaise - m.SpentPaise
 }
 
+// AgentStanding answers one question about a registered agent: may it still
+// act. The mandate book depends on this narrow interface rather than on the
+// agent register itself, so the two remain separable and a deployment that
+// runs no register behaves exactly as before.
+type AgentStanding interface {
+	// Standing reports whether the agent is on a register and, if it is,
+	// whether its registration has been withdrawn and by whom.
+	Standing(agentID string) (registered bool, withdrawn bool, by string)
+}
+
 // MandateRegistry holds grants and enforces them.
 type MandateRegistry struct {
-	mu      sync.RWMutex
-	byID    map[string]*Mandate
-	order   []string
-	chain   *DrunixChain
-	creds   *CredentialRegistry
-	nowFunc func() time.Time
+	mu       sync.RWMutex
+	byID     map[string]*Mandate
+	order    []string
+	chain    *DrunixChain
+	creds    *CredentialRegistry
+	standing AgentStanding
+	nowFunc  func() time.Time
+}
+
+// WithAgentStanding makes the book consult an agent register before it
+// authorises anything. Without it the book enforces grants alone, which was
+// the behaviour before registers existed.
+func (r *MandateRegistry) WithAgentStanding(s AgentStanding) *MandateRegistry {
+	r.standing = s
+	return r
 }
 
 // NewMandateRegistry wires the registry to the chain it anchors into and,
@@ -346,6 +371,14 @@ func (r *MandateRegistry) Authorise(id, agent, action, assetID string, amountPai
 	}
 	if m.Revoked {
 		return nil, fmt.Errorf("%w: withdrawn by %s", ErrMandateRevoked, m.RevokedBy)
+	}
+	// Checked before the grant's own terms: an agent that may not act at all
+	// should be told that, not told its limit is too low.
+	if r.standing != nil {
+		if registered, withdrawn, by := r.standing.Standing(m.Agent); registered && withdrawn {
+			return nil, fmt.Errorf("%w: %s was withdrawn by %s, so every mandate it holds is inert",
+				ErrAgentWithdrawn, m.Agent, by)
+		}
 	}
 	if exp, perr := time.Parse(time.RFC3339, m.ExpiresAt); perr == nil && !r.now().Before(exp) {
 		return nil, fmt.Errorf("%w: expired at %s", ErrMandateExpired, m.ExpiresAt)

@@ -358,6 +358,11 @@ func main() {
 		// autonomous runs here; this is the authority layer such an actor
 		// would act under, enforced on the settlement path.
 		srv.Mandates = drunix.NewMandateRegistry(chain, srv.Credentials)
+		// Withdrawing an agent's registration has to stop the agent, not
+		// leave its existing grants live.
+		if srv.Agents != nil {
+			srv.Mandates = srv.Mandates.WithAgentStanding(srv.Agents)
+		}
 		if n := srv.Mandates.RestoreFromChain(); n > 0 {
 			log.Printf("Mandate registry restored %d delegated mandate(s) from the ledger", n)
 		}
