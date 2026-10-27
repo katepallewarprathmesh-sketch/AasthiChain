@@ -449,7 +449,7 @@ export default function PropertyDetail({ user }) {
           {sub?.fullySubscribed ? (
             <div style={{ marginTop: 20 }}>
               <div style={{ padding: '12px 14px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#166534' }}>🏠 Fully Subscribed primary sale closed</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#166534' }}>Fully Subscribed primary sale closed</div>
                 <div style={{ fontSize: 12, color: '#3F6212', marginTop: 4, lineHeight: 1.6 }}>
                   Every token is owned. No new supply this raise is permanently closed to new buys. Ownership lives on the Aasthi Drunix ledger.
                 </div>
@@ -527,7 +527,7 @@ export default function PropertyDetail({ user }) {
           )}
 
           <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', marginTop: 10 }}>
-            🔒 Secure payment • Instant transfer • No paperwork
+            Secure payment • Instant transfer • No paperwork
           </div>
 
           {user && myHeld > 0 && identityOptions.length > 0 && (
@@ -563,7 +563,7 @@ export default function PropertyDetail({ user }) {
 
           {balances.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '30px 0', color: '#6B7280' }}>
-              <div style={{ fontSize: 24 }}>👥</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#6b7280' }}>&mdash;</div>
               <p style={{ fontSize: 13, marginTop: 8 }}>No investors yet</p>
               <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>Be the first to invest</p>
             </div>

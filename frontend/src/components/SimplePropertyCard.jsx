@@ -62,7 +62,7 @@ export default function SimplePropertyCard({ property }) {
 
       <div style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>📍</span> {city}, {state}
+          {city}, {state}
         </div>
       </div>
 

@@ -355,7 +355,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         )}
         {payment.risk && (
           <div style={{ fontSize: 12, color: payment.risk.decision === 'APPROVE' ? '#065F46' : '#92400E', marginTop: 10 }}>
-            🛡 Security check {payment.risk.decision === 'APPROVE' ? 'passed' : 'flagged'} risk {payment.risk.band} ({payment.risk.score}/100)
+            Security check {payment.risk.decision === 'APPROVE' ? 'passed' : 'flagged'} risk {payment.risk.band} ({payment.risk.score}/100)
           </div>
         )}
         {/* Only claim an atomic DvP when the settlement rail actually did one.
@@ -487,7 +487,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
         </h3>
         <StepTrack current={step} doneCount={step === 'paying' ? 0 : step === 'confirming' ? 1 : 2} />
         <div style={{ marginTop: 12, fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
-          🔒 Money and tokens move together never one without the other
+          Money and tokens move together never one without the other
         </div>
       </div>
     )
@@ -618,7 +618,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
       </button>
 
       <div style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', marginTop: 10, lineHeight: 1.4 }}>
-        🔒 Secure UPI payment • Tokens transferred instantly • No paperwork
+        Secure UPI payment • Tokens transferred instantly • No paperwork
       </div>
     </div>
   )

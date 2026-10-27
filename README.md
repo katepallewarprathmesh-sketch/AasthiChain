@@ -265,7 +265,7 @@ connected to a Drunix network (`/trust` says so), and nothing here is an NPCI en
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 160 checks across 120 suite files
+make test         # the full sweep: 166 checks across 121 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

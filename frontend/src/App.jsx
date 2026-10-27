@@ -236,7 +236,7 @@ function Footer() {
         <div style={{ display: 'grid', gridTemplateColumns: isMobileF ? '1fr' : '1.5fr 1fr 1fr 1fr 1fr', gap: isMobileF ? 26 : 32 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800 }}>A</div>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? '#7FA8E8' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800 }}>A</div>
               <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: head }}>AasthiChain</span>
             </div>
             <p style={{ fontSize: 12.5, color: mut, lineHeight: 1.7, marginTop: 12, maxWidth: '38ch' }}>
@@ -491,7 +491,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
       <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: twoRow ? 'flex-start' : 'center', flexWrap: twoRow ? 'wrap' : undefined, height: twoRow ? undefined : (isMobile ? 56 : 64), gap: isMobile ? 10 : 24, rowGap: twoRow ? 0 : undefined, padding: twoRow ? '2px 12px' : (isMobile ? '0 12px' : undefined) }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: twoRow ? 10 : 22, flex: twoRow ? '1 1 100%' : undefined, minHeight: twoRow ? 50 : undefined }}>
           <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? 'linear-gradient(145deg,#A9C6F4,#5F8BD4)' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? '#7FA8E8' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
             {!isMobile && <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>}
           </Link>
           <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0, alignItems: 'center' }}>
@@ -552,7 +552,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
               <button onClick={onLogout} style={{ padding: isMobile ? '6px 8px' : '8px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: 'transparent', color: mut, border: `1px solid ${chipBorder}` }}>Sign out</button>
             </>
           ) : (
-            <Link to="/login" style={{ textDecoration: 'none', padding: isMobile ? '8px 12px' : '9px 16px', fontSize: isMobile ? 12 : 13, fontWeight: 600, borderRadius: 9, background: dark ? 'linear-gradient(180deg,#A9C6F4,#7FA8E8)' : '#1E3A5F', color: dark ? '#0A1422' : 'white', boxShadow: dark ? '0 8px 24px -8px rgba(127,168,232,0.5)' : 'none', flexShrink: 0 }}>
+            <Link to="/login" style={{ textDecoration: 'none', padding: isMobile ? '8px 12px' : '9px 16px', fontSize: isMobile ? 12 : 13, fontWeight: 600, borderRadius: 9, background: dark ? '#9BBCF0' : '#1E3A5F', color: dark ? '#0A1422' : 'white', boxShadow: 'none', flexShrink: 0 }}>
               Sign in
             </Link>
           )}
