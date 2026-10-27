@@ -593,6 +593,15 @@ function AppContentInner({ user, setUser, clerk, isLoaded, isSignedIn, clerkUser
 
   useEffect(() => { prefetchLikelyRoutes() }, [])
 
+  // The taste layer (styles/taste.css) is scoped to this attribute: one
+  // radius, one hairline, no resting shadows, tabular figures. The home page
+  // is deliberately excluded, so it keeps rendering exactly as it does today.
+  useEffect(() => {
+    const root = document.documentElement
+    if (location.pathname === '/') root.removeAttribute('data-taste')
+    else root.setAttribute('data-taste', 'on')
+  }, [location.pathname])
+
   // A tab left open through a deployment keeps running the old bundle, so
   // people see screens that were fixed hours ago. Check once on load, and
   // again whenever the tab is brought back to the front.

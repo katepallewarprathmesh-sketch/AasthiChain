@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import './styles/taste.css'
 import { ClerkProvider, ClerkFailed } from '@clerk/react'
 const Analytics = lazy(() => import('@vercel/analytics/react').then(m => ({ default: m.Analytics })))
 

@@ -1,0 +1,229 @@
+/* ============================================================================
+   The taste layer
+   ----------------------------------------------------------------------------
+   Read off tasteskill.dev's own interface, which practises what its rules
+   preach: one paper ground (#f5f4f2), one ink (#0a0a0a), one accent, a
+   neutral ramp doing all the rest, hairline borders at a few per cent black,
+   nothing floating at rest, tabular numerals wherever a figure appears,
+   display type tracked in to -0.025em, radii decided once, and every state
+   change a 150ms ease-out rather than a jump.
+
+   What is deliberately NOT copied: their accent (#ff6b00) and their
+   typefaces. AasthiChain keeps its forest green and its Fraunces/Inter
+   pairing. This layer is about discipline, not about looking like them.
+
+   SCOPE. Everything here is nested under [data-taste="on"], which App.jsx
+   sets on <html> for every route EXCEPT the home page. Landing.jsx is frozen
+   and must render byte-identically, so the attribute is simply absent there.
+
+   This layer only retunes the shared primitives (.pg-*, .ax-*, .card, .btn,
+   tables, inputs, nav). It cannot and should not fight the inline styles that
+   62 components still carry; those get migrated screen by screen onto
+   lib/tokens.js. What it does buy, today, on 36 routes: one radius, one
+   hairline, no resting shadows, aligned figures, real section rhythm and
+   consistent focus and hover behaviour.
+   ========================================================================== */
+
+[data-taste='on'] {
+  /* One ground, one ink, one accent. The ramp carries everything between. */
+  --t-paper: #f7f6f3;
+  --t-surface: #ffffff;
+  --t-surface-step: #faf9f7; /* the tone step: a surface, not a line */
+  --t-ink: #111827;
+  --t-ink-2: #4b5563;
+  --t-ink-3: #6b7280;
+  --t-ink-4: #9ca3af;
+  --t-hairline: rgba(17, 24, 39, 0.08);
+  --t-hairline-strong: rgba(17, 24, 39, 0.14);
+  --t-accent: #246b4a;
+  --t-accent-hover: #1c5639;
+
+  /* Radii decided once. 10 for a surface, 8 for a control, 999 for a pill. */
+  --t-r-surface: 10px;
+  --t-r-control: 8px;
+
+  /* One motion curve, one duration. */
+  --t-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --t-dur: 150ms;
+}
+
+/* --- Ground and ink ------------------------------------------------------ */
+
+[data-taste='on'] body {
+  background: var(--t-paper);
+  color: var(--t-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Figures align. A settlement ledger reads down a column of amounts, and
+   proportional digits make that column ragged. */
+[data-taste='on'] body,
+[data-taste='on'] table,
+[data-taste='on'] input,
+[data-taste='on'] select {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* --- Display type -------------------------------------------------------- */
+
+[data-taste='on'] .pg-title,
+[data-taste='on'] .ax-display,
+[data-taste='on'] .acx-h1 {
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+[data-taste='on'] .pg-card-title,
+[data-taste='on'] .ax-card-title {
+  letter-spacing: -0.015em;
+}
+
+/* Running text sits in full ink, not in a grey that implies it matters less.
+   Supporting text gets the ramp. */
+[data-taste='on'] .pg-lede,
+[data-taste='on'] .ax-lede {
+  color: var(--t-ink-2);
+  line-height: 1.55;
+  max-width: 68ch;
+}
+
+/* --- Surfaces: a tone step, a hairline, and nothing floating ------------- */
+
+[data-taste='on'] .pg-card,
+[data-taste='on'] .card,
+[data-taste='on'] .ax-card {
+  border-radius: var(--t-r-surface);
+  border-color: var(--t-hairline);
+  box-shadow: none;
+  transition: border-color var(--t-dur) var(--t-ease);
+}
+
+[data-taste='on'] .card-elevated {
+  box-shadow: none;
+  background: var(--t-surface-step);
+  border: 1px solid var(--t-hairline);
+}
+
+/* Section rhythm. The gap between sections has to be visibly larger than any
+   gap inside one, or the page reads as a single undifferentiated run. */
+[data-taste='on'] .pg-card + .pg-card {
+  margin-top: 20px;
+}
+
+[data-taste='on'] .pg-head {
+  padding: 40px 0 22px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--t-hairline);
+}
+
+/* --- Controls: flat, one fill, one radius, a real press ------------------ */
+
+[data-taste='on'] .pg-btn,
+[data-taste='on'] .ax-btn,
+[data-taste='on'] .btn {
+  border-radius: var(--t-r-control);
+  box-shadow: none;
+  transition:
+    background-color var(--t-dur) var(--t-ease),
+    border-color var(--t-dur) var(--t-ease),
+    color var(--t-dur) var(--t-ease),
+    scale var(--t-dur) var(--t-ease);
+}
+
+[data-taste='on'] .pg-btn:active,
+[data-taste='on'] .ax-btn:active,
+[data-taste='on'] .btn:active {
+  scale: 0.97;
+}
+
+/* No lift on hover. A button is on the page, not above it. */
+[data-taste='on'] .acx-btn:hover,
+[data-taste='on'] .acx-btn:active {
+  transform: none;
+}
+
+[data-taste='on'] .acx-btn-primary:hover {
+  box-shadow: none;
+}
+
+[data-taste='on'] .pg-input,
+[data-taste='on'] .input,
+[data-taste='on'] select {
+  border-radius: var(--t-r-control);
+  border-color: var(--t-hairline-strong);
+  transition: border-color var(--t-dur) var(--t-ease);
+}
+
+[data-taste='on'] .pg-input:focus,
+[data-taste='on'] .input:focus {
+  border-color: var(--t-accent);
+}
+
+[data-taste='on'] .pg-tab {
+  border-radius: var(--t-r-control);
+  transition:
+    background-color var(--t-dur) var(--t-ease),
+    border-color var(--t-dur) var(--t-ease),
+    color var(--t-dur) var(--t-ease);
+}
+
+/* One focus treatment everywhere, visible on both grounds. */
+[data-taste='on'] *:focus-visible {
+  outline: 2px solid rgba(17, 24, 39, 0.3);
+  outline-offset: 2px;
+}
+
+/* --- Tables: the one place hairlines are correct ------------------------- */
+
+[data-taste='on'] .pg-table th {
+  color: var(--t-ink-3);
+  border-bottom: 1px solid var(--t-hairline-strong);
+}
+
+[data-taste='on'] .pg-table td {
+  border-bottom: 1px solid var(--t-hairline);
+}
+
+/* A row responds to the pointer with a tone step, never a shadow or a line. */
+[data-taste='on'] .pg-table tbody tr {
+  transition: background-color var(--t-dur) var(--t-ease);
+}
+
+[data-taste='on'] .pg-table tbody tr:hover {
+  background: var(--t-surface-step);
+}
+
+/* --- Chrome -------------------------------------------------------------- */
+
+/* The nav separates from the page with a hairline, not with a shadow. */
+[data-taste='on'] .site-nav {
+  box-shadow: none;
+}
+
+[data-taste='on'] .pg-tag {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Links in body copy underline with an offset rather than changing colour. */
+[data-taste='on'] .pg-card a:not(.pg-btn):not(.pg-tab),
+[data-taste='on'] .ax-body a {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color var(--t-dur) var(--t-ease);
+}
+
+/* Respect the system setting. Everything above degrades to a static page. */
+@media (prefers-reduced-motion: reduce) {
+  [data-taste='on'] * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  [data-taste='on'] .pg-btn:active,
+  [data-taste='on'] .ax-btn:active,
+  [data-taste='on'] .btn:active {
+    scale: 1;
+  }
+}
