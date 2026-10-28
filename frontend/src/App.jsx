@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 
 import NotificationBell from './components/NotificationBell.jsx'
 const AasthiAI = lazy(() => import('./components/AasthiAI.jsx'))
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import api from './lib/api.js'
 import { trackPageview } from './lib/track'
 import { checkFreshness } from './lib/freshness'
 import { applySeo } from './lib/seo'
@@ -105,10 +106,65 @@ function RouteFallback() {
 
 // Warm the most likely next screens once the browser is idle, so the first
 // click after landing feels instant instead of triggering a cold fetch.
-function prefetchLikelyRoutes() {
+// Every route is a lazy chunk, which keeps the first load small but means
+// the first click on a link pays for a network round trip before anything
+// renders. The fix is to have the chunk already in memory by the time the
+// click happens: a pointer entering a link, or a finger touching it, is
+// between 100ms and several seconds of warning, and that is usually the
+// whole chunk.
+const ROUTE_CHUNKS = {
+  '/marketplace': () => import('./pages/Marketplace.jsx'),
+  '/dashboard': () => import('./pages/InvestorDashboard.jsx'),
+  '/wallet': () => import('./pages/Wallet.jsx'),
+  '/ledger': () => import('./pages/LedgerExplorer.jsx'),
+  '/umi': () => import('./pages/UMISettlement.jsx'),
+  '/admin': () => import('./pages/Admin.jsx'),
+  '/admin/ops': () => import('./pages/AdminOps.jsx'),
+  '/market': () => import('./pages/SecondaryMarket.jsx'),
+  '/cbdc': () => import('./pages/DigitalRupee.jsx'),
+  '/crossborder': () => import('./pages/CrossBorder.jsx'),
+  '/proof': () => import('./pages/ProofChain.jsx'),
+  '/verify': () => import('./pages/VerifyDocument.jsx'),
+  '/keys': () => import('./pages/KeyRegister.jsx'),
+  '/feeds': () => import('./pages/Feeds.jsx'),
+  '/cards': () => import('./pages/Cards.jsx'),
+  '/chainstate': () => import('./pages/ChainState.jsx'),
+  '/token': () => import('./pages/PublicToken.jsx'),
+  '/trust': () => import('./pages/Trust.jsx'),
+  '/support': () => import('./pages/Support.jsx'),
+  '/insights': () => import('./pages/Insights.jsx'),
+  '/explore': () => import('./pages/Explore.jsx'),
+  '/login': () => import('./pages/Login.jsx'),
+}
+
+const prefetched = new Set()
+function prefetchRoute(path) {
+  const load = ROUTE_CHUNKS[path]
+  if (!load || prefetched.has(path)) return
+  prefetched.add(path)
+  load().catch(() => prefetched.delete(path))
+}
+
+// Handlers to spread onto any link. pointerenter fires on a mouse and a
+// trackpad; touchstart is the phone equivalent and lands roughly 150ms
+// before the click does.
+function prefetchProps(path) {
+  return {
+    onPointerEnter: () => prefetchRoute(path),
+    onTouchStart: () => prefetchRoute(path),
+    onFocus: () => prefetchRoute(path),
+  }
+}
+
+function prefetchLikelyRoutes(user) {
   const run = () => {
-    import('./pages/Marketplace.jsx')
-    import('./pages/Login.jsx')
+    // Warm the rail first: on a cold free instance this is the 23 seconds
+    // that otherwise lands on whichever screen the person opens.
+    api.warm()
+    const paths = user
+      ? ['/dashboard', '/marketplace', '/wallet', '/ledger']
+      : ['/marketplace', '/login']
+    paths.forEach(prefetchRoute)
     import('./pages/PropertyDetail.jsx')
   }
   if (typeof window === 'undefined') return
@@ -377,6 +433,7 @@ function MoreMenu({ groups, mut, text, dark, chipBorder, isMobile }) {
                     to={i.path}
                     role="menuitem"
                     onClick={close}
+                    {...prefetchProps(i.path)}
                     style={{ display: 'block', textDecoration: 'none', fontSize: 13, fontWeight: 500, color: text, padding: '7px 8px', borderRadius: 8 }}
                   >
                     {i.label}
@@ -464,7 +521,7 @@ function MobileNavDrawer({ open, onClose, top, navItems, moreGroups, isActive, u
             <div style={{ fontSize: 13, fontWeight: 650, color: mut, padding: '0 14px 6px' }}>{g.name}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {g.items.map((i) => (
-                <Link key={i.path} to={i.path} onClick={onClose} style={itemStyle(false)}>{i.label}</Link>
+                <Link key={i.path} to={i.path} onClick={onClose} {...prefetchProps(i.path)} style={itemStyle(false)}>{i.label}</Link>
               ))}
             </div>
           </div>
@@ -672,7 +729,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
           </Link>
           <div className="site-nav-links" style={{ flex: isMobile ? '1 1 auto' : undefined, minWidth: 0, alignItems: 'center' }}>
             {navItems.map(item => (
-              <Link key={item.path} to={item.path} style={{
+              <Link key={item.path} to={item.path} {...prefetchProps(item.path)} style={{
                 textDecoration: 'none', fontSize: isMobile ? 12.5 : 13, fontWeight: 500, padding: isMobile ? '6px 9px' : '8px 12px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
                 color: isActive(item.path) ? (dark ? '#EAEEF5' : '#1E3A5F') : mut,
                 background: isActive(item.path) ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent',
@@ -767,7 +824,7 @@ function AppContentInner({ user, setUser, clerk, isLoaded, isSignedIn, clerkUser
 
   useEffect(() => { setInternalUser(user) }, [user])
 
-  useEffect(() => { prefetchLikelyRoutes() }, [])
+  useEffect(() => { prefetchLikelyRoutes(user) }, [user])
 
   // The taste layer (styles/taste.css) is scoped to this attribute: one
   // radius, one hairline, no resting shadows, tabular figures. The home page

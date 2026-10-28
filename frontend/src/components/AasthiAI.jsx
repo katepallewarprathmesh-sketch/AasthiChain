@@ -122,7 +122,22 @@ function Bubble({ role, children, tone }) {
   )
 }
 
+// A media query rather than a width prop: this component is mounted once by
+// App and has no parent that knows the viewport.
+function usePhone(max = 640) {
+  const [p, setP] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(`(max-width: ${max}px)`).matches : false))
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined
+    const mq = window.matchMedia(`(max-width: ${max}px)`)
+    const on = () => setP(mq.matches)
+    if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on)
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on) }
+  }, [max])
+  return p
+}
+
 export default function AasthiAI() {
+  const phone = usePhone()
   const [available, setAvailable] = useState(false)
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -191,7 +206,9 @@ export default function AasthiAI() {
         onClick={() => setOpen(true)}
         aria-label="Open Aasthi AI"
         style={{
-          position: 'fixed', right: 18, bottom: 18, zIndex: 900,
+          position: 'fixed', zIndex: 900,
+          right: 'max(14px, env(safe-area-inset-right))',
+          bottom: 'calc(max(14px, env(safe-area-inset-bottom)))',
           display: 'flex', alignItems: 'center', gap: 8,
           background: C.navy, color: '#fff', border: 'none',
           borderRadius: 999, padding: '11px 17px', fontSize: 13.5, fontWeight: 600,
@@ -208,12 +225,18 @@ export default function AasthiAI() {
       aria-label="Aasthi AI assistant"
       style={{
         position: 'fixed', zIndex: 900,
-        right: 'max(12px, env(safe-area-inset-right))',
-        bottom: 'max(12px, env(safe-area-inset-bottom))',
-        width: 'min(380px, calc(100vw - 24px))',
-        height: 'min(560px, calc(var(--vh-full) - 24px))',
+        // Phone: a bottom sheet across the full width, 85% of the dynamic
+        // viewport so the browser toolbar cannot swallow the composer.
+        // Tablet and up: the corner panel it has always been.
+        right: phone ? 0 : 'max(12px, env(safe-area-inset-right))',
+        left: phone ? 0 : undefined,
+        bottom: phone ? 0 : 'max(12px, env(safe-area-inset-bottom))',
+        width: phone ? '100%' : 'min(380px, calc(100vw - 24px))',
+        height: phone ? 'min(85dvh, calc(var(--vh-full) - 44px))' : 'min(560px, calc(var(--vh-full) - 24px))',
+        paddingBottom: phone ? 'env(safe-area-inset-bottom)' : undefined,
         display: 'flex', flexDirection: 'column',
-        background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14,
+        background: C.paper, border: `1px solid ${C.line}`,
+        borderRadius: phone ? '16px 16px 0 0' : 14,
         boxShadow: '0 18px 50px rgba(17,24,39,0.22)', overflow: 'hidden',
       }}>
 

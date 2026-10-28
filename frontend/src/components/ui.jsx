@@ -302,10 +302,20 @@ export function ConfirmDialog({ open, title, body, confirmLabel = 'Confirm', dan
   if (!open) return null
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(23,33,43,.45)', display: 'grid', placeItems: 'center', zIndex: 150, padding: 18 }}
+      // A dialog taller than a landscape phone used to be clipped with no
+      // way to reach its buttons: placeItems:center with no overflow centres
+      // the overflow off both ends of the screen. Scroll the backdrop, pin
+      // the card to the top once it stops fitting, and keep clear of the
+      // home indicator.
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(23,33,43,.45)', zIndex: 150,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflowY: 'auto', overscrollBehavior: 'contain',
+        padding: '18px 18px calc(18px + env(safe-area-inset-bottom))',
+      }}
       onClick={(e) => { if (e.target === e.currentTarget) onCancel?.() }}
     >
-      <div role="dialog" aria-modal="true" aria-label={title} className="ax-card ax-card--raised" style={{ maxWidth: 440, width: '100%' }}>
+      <div role="dialog" aria-modal="true" aria-label={title} className="ax-card ax-card--raised" style={{ maxWidth: 440, width: '100%', margin: 'auto' }}>
         <h3 className="ax-card-title">{title}</h3>
         {body && <p className="ax-body" style={{ marginTop: 10 }}>{body}</p>}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>

@@ -48,9 +48,99 @@ class ApiClient {
     } catch { return {} }
   }
 
+  // Why there is a cache in here at all.
+  //
+  // Every screen fetches on mount, so going Marketplace -> a property ->
+  // back refetched the identical list and the page sat empty for a round
+  // trip it had already paid for. Worse, several components on one screen
+  // ask for the same thing independently, so one render could fire the same
+  // GET three times.
+  //
+  // Two mechanisms, both small and both only for GETs:
+  //   - in-flight dedupe: concurrent callers for one URL share one request
+  //   - a short memo (TTL below): a repeat GET inside the window is answered
+  //     from memory, which is what makes going back feel instant
+  //
+  // Any write empties the memo, because after a purchase nothing stale is
+  // acceptable. Callers that must have fresh data pass { fresh: true }.
+  static TTL_MS = 15000
+
+  _cache = new Map()   // url -> { at, data }
+  _inflight = new Map() // url -> Promise
+
+  invalidate() {
+    this._cache.clear()
+  }
+
+  // A cold Render free instance takes about 23 seconds to wake, and the
+  // first thing it serves is whatever the app happened to ask for first.
+  // Asking for /health the moment the bundle boots moves that wait off the
+  // critical path: by the time a screen needs data the instance is usually
+  // already up.
+  warm() {
+    if (this._warmed) return
+    this._warmed = true
+    try { fetch('/health', { method: 'GET', cache: 'no-store' }).catch(() => {}) } catch { /* nothing to do */ }
+  }
+
   async request(path, options = {}) {
+    const method = (options.method || 'GET').toUpperCase()
+    const isGet = method === 'GET'
+    const fresh = options.fresh === true
+
+    if (isGet && !fresh) {
+      const hit = this._cache.get(path)
+      if (hit && Date.now() - hit.at < ApiClient.TTL_MS) return hit.data
+      const pending = this._inflight.get(path)
+      if (pending) return pending
+    }
+
+    const run = this._perform(path, options)
+    if (isGet) {
+      this._inflight.set(path, run)
+      run.then(
+        (data) => { this._cache.set(path, { at: Date.now(), data }); this._inflight.delete(path) },
+        () => { this._inflight.delete(path) },
+      )
+    } else {
+      run.then(() => this.invalidate(), () => this.invalidate())
+    }
+    return run
+  }
+
+  async _perform(path, options = {}) {
     const headers = { ...this.getAuthHeaders(), ...this.operatorHeaders(path), ...(options.headers || {}) }
-    const res = await fetch(path, { ...options, headers })
+
+    // The backend is a free Render instance that sleeps after fifteen idle
+    // minutes, so the first request of a session can legitimately take the
+    // best part of half a minute. A default fetch has no timeout at all and
+    // would hang for ever on a dropped mobile connection; 35 seconds is long
+    // enough for a cold start and short enough to fail honestly. One retry,
+    // for GETs only, covers the handover when a phone switches from wifi to
+    // mobile data mid-request.
+    const attempt = async (ms) => {
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null
+      const timer = ctl ? setTimeout(() => ctl.abort(), ms) : null
+      try {
+        return await fetch(path, { ...options, headers, signal: ctl ? ctl.signal : undefined })
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    }
+
+    let res
+    try {
+      res = await attempt(35000)
+    } catch (err) {
+      const retryable = (options.method || 'GET').toUpperCase() === 'GET'
+      if (!retryable) {
+        const e = new Error(err && err.name === 'AbortError' ? 'The server did not answer in time. It may be waking up, try once more.' : 'Could not reach the server. Check your connection and try again.')
+        e.status = 0
+        e.offline = true
+        throw e
+      }
+      res = await attempt(20000).catch(() => { throw err })
+    }
     
     // Read as text first: a non-JSON body (an HTML error page, or a plain-text
     // 404 from an upstream service) used to collapse into "Request failed 404"
