@@ -399,6 +399,115 @@ function MoreMenu({ groups, mut, text, dark, chipBorder, isMobile }) {
   )
 }
 
+
+// The navigation drawer for narrow screens.
+//
+// What it replaces, and why. The bar used to keep every primary link on the
+// phone in a horizontally scrolling strip with its scrollbar hidden, and for
+// a signed-in user it grew a second row carrying the role switcher and sign
+// out. Both decisions hid things. A scroll strip with no scrollbar gives no
+// hint that anything is off the right edge, so Ledger and Settlement were
+// simply invisible on a 390px screen; the second row then ate 50px of a
+// sticky bar and pushed the page down.
+//
+// One button, one sheet. Everything the bar used to hide is in the sheet at
+// full width with 44px touch targets, which is Apple's minimum and close to
+// Google's 48dp. The sheet is fixed, is capped to the dynamic viewport
+// height so the browser toolbar cannot cut off its last item, scrolls
+// internally, and locks the page behind it.
+function MobileNavDrawer({ open, onClose, top, navItems, moreGroups, isActive, user, dark, text, mut, chipBg, chipBorder, border, onLogout, onRoleSwitch, onOperatorUnlock }) {
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+  const panel = dark ? '#101623' : '#FFFFFF'
+  const itemStyle = (active) => ({
+    display: 'flex', alignItems: 'center', minHeight: 44, padding: '0 14px',
+    textDecoration: 'none', fontSize: 15, fontWeight: active ? 650 : 500,
+    borderRadius: 10, color: active ? (dark ? '#EAEEF5' : '#1E3A5F') : text,
+    background: active ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent',
+  })
+
+  return (
+    <>
+      <div onClick={onClose} aria-hidden="true" style={{ position: 'fixed', inset: 0, top, zIndex: 190, background: 'rgba(8,12,20,0.38)' }} />
+      <div
+        id="site-nav-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        style={{
+          position: 'fixed', top, left: 0, right: 0, zIndex: 191,
+          maxHeight: `calc(var(--vh-full) - ${top}px)`, overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
+          background: panel, borderBottom: `1px solid ${border}`,
+          padding: `10px 12px calc(16px + env(safe-area-inset-bottom))`,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {navItems.map((item) => (
+            <Link key={item.path} to={item.path} onClick={onClose} style={itemStyle(isActive(item.path))}>{item.label}</Link>
+          ))}
+        </div>
+
+        {moreGroups.map((g) => (
+          <div key={g.name} style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 650, color: mut, padding: '0 14px 6px' }}>{g.name}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {g.items.map((i) => (
+                <Link key={i.path} to={i.path} onClick={onClose} style={itemStyle(false)}>{i.label}</Link>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${border}` }}>
+          <Link to="/explore" onClick={onClose} style={{ ...itemStyle(false), fontWeight: 650 }}>Everything on AasthiChain</Link>
+        </div>
+
+        {user && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {user.canSwitchIdentity === false ? (
+              <button
+                onClick={() => { onClose(); onOperatorUnlock() }}
+                style={{ minHeight: 44, borderRadius: 10, cursor: 'pointer', background: 'transparent', color: text, border: `1px solid ${chipBorder}`, fontSize: 14, fontWeight: 600 }}
+              >
+                Switch between the demo roles
+              </button>
+            ) : (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 10, padding: '0 12px', minHeight: 44 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: mut, whiteSpace: 'nowrap' }}>Role</span>
+                <select
+                  value={user.identityId}
+                  onChange={(e) => { const r = ROLES.find((x) => x.id === e.target.value); if (r) { onRoleSwitch(r); onClose() } }}
+                  style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, background: 'transparent', color: text, border: 0, padding: '10px 0' }}
+                >
+                  {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                </select>
+              </label>
+            )}
+            <button
+              onClick={() => { onClose(); onLogout() }}
+              style={{ minHeight: 44, borderRadius: 10, cursor: 'pointer', background: 'transparent', color: text, border: `1px solid ${chipBorder}`, fontSize: 14, fontWeight: 600 }}
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock }) {
   const location = useLocation()
   // Five daily screens stay in the bar. Everything else is one click away in
@@ -470,9 +579,17 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
   const isLanding = location.pathname === '/'
   const theme = useChromeTheme(isLanding)
   const dark = isLanding && theme === 'dark'
-  const isMobile = useIsMobile()
-  // Signed-in phones get a two-row navbar so role + sign out are always reachable
-  const twoRow = isMobile && !!user
+  // 980, not 860: at 900px the bar had six links, a More trigger, a role
+  // switcher and a sign-out button competing for the width, which is iPad
+  // portrait and a small laptop window as much as it is a phone. Above it
+  // the full bar fits; below it everything moves into the drawer.
+  const compact = useIsMobile(980)
+  const isMobile = compact
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  useEffect(() => { setDrawerOpen(false) }, [location.pathname])
+  useEffect(() => { if (!compact) setDrawerOpen(false) }, [compact])
+  const barH = compact ? 56 : 64
 
   const bg = dark ? 'transparent' : '#FFFFFF'
   const border = dark ? 'rgba(255,255,255,0.07)' : '#E5E7EB'
@@ -486,10 +603,69 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
     window.dispatchEvent(new CustomEvent('aasthi-theme', { detail: next }))
   }
 
+  // Narrow screens: one row, one button, everything else in the drawer. The
+  // bar keeps the wordmark (it was hidden on a phone, which left an
+  // unlabelled square), the notification bell, the sign-in call to action
+  // when signed out, and the menu.
+  if (compact) {
+    return (
+      <nav className="site-nav" data-look={dark ? 'dark' : 'light'} style={{ position: 'sticky', top: 0, zIndex: 200, background: bg, borderBottom: `1px solid ${border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, height: barH, padding: '0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right))' }}>
+          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: dark ? '#7FA8E8' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
+            <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 17, color: text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>AasthiChain</span>
+          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {user && <NotificationBell user={user} mut={mut} border={border} />}
+            {!user && (
+              <Link to="/login" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', minHeight: 40, padding: '0 14px', fontSize: 13, fontWeight: 600, borderRadius: 9, background: dark ? '#9BBCF0' : '#1E3A5F', color: dark ? '#0A1422' : 'white' }}>Sign in</Link>
+            )}
+            {user && isClerkConfigured && (
+              <>
+                <ClerkLoading><div style={{ width: 28, height: 28, background: chipBg, borderRadius: '50%' }} /></ClerkLoading>
+                <ClerkLoaded><UserButton afterSignOutUrl="/" /></ClerkLoaded>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => setDrawerOpen((o) => !o)}
+              aria-expanded={drawerOpen}
+              aria-controls="site-nav-drawer"
+              aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, cursor: 'pointer', background: drawerOpen ? (dark ? 'rgba(255,255,255,0.08)' : '#F1F5F9') : 'transparent', border: `1px solid ${drawerOpen ? chipBorder : 'transparent'}`, color: text }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                {drawerOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>}
+              </svg>
+            </button>
+          </div>
+        </div>
+        <MobileNavDrawer
+          open={drawerOpen}
+          onClose={closeDrawer}
+          top={barH}
+          navItems={navItems}
+          moreGroups={moreGroups}
+          isActive={isActive}
+          user={user}
+          dark={dark}
+          text={text}
+          mut={mut}
+          chipBg={chipBg}
+          chipBorder={chipBorder}
+          border={border}
+          onLogout={onLogout}
+          onRoleSwitch={onRoleSwitch}
+          onOperatorUnlock={onOperatorUnlock}
+        />
+      </nav>
+    )
+  }
+
   return (
     <nav className="site-nav" data-look={dark ? 'dark' : 'light'} style={{ position: 'sticky', top: 0, zIndex: 100, background: bg, borderBottom: `1px solid ${border}` }}>
-      <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: twoRow ? 'flex-start' : 'center', flexWrap: twoRow ? 'wrap' : undefined, height: twoRow ? undefined : (isMobile ? 56 : 64), gap: isMobile ? 10 : 24, rowGap: twoRow ? 0 : undefined, padding: twoRow ? '2px 12px' : (isMobile ? '0 12px' : undefined) }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: twoRow ? 10 : 22, flex: twoRow ? '1 1 100%' : undefined, minHeight: twoRow ? 50 : undefined }}>
+      <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: barH, gap: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 22, minWidth: 0 }}>
           <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <div style={{ width: 32, height: 32, borderRadius: 9, background: dark ? '#7FA8E8' : '#1E3A5F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: dark ? '#0A1422' : 'white', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 800, flexShrink: 0 }}>A</div>
             {!isMobile && <span style={{ fontFamily: 'Fraunces, Georgia, serif', fontWeight: 700, fontSize: 18, color: text }}>AasthiChain</span>}
@@ -506,7 +682,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
           <MoreMenu groups={moreGroups} mut={mut} text={text} dark={dark} chipBg={chipBg} chipBorder={chipBorder} isMobile={isMobile} />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexShrink: 0, flex: twoRow ? '1 1 100%' : undefined, justifyContent: twoRow ? 'space-between' : undefined, borderTop: twoRow ? `1px solid ${border}` : undefined, padding: twoRow ? '7px 0' : undefined }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {user && <NotificationBell user={user} mut={mut} border={border} />}
           {isLanding && (
             <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} style={{ color: mut }} title="Toggle light / dark">
@@ -539,7 +715,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
                   title="Stop acting as a demo role and go back to your own account"
                   style={{ fontSize: 10, fontWeight: 700, color: dark ? '#64718A' : '#9CA3AF', cursor: 'pointer' }}
                 >ROLE</span>
-                <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: twoRow ? 130 : isMobile ? 110 : undefined }}>
+                <select value={user.identityId} onChange={e => { const s = ROLES.find(r => r.id === e.target.value); if (s) onRoleSwitch(s) }} style={{ fontSize: isMobile ? 11 : 12, fontWeight: 600, background: dark ? '#101623' : 'white', color: text, border: `1px solid ${chipBorder}`, borderRadius: 6, padding: isMobile ? '3px 4px' : '4px 8px', maxWidth: undefined }}>
                   {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>
               </div>

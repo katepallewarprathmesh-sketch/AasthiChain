@@ -1,0 +1,183 @@
+/* ============================================================================
+   One layout, every screen
+   ----------------------------------------------------------------------------
+   The device list this has to survive: a 320px iPhone SE, a 390-430px modern
+   phone, a folded Galaxy Fold at 344px, a phone in landscape at 740x360, an
+   iPad in portrait at 768 and landscape at 1024, a 1280 laptop, a 1440 Mac,
+   and a 2560 desktop. Plus every one of those with the system text size
+   raised, and every one of them with a pointer that cannot hover.
+
+   The rules below are breakpoint-light on purpose. Most of the work is done
+   by clamp(), by auto-fit grids and by min-width:0, which cover widths
+   nobody thought to test. Breakpoints only appear where a layout genuinely
+   has to change shape.
+   ========================================================================== */
+
+/* --- The outer rhythm ---------------------------------------------------- */
+
+/* Gutters that shrink with the screen instead of in three steps. 16px on the
+   narrowest phone, 24px from tablet up. */
+.container,
+.pg,
+.ax-wrap,
+.acx-wrap {
+  padding-left: clamp(16px, 4vw, 24px);
+  padding-right: clamp(16px, 4vw, 24px);
+  width: 100%;
+  min-width: 0;
+}
+
+/* A very wide display should not stretch a measure to 2000px. */
+@media (min-width: 1680px) {
+  .container,
+  .pg {
+    max-width: 1240px;
+  }
+}
+
+/* --- Nothing may exceed the viewport ------------------------------------- */
+
+/* Flex and grid children default to min-width:auto, which is how one long
+   hash or one wide table silently makes the whole page scroll sideways. */
+.pg-card,
+.pg-grid > *,
+.pg-head,
+.pg-kv,
+.ax-card,
+main > * {
+  min-width: 0;
+}
+
+/* A hash, a wallet address or a transaction id has no spaces in it, so it
+   cannot wrap on its own. */
+.pg-mono,
+.ax-mono,
+.hash-display,
+.pg-kv dd,
+code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- Grids --------------------------------------------------------------- */
+
+/* auto-fit with a floor low enough for a 320px screen. At 260 the first
+   column alone overflowed a Fold. */
+.pg-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+@media (max-width: 560px) {
+  .pg-grid,
+  .grid-2,
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* iPad portrait and small laptop windows: three columns are too tight, one
+   is wasteful. */
+@media (min-width: 561px) and (max-width: 1024px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* --- Tables -------------------------------------------------------------- */
+
+/* A ledger table has six or seven columns and genuinely cannot collapse to a
+   phone width, so it scrolls inside its own card rather than dragging the
+   page with it. */
+@media (max-width: 860px) {
+  .pg-card:has(.pg-table),
+  .pg-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .pg-table {
+    min-width: 560px;
+  }
+}
+
+/* --- Touch ---------------------------------------------------------------- */
+
+/* Apple asks for 44px, Google for 48dp. Anything a finger has to hit gets
+   44, on touch devices only, so the desktop density is unchanged. */
+@media (pointer: coarse) {
+  .pg-btn,
+  .ax-btn,
+  .btn,
+  .pg-tab,
+  .pg-input,
+  .input,
+  select,
+  a.pg-btn {
+    min-height: 44px;
+  }
+  .pg-tabs {
+    gap: 8px;
+  }
+}
+
+/* --- Phones in landscape and short windows ------------------------------- */
+
+/* 360px tall and sticky chrome at both ends leaves almost nothing. Shrink
+   the vertical rhythm rather than the type. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .pg-head {
+    padding-top: 18px;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+  }
+  .pg {
+    padding-bottom: 40px;
+  }
+}
+
+/* --- The very narrow end -------------------------------------------------- */
+
+/* 320px (iPhone SE) and 344px (Galaxy Fold, folded). */
+@media (max-width: 360px) {
+  .pg-head {
+    padding-top: 26px;
+  }
+  .pg-card {
+    padding: 16px;
+  }
+  .pg-actions {
+    width: 100%;
+  }
+  .pg-actions > * {
+    flex: 1 1 auto;
+  }
+}
+
+/* --- Accessibility ------------------------------------------------------- */
+
+/* Someone running their phone at 200% text size should still get a usable
+   page: nothing here is sized in a way that assumes 16px is 16px. */
+@media (prefers-reduced-transparency: reduce) {
+  .site-nav[data-look='light'] {
+    background: #ffffff;
+  }
+  .site-nav[data-look='dark'] {
+    background: #0a0d13;
+  }
+}
+
+@media (prefers-contrast: more) {
+  [data-taste='on'] {
+    --t-hairline: rgba(17, 24, 39, 0.26);
+    --t-hairline-strong: rgba(17, 24, 39, 0.45);
+  }
+}
