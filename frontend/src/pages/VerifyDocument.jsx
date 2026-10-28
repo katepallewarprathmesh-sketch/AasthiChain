@@ -194,7 +194,7 @@ export default function VerifyDocument() {
   }, [manual, runVerify])
 
   return (
-    <div style={{ minHeight: '100vh', background: PAPER, padding: '40px 20px 80px' }}>
+    <div style={{ minHeight: 'var(--vh-full)', background: PAPER, padding: '40px 20px 80px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <h1 className="pg-title">
           Verify a property document

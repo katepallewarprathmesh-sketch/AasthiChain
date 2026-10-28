@@ -105,7 +105,7 @@ export default function ArticleShell({ title, standfirst, updated = '4 October 2
     mainEntityOfPage: `https://aasthi-chain.vercel.app/learn/${slug}`,
   }
   return (
-    <div style={{ background: C.paper, minHeight: '100vh', padding: '36px 20px 64px' }}>
+    <div style={{ background: C.paper, minHeight: 'var(--vh-full)', padding: '36px 20px 64px' }}>
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>
           <Link to="/" style={{ color: C.navy, textDecoration: 'none' }}>AasthiChain</Link>

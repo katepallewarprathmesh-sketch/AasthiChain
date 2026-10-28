@@ -833,7 +833,7 @@ function AppContentInner({ user, setUser, clerk, isLoaded, isSignedIn, clerkUser
 
   if (isClerkConfigured && !isLoaded && !isPublicPath) {
     return (
-      <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div style={{minHeight:'var(--vh-full)', display:'flex', alignItems:'center', justifyContent:'center'}}>
         <div style={{textAlign:'center'}}>
           <div style={{width:32, height:32, border:'3px solid #E5E7EB', borderTopColor:'#1E3A5F', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto'}}></div>
           <div style={{fontSize:13, color:'#6B7280', marginTop:12}}>Loading...</div>

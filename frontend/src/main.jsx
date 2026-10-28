@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import './styles/taste.css'
+import './styles/apple.css'
 import { ClerkProvider, ClerkFailed } from '@clerk/react'
 const Analytics = lazy(() => import('@vercel/analytics/react').then(m => ({ default: m.Analytics })))
 
@@ -63,7 +64,7 @@ window.fetch = async (input, init = {}) => {
 function ClerkFailedState({ error }) {
   if (import.meta.env.DEV) console.error('[Clerk] Failed to load:', error)
   return (
-    <div style={{minHeight:'100vh', background:'var(--paper)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+    <div style={{minHeight:'var(--vh-full)', background:'var(--paper)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
       <div className="card" style={{maxWidth:480, borderColor:'rgba(161,61,46,0.2)'}}>
         <h3 style={{color:'var(--error-rust)'}}>Authentication failed to load</h3>
         <p style={{fontSize:13, color:'var(--ink-60)', marginTop:8}}>

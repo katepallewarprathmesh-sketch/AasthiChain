@@ -2,10 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- viewport-fit=cover lets the page paint into the safe-area insets on a
+       notched display; src/styles/apple.css pads the body back out. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>AasthiChain — Fractional Real Estate on Drunix</title>
   <meta name="description" content="Own a fraction of premium real estate from ₹500. Simulated UPI payments, instant tokenised ownership, and a transparent ledger — an interactive demo." />
-  <meta name="theme-color" content="#0A0D13" />
+  <!-- The home page is dark and the product routes are light, so Safari gets
+       both and picks by the system appearance. -->
+  <meta name="theme-color" content="#0A0D13" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#F7F6F3" media="(prefers-color-scheme: light)" />
+
+  <!-- Apple. Without apple-touch-icon, Safari on macOS and iOS invents a
+       pinned-tab and home-screen icon from a screenshot of the page. -->
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AasthiChain" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="format-detection" content="telephone=no" />
   <link rel="canonical" href="https://aasthi-chain.vercel.app/" />
   <!-- Bing Webmaster Tools site verification. This must live in the file
        that is actually served at the domain root - i.e. the Vite entry

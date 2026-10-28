@@ -25,7 +25,7 @@ const ARTICLES = [
 
 export default function LearnIndex() {
   return (
-    <div style={{ background: C.paper, minHeight: '100vh', padding: '36px 20px 64px' }}>
+    <div style={{ background: C.paper, minHeight: 'var(--vh-full)', padding: '36px 20px 64px' }}>
       <div style={{ maxWidth: 880, margin: '0 auto' }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>
           <Link to="/" style={{ color: C.navy, textDecoration: 'none' }}>AasthiChain</Link>

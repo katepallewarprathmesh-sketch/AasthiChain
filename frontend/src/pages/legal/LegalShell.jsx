@@ -39,7 +39,7 @@ export function UL({ children }) {
 // trust pages because a reader may land on any one of them first.
 export default function LegalShell({ title, subtitle, children }) {
   return (
-    <div style={{ background: C.paper, minHeight: '100vh', padding: '36px 20px 64px' }}>
+    <div style={{ background: C.paper, minHeight: 'var(--vh-full)', padding: '36px 20px 64px' }}>
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>
           <Link to="/" style={{ color: C.navy, textDecoration: 'none' }}>AasthiChain</Link>

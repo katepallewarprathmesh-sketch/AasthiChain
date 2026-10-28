@@ -211,7 +211,7 @@ export default function AasthiAI() {
         right: 'max(12px, env(safe-area-inset-right))',
         bottom: 'max(12px, env(safe-area-inset-bottom))',
         width: 'min(380px, calc(100vw - 24px))',
-        height: 'min(560px, calc(100vh - 24px))',
+        height: 'min(560px, calc(var(--vh-full) - 24px))',
         display: 'flex', flexDirection: 'column',
         background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14,
         boxShadow: '0 18px 50px rgba(17,24,39,0.22)', overflow: 'hidden',

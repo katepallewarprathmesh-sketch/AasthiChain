@@ -125,7 +125,7 @@ export function Faq({ items }) {
 
 export default function ToolShell({ title, tagline, children, faq, related }) {
   return (
-    <div style={{ background: C.paper, minHeight: '100vh', padding: '36px 20px 64px' }}>
+    <div style={{ background: C.paper, minHeight: 'var(--vh-full)', padding: '36px 20px 64px' }}>
       <div style={{ maxWidth: 940, margin: '0 auto' }}>
         <nav style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>
           <Link to="/" style={{ color: C.navy, textDecoration: 'none' }}>AasthiChain</Link>

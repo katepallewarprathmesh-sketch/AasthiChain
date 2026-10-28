@@ -489,6 +489,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line-2);
   background: var(--panel); color: var(--muted);
   font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 .acx-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--glow); }
@@ -503,6 +504,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .acx-card-glass {
   background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015));
   border: 1px solid var(--line-2); border-radius: 18px;
+  -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
 .acx[data-mode="light"] .acx-card-glass {
@@ -574,10 +576,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .site-nav { transition: background .3s ease, border-color .3s ease, backdrop-filter .3s ease; }
 .site-nav[data-look="dark"] {
   background: var(--nav-bg, rgba(10,13,19,0.78));
+  -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(255,255,255,0.07);
 }
-.site-nav[data-look="light"] { background: rgba(255,255,255,0.86); backdrop-filter: blur(14px); border-bottom: 1px solid #E5E7EB; }
+.site-nav[data-look="light"] { background: rgba(255,255,255,0.86); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-bottom: 1px solid #E5E7EB; }
 
 .site-footer[data-look="dark"] { background: #080B10; color: #9DA9BC; border-top: 1px solid rgba(255,255,255,0.07); }
 .site-footer[data-look="light"] { background: #FFFFFF; color: #6B7280; border-top: 1px solid #F3F4F6; }
@@ -1028,7 +1031,7 @@ pre, code, kbd, samp,
 .ax-pcard:hover { border-color: var(--ax-line-strong); box-shadow: var(--ax-shadow); }
 .ax-pcard-media { position: relative; aspect-ratio: 16 / 10; background: var(--ax-ivory); overflow: hidden; }
 .ax-pcard-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ax-pcard-media .ax-badge { position: absolute; left: 12px; top: 12px; background: rgba(255,255,255,.94); backdrop-filter: saturate(1.2); }
+.ax-pcard-media .ax-badge { position: absolute; left: 12px; top: 12px; background: rgba(255,255,255,.94); -webkit-backdrop-filter: saturate(1.2); backdrop-filter: saturate(1.2); }
 .ax-pcard-body { padding: var(--ax-s4); display: flex; flex-direction: column; gap: 10px; flex: 1; }
 .ax-pcard-foot { border-top: 1px solid var(--ax-line); padding: 13px var(--ax-s4); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
