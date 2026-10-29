@@ -61,7 +61,7 @@ export default function ToolsIndex() {
           No signup, no email, nothing stored. Every calculation runs in your browser.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 280px),1fr))', gap: 18 }}>
           {TOOLS.map((t) => (
             <Link key={t.to} to={t.to} style={{ ...card, textDecoration: 'none', display: 'block' }}>
               <h2 style={{ fontSize: 17.5, fontWeight: 700, color: C.navy, marginBottom: 8 }}>{t.name}</h2>

@@ -20,7 +20,7 @@ const n = (v) => Number(v || 0).toLocaleString('en-IN')
 
 function Stat({ label, value, unit, hint }) {
   return (
-    <div style={{ minWidth: 118 }}>
+    <div style={{ minWidth: 'min(100%, 118px)' }}>
       <div style={{ fontSize: 11, color: C.mut, textTransform: 'uppercase', letterSpacing: .4 }}>{label}</div>
       <div style={{ fontWeight: 700, fontSize: 19, color: C.navy, marginTop: 2 }}>
         {value}<span style={{ fontSize: 12, fontWeight: 500, color: C.mut }}>{unit ? ` ${unit}` : ''}</span>

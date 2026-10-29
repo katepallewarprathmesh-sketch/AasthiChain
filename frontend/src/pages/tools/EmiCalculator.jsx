@@ -141,7 +141,7 @@ export default function EmiCalculator() {
       faq={FAQ}
       related={RELATED}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 300px),1fr))', gap: 20, alignItems: 'start' }}>
         <div style={card}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: C.ink, marginBottom: 16 }}>Your loan</h2>
 
@@ -210,7 +210,7 @@ export default function EmiCalculator() {
           Lenders size a loan on net take-home pay, usually allowing an EMI of 40–50% of it.
           Crossing that is the single most common reason a sanction is cut or refused.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 240px),1fr))', gap: 18, alignItems: 'start' }}>
           <Field label="Net monthly income (take-home)" prefix="₹" value={income} onChange={setIncome} />
           <div>
             <Row k="EMI as % of income" v={pct(r.emiToIncome)} strong />
@@ -267,7 +267,7 @@ export default function EmiCalculator() {
             on a <i>let-out</i> property remains deductible against that property's rental income.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 200px),1fr))', gap: 14 }}>
             <Box label="Interest paid, year 1" value={inr(r.y1.interest)} note={`of which ${inr(r.sec24)} is deductible u/s 24(b)`} />
             <Box label="Principal repaid, year 1" value={inr(r.y1.principal)} note={`${inr(r.sec80c)} counts towards the 80C limit`} />
             <Box label="Tax saved at your slab" value={inr(r.taxRelief)} note={`effective EMI ${inr(r.effectiveEmi)}/month`} tone />

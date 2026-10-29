@@ -440,7 +440,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
             Tokens and cash change hands in the same instant. If either side cannot deliver, nothing moves at all.
           </p>
 
-          <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))')}>
+          <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 170px), 1fr))')}>
             <Field label="Property" hint={assetId ? propRef(assetId) : null}>
               <PropertyPicker value={assetId} onChange={(v) => {
                 setAssetId(v)
@@ -558,7 +558,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         title="2 · Atomic DvP instruction"
         sub="Validate → match → lock BOTH legs → commit in one block. If either leg fails, nothing moves: there is no settlement-risk window."
       >
-        <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))', { marginBottom: 12 })}>
+        <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 170px), 1fr))', { marginBottom: 12 })}>
           <Field label="Property" hint={assetId ? propRef(assetId) : null}>
             <PropertyPicker value={assetId} onChange={(v) => {
               setAssetId(v)
@@ -624,7 +624,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         title="3 · Programmable asset servicing"
         sub="Rent / coupon paid pro-rata straight into holders' CBDC wallets on the due date: no registrar file exchange, no reconciliation batch."
       >
-        <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))', { marginBottom: 12 })}>
+        <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 170px), 1fr))', { marginBottom: 12 })}>
           <Field label="Property" hint={servAsset ? propRef(servAsset) : null}><PropertyPicker value={servAsset} onChange={(v) => {
             setServAsset(v)
             const pr = properties.find(x => x.assetId === v)
@@ -734,7 +734,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
 
       <Card title="6 · Reconciliation" sub="Conservation of central bank money, plus a full replay of the Drunix hash chain that carries every UMI block.">
         {recon && (
-          <div style={fieldRow('repeat(auto-fit, minmax(170px, 1fr))')}>
+          <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 170px), 1fr))')}>
             {[
               ['Wallets', num(recon.wallets)],
               ['Total e₹-W held', money(recon.totalBalanceINR)],
@@ -769,7 +769,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       <Card
         title="7 · Baskets: cross-property portfolio tokens"
         sub="One unit is a fixed recipe of several properties. Subscribing moves the underlying tokens into custody, so a unit is redeemable rather than notional. Investors create, sell and redeem units from their dashboard; defining the instrument happens here.">
-        <div style={fieldRow('repeat(auto-fit, minmax(190px, 1fr))')}>
+        <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 190px), 1fr))')}>
           <Field label="Basket id"><input style={input} value={bId} onChange={e => setBId(e.target.value)} /></Field>
           <Field label="Name"><input style={input} value={bName} onChange={e => setBName(e.target.value)} /></Field>
         </div>

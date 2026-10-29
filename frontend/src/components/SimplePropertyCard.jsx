@@ -89,7 +89,7 @@ export default function SimplePropertyCard({ property }) {
       </div>
 
       <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, border: '1px solid #F3F4F6' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 12 }}>
           <div>
             <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Property Value</div>
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: '#111827' }}>{money(property.valuationINR)}</div>

@@ -58,7 +58,7 @@ export default function RentalYieldCalculator() {
       faq={FAQ}
       related={RELATED}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 300px),1fr))', gap: 20, alignItems: 'start' }}>
         <div style={card}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: C.ink, marginBottom: 16 }}>Property &amp; rent</h2>
           <Field label="Property price" prefix="₹" value={price} onChange={setPrice} />

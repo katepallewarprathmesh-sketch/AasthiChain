@@ -77,7 +77,7 @@ export default function Marketplace() {
             where something has not been published, the card says so.
           </p>
         </div>
-        <Card pad="sm" style={{ minWidth: 260 }}>
+        <Card pad="sm" style={{ minWidth: 'min(100%, 260px)' }}>
           <h2 className="ax-card-title" style={{ fontSize: 14 }}>Looking to buy from another holder?</h2>
           <p className="ax-body" style={{ fontSize: 13, marginTop: 6 }}>
             Resale offers live on the secondary market, priced by the people posting them.
@@ -88,7 +88,7 @@ export default function Marketplace() {
 
       {/* ------------------------------------------------------- controls */}
       <Card pad="sm" style={{ marginBottom: 22 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.4fr) repeat(auto-fit, minmax(140px, 1fr))', gap: 12, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: 12, alignItems: 'end' }}>
           <Field label="Search" htmlFor="mk-search">
             <Input
               id="mk-search" type="search" placeholder="Name, locality or city"
@@ -210,7 +210,7 @@ export default function Marketplace() {
                       <td className="ax-hint">{[p.location?.locality, p.location?.city].filter(Boolean).join(', ') || 'Not stated'}</td>
                       <td className="ax-num">{p.valuationINR ? inrShort(p.valuationINR) : '–'}</td>
                       <td className="ax-num">{price ? inr(Math.round(price)) : '–'}</td>
-                      <td style={{ minWidth: 130 }}>
+                      <td style={{ minWidth: 'min(100%, 130px)' }}>
                         {Number.isFinite(funded) && funded > 0
                           ? <><Progress value={funded} label={`${Math.round(funded)} percent funded`} /><span className="ax-hint"><Num>{Math.round(funded)}%</Num></span></>
                           : <span className="ax-hint">Not published</span>}

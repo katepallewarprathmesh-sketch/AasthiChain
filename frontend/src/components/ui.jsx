@@ -425,7 +425,7 @@ export function PropertyCard({ p, href }) {
             {[p.location?.locality, p.location?.city, p.location?.state].filter(Boolean).join(', ') || 'Location not stated'}
           </p>
         </div>
-        <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 12px', margin: 0 }}>
+        <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: '10px 12px', margin: 0 }}>
           <div>
             <dt className="ax-hint" style={{ margin: 0 }}>Valuation</dt>
             <dd style={{ margin: '2px 0 0', fontWeight: 600 }}><Num>{inrShort(p.valuationINR)}</Num></dd>

@@ -254,7 +254,7 @@ export default function PropertyDetail({ user }) {
       {/* Overview. The photograph is drawn rather than stocked: a picture of
           a building that is not this building, printed beside a valuation,
           is the kind of small untruth this project avoids. */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 28, alignItems: 'start' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 28, alignItems: 'start' }}>
         <figure style={{ margin: 0 }}>
           <div style={{ position: 'relative', borderRadius: 'var(--ax-r-lg)', overflow: 'hidden', border: '1px solid var(--ax-line)', aspectRatio: '16 / 10', background: 'var(--ax-ivory)' }}>
             {heroImage.src
@@ -289,7 +289,7 @@ export default function PropertyDetail({ user }) {
             </p>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 12, marginTop: 20 }}>
             <Metric label="Valuation" value={<Num>{inrShort(property.valuationINR)}</Num>} foot={<Num>{moneyExact(property.valuationINR)}</Num>} />
             <Metric
               label="Price per token"
@@ -662,7 +662,7 @@ export default function PropertyDetail({ user }) {
                 return (
                   <div key={g.id} style={{ background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 10, padding: 12, marginBottom: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                      <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ flex: 1, minWidth: 'min(100%, 200px)' }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{g.title}</div>
                         <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>by {g.createdBy} · YES {yes.toLocaleString('en-IN')} / NO {no.toLocaleString('en-IN')} · quorum {g.quorumPct}%</div>
                       </div>

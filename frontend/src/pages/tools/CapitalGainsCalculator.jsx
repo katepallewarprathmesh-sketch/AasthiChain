@@ -161,7 +161,7 @@ export default function CapitalGainsCalculator() {
       faq={FAQ}
       related={RELATED}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(290px,1fr))', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 290px),1fr))', gap: 20, alignItems: 'start' }}>
         <div style={card}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: C.ink, marginBottom: 16 }}>Purchase</h2>
           <label style={lbl}>

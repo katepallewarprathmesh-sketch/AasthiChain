@@ -142,7 +142,7 @@ export default function InvestorDashboard({ user }) {
       {/* Headline numbers. Each says what it is made of: a portfolio total
           with an unstated basis is the easiest number on a page like this to
           read as something it is not. */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginTop: 24 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 14, marginTop: 24 }}>
         <AxMetric
           label="Portfolio value"
           value={loading ? <Skeleton h={26} w="70%" /> : <Num>{inr(portfolio)}</Num>}
@@ -204,7 +204,7 @@ export default function InvestorDashboard({ user }) {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)', gap: 18, marginTop: 18, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 18, marginTop: 18, alignItems: 'start' }}>
         {/* ------------------------------------------------------ holdings */}
         <AxCard title="Holdings" sub="Valued at the token price recorded on each property.">
           {loading ? (

@@ -150,7 +150,7 @@ export default function CarbonPanel({ participants = [] }) {
       {assets.length > 0 && (
         <div style={{ marginTop: 18, borderTop: `1px solid ${C.line}`, paddingTop: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.navy, marginBottom: 10 }}>Retire credits</div>
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))' }}>
             <Field label="Asset">
               <select style={input} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
                 {assets.map((a) => <option key={a.profile.assetId} value={a.profile.assetId}>{a.profile.name || a.profile.assetId}</option>)}

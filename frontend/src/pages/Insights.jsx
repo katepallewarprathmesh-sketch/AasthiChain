@@ -121,7 +121,7 @@ function AudienceSection({ a }) {
         Live presence, lifetime totals and the register of accounts that have signed in.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 12 }}>
         <Metric label="On the site now" value={Number(live.onlineNow || 0).toLocaleString('en-IN')}
           sub={`last ${live.windowMinutes || 5} min`} color="#047857" />
         <Metric label="Accounts ever signed in" value={Number(acc.totalAccounts || 0).toLocaleString('en-IN')} color="#1E3A5F" />
@@ -192,7 +192,7 @@ function AudienceSection({ a }) {
       </div>
 
       {(all.topPages || []).length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 12, marginTop: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: 12, marginTop: 14 }}>
           <RankList title="Top pages, all time" rows={all.topPages.slice(0, 15)} labelKey="path" empty="Nothing recorded yet." />
           <RankList title="Where they came from, all time" rows={(all.topReferrers || []).slice(0, 15)} labelKey="source" empty="Nothing recorded yet." />
         </div>
@@ -233,7 +233,7 @@ function TrafficSection({ t }) {
           : 'No DATABASE_URL: counts sit in a temp file and reset on a cold start.'}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 12 }}>
         <Metric label="Pageviews" value={Number(t.totalViews || 0).toLocaleString('en-IN')} color="#0E7490" />
         <Metric label="Unique visitors" value={Number(t.uniqueVisitors || 0).toLocaleString('en-IN')} sub="daily-rotating ids" color="#B45309" />
         <Metric label="Views / visitor" value={t.viewsPerVisitor} />
@@ -250,7 +250,7 @@ function TrafficSection({ t }) {
         <TrafficBars series={t.series || []} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 12, marginTop: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: 12, marginTop: 14 }}>
         <RankList title="Top pages" rows={t.topPages || []} labelKey="path"
           empty="No pageviews recorded yet. Visit a page and refresh." />
         <RankList title="Where visitors come from" rows={t.topReferrers || []} labelKey="source"
@@ -431,7 +431,7 @@ export default function Insights() {
 
       <IntegrityPanel integrity={data.integrity} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))', gap: 12, marginTop: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 185px), 1fr))', gap: 12, marginTop: 18 }}>
         <Metric label="Settled value" value={s.available ? money(s.settledValueINR) : '—'} sub={s.available ? `${s.settled} settlements` : 'rail unreachable'} color="#065F46" />
         <Metric label="Success rate (lifetime)" value={s.available ? pct(s.successRatePct) : '—'} sub={s.available ? `${s.failed} failed, all time` : ''} color={s.available && s.successRatePct >= 90 ? '#065F46' : '#92400E'} />
         <Metric label={`Success rate (${s.recent ? s.recent.days : 14}d)`} value={s.recent ? pct(s.recent.successRatePct) : '—'}
@@ -454,7 +454,7 @@ export default function Insights() {
         <Bars series={data.activity || []} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 12, marginTop: 16 }}>
         <div style={card}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Properties by allocation</h2>
           {(data.properties || []).length === 0 ? (

@@ -156,7 +156,7 @@ export default function TransactionHistory({ identityId, titleFor = () => null, 
                       )}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', marginLeft: 'auto', minWidth: 110 }}>
+                  <div style={{ textAlign: 'right', marginLeft: 'auto', minWidth: 'min(100%, 110px)' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: incoming ? C.inFg : C.outFg }}>
                       {incoming ? '+' : '−'}{tokens.toLocaleString('en-IN')} tokens
                     </div>

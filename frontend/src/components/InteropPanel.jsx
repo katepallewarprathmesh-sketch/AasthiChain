@@ -211,7 +211,7 @@ export default function InteropPanel({ participants = [], properties = [] }) {
           ['Attested only', n(s.committedAttestedOnly), 'claimed by a supervisor, not observed'],
           ['Aborted', n(s.aborted), 'tokens returned'],
         ].map(([label, value, hint]) => (
-          <div key={label} style={{ minWidth: 130 }}>
+          <div key={label} style={{ minWidth: 'min(100%, 130px)' }}>
             <div style={{ fontSize: 11, color: C.mut, textTransform: 'uppercase', letterSpacing: .4 }}>{label}</div>
             <div style={{ fontWeight: 700, fontSize: 19, color: C.navy, marginTop: 2 }}>{value}</div>
             <div style={{ fontSize: 10.5, color: C.mut, marginTop: 2 }}>{hint}</div>
@@ -228,7 +228,7 @@ export default function InteropPanel({ participants = [], properties = [] }) {
           until the transfer is committed, and an abort returns them.
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 9, marginTop: 11 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 9, marginTop: 11 }}>
           <label style={{ display: 'grid', gap: 3, fontSize: 11, color: C.mut }}>
             Asset
             <select style={field} value={assetId} onChange={(e) => setAssetId(e.target.value)}>

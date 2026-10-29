@@ -222,7 +222,7 @@ export default function Wallet({ user }) {
         </div>
       </header>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginTop: 22 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 14, marginTop: 22 }}>
         <AxMetric
           label="Token value held"
           value={loading ? <Skeleton h={26} w="70%" /> : <Num>{inr(totalValue)}</Num>}
@@ -300,7 +300,7 @@ export default function Wallet({ user }) {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
               {[['Assets', money(nav.assetsValueINR), '#111827'], ['Yield earned', '+' + money(nav.yieldEarnedINR), '#065F46'], ['Loan due', '-' + money(nav.outstandingDebtINR), '#991B1B'], ['Active loans', String(nav.activeLoans), '#374151']].map(([k, v, c]) => (
-                <div key={k} style={{ flex: 1, minWidth: 110, background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 10 }}>
+                <div key={k} style={{ flex: 1, minWidth: 'min(100%, 110px)', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 10 }}>
                   <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: c, marginTop: 3 }}>{v}</div>
                 </div>

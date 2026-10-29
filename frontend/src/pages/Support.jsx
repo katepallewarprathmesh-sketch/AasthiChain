@@ -46,7 +46,7 @@ function QrCard() {
       <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ width: 148, height: 148, padding: 8, border: '1px solid #E5E7EB', borderRadius: 10, background: 'white', flexShrink: 0 }}
           dangerouslySetInnerHTML={{ __html: svg.replace('<svg', '<svg style="width:100%;height:100%;display:block"') }} />
-        <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ flex: 1, minWidth: 'min(100%, 200px)' }}>
           <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.6 }}>
             Scan with any UPI app (PhonePe, GooglePay, Paytm, BHIM) or tap below on mobile. Money goes directly to the maintainer's bank account. No platform fees.
           </div>
@@ -79,7 +79,7 @@ export default function Support() {
         Support is a donation to open-source work. It is not an investment, and it confers no ownership, returns, or tokens.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 14, marginTop: 22 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>GitHub Sponsors</h3>
           <p style={{ fontSize: 12.5, color: '#6B7280', lineHeight: 1.6, marginTop: 8 }}>
@@ -110,7 +110,7 @@ export default function Support() {
 
       <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, marginTop: 14 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Where the money goes</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 12, marginTop: 12 }}>
           {costs.map(([t, d]) => (
             <div key={t} style={{ background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 10, padding: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{t}</div>

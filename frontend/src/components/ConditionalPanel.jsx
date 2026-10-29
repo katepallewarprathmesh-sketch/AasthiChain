@@ -151,7 +151,7 @@ export default function ConditionalPanel({ properties = [], participants = [], p
       </button>
 
       {open && (
-        <div style={{ marginTop: 14, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+        <div style={{ marginTop: 14, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))' }}>
           <label style={{ display: 'block' }}>
             <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.navy, marginBottom: 4 }}>Property</span>
             {properties.length

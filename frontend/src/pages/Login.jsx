@@ -68,7 +68,7 @@ function DemoPresets({ onLogin, title }) {
 
   return (
     <div style={{marginTop:24}}>
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:12}}>
         <h3 style={{fontSize:13, fontWeight:700}}>{title || 'Quick Demo Access Instant, no verification'}</h3>
         <span style={{fontSize:9, background:'#F0FDF4', color:'#065F46', border:'1px solid #BBF7D0', padding:'3px 8px', borderRadius:20, fontWeight:600}}>LIVE + LOCAL</span>
       </div>

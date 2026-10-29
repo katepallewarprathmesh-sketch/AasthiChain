@@ -73,7 +73,7 @@ export default function UMIPortfolioPanel({ identityId }) {
   const received = sold.reduce((s, r) => s + (r.cashINR || 0), 0)
 
   const stat = (k, v, c) => (
-    <div key={k} style={{ flex: 1, minWidth: 120, background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 10 }}>
+    <div key={k} style={{ flex: 1, minWidth: 'min(100%, 120px)', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, padding: 10 }}>
       <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
       <div style={{ fontSize: 14, fontWeight: 700, color: c || '#111827', marginTop: 3, overflowWrap: 'anywhere' }}>{v}</div>
     </div>

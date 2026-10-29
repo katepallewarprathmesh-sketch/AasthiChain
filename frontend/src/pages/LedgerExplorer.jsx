@@ -227,7 +227,7 @@ function PublicAnchor() {
         }}>{live ? st.cluster + ' reachable' : 'cluster unreachable'}</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 10, marginTop: 14 }}>
         {[
           ['Network', 'Solana ' + (st.cluster || '')],
           ['Cluster slot', st.clusterSlot ? '#' + st.clusterSlot : 'unavailable'],
@@ -453,7 +453,7 @@ export default function LedgerExplorer() {
       )}
 
       {/* Stats strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: 10, marginTop: 18 }}>
         {stats.map(([k, v]) => (
           <div key={k} className="ax-card ax-card--pad-sm">
             <div className="ax-metric-label">{k}</div>
@@ -493,7 +493,7 @@ export default function LedgerExplorer() {
       </div>
 
       {/* Programmable finance + open layer */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12, marginTop: 16 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Programmable finance on-chain</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 1.6 }}>

@@ -181,3 +181,115 @@ iframe {
     --t-hairline-strong: rgba(17, 24, 39, 0.45);
   }
 }
+
+
+/* --- What the browser audit found (tests/mobileaudit.mjs) ---------------- */
+
+/* A status tag carrying a whole sentence. .pg-tag is nowrap, which is right
+   for "Settled" and wrong for "Simulated leg: no chain is connected", so at
+   320px it ran 180px past the edge of the screen. Below the tablet
+   breakpoint a tag wraps and loses its pill shape rather than the page
+   losing its right-hand edge. */
+@media (max-width: 900px) {
+  .pg-tag {
+    white-space: normal;
+    text-align: left;
+  }
+}
+
+/* The home page carries seven inline auto-fit grids with floors between
+   220px and 320px, and at 320px those floors are wider than the content
+   box. Landing.jsx is frozen, so the collapse is done here rather than in
+   the file: below 420px every grid inside the landing scope is one column.
+   Everywhere else the same bug was fixed properly, by wrapping each floor
+   in min(100%, …). */
+@media (max-width: 420px) {
+  .acx [style*='grid-template-columns'] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* The last-resort column collapse.
+   --------------------------------
+   Most multi-column layouts in this codebase are inline styles on the
+   element, which no stylesheet can override without !important. Several of
+   them do not overflow - minmax(0, 1.25fr) minmax(0, 1fr) is perfectly
+   well behaved - and are still wrong on a phone, because they leave a title
+   column 170px wide setting one word per line. An overflow check cannot see
+   that; only a width check can.
+
+   So below 560px every inline grid template is collapsed to a single
+   column. Anything that genuinely must stay side by side on a phone opts
+   out with data-keep-cols, and anything defined in a stylesheet rather than
+   inline is unaffected and keeps its own breakpoints. */
+@media (max-width: 560px) {
+  [style*='grid-template-columns']:not([data-keep-cols]) {
+    grid-template-columns: 1fr !important;
+  }
+  /* 1fr is minmax(auto, 1fr), and auto means min-content, so a single
+     unshrinkable child still forces the track wider than the screen. This
+     is the line that actually makes the collapse hold. */
+  [style*='grid-template-columns']:not([data-keep-cols]) > * {
+    min-width: 0;
+  }
+}
+
+/* A card header is a title block and an action side by side. On a narrow
+   phone that leaves the title about 190px, so it wraps onto its own line
+   instead. */
+@media (max-width: 480px) {
+  .pg-card-head,
+  .pg-head {
+    flex-wrap: wrap;
+  }
+  .pg-card-head > *:first-child {
+    flex: 1 1 100%;
+  }
+}
+
+/* The landing page's three-up and two-up card rows keep two columns down to
+   560px, which leaves a card heading 125px wide - "Unified Market Interface
+   rail" set four words deep. Landing.jsx is frozen, so this is done here. */
+@media (max-width: 560px) {
+  .acx-r2,
+  .acx-r2x,
+  .acx-r3,
+  .acx-rhero,
+  .acx-rsplit {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A heading and a status chip on one line, with the chip set not to shrink,
+   leaves the heading 125px on a phone. Below the tablet breakpoint the chip
+   drops to its own line. Again CSS rather than JSX, because these rows are
+   on the frozen landing page. */
+@media (max-width: 560px) {
+  .acx-card [style*='space-between'],
+  .acx-card-glass [style*='space-between'] {
+    flex-wrap: wrap;
+  }
+}
+
+/* Double gutters. <main class="container"> already pads the page, and most
+   pages then nest .pg or .ax-wrap inside it, which pads it again. At 320px
+   that is 64px of margin before a card's own 20px, leaving 216px of usable
+   width. The inner wrapper keeps its max-width and drops its padding. */
+.container > .pg,
+.container > .ax-wrap,
+.container > .acx-wrap,
+.container .pg,
+.container .ax-wrap {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* On a 320px screen a 24px card inset costs 15% of the width. */
+@media (max-width: 360px) {
+  .acx-card,
+  .acx-card-glass,
+  .ax-card {
+    padding: 16px;
+  }
+}
