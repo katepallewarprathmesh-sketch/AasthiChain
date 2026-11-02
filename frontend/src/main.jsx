@@ -5,6 +5,7 @@ import './index.css'
 import './styles/taste.css'
 import './styles/apple.css'
 import './styles/responsive.css'
+import { initClarity } from './lib/clarity.js'
 import { ClerkProvider, ClerkFailed } from '@clerk/react'
 const Analytics = lazy(() => import('@vercel/analytics/react').then(m => ({ default: m.Analytics })))
 
@@ -143,3 +144,9 @@ function Root() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />)
+
+// Microsoft Clarity. Last, and after the first render is scheduled, so the
+// analytics script can never delay the interface. No-ops unless
+// VITE_CLARITY_PROJECT_ID is set in the Vercel environment; see
+// src/lib/clarity.js for what is masked before anything is sent.
+initClarity()

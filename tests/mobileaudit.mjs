@@ -3,12 +3,18 @@
 // a Chromium download, neither of which belongs in CI here. Run it by hand:
 //
 //   cd frontend && npm run dev &
-//   PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 node tests/mobileaudit.mjs
+//   PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 \
+//     PLAYWRIGHT_CORE=/path/to/playwright-core/index.mjs \
+//     BASE=http://localhost:5173 node tests/mobileaudit.mjs
 //
 // It answers one question per route and answers it the way a phone does:
 // is anything wider than the screen, and if so, what.
 
-import { chromium } from '/home/user/.npm/_npx/8ef14e20fba81900/node_modules/playwright-core/index.mjs'
+// playwright-core is not a dependency of this repo: a browser download has
+// no business in the install every contributor runs. Point PLAYWRIGHT_CORE
+// at one you already have, or install it anywhere and pass the path.
+//   npm i playwright-core && npx playwright-core install chromium
+const { chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core')
 
 const BASE = process.env.BASE || 'http://localhost:5173'
 const WIDTHS = [320, 390, 768]

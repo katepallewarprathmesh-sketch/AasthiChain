@@ -328,7 +328,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'success' && payment) {
     return (
-      <div className="ax ax-card" style={{ borderColor: 'rgba(36,107,74,.3)', background: 'var(--ax-success-wash)' }}>
+      <div className="ax ax-card" data-clarity-mask="true" style={{ borderColor: 'rgba(36,107,74,.3)', background: 'var(--ax-success-wash)' }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
           {/* The badge reports what the backend returned, not what the
               animation finished doing. A purchase recorded without an atomic
@@ -406,7 +406,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'error') {
     return (
-      <div className="ax ax-card">
+      <div className="ax ax-card" data-clarity-mask="true">
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <Badge tone="error">Not completed</Badge>
           <h3 className="ax-card-title">Nothing was bought</h3>
@@ -435,7 +435,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'payu' && payment?.payuCheckout) {
     return (
-      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+      <div data-clarity-mask="true" style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 12px' }}>Pay ₹{total.toLocaleString('en-IN')} via UPI</h3>
         <PayUCheckout
           checkout={payment.payuCheckout}
@@ -452,7 +452,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'pending' && payment) {
     return (
-      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+      <div data-clarity-mask="true" style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Approve in your UPI app</h3>
         <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginTop: 12, textAlign: 'center' }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>₹{total.toLocaleString('en-IN')}</div>
@@ -481,7 +481,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   if (step === 'confirming' || step === 'transferring' || step === 'paying') {
     return (
-      <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+      <div data-clarity-mask="true" style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
           {step === 'paying' ? 'Creating payment request…' : step === 'confirming' ? 'Confirming payment…' : 'Transferring tokens…'}
         </h3>
@@ -495,7 +495,7 @@ export default function SimpleBuyFlow({ assetId, tokenPrice, recipient, user, pr
 
   // step === 'form'
   return (
-    <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+    <div data-clarity-mask="true" style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
       <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Buy Tokens</h3>
       {resumeInfo && (
         <div style={{ marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 10, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>

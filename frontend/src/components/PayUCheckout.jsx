@@ -23,7 +23,9 @@ export default function PayUCheckout({ checkout, testMode = true, onCancel }) {
   if (!checkout || !checkout.action) return null
 
   return (
-    <div>
+    // The payment bridge carries the amount, the transaction id and the
+    // signed parameter set. None of it belongs in a session recording.
+    <div data-clarity-mask="true">
       {/* Hidden form server-computed hash travels with it */}
       <form ref={formRef} method="POST" action={checkout.action} style={{ display: 'none' }}>
         {Object.entries(checkout.params || {}).map(([k, v]) => (
