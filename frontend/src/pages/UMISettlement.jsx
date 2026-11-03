@@ -16,7 +16,7 @@
 
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { prettifyAssetId } from '../lib/assetNames.js'
-import { umiFetch as umi } from '../lib/umiFetch'
+import { umiFetch as umi, umiPost } from '../lib/umiFetch'
 // These five panels sit below the settlement forms, which is the reason
 // anyone opens this page. Loading them up front made the first paint wait
 // for code most visitors scroll past, so they are split out and fetched
@@ -149,6 +149,16 @@ export default function UMISettlement() {
   // a property the reader never chose there. It picks its own now.
   const [servAsset, setServAsset] = useState('PROP-GREEN-VALLEY-PUNE-001')
   const [servPayer, setServPayer] = useState('originator1')
+
+  // Card 4 (netting). Legs are collected locally and sent as one batch: the
+  // rail has no concept of a half-built batch and should not acquire one.
+  const [netLegs, setNetLegs] = useState([])
+  const [netAsset, setNetAsset] = useState('PROP-GREEN-VALLEY-PUNE-001')
+  const [netSeller, setNetSeller] = useState('originator1')
+  const [netBuyer, setNetBuyer] = useState('investor1')
+  const [netTokens, setNetTokens] = useState(10)
+  const [netPrice, setNetPrice] = useState(500)
+  const [batch, setBatch] = useState(null)
   const [properties, setProperties] = useState([])
   // The page opened straight onto five operator cards: wallets, raw ids,
   // ISO 20022 traces. That is the right screen for someone running a
@@ -345,6 +355,49 @@ export default function UMISettlement() {
   // So the field hands its three parts to the row's own grid (subgrid) and
   // lets the row line them up. Fields with no hint simply leave that cell
   // empty instead of closing the gap and dragging their control down.
+  const addNetLeg = () => {
+    const leg = {
+      assetId: netAsset, seller: netSeller, buyer: netBuyer,
+      tokens: Number(netTokens), pricePerTokenINR: Number(netPrice),
+    }
+    if (!leg.assetId || !leg.seller || !leg.buyer || leg.tokens <= 0 || leg.pricePerTokenINR <= 0) {
+      setFlash({ kind: 'err', where: 'netting', text: 'A leg needs a property, two different parties, and positive tokens and price.' })
+      return
+    }
+    if (leg.seller === leg.buyer) {
+      setFlash({ kind: 'err', where: 'netting', text: 'A participant cannot settle against itself.' })
+      return
+    }
+    setBatch(null)
+    setNetLegs(prev => [...prev, leg])
+  }
+
+  const runNetting = async (settle) => {
+    if (netLegs.length === 0) {
+      setFlash({ kind: 'err', where: 'netting', text: 'Add at least one leg first.' })
+      return
+    }
+    setBusy(settle ? 'netsettle' : 'netpreview')
+    try {
+      const res = await umiPost(settle ? '/netting/settle' : '/netting/preview', { legs: netLegs })
+      setBatch(res.data || null)
+      if (res.ok) {
+        const d = res.data
+        setFlash({
+          kind: 'ok', where: 'netting',
+          text: settle
+            ? `Batch ${d.batchId} settled: ${money(d.netCashINR)} moved instead of ${money(d.grossCashINR)}, block #${d.blockHeight}.`
+            : `Preview: ${money(d.grossCashINR)} of obligations nets to ${money(d.netCashINR)}.`,
+        })
+      } else {
+        setFlash({ kind: 'err', where: 'netting', text: explain(res.data) })
+      }
+      if (settle && res.ok) { setNetLegs([]); refresh() }
+    } catch (e) {
+      setFlash({ kind: 'err', where: 'netting', text: e.message })
+    } finally { setBusy(null) }
+  }
+
   const Field = ({ label, hint, children }) => (
     <label style={{ display: 'grid', gridTemplateRows: 'subgrid', gridRow: 'span 3', minWidth: 0 }}>
       <span style={{ alignSelf: 'end', paddingBottom: 5, fontSize: 11.5, fontWeight: 700, color: C.navy, letterSpacing: .1 }}>{label}</span>
@@ -643,6 +696,112 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         <Notice flash={flash} where="servicing" onClose={() => setFlash(null)} />
       </Card>
 
+      {/* Netting: the other half of the settlement argument.
+          Card 2 settles one instruction atomically, which is the headline.
+          This is the cost of that headline. Atomic DvP is gross settlement,
+          so a participant needs funded cash for every purchase even when
+          they are selling the same value back out. A clearing corporation
+          nets first and moves only the difference. Both are implemented here
+          so the trade-off is a number on this page rather than an argument. */}
+      <Card
+        title="4 · Netting the cash leg"
+        sub="Collect several obligations, offset them against each other, and move only the difference. Token positions still land exactly where the individual legs put them."
+        right={<Pill tone="warn">No central counterparty</Pill>}
+      >
+        <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 150px), 1fr))', { marginBottom: 12 })}>
+          <Field label="Property" hint={netAsset ? propRef(netAsset) : null}>
+            <PropertyPicker value={netAsset} onChange={setNetAsset} />
+          </Field>
+          <Field label="Seller"><PartyPicker value={netSeller} onChange={setNetSeller} /></Field>
+          <Field label="Buyer"><PartyPicker value={netBuyer} onChange={setNetBuyer} /></Field>
+          <Field label="Tokens"><input style={input} type="number" value={netTokens} onChange={e => setNetTokens(e.target.value)} /></Field>
+          <Field label="Price per token"><input style={input} type="number" value={netPrice} onChange={e => setNetPrice(e.target.value)} /></Field>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button style={btn(false)} onClick={addNetLeg}>Add this leg to the batch</button>
+          {netLegs.length > 0 && (
+            <button style={btn(false)} onClick={() => { setNetLegs([]); setBatch(null) }}>Clear batch</button>
+          )}
+        </div>
+
+        {netLegs.length === 0 ? (
+          <p style={{ fontSize: 13, color: C.mut, lineHeight: 1.6 }}>
+            Nothing in the batch yet. A batch is most interesting when the obligations point in a
+            circle: A buys from B, B buys from C, C buys from A. Gross, that is three payments.
+            Netted, it can be none at all.
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+            {netLegs.map((l, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center', border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 12px', fontSize: 13 }}>
+                <span style={{ minWidth: 0 }}>
+                  <strong>{l.buyer}</strong> buys {num(l.tokens)} of {propLabel(l.assetId)} from <strong>{l.seller}</strong>
+                </span>
+                <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Pill>{money(l.tokens * l.pricePerTokenINR)}</Pill>
+                  <button
+                    style={{ ...btn(false), padding: '4px 9px' }}
+                    title="Remove this leg"
+                    onClick={() => { setBatch(null); setNetLegs(prev => prev.filter((_, j) => j !== i)) }}
+                  >Remove</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button style={btn(false)} onClick={() => runNetting(false)} disabled={!!busy || netLegs.length === 0}>
+            {busy === 'netpreview' ? 'Calculating…' : 'Preview the netting'}
+          </button>
+          <button style={btn(true)} onClick={() => runNetting(true)} disabled={!!busy || netLegs.length === 0}>
+            {busy === 'netsettle' ? 'Settling…' : 'Settle the batch'}
+          </button>
+        </div>
+
+        {batch && (
+          <div style={{ marginTop: 14 }}>
+            <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 150px), 1fr))', { rowGap: 10, marginBottom: 12 })}>
+              {[
+                ['Gross obligations', money(batch.grossCashINR), 'what gross settlement would move'],
+                ['Net to move', money(batch.netCashINR), 'what actually changes hands'],
+                ['Never moves', money(batch.savedINR), 'offset against itself'],
+                ['Efficiency', `${Number(batch.efficiencyPct || 0).toFixed(1)}%`, 'of the cash removed'],
+              ].map(([label, value, hint]) => (
+                <div key={label} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: C.navy }}>{label}</div>
+                  <div style={{ fontSize: 17, fontWeight: 650, color: C.navy, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                  <div style={{ fontSize: 11, color: C.mut, marginTop: 2, lineHeight: 1.4 }}>{hint}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              {(batch.cashPositions || []).map(p => (
+                <div key={p.participant} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center', border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 12px', fontSize: 13 }}>
+                  <span style={{ minWidth: 0 }}>
+                    <strong>{p.participant}</strong>
+                    <span style={{ color: C.mut }}> owes {money(p.grossPayINR)}, is owed {money(p.grossReceiveINR)}</span>
+                  </span>
+                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {p.shortfallINR > 0 && <Pill tone="bad">short {money(p.shortfallINR)}</Pill>}
+                    <Pill tone={p.direction === 'PAY' ? 'warn' : p.direction === 'RECEIVE' ? 'ok' : 'mut'}>
+                      {p.direction === 'FLAT' ? 'settles flat' : `${p.direction === 'PAY' ? 'pays' : 'receives'} ${money(Math.abs(p.netINR))}`}
+                    </Pill>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ fontSize: 12, color: C.mut, marginTop: 12, lineHeight: 1.6 }}>
+              {batch.guarantee} Settling a batch is a supervisory action, because it moves several
+              participants' money in one step.
+            </p>
+          </div>
+        )}
+        <Notice flash={flash} where="netting" onClose={() => setFlash(null)} />
+      </Card>
+
       {/* The lifecycle named in post-trade terms.
           The states were always a post-trade flow, but they were labelled in
           our own words, so a settlement person had to translate before they
@@ -650,7 +809,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
           custodian would is not decoration: it is the difference between
           "some states" and a recognisable settlement cycle. */}
       <Card
-        title="4 · Settlement lifecycle"
+        title="5 · Settlement lifecycle"
         sub="The same cycle a central securities depository runs, on a T+1 basis. Our state names are on the left, the post-trade term for each on the right."
       >
         <div style={{ display: 'grid', gap: 8 }}>
@@ -681,7 +840,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         </p>
       </Card>
 
-      <Card title="5 · Instructions & ISO 20022 trace" sub="Every instruction carries the message family a real securities-settlement rail would emit: sese.023 (instruction), sese.024 (status), pacs.009 (cash leg), sese.025 (confirmation), camt.054 (debit/credit advice).">
+      <Card title="6 · Instructions & ISO 20022 trace" sub="Every instruction carries the message family a real securities-settlement rail would emit: sese.023 (instruction), sese.024 (status), pacs.009 (cash leg), sese.025 (confirmation), camt.054 (debit/credit advice).">
         {instructions.length === 0 ? <p style={{ fontSize: 13, color: C.mut }}>No instructions yet.</p> : instructions.map(si => (
           <div key={si.instructionId} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -732,7 +891,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
         ))}
       </Card>
 
-      <Card title="6 · Reconciliation" sub="Conservation of central bank money, plus a full replay of the Drunix hash chain that carries every UMI block.">
+      <Card title="7 · Reconciliation" sub="Conservation of central bank money, plus a full replay of the Drunix hash chain that carries every UMI block.">
         {recon && (
           <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 170px), 1fr))')}>
             {[
@@ -767,7 +926,7 @@ cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_
       </Card>
 
       <Card
-        title="7 · Baskets: cross-property portfolio tokens"
+        title="8 · Baskets: cross-property portfolio tokens"
         sub="One unit is a fixed recipe of several properties. Subscribing moves the underlying tokens into custody, so a unit is redeemable rather than notional. Investors create, sell and redeem units from their dashboard; defining the instrument happens here.">
         <div style={fieldRow('repeat(auto-fit, minmax(min(100%, 190px), 1fr))')}>
           <Field label="Basket id"><input style={input} value={bId} onChange={e => setBId(e.target.value)} /></Field>
