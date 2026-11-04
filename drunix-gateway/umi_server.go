@@ -23,6 +23,8 @@ var umiEndpointList = []string{
 	"POST /umi/dvp                           {\"assetId\":\"...\",\"seller\":\"...\",\"buyer\":\"...\",\"tokens\":100,\"pricePerTokenINR\":500,\"dryRun\":false}",
 	"POST /umi/netting/preview               {\"legs\":[{\"assetId\":\"...\",\"seller\":\"...\",\"buyer\":\"...\",\"tokens\":100,\"pricePerTokenINR\":500}]}  calculate only",
 	"POST /umi/netting/settle                same body; multilateral net cash leg, supervisory, all-or-nothing",
+	"GET  /umi/credentials/status            revocation list, public and pollable",
+	"GET  /umi/credentials/{id}/presentation portable bundle: key, anchor, canonicalisation rule",
 	"GET  /umi/instructions?limit=50",
 	"GET  /umi/instructions/{id}",
 	"POST /umi/servicing                     {\"assetId\":\"...\",\"payer\":\"...\",\"amountINR\":6000}",

@@ -3915,6 +3915,12 @@ async function umiProxy(req, res) {
         upstreamBody: text.slice(0, 200),
       });
     }
+    // A download keeps its filename. The rail marks a credential bundle as an
+    // attachment so a holder ends up with a recognisable file on disk rather
+    // than something called "presentation"; dropping the header here turned a
+    // download into a tab full of JSON.
+    const disposition = upstream.headers.get('content-disposition');
+    if (disposition) res.set('Content-Disposition', disposition);
     res.status(upstream.status).type('application/json').send(text);
   } catch (e) {
     res.status(503).json({

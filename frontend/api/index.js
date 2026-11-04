@@ -5892,7 +5892,11 @@ export default async function handler(req, res) {
         // curl re-hash the bytes and confirm they match the CID it asked for;
         // dropping them turns a content-addressed fetch into an ordinary one
         // the caller has to take on trust.
-        for (const h of ['x-document-cid', 'x-document-sha256', 'x-document-status', 'cache-control']) {
+        // content-disposition is on this list for the same reason: a
+        // credential presentation is served as a named attachment so a holder
+        // ends up with a recognisable file, and dropping the header turns a
+        // download into a tab full of JSON.
+        for (const h of ['x-document-cid', 'x-document-sha256', 'x-document-status', 'cache-control', 'content-disposition']) {
           const v = upstream.headers.get(h);
           if (v) res.setHeader(h, v);
         }

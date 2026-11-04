@@ -9,6 +9,8 @@ package drunix
 //	GET  /umi/credentials/{id}/verify              verify the stored copy
 //	POST /umi/credentials/{id}/revoke              revoke (issuer or supervisor)
 //	POST /umi/credentials/verify                   verify a credential presented in the body
+//	GET  /umi/credentials/status                   revocation status list, pollable and cacheable
+//	GET  /umi/credentials/{id}/presentation        self-contained bundle for offline verification
 //
 // Reads are public on purpose. A credential whose verification needs our
 // permission is not a verifiable credential, it is a login.
@@ -138,6 +140,27 @@ func (s *Server) handleCredentialPath(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, res)
 
+	// The revocation list. Public, and deliberately a whole list: a
+	// per-credential lookup would tell us which credential a verifier is
+	// interested in every time they look.
+	case rest == "status" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, reg.StatusList(r.URL.Query().Get("revokedOnly") == "true"))
+
+	// The portable bundle. Everything a stranger needs to check the
+	// signature and the anchor without calling us again, including the
+	// canonicalisation rule and an honest statement of what it cannot prove.
+	case len(parts) == 2 && parts[1] == "presentation" && r.Method == http.MethodGet:
+		pres, err := reg.Presentation(parts[0], statusListURL(r))
+		if err != nil {
+			code, sentinel := credentialStatusFor(err)
+			umiErr(w, code, sentinel, err.Error())
+			return
+		}
+		// Named so a holder's download is recognisable on disk months later.
+		w.Header().Set("Content-Disposition",
+			`attachment; filename="`+safeFilename(parts[0])+`.credential.json"`)
+		writeJSON(w, http.StatusOK, pres)
+
 	case len(parts) == 2 && parts[0] == "issuers" && r.Method == http.MethodGet:
 		_, demo := issuerSeed()
 		writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -210,4 +233,51 @@ func (s *Server) handleCredentialPath(w http.ResponseWriter, r *http.Request) {
 	default:
 		umiErr(w, http.StatusNotFound, "ERR_NOT_FOUND", "No such credential route.")
 	}
+}
+
+// statusListURL is the address a bundle tells its verifier to poll. It is
+// built from the request so a bundle downloaded through the public proxy
+// points at the public proxy, not at an internal hostname the holder cannot
+// reach.
+func statusListURL(r *http.Request) string {
+	scheme := "https"
+	if r.TLS == nil && !strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "http"
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	// Through the app proxy the rail is mounted under /api/umi; direct
+	// callers reach it at /umi. Keep whichever prefix the caller used.
+	prefix := "/umi"
+	if strings.HasPrefix(r.URL.Path, "/api/umi") {
+		prefix = "/api/umi"
+	}
+	if fwd := r.Header.Get("X-Forwarded-Prefix"); fwd != "" {
+		prefix = strings.TrimRight(fwd, "/")
+	}
+	return scheme + "://" + host + prefix + "/credentials/status"
+}
+
+// safeFilename keeps a credential id usable as a filename without inviting a
+// header injection or a path traversal through Content-Disposition.
+func safeFilename(id string) string {
+	var b strings.Builder
+	for _, ch := range id {
+		switch {
+		case ch >= 'a' && ch <= 'z', ch >= 'A' && ch <= 'Z', ch >= '0' && ch <= '9', ch == '-', ch == '_':
+			b.WriteRune(ch)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "credential"
+	}
+	if len(out) > 64 {
+		out = out[:64]
+	}
+	return out
 }

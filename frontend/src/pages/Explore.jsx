@@ -35,6 +35,7 @@ const SECTIONS = [
       { path: '/umi', title: 'Settlement interface', what: 'Atomic delivery versus payment: the property leg and the cash leg commit in one block or neither moves.' },
       { path: '/cbdc', title: 'Digital rupee', what: 'Money bound to a purpose, value carried offline, and refunds that pay themselves when an event is attested.' },
       { path: '/crossborder', title: 'Cross-border', what: 'Paying in from outside India, with the tax and reporting rules applied rather than assumed.' },
+      { path: '/credentials', title: 'Credentials', what: 'Issued here and checkable anywhere: download a presentation bundle and verify the signature and the ledger anchor on your own machine, offline.' },
       { path: '/keys', title: 'Key register', what: 'Prove a signing key is yours, and watch it screened for the entropy failures that have broken real certificate authorities.' },
       { path: '/feeds', title: 'Feeds and backing', what: 'Signed rate feeds that refuse when stale, and backing attestations that stop issuance when withdrawn.' },
       { path: '/cards', title: 'Card rail and disputes', what: 'The split a merchant never sees, and the chargeback ladder that can reverse a settled payment four months later.' },

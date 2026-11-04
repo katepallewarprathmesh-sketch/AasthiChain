@@ -26,6 +26,11 @@ export const ROUTE_SEO = {
     description:
       'Browse fractional property investments across Indian cities. Compare rental yield, token price and minimum investment on residential and commercial real estate. Free to browse.',
   },
+  '/credentials': {
+    title: 'Verifiable Credentials, Checkable Without Us | AasthiChain',
+    description:
+      'Signed, ledger-anchored credentials with a downloadable presentation bundle and a published revocation list, so a second venue can verify a holder offline instead of re-onboarding them.',
+  },
   '/keys': {
     title: 'Key Register and Weak Key Screening | AasthiChain',
     description:

@@ -26,6 +26,7 @@ import Support from '../src/pages/Support.jsx'
 import Trust from '../src/pages/Trust.jsx'
 import VerifyDocument from '../src/pages/VerifyDocument.jsx'
 import KeyRegister from '../src/pages/KeyRegister.jsx'
+import Credentials from '../src/pages/Credentials.jsx'
 import Feeds from '../src/pages/Feeds.jsx'
 import Cards from '../src/pages/Cards.jsx'
 import ChainState from '../src/pages/ChainState.jsx'
@@ -68,6 +69,7 @@ const ROUTES = [
   ['/trust', <Trust />],
   ['/verify', <VerifyDocument />],
   ['/keys', <KeyRegister />],
+  ['/credentials', <Credentials />],
   ['/feeds', <Feeds />],
   ['/cards', <Cards />],
   ['/chainstate', <ChainState />],
