@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "4ac1947442db6ec159d20561920895b7a88a986eebb902fc9b03a967773ad158",
+  "sourceDigest": "7c812f3490d8fb029b3ab7a19b8715bc7402d26e636416782002a9a9519bbe35",
   "sections": [
     {
       "doc": "README",
@@ -115,7 +115,7 @@
       "doc": "README",
       "file": "README.md",
       "heading": "Regulatory context",
-      "text": "The Asset Tokenisation (Regulation) Bill 2026 is a pending Private Member's Bill, not law. It\nproposes KYC/AML obligations, a registered custodian, registrar validation and a regulator freeze power.\nAasthiChain maps to all four: a Registrar org validates title, a Regulator org can freeze, the cap table\nis auditable end to end, and the payment path enforces a KYC gate.\n\n SPV structure. Real platforms wrap each property in a special-purpose vehicle, so a token is a\nbeneficial interest in the SPV holding legal title (Registration Act 1908 + the 2026 Bill). That is a\nlegal structure, not a code change, and is documented as Phase 2 rather than built.\n\n---"
+      "text": "The Asset Tokenisation (Regulation) Bill 2026 is a pending Private Member's Bill, not law. It\nproposes KYC/AML obligations, a registered custodian, registrar validation and a regulator freeze power.\nAasthiChain maps to all four: a Registrar org validates title, a Regulator org can freeze, the cap table\nis auditable end to end, and the payment path enforces a KYC gate.\n\n SPV structure. Real platforms wrap each property in a special-purpose vehicle, so a token is a\nbeneficial interest in the SPV holding legal title (Registration Act 1908 + the 2026 Bill). That is a\nlegal structure, not a code change, and is documented as Phase 2 rather than built.\n\n Where a cohort would start. docs/SANDBOX PROPOSAL.md is a draft\nregulatory sandbox submission: the specific friction, a scope contained to one city and one asset\nclass, every failure mode with the symptom it produces and what is built against it, and the two\ngaps that are still open. It is generated from the same data the /sandbox screen renders, so the\npage and the document cannot drift. Nothing in it has been submitted or approved.\n\n---"
     },
     {
       "doc": "README",
@@ -1178,6 +1178,60 @@
       "file": "docs/RISK_MODEL.md",
       "heading": "Retraining",
       "text": "The seed is fixed, so a rerun on the same code produces the same file. Changing\nthe generator, the features or the hyperparameters changes the weights and the\npublished metrics together: the numbers on this page come from the same run\nthat produced the coefficients, and there is no path by which one can be\nupdated without the other."
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "Fractional property settlement with a wholesale cash leg",
+      "text": "DRAFT. Not submitted, not approved, not under review. \n\nA cohort-scoped test of whether registrar-verified fractional property can settle against a wholesale central bank money leg at retail ticket sizes, with multilateral netting, without creating a settlement-risk window and without any participant funding a gross position.\n\nApplicant: AasthiChain (Rudraksha Aasthi). Regulatory sandbox cohort submission, draft.\n\n<!-- Generated from frontend/src/lib/sandboxProposal.js by scripts/build-sandbox-doc.mjs.\n Edit the data file, not this document. tests/sandbox.test.mjs fails if they disagree. -- \n\nA sandbox exists to create regulatory clarity, not to demonstrate that software runs. The four\nsections below are the four things that carry the weight: the specific friction, a scope small\nenough that reversing it is uninteresting, the failure modes stated before anyone asks, and what\nwill have been learned either way."
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "1. The friction",
+      "text": "Indian property is indivisible in practice, slow to transfer, and expensive to verify. The smallest credible exposure to institutional-grade real estate is a ten lakh rupee SM REIT unit; below that, a household’s only options are unregulated or illiquid.\n\n- Land and property disputes are roughly two thirds of civil litigation, and a title dispute runs for about two decades.\n <br <sub Samiullah v. State of Bihar, 2025 INSC 1292</sub \n- The regulated floor for a fractional real-estate unit is ten lakh rupees, in schemes of fifty to five hundred crore with at least two hundred unitholders.\n <br <sub SEBI SM REIT framework</sub \n- Verification is repeated per venue. A buyer who has already been checked by one platform is checked again by the next, because nothing a holder carries can be verified by a second venue.\n <br <sub Observed in the design of every platform surveyed, including our own before this build</sub \n\n Why this cohort, now. The cash leg is the part that has not been solved. A depository can issue a token today; what stalls is settling it against money, because atomic delivery versus payment is gross settlement and gross settlement demands funded cash for every leg. India can sequence this differently from markets that shipped the asset leg first and left settlement to participants."
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "2. Scope, and how it is contained",
+      "text": "One city, one asset class, registrar-verified titles only, hard caps on value and participants, and a single switch that ends it.\n Bound Limit \n --- --- \n Geography One metropolitan area, one state registrar \n Asset class Completed, revenue-generating commercial property only. No under-construction, no land parcels \n Title Only titles carrying a registrar-signed credential anchored on the ledger. No self-declared ownership \n Participants Capped cohort, KYC-complete, resident Indian investors only for the first phase \n Ticket size Floor of five hundred rupees, per-participant cap for the cohort duration \n Scheme value A single capped pool, well below the SM REIT floor, so nothing here competes with a regulated product \n Cash leg Wholesale central bank money within the cohort. No retail custody of client funds by the platform \n Duration One cohort period, with a stated end date rather than a renewal assumption \n\n Reversibility. The asset leg and the cash leg are separate modules behind one settlement call. Disabling the cash rail stops all settlement immediately and leaves every position readable and transferable through the ordinary registrar process. No participant depends on us remaining operational to prove what they hold: credentials are verifiable offline and positions are anchored on an append-only ledger."
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "3. Failure modes, stated before being asked",
+      "text": "Each row names what goes wrong, what it looks like from outside, and what is already built. The\nrows marked open are not handled. They are listed because an application claiming everything\nis handled is the one a reader stops believing.\n\n The issuer becomes insolvent: open\n\n Symptom. Holders own tokens in an entity that cannot operate the asset or distribute income.\n\n Today. NOT IMPLEMENTED. Recourse is recorded as absent rather than implied. No waterfall, no indemnity, no insurer, no reserve is encoded today, and the attestation endpoint says so in the response rather than in a footnote.\n\n<sub drunix-gateway/attestation.go · tests/attestation.test.mjs </sub \n\n An attestation turns out to be wrong or is withdrawn\n\n Symptom. Tokens exist against backing that is no longer evidenced.\n\n Today. Withdrawing a backing attestation blocks further issuance against that asset immediately, and the refusal is recorded on the ledger rather than handled quietly.\n\n<sub drunix-gateway/backing.go · tests/backing.test.mjs </sub \n\n The cash leg does not complete\n\n Symptom. Ownership moves and money does not, or the reverse.\n\n Today. Settlement locks both legs and commits them in one block. There is no observable state in which one leg moved. A netting batch keeps the same promise across every leg in it: all of them settle or none do.\n\n<sub drunix-gateway/netting.go · tests/netting.test.mjs </sub"
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "3. Failure modes, stated before being asked (continued)",
+      "text": "A participant cannot fund their obligation\n\n Symptom. A settlement fails late, after others have relied on it.\n\n Today. Funding is checked before anything locks, the shortfall is named in the refusal, and a netting batch reports every participant’s net position before it is settled rather than discovering the gap mid-batch.\n\n<sub drunix-gateway/netting.go · tests/netting.test.mjs </sub \n\n A credential is revoked after a counterparty has relied on it\n\n Symptom. A second venue accepts a holder on evidence that is no longer valid.\n\n Today. Revocation is published as a whole status list with the ledger height it was read at, so a verifier polls one cacheable document. A presentation bundle verifies offline; only revocation needs a network, and that is stated inside the bundle.\n\n<sub drunix-gateway/portability.go · tests/credentialportability.test.mjs </sub \n\n An automated agent acts beyond its authority: open\n\n Symptom. Value moves under a delegation the principal did not intend.\n\n Today. Agents hold explicit mandates with caps and expiry, and withdrawals are enforced against them. One gap remains and is not hidden: a principal cannot currently revoke their own agent without a supervisor, which is the wrong asymmetry for the fastest response to a compromise.\n\n<sub drunix-gateway/mandates.go · tests/mandates.test.mjs </sub \n\n A signing key is weak or compromised"
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "3. Failure modes, stated before being asked (continued)",
+      "text": "Symptom. A signature that should be unforgeable is forged.\n\n Today. Keys are screened on registration for the entropy failures that have broken real certificate authorities, and possession is proved against a server-issued challenge rather than asserted.\n\n<sub drunix-gateway/keyregistry.go · tests/operatorkeyscope.test.mjs </sub \n\n The durable record falls behind the ledger\n\n Symptom. A restart loses state that participants were told was final.\n\n Today. Money-moving requests are refused while committed blocks are still unpersisted, and the distance behind is published rather than inferred. Reads stay available, because going dark is a worse answer than a slightly stale one.\n\n<sub drunix-gateway/umi server.go · tests/sealedrail.test.mjs </sub \n\n The platform is used to move value across a border outside banking channels\n\n Symptom. An on-ramp or off-ramp operating without authorisation, which is what enforcement actions in this sector are actually about.\n\n Today. The cross-border leg converts outside India through a named third-party provider, credits rupees only against a bank advice reference and an RBI purpose code, and never pays a seller in tokens. A test holds the public copy to that description so it cannot drift into an advertisement.\n\n<sub drunix-gateway/crossborder.go · tests/rampclaims.test.mjs </sub \n\n A payment is fraudulent or structured to evade a threshold"
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "3. Failure modes, stated before being asked (continued)",
+      "text": "Symptom. Settlement completes on money that should have been stopped.\n\n Today. Payments are scored before settlement, velocity is counted per payer over a window, and transfers above the information threshold carry originator and beneficiary records.\n\n<sub drunix-gateway/fraud.go · tests/aml.test.mjs </sub"
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "4. What the cohort would establish",
+      "text": "The question. Can registrar-verified fractional property settle against a wholesale central bank money leg at retail ticket sizes, under multilateral netting, while conserving both cash and ownership exactly and without any participant funding a gross position?\n\n Measured by: \n\n- Netting efficiency achieved on real cohort flow: gross obligations against cash actually moved, per session.\n- Peak funding a participant needed under netting, against what gross settlement would have demanded of the same participant.\n- Settlement failures, with the cause of each, and whether any produced a partial state.\n- Time from registrar credential issuance to a second party verifying it without contacting us.\n- Conservation checks: cash and tokens before and after every batch, reconciled against the ledger replay.\n\n A negative result is still a result. If netting at these ticket sizes saves little, or if conservation cannot be shown under concurrent load, that is a finding worth the cohort. It would say the cash leg should stay gross and that the complexity of netting is not earned at this scale, which is useful to anyone else about to build it."
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "What is not being claimed",
+      "text": "- No licence, authorisation or registration is claimed or implied by this document.\n- No live connectivity to RBI, NPCI or any state registrar exists today. Every rail named here is a simulation unless a cohort provides the real one.\n- The signing keys in the current build derive from a seed published in the repository, so signatures prove integrity and not authority until a cohort key is issued."
     },
     {
       "doc": "THROUGHPUT",

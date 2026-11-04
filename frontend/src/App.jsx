@@ -72,6 +72,7 @@ const ProofChain = lazy(() => import('./pages/ProofChain.jsx')) // attestations,
 const CrossBorder = lazy(() => import('./pages/CrossBorder.jsx')) // funding a purchase from outside India
 const KeyRegister = lazy(() => import('./pages/KeyRegister.jsx')) // proving a signing key is worth trusting
 const Credentials = lazy(() => import('./pages/Credentials.jsx')) // issued here, verifiable anywhere
+const Sandbox = lazy(() => import('./pages/Sandbox.jsx')) // the cohort submission, failure modes first
 const Feeds = lazy(() => import('./pages/Feeds.jsx')) // signed rate feeds and backing attestations
 const Cards = lazy(() => import('./pages/Cards.jsx')) // card interchange economics and the dispute ladder
 const ChainState = lazy(() => import('./pages/ChainState.jsx')) // module state replayed from the ledger
@@ -128,6 +129,7 @@ const ROUTE_CHUNKS = {
   '/verify': () => import('./pages/VerifyDocument.jsx'),
   '/keys': () => import('./pages/KeyRegister.jsx'),
   '/credentials': () => import('./pages/Credentials.jsx'),
+  '/sandbox': () => import('./pages/Sandbox.jsx'),
   '/feeds': () => import('./pages/Feeds.jsx'),
   '/cards': () => import('./pages/Cards.jsx'),
   '/chainstate': () => import('./pages/ChainState.jsx'),
@@ -603,6 +605,7 @@ function Nav({ user, onLogout, onRoleSwitch, onOperatorUnlock, onOperatorLock })
         { path: '/chainstate', label: 'Chain-first state' },
         { path: '/token', label: 'Public-chain token' },
         { path: '/trust', label: 'Trust' },
+        { path: '/sandbox', label: 'Sandbox submission' },
         { path: '/support', label: 'Support' },
       ],
     },
@@ -1097,6 +1100,7 @@ function AppContentInner({ user, setUser, clerk, isLoaded, isSignedIn, clerkUser
           <Route path="/crossborder" element={<CrossBorder />} />
           <Route path="/keys" element={<KeyRegister />} />
           <Route path="/credentials" element={<Credentials />} />
+          <Route path="/sandbox" element={<Sandbox />} />
           <Route path="/feeds" element={<Feeds />} />
           <Route path="/cards" element={<Cards />} />
           <Route path="/chainstate" element={<ChainState />} />

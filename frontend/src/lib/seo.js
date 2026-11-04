@@ -31,6 +31,11 @@ export const ROUTE_SEO = {
     description:
       'Signed, ledger-anchored credentials with a downloadable presentation bundle and a published revocation list, so a second venue can verify a holder offline instead of re-onboarding them.',
   },
+  '/sandbox': {
+    title: 'Regulatory Sandbox Submission, Failure Modes First | AasthiChain',
+    description:
+      'A draft cohort submission: the specific friction in Indian property, a scope contained to one city and one asset class, every failure mode with its symptom and what is built against it, and the two gaps that are still open.',
+  },
   '/keys': {
     title: 'Key Register and Weak Key Screening | AasthiChain',
     description:
