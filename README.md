@@ -202,6 +202,7 @@ Each of these has its own design document. Every one states what is simulated.
 | Feature | Summary | Docs |
 |---|---|---|
 | **Central bank money on the ledger** | Simulated digital rupee issued, moved and redeemed on-chain, with published conservation arithmetic. Supports purpose-bound money, offline vouchers and event-triggered refunds. Distinguishes technical from financial finality. | [`docs/CBDC.md`](docs/CBDC.md) |
+| **Recourse, as data rather than prose** | The claim waterfall if an asset fails: an ordered priority, triggers with an observable test for each, and a simulation of what a named holder would recover. A rank counts as funded only when it names a pot this ledger can see, so today every answer is zero and says why. | [`docs/SANDBOX_PROPOSAL.md`](docs/SANDBOX_PROPOSAL.md) |
 | **Cross-border corridors** | Five corridor types modelled on their own terms; payments refused by the corridor that cannot carry them, naming the missing authorisation. Atomic when both legs share a ledger, provisional otherwise. | [`docs/CORRIDORS.md`](docs/CORRIDORS.md) |
 | **Paying from outside India** | Stablecoin converted outside India; rupee wallet credited only against an inward-remittance attestation. Eligibility checked before quoting. Simulation only. | [`docs/CROSS_BORDER.md`](docs/CROSS_BORDER.md) |
 | **Trained risk model** | A classifier fitted in this repo (AUC 0.866 on held-out data) runs beside the hand-written screening rules, and takes the KYC tier, its route, its age and the ceiling it implies as inputs. Trained on synthetic data and advisory only; the rules decide. | [`docs/RISK_MODEL.md`](docs/RISK_MODEL.md) |
@@ -265,7 +266,7 @@ connected to a Drunix network (`/trust` says so), and nothing here is an NPCI en
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 182 checks across 125 suite files
+make test         # the full sweep: 218 checks across 126 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

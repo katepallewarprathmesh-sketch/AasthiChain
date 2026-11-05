@@ -3,6 +3,7 @@ import { useParams, Link, useLocation } from 'react-router-dom'
 import { useProperty } from '../hooks/useProperties.js'
 import SimpleBuyFlow from '../components/SimpleBuyFlow.jsx'
 import PropertyDocuments from '../components/PropertyDocuments.jsx'
+import IfThisFails from '../components/IfThisFails.jsx'
 import api from '../lib/api.js'
 import { money, moneyExact } from '../lib/format.js'
 import { applySeo, propertySeo } from '../lib/seo.js'
@@ -411,6 +412,10 @@ export default function PropertyDetail({ user }) {
       )}
 
       <PropertyDocuments assetId={id} />
+
+      {/* What happens when it goes wrong, on the page where somebody is
+          deciding to buy, rather than three screens away. */}
+      <IfThisFails assetId={id} holder={myHeld > 0 ? user?.identityId : null} />
 
       <div className="acx-r2" style={{ marginTop: 24 }}>
         <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>

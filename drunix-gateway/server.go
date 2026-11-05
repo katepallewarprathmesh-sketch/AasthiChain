@@ -60,6 +60,11 @@ type Server struct {
 	// (see backing.go). Nil means the /umi/backing/* routes are not mounted
 	// and issuance is bounded only by the issuer's declared supply cap.
 	Backing *BackingRegistry
+	// Recourse holds what a holder actually gets when the thing under the
+	// token fails: an ordered claim priority, triggers with an observable
+	// test, and a waterfall the rail can walk (see recourse.go). Nil means
+	// the /umi/recourse/* routes are not mounted.
+	Recourse *RecourseDesk
 	// CrossBorder is the simulated cross-border funding leg: a stablecoin
 	// received and converted outside India, credited as rupees only against
 	// an off-ramp attestation (crossborder.go). Nil leaves it unmounted.
@@ -201,6 +206,7 @@ func (s *Server) Router() http.Handler {
 	s.registerConditionRoutes(mux)
 	s.registerAttestationRoutes(mux)
 	s.registerBackingRoutes(mux)
+	s.registerRecourseRoutes(mux)
 	s.registerCrossBorderRoutes(mux)
 	s.registerAnchorRoutes(mux)
 	s.registerCBDCRoutes(mux)

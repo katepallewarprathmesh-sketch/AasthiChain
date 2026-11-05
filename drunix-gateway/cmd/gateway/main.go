@@ -230,6 +230,12 @@ func main() {
 		srv.UMI.SetIssuanceGate(srv.Backing)
 		log.Printf("Backing mounted at /umi/backing/*: issuance refused past the attested figure, or once it goes stale")
 
+		// Recourse (recourse.go): the claim waterfall if the asset fails,
+		// as data rather than prose. A rank pays only when it names a pot
+		// this ledger can see, so today every simulation returns zero.
+		srv.Recourse = drunix.NewRecourseDesk(srv.UMI, srv.Backing)
+		log.Printf("Recourse mounted at /umi/recourse/*: the claim waterfall, with unfunded ranks paying zero")
+
 		// Cross-border funding (crossborder.go): a buyer outside India funds
 		// a purchase with a stablecoin that is converted outside India, and
 		// the rupee wallet is credited only against an off-ramp attestation.

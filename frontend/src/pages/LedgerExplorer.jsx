@@ -127,6 +127,8 @@ const TYPE_STYLES = {
   UMI_CBX_EXPIRED: { label: 'Cross-border · Quote Lapsed', color: '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
   UMI_BACKING_ATTESTED: { label: 'Backing · Attested', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
   UMI_BACKING_WITHDRAWN: { label: 'Backing · Withdrawn', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
+  UMI_RECOURSE_TERMS_SET: { label: 'Recourse · Terms set', color: '#374151', bg: '#F9FAFB', border: '#E5E7EB' },
+  UMI_RECOURSE_TRIGGER_DECLARED: { label: 'Recourse · Trigger declared', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   UMI_ISSUE_BLOCKED: { label: 'Issuance · Refused, Backing Short', color: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' },
   // Work orders (escrowed engagements)
   UMI_CONDITION_OPENED: { label: 'Conditional · Cash Reserved', color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },

@@ -51,6 +51,7 @@ const MODULES = [
   ['keys', 'key register'],
   ['oracle', 'signed feeds'],
   ['backing', 'backing attestations'],
+  ['recourse', 'the claim waterfall if the asset fails'],
   ['agents', 'agent passports'],
   ['mandates', 'delegated authority'],
   ['proposals', 'proposing agent'],
