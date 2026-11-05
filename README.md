@@ -77,11 +77,11 @@ Other ways to run it and every configuration switch: [`docs/ARCHITECTURE.md`](do
 
 <div align="center">
 
-<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange; every state change is written to an append-only record that the whole system answers to; and a layer of assurance sits under all of it: a register of the keys that sign, a risk layer that judges a payment before it settles, and copies of the proof on public chains that a holder can check without asking the platform." width="100%">
+<img src="docs/architecture.png" alt="AasthiChain architecture: owners, registrars, investors and regulators work through a web experience; an access layer establishes who is calling, what they may touch, and keeps the listing register, whose addresses are checked against an outside postal directory; a settlement core moves the cash leg and the ownership leg as one atomic exchange, and nets a whole batch of legs so nobody funds a gross position; every state change is written to an append-only record that the whole system answers to; and a layer of assurance sits under all of it: a register of the keys that sign, a risk layer that judges a payment before it settles, copies of the proof on public chains that a holder can check without asking the platform, credentials a second venue can verify offline, and an ordered claim waterfall saying what a holder would recover if the asset fails, which today is nothing because no rank is funded." width="100%">
 
 </div>
 
-<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg). Edit the SVG, then re-export the PNG.</sub>
+<sub>Vector source: [`docs/architecture.svg`](docs/architecture.svg). Edit the SVG, then regenerate the PNG with `node scripts/export-arch-png.mjs`.</sub>
 
 Four kinds of people use it: owners list property, registrars validate title, investors buy and
 trade fractions, regulators supervise. Behind them sit four things:
