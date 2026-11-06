@@ -25,6 +25,7 @@ package drunix
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -82,6 +83,24 @@ type AgentPassport struct {
 	// Threshold of them, which is the entire point: one custodian holding a
 	// share learns nothing, and neither do Threshold-1 of them together.
 	shares map[string][]byte
+
+	// principalSalt and principalDigest let the register answer exactly one
+	// question about the sealed principal: "is the caller it?".
+	//
+	// Without this the register could not recognise its own principal, so
+	// stopping an agent required either a custodian ceremony or a
+	// supervisor. That is the wrong asymmetry for the fastest response to a
+	// compromised agent, and it was a declared gap: the person with the most
+	// reason to pull the handle was the one person who could not.
+	//
+	// The digest is SHA-256 over a 32-byte random salt and the principal.
+	// A guessing attack needs the salt, which never leaves this process and
+	// is never written to a block, and the only thing a successful
+	// comparison discloses is something the caller already knew about
+	// themselves. The register still cannot say who the principal is; it can
+	// only agree when told correctly.
+	principalSalt   []byte
+	principalDigest []byte
 
 	// reveal state
 	RequestedBy  string
@@ -168,6 +187,11 @@ func (r *AgentRegistry) Register(principal string, req AgentRegistration) (*Agen
 		CreatedAt:  now,
 		shares:     map[string][]byte{},
 	}
+	p.principalSalt = make([]byte, 32)
+	if _, err := rand.Read(p.principalSalt); err != nil {
+		return nil, fmt.Errorf("%w: could not seal the principal", ErrAgentFields)
+	}
+	p.principalDigest = principalDigest(p.principalSalt, principal)
 	for i, c := range custodians {
 		p.shares[c] = shares[i]
 	}
@@ -220,6 +244,23 @@ func normaliseCustodians(principal string, in []string) ([]string, error) {
 	return out, nil
 }
 
+// principalDigest binds a principal to one passport's salt. Salting per
+// passport means the same principal behind two agents produces two unrelated
+// digests, so the register cannot be used to cluster agents by owner.
+func principalDigest(salt []byte, principal string) []byte {
+	h := sha256.Sum256(append(append([]byte{}, salt...), []byte(strings.ToLower(strings.TrimSpace(principal)))...))
+	return h[:]
+}
+
+// isPrincipal is a constant-time comparison, so the register does not leak
+// how close a guess was through how long it took to reject it.
+func (p *AgentPassport) isPrincipal(claim string) bool {
+	if len(p.principalDigest) == 0 || strings.TrimSpace(claim) == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare(p.principalDigest, principalDigest(p.principalSalt, claim)) == 1
+}
+
 // agentPseudonym is derived, not sequential, so the order of registration
 // leaks nothing either.
 func agentPseudonym(principal, purpose string, at time.Time) string {
@@ -262,14 +303,15 @@ func (r *AgentRegistry) Revoke(agentID, by string, supervisor bool) (*AgentPassp
 		r.mu.Unlock()
 		return nil, ErrAgentNotFound
 	}
-	// Only the principal (who is sealed, so this is the supervisor's job in
-	// practice) or a supervisor may revoke. A custodian holding a share is not
-	// thereby in charge of the agent.
-	if !supervisor && !p.Revealed {
-		r.mu.Unlock()
-		return nil, ErrAgentNotPrincipal
-	}
-	if !supervisor && !strings.EqualFold(by, p.Principal) {
+	// Who may pull the handle: the principal, or a supervisor. A custodian
+	// holding a share is not thereby in charge of the agent.
+	//
+	// The principal is sealed, so the register recognises them by comparing
+	// a salted digest rather than by reading a name. This used to require
+	// the custodian ceremony first, which meant that in practice only a
+	// supervisor could stop a running agent. An agent you cannot stop
+	// yourself is not delegated authority, it is a standing instruction.
+	if !supervisor && !p.isPrincipal(by) && !(p.Revealed && strings.EqualFold(by, p.Principal)) {
 		r.mu.Unlock()
 		return nil, ErrAgentNotPrincipal
 	}

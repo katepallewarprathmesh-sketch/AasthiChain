@@ -66,6 +66,22 @@ func (s *Server) handleConditionsRoot(w http.ResponseWriter, r *http.Request) {
 		if !caller.supervisor() {
 			participant = caller.ID
 		}
+		// An agent reads the book its principal can act in, not its own,
+		// which is empty by construction: a pseudonym is never a buyer, a
+		// seller or an asserter.
+		//
+		// Without this an agent delegated RELEASE_CONDITION could be told
+		// nothing is releasable and would have to be fed condition ids out
+		// of band, which defeats the delegation and tempts an operator into
+		// handing the agent a supervisor identity instead. The scope is
+		// exactly the principal's own view: holding a mandate widens what
+		// an agent may see to what its principal may see, and no further.
+		if !caller.supervisor() && s.Mandates != nil {
+			if m, err := s.Mandates.Get(strings.TrimSpace(r.Header.Get(AgentMandateHeader))); err == nil &&
+				m != nil && !m.Revoked && strings.EqualFold(m.Agent, caller.ID) {
+				participant = m.Principal
+			}
+		}
 		list := desk.List(participant, queryLimit(r, 50, 200))
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"conditions": list,

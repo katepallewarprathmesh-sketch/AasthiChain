@@ -199,9 +199,16 @@ async function main() {
   ok('an uninvolved party cannot read someone else\'s mandate', nosy.status === 403,
      `status ${nosy.status}`);
 
-  ok('the registry discloses that nothing autonomous actually runs here',
-     !!(mine.body && /no autonomous agent/i.test(JSON.stringify(mine.body.registry || mine.body.disclaimer || ''))),
-     JSON.stringify(mine.body && mine.body.registry).slice(0, 200));
+  // This used to require the words "no autonomous agent". True when written,
+  // false the moment agent/ shipped, and a stale disclaimer is a worse
+  // failure than a missing one: it is the rail making a claim about itself
+  // that the rail cannot check. The pin moved to what is still true.
+  const note = JSON.stringify((mine.body && (mine.body.registry || mine.body.disclaimer)) || '');
+  ok('the registry no longer claims that nothing autonomous runs here',
+     !/no autonomous agent/i.test(note), note.slice(0, 200));
+  ok('the registry points at the harness and says nothing starts it on its own',
+     /agent\//.test(note) && /nothing starts it automatically/i.test(note),
+     note.slice(0, 200));
 
   // The spend has to be attributable on the ledger, not just in memory.
   const used = await railGet('regulator1', 'Regulator')('/drunix/chain?limit=100');

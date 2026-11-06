@@ -88,6 +88,45 @@ Rail routes, all additive, under the existing identity headers:
 Blocks: `AGENT_REGISTERED`, `AGENT_REVOKED`, `AGENT_REVEAL_REQUESTED`, `AGENT_REVEAL_APPROVED`,
 `AGENT_REVEALED`, `AGENT_REVEAL_EXPIRED`.
 
+## Recognising the principal without disclosing them
+
+The table above always said the principal could revoke. For a long time the code did not: revocation
+required a supervisor or a completed custodian ceremony, so the party with the most exposure and the
+fastest reason to act was the one party who could not pull the handle. The reason was structural
+rather than careless. The passport seals its principal, so the register had no name to compare a
+caller against, and the obvious fix, storing the principal in the clear next to the sealed copy,
+would have undone the entire design.
+
+The register now answers a narrower question than "who is the principal". It answers "is this
+caller the principal", which needs no name:
+
+- each passport carries its own 32-byte random salt and the SHA-256 digest of `salt || principal`,
+- a revocation hashes the caller the same way and compares in constant time,
+- the salt is per passport, so two agents of the same owner produce unrelated digests and the
+  register cannot cluster passports by who is behind them.
+
+The digest is a one-way check, not a sealed copy. It can confirm a guess and cannot produce an
+answer, which is exactly the authority a kill switch needs and no more. Reveal is still the only
+route to a name, and it still takes the threshold.
+
+Covered by `drunix-gateway/agentstop_test.go` and the live half in `tests/agentlive.test.mjs`.
+
+## A refusal has to say which refusal it was
+
+Every way an agent can fail to present a credential collapses into one sentinel,
+`ERR_UMI_CONDITION_NOT_ASSERTER`, because from the desk's point of view they are all "you may not
+assert this". That is a reasonable code and a useless answer: a withdrawn passport, a spent ceiling
+and a genuinely wrong agent are three different problems with three different fixes. The desk
+composed the real reason, wrote it to the block, and then returned the bare sentinel, so the only
+copy of the answer was in a place the caller might not be able to read. The detail now travels back
+with the error.
+
+## Why there is an agent to stop
+
+An agent harness ships in `agent/`. It is a real process holding a real passport, and it found three
+defects that no amount of reading the code had found, including this one. See
+[`docs/AGENT_HARNESS.md`](AGENT_HARNESS.md).
+
 ## Why this matters beyond the demo
 
 Cross-border recognition is the stated endgame for agent identity, and it will favour whoever built

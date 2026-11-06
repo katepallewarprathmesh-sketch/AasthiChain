@@ -75,7 +75,17 @@ test('the two known gaps are still declared as gaps', () => {
   // without the audit closing, this test is the thing that catches it.
   const open = FAILURE_MODES.filter(f => !f.implemented).map(f => f.mode.toLowerCase()).join(' | ');
   assert.ok(/insolven/.test(open), 'issuer insolvency must be listed as an open failure mode');
-  assert.ok(/agent/.test(open), 'agent authority (principal cannot revoke) must be listed as open');
+  // The second gap used to be that a principal could not revoke their own
+  // agent. That is closed in drunix-gateway/agentid.go and covered by
+  // agentstop_test.go, so requiring it to stay open would be requiring the
+  // page to lie in the pessimistic direction, which is still lying.
+  //
+  // Building the harness replaced it with a sharper one: the custody of a
+  // pseudonym is threshold arithmetic held entirely inside one process, so
+  // it is not custody. That is the claim this now pins.
+  assert.ok(/pseudonym|re-identif/.test(open), 'the pseudonym custody gap must be listed as open');
+  const closed = FAILURE_MODES.filter(f => f.implemented).map(f => f.mode.toLowerCase()).join(' | ');
+  assert.ok(/agent acts beyond/.test(closed), 'agent authority is closed and should be recorded as closed');
 });
 
 test('at least two failure modes are open, so the list is not a sales sheet', () => {

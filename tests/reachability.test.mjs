@@ -87,7 +87,7 @@ const run = async () => {
   const seo = src('frontend/src/lib/seo.js');
   const smoke = src('frontend/smoke/smoke-render.jsx');
 
-  for (const [route, page] of [['/keys', 'KeyRegister.jsx'], ['/credentials', 'Credentials.jsx'], ['/sandbox', 'Sandbox.jsx'], ['/feeds', 'Feeds.jsx'], ['/cards', 'Cards.jsx'], ['/chainstate', 'ChainState.jsx'], ['/token', 'PublicToken.jsx']]) {
+  for (const [route, page] of [['/keys', 'KeyRegister.jsx'], ['/credentials', 'Credentials.jsx'], ['/sandbox', 'Sandbox.jsx'], ['/agents', 'Agents.jsx'], ['/feeds', 'Feeds.jsx'], ['/cards', 'Cards.jsx'], ['/chainstate', 'ChainState.jsx'], ['/token', 'PublicToken.jsx']]) {
     ok(`${route} has a route`, app.includes(`path="${route}"`), app.includes(route) ? 'mentioned but not routed' : 'absent');
     ok(`${route} is reachable from the navigation`, app.includes(`path: '${route}'`));
     ok(`${route} is listed in the explore index`, explore.includes(`'${route}'`));

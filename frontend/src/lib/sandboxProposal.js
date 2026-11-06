@@ -134,10 +134,18 @@ export const FAILURE_MODES = [
   {
     mode: 'An automated agent acts beyond its authority',
     symptom: 'Value moves under a delegation the principal did not intend.',
-    containment: 'Agents hold explicit mandates with caps and expiry, and withdrawals are enforced against them. One gap remains and is not hidden: a principal cannot currently revoke their own agent without a supervisor, which is the wrong asymmetry for the fastest response to a compromise.',
+    containment: 'Agents hold explicit mandates with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act rather than trusted. The asymmetry that used to be declared here is closed: a principal can now revoke their own agent in one request, with no supervisor and no custodian ceremony, and revoking the passport makes every mandate it holds inert at once. A real harness runs against this surface in agent/, which is how three defects in it were found rather than argued about.',
+    implemented: true,
+    file: 'drunix-gateway/agentid.go',
+    test: 'drunix-gateway/agentstop_test.go',
+  },
+  {
+    mode: 'An agent pseudonym has to be re-identified',
+    symptom: 'A supervisor needs to know who is behind an automated actor, and either cannot, or can too easily.',
+    containment: 'A passport seals its principal and recovery takes a threshold of named custodians, with every approval written to the chain. NOT IMPLEMENTED as real custody: the threshold arithmetic is genuine but one process holds every share, so the split protects against a careless operator and not against a compromised deployment. Separating the shares across parties who do not share a host is the work, and it is not done.',
     implemented: false,
-    file: 'drunix-gateway/mandates.go',
-    test: 'tests/mandates.test.mjs',
+    file: 'drunix-gateway/agentid.go',
+    test: 'drunix-gateway/agentid_test.go',
   },
   {
     mode: 'A signing key is weak or compromised',

@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "cef8e2928fa37f83e358b5b75ca54775c7b6ea94e404e40c0bf601ec8d438247",
+  "sourceDigest": "54c5883be2b833c09f295e52a6054062668845f71de5f1bad411d0c975c5268f",
   "sections": [
     {
       "doc": "README",
@@ -79,7 +79,7 @@
       "doc": "README",
       "file": "README.md",
       "heading": "Features in depth (continued)",
-      "text": "I AGENT.md \n Screening: list, case, report Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. docs/AML.md \n Grounded assistant Answers from the project's own docs and live rail state, fetches specific records by reference through ordinary code (no tool access), and says \"not documented\" when it has no source. Off if no key is configured. docs/AI AGENT.md \n Measured throughput About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. docs/THROUGHPUT.md \n\n---"
+      "text": "I AGENT.md \n An autonomous agent, and a handle to stop it A real process in agent/ holds a pseudonymous passport and a mandate with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act. Its principal can revoke it in one request, with no supervisor and no custodian ceremony, and that makes every mandate it holds inert. Running it is what found three defects in the bounds. Nothing starts it automatically and no deployment runs it. docs/AGENT HARNESS.md \n Screening: list, case, report Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. docs/AML.md \n Grounded assistant Answers from the project's own docs and live rail state, fetches specific records by reference through ordinary code (no tool access), and says \"not documented\" when it has no source. Off if no key is configured. docs/AI AGENT.md \n Measured throughput About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. docs/THROUGHPUT.md \n\n---"
     },
     {
       "doc": "README",
@@ -130,6 +130,42 @@
       "text": "The in-app Support page carries UPI and GitHub Sponsors\nlinks. These are donations to the project, not investments . They buy no tokens and no stake.\n\n<div align=\"center\" \n\n aasthi-chain.vercel.app · Apache 2.0 licensed\n\n</div"
     },
     {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "The agent harness",
+      "text": "A real process that holds a passport, takes a mandate from a named principal, and acts on the rail\nover the ordinary HTTP surface. It lives in agent/ and nothing starts it automatically.\n\nThe rail already had the authority half of delegated action: mandates with named actions, a rupee\nceiling and an expiry, re-checked on every act. What it did not have was anything that exercised\nthem. Bounds nobody has pushed against are a design, not a control, so this exists mostly to be the\nthing that pushes."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "What it does",
+      "text": "A conditional settlement is money locked against a named credential. It sits locked until somebody\npresents that credential, and nobody is watching for the moment one becomes presentable, so cash\nstays reserved after the condition it was waiting on has already been satisfied and eventually\nexpires back to the payer for no better reason than inattention. The agent watches for that and\npresents.\n\nA dull job is the right first job for an automated actor. The failure mode of a clever agent is\nthat nobody can say what it will do; the failure mode of this one is that a release happens a few\nseconds earlier than a person would have managed."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "Shape",
+      "text": "File What \n --- --- \n agent/policy.mjs every decision, as pure functions of a state snapshot. No I/O, no clock. \n agent/agent.mjs the runtime: observe, check the stop rule, dry-run each intent, act, record. \n agent/run.mjs the CLI: setup , once , watch , stop , start , log . \n .agent/ local state: config, an append-only JSONL run log, the stop file. Not tracked. \n\nThe split is the point. The interesting question about an autonomous agent is never whether it can\nmake a request, it is what it would decide and whether that decision can be checked without letting\nit loose on a live rail. So the judgements are pure and tests/agentharness.test.mjs feeds them\nhand-built states, including every state they must refuse to act on."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "How it is bounded",
+      "text": "Four independent things stop it, and any one is sufficient:\n\n1. the passport is revoked, which the principal can now do themselves,\n2. the mandate is revoked, expired, or out of headroom,\n3. the local stop file, so an unreachable rail is never the reason an operator cannot halt it,\n4. an open identification request, where the runtime is deliberately stricter than the rail: while\n somebody is formally trying to establish who is behind this pseudonym, it pauses.\n\nThe stop rule is checked before every act rather than once at startup. A runtime that checks its\nauthority once and then trusts its own memory of it is precisely the thing a revocation needs to\ndefeat.\n\nBefore acting, every intent is dry-run through POST /umi/mandates/{id}/check , which consumes\nnothing. The local bounds in policy.mjs are a courtesy that saves spending an operator's attention\non requests already known to be refused. The rail's answer is the one that counts. An agent that\ndecides it is allowed is not operating under a mandate, it is operating under a habit."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "What running it found",
+      "text": "Three defects, none of which reading the code had surfaced.\n\n The kill switch was wired to a name nothing used. MandateRegistry.Authorise checks standing\nagainst the name written on the mandate. The first version granted the mandate to a readable agent\nname while the passport lived under its generated pseudonym, so Standing reported the agent as\nunregistered, the withdrawal branch never fired, and revoking the passport stopped nothing. The\npassport's own mandateId field actively invites that ordering. The agent now refuses to start when\nthe two names disagree, rather than running unstoppably.\n\n A revoked agent kept running. The register publishes a status string, not a boolean. The runtime\nread passport.revoked , got undefined , and carried on. Found by revoking a real passport and\nwatching the next pass act anyway.\n\n A refusal named the wrong reason. See the section of the same name in\n docs/AGENT IDENTITY.md .\n\nA fourth thing was not a defect but a missing rule: an agent's own pseudonym is never a buyer, a\nseller or an asserter, so GET /umi/conditions returned it an empty book and the delegation was\nuseless. Presenting a valid mandate now widens what an agent may see to exactly what its principal\nmay see, and no further. Without that, an operator feeds the agent condition ids out of band or,\nworse, hands it a supervisor identity."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "What it is not",
+      "text": "- It is not running in any deployment. The screen at /agents shows whether one is, from the spend\n recorded against each grant rather than from a sentence.\n- The run log is the agent marking its own homework. /agents deliberately reads the register and\n the mandate book instead: a compromised agent writes a flattering log, and it cannot edit the\n rail. If the two disagree, the rail is right and the agent is the story.\n- Stopping an agent stops it acting. It reverses nothing it already did, and nothing here can."
+    },
+    {
       "doc": "AGENT_IDENTITY",
       "file": "docs/AGENT_IDENTITY.md",
       "heading": "The problem",
@@ -158,6 +194,18 @@
       "file": "docs/AGENT_IDENTITY.md",
       "heading": "Surface",
       "text": "Rail routes, all additive, under the existing identity headers:\n Route Who What \n --- --- --- \n GET /umi/agents anyone pseudonyms, purpose, custodian set, threshold, state \n POST /umi/agents the principal register an agent, seal the principal, get the pseudonym \n GET /umi/agents/{id} anyone one passport, plus any open or completed reveal \n POST /umi/agents/{id}/revoke principal or supervisor stop the agent acting \n POST /umi/agents/{id}/reveal supervisor or a custodian open a request with a stated trigger \n POST /umi/agents/{id}/reveal/approve a named custodian contribute one share \n\nBlocks: AGENT REGISTERED , AGENT REVOKED , AGENT REVEAL REQUESTED , AGENT REVEAL APPROVED ,\n AGENT REVEALED , AGENT REVEAL EXPIRED ."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "Recognising the principal without disclosing them",
+      "text": "The table above always said the principal could revoke. For a long time the code did not: revocation\nrequired a supervisor or a completed custodian ceremony, so the party with the most exposure and the\nfastest reason to act was the one party who could not pull the handle. The reason was structural\nrather than careless. The passport seals its principal, so the register had no name to compare a\ncaller against, and the obvious fix, storing the principal in the clear next to the sealed copy,\nwould have undone the entire design.\n\nThe register now answers a narrower question than \"who is the principal\". It answers \"is this\ncaller the principal\", which needs no name:\n\n- each passport carries its own 32-byte random salt and the SHA-256 digest of salt principal ,\n- a revocation hashes the caller the same way and compares in constant time,\n- the salt is per passport, so two agents of the same owner produce unrelated digests and the\n register cannot cluster passports by who is behind them.\n\nThe digest is a one-way check, not a sealed copy. It can confirm a guess and cannot produce an\nanswer, which is exactly the authority a kill switch needs and no more. Reveal is still the only\nroute to a name, and it still takes the threshold.\n\nCovered by drunix-gateway/agentstop test.go and the live half in tests/agentlive.test.mjs ."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "A refusal has to say which refusal it was",
+      "text": "Every way an agent can fail to present a credential collapses into one sentinel,\n ERR UMI CONDITION NOT ASSERTER , because from the desk's point of view they are all \"you may not\nassert this\". That is a reasonable code and a useless answer: a withdrawn passport, a spent ceiling\nand a genuinely wrong agent are three different problems with three different fixes. The desk\ncomposed the real reason, wrote it to the block, and then returned the bare sentinel, so the only\ncopy of the answer was in a place the caller might not be able to read. The detail now travels back\nwith the error."
     },
     {
       "doc": "AGENT_IDENTITY",
@@ -1207,13 +1255,19 @@
       "doc": "SANDBOX_PROPOSAL",
       "file": "docs/SANDBOX_PROPOSAL.md",
       "heading": "3. Failure modes, stated before being asked (continued)",
-      "text": "A participant cannot fund their obligation\n\n Symptom. A settlement fails late, after others have relied on it.\n\n Today. Funding is checked before anything locks, the shortfall is named in the refusal, and a netting batch reports every participant’s net position before it is settled rather than discovering the gap mid-batch.\n\n<sub drunix-gateway/netting.go · tests/netting.test.mjs </sub \n\n A credential is revoked after a counterparty has relied on it\n\n Symptom. A second venue accepts a holder on evidence that is no longer valid.\n\n Today. Revocation is published as a whole status list with the ledger height it was read at, so a verifier polls one cacheable document. A presentation bundle verifies offline; only revocation needs a network, and that is stated inside the bundle.\n\n<sub drunix-gateway/portability.go · tests/credentialportability.test.mjs </sub \n\n An automated agent acts beyond its authority (open)\n\n Symptom. Value moves under a delegation the principal did not intend.\n\n Today. Agents hold explicit mandates with caps and expiry, and withdrawals are enforced against them. One gap remains and is not hidden: a principal cannot currently revoke their own agent without a supervisor, which is the wrong asymmetry for the fastest response to a compromise.\n\n<sub drunix-gateway/mandates.go · tests/mandates.test.mjs </sub \n\n A signing key is weak or compromised"
+      "text": "A participant cannot fund their obligation\n\n Symptom. A settlement fails late, after others have relied on it.\n\n Today. Funding is checked before anything locks, the shortfall is named in the refusal, and a netting batch reports every participant’s net position before it is settled rather than discovering the gap mid-batch.\n\n<sub drunix-gateway/netting.go · tests/netting.test.mjs </sub \n\n A credential is revoked after a counterparty has relied on it\n\n Symptom. A second venue accepts a holder on evidence that is no longer valid.\n\n Today. Revocation is published as a whole status list with the ledger height it was read at, so a verifier polls one cacheable document. A presentation bundle verifies offline; only revocation needs a network, and that is stated inside the bundle.\n\n<sub drunix-gateway/portability.go · tests/credentialportability.test.mjs </sub \n\n An automated agent acts beyond its authority\n\n Symptom. Value moves under a delegation the principal did not intend."
     },
     {
       "doc": "SANDBOX_PROPOSAL",
       "file": "docs/SANDBOX_PROPOSAL.md",
       "heading": "3. Failure modes, stated before being asked (continued)",
-      "text": "Symptom. A signature that should be unforgeable is forged.\n\n Today. Keys are screened on registration for the entropy failures that have broken real certificate authorities, and possession is proved against a server-issued challenge rather than asserted.\n\n<sub drunix-gateway/keyregistry.go · tests/operatorkeyscope.test.mjs </sub \n\n The durable record falls behind the ledger\n\n Symptom. A restart loses state that participants were told was final.\n\n Today. Money-moving requests are refused while committed blocks are still unpersisted, and the distance behind is published rather than inferred. Reads stay available, because going dark is a worse answer than a slightly stale one.\n\n<sub drunix-gateway/umi server.go · tests/sealedrail.test.mjs </sub \n\n The platform is used to move value across a border outside banking channels\n\n Symptom. An on-ramp or off-ramp operating without authorisation, which is what enforcement actions in this sector are actually about.\n\n Today. The cross-border leg converts outside India through a named third-party provider, credits rupees only against a bank advice reference and an RBI purpose code, and never pays a seller in tokens. A test holds the public copy to that description so it cannot drift into an advertisement.\n\n<sub drunix-gateway/crossborder.go · tests/rampclaims.test.mjs </sub \n\n A payment is fraudulent or structured to evade a threshold"
+      "text": "Today. Agents hold explicit mandates with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act rather than trusted. The asymmetry that used to be declared here is closed: a principal can now revoke their own agent in one request, with no supervisor and no custodian ceremony, and revoking the passport makes every mandate it holds inert at once. A real harness runs against this surface in agent/, which is how three defects in it were found rather than argued about.\n\n<sub drunix-gateway/agentid.go · drunix-gateway/agentstop test.go </sub \n\n An agent pseudonym has to be re-identified (open)\n\n Symptom. A supervisor needs to know who is behind an automated actor, and either cannot, or can too easily.\n\n Today. A passport seals its principal and recovery takes a threshold of named custodians, with every approval written to the chain. NOT IMPLEMENTED as real custody: the threshold arithmetic is genuine but one process holds every share, so the split protects against a careless operator and not against a compromised deployment. Separating the shares across parties who do not share a host is the work, and it is not done.\n\n<sub drunix-gateway/agentid.go · drunix-gateway/agentid test.go </sub \n\n A signing key is weak or compromised\n\n Symptom. A signature that should be unforgeable is forged."
+    },
+    {
+      "doc": "SANDBOX_PROPOSAL",
+      "file": "docs/SANDBOX_PROPOSAL.md",
+      "heading": "3. Failure modes, stated before being asked (continued)",
+      "text": "Today. Keys are screened on registration for the entropy failures that have broken real certificate authorities, and possession is proved against a server-issued challenge rather than asserted.\n\n<sub drunix-gateway/keyregistry.go · tests/operatorkeyscope.test.mjs </sub \n\n The durable record falls behind the ledger\n\n Symptom. A restart loses state that participants were told was final.\n\n Today. Money-moving requests are refused while committed blocks are still unpersisted, and the distance behind is published rather than inferred. Reads stay available, because going dark is a worse answer than a slightly stale one.\n\n<sub drunix-gateway/umi server.go · tests/sealedrail.test.mjs </sub \n\n The platform is used to move value across a border outside banking channels\n\n Symptom. An on-ramp or off-ramp operating without authorisation, which is what enforcement actions in this sector are actually about.\n\n Today. The cross-border leg converts outside India through a named third-party provider, credits rupees only against a bank advice reference and an RBI purpose code, and never pays a seller in tokens. A test holds the public copy to that description so it cannot drift into an advertisement.\n\n<sub drunix-gateway/crossborder.go · tests/rampclaims.test.mjs </sub \n\n A payment is fraudulent or structured to evade a threshold"
     },
     {
       "doc": "SANDBOX_PROPOSAL",

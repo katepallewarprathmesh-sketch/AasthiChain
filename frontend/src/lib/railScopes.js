@@ -33,6 +33,12 @@ const IDENTIFIED_PREFIXES = [
   '/wallets',
   '/instructions',
   '/conditions',
+  // A mandate names who delegated what authority to whom, and how much of
+  // the ceiling has been spent. That is a participant's own arrangement,
+  // and the rail refuses it to an unnamed caller. /agents, by contrast, is
+  // public: the register of pseudonyms is meant to be readable, which is
+  // the point of registering them.
+  '/mandates',
   '/crossborder',
   '/work',
 ];

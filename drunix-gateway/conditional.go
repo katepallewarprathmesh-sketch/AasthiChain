@@ -366,7 +366,13 @@ func (d *ConditionDesk) Present(conditionID string, req PresentRequest, presente
 			"credentialId": req.CredentialID,
 			"note":         "The agreement is still open. A refusal records an attempt that did not satisfy the condition, which is not the same as the parties walking away.",
 		})
-		return &out, err
+		// The detail is the whole answer, so it has to travel back to the
+		// caller and not only into the block. Returning the bare sentinel
+		// told an agent whose passport had been withdrawn that it was "not
+		// the asserter", which it is, and sent whoever was debugging it to
+		// look at the wrong thing entirely. The reason already exists here;
+		// it was simply being dropped on the way out.
+		return &out, fmt.Errorf("%w: %s", err, detail)
 	}
 
 	// Deadline first: an expired condition is refunded, not settled late.

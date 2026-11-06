@@ -90,13 +90,21 @@ is handled is the one a reader stops believing.
 
 <sub>`drunix-gateway/portability.go` · `tests/credentialportability.test.mjs`</sub>
 
-### An automated agent acts beyond its authority (open)
+### An automated agent acts beyond its authority
 
 **Symptom.** Value moves under a delegation the principal did not intend.
 
-**Today.** Agents hold explicit mandates with caps and expiry, and withdrawals are enforced against them. One gap remains and is not hidden: a principal cannot currently revoke their own agent without a supervisor, which is the wrong asymmetry for the fastest response to a compromise.
+**Today.** Agents hold explicit mandates with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act rather than trusted. The asymmetry that used to be declared here is closed: a principal can now revoke their own agent in one request, with no supervisor and no custodian ceremony, and revoking the passport makes every mandate it holds inert at once. A real harness runs against this surface in agent/, which is how three defects in it were found rather than argued about.
 
-<sub>`drunix-gateway/mandates.go` · `tests/mandates.test.mjs`</sub>
+<sub>`drunix-gateway/agentid.go` · `drunix-gateway/agentstop_test.go`</sub>
+
+### An agent pseudonym has to be re-identified (open)
+
+**Symptom.** A supervisor needs to know who is behind an automated actor, and either cannot, or can too easily.
+
+**Today.** A passport seals its principal and recovery takes a threshold of named custodians, with every approval written to the chain. NOT IMPLEMENTED as real custody: the threshold arithmetic is genuine but one process holds every share, so the split protects against a careless operator and not against a compromised deployment. Separating the shares across parties who do not share a host is the work, and it is not done.
+
+<sub>`drunix-gateway/agentid.go` · `drunix-gateway/agentid_test.go`</sub>
 
 ### A signing key is weak or compromised
 

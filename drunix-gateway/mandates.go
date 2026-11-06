@@ -78,8 +78,15 @@ const (
 	// amount of the settlement is charged against the mandate's limit.
 	ActionReleaseCondition = "RELEASE_CONDITION"
 	MandateCredential      = CredentialDelegated
-	MandateDisclaimer      = "No autonomous agent runs on this deployment. This is the authority a software agent would act under, enforced by the rail."
-	mandateMaxLifetime     = 365 * 24 * time.Hour
+	// MandateDisclaimer used to say that no autonomous agent ran here. That
+	// stopped being true when agent/ shipped, and a disclaimer that has
+	// quietly become false is worse than none: it is the rail asserting
+	// something about itself that the rail can no longer check.
+	MandateDisclaimer = "A mandate is the authority a software agent acts under, enforced here rather than trusted. " +
+		"An agent harness ships in agent/ and can be run against this rail by a named principal; nothing starts it " +
+		"automatically and no deployment runs it. Whether one is running right now is visible from the uses and the " +
+		"spend on each grant below, not from this sentence."
+	mandateMaxLifetime = 365 * 24 * time.Hour
 )
 
 var (

@@ -211,6 +211,7 @@ Each of these has its own design document. Every one states what is simulated.
 | **A register of the keys that sign** | Keys are screened before they enter service, registration proves possession, duplicates are refused, and revocation is a recorded event that distinguishes a compromise from a retirement. Passing the screen means no known-bad pattern was found, not that the key was generated well. | |
 | **A token a holder can check** | A restricted ERC-20 carrying the ERC-7943 interface, arranged the way ERC-3643 arranges a permissioned security token: eligibility, holder caps, lock-ups and freezes are enforced inside the contract rather than around it. It mirrors the rail and never replaces it. Built and tested, not deployed to a public network. | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | **AI agent that proposes, never acts** | Reads live state and drafts actions (stuck legs, expiring conditions, stale backing) into a queue. A named person approves, facts are re-read at approval time, and the ledger records the approver. | [`docs/AI_AGENT.md`](docs/AI_AGENT.md) |
+| **An autonomous agent, and a handle to stop it** | A real process in `agent/` holds a pseudonymous passport and a mandate with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act. Its principal can revoke it in one request, with no supervisor and no custodian ceremony, and that makes every mandate it holds inert. Running it is what found three defects in the bounds. Nothing starts it automatically and no deployment runs it. | [`docs/AGENT_HARNESS.md`](docs/AGENT_HARNESS.md) |
 | **Screening: list, case, report** | Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. | [`docs/AML.md`](docs/AML.md) |
 | **Grounded assistant** | Answers from the project's own docs and live rail state, fetches specific records by reference through ordinary code (no tool access), and says "not documented" when it has no source. Off if no key is configured. | [`docs/AI_AGENT.md`](docs/AI_AGENT.md) |
 | **Measured throughput** | About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. | [`docs/THROUGHPUT.md`](docs/THROUGHPUT.md) |
@@ -266,7 +267,7 @@ connected to a Drunix network (`/trust` says so), and nothing here is an NPCI en
 
 ```bash
 make dev          # the suites talk to a running stack, so start it first
-make test         # the full sweep: 218 checks across 126 suite files
+make test         # the full sweep: 173 checks across 128 suite files
 make test-go      # gofmt, vet and race tests across every Go module
 make smoke        # every page renders real content
 make secret-scan  # refuse tracked files that look like live credentials

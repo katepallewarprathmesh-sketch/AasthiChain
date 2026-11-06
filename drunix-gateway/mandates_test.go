@@ -219,11 +219,36 @@ func TestMandateUseIsAttributedOnTheChain(t *testing.T) {
 	}
 }
 
-func TestMandateSummaryDisclosesThatNoAgentRuns(t *testing.T) {
+// This test used to require the summary to say that no autonomous agent
+// runs here. That was true and worth pinning, right up until agent/ shipped,
+// at which point the test was holding a false claim in place. A disclaimer
+// that has quietly stopped being true is worse than no disclaimer: it is the
+// rail asserting something about itself that the rail cannot check.
+//
+// So the pin moved rather than went away. The claim is now the narrower one
+// that is still true and still checkable by a reader: a harness exists,
+// nothing starts it on its own, and whether one is actually running is a
+// question answered by the spend on the grants and not by this sentence.
+func TestMandateSummaryIsHonestAboutTheAgentHarness(t *testing.T) {
 	reg := newMandates(t)
 	sum := reg.Summary()
-	note, _ := sum["disclaimer"].(string)
-	if !strings.Contains(strings.ToLower(note), "no autonomous agent") {
-		t.Errorf("the summary does not disclose that nothing autonomous runs: %q", note)
+	note := strings.ToLower(asString(sum["disclaimer"]))
+
+	if strings.Contains(note, "no autonomous agent") {
+		t.Error("the summary still claims no autonomous agent runs here; a harness ships in agent/")
 	}
+	for _, must := range []string{"agent/", "nothing starts it automatically"} {
+		if !strings.Contains(note, must) {
+			t.Errorf("the disclaimer should say %q, got %q", must, note)
+		}
+	}
+	// It must not swing the other way either and imply something is running.
+	if strings.Contains(note, "an agent is running") {
+		t.Errorf("the disclaimer overclaims: %q", note)
+	}
+}
+
+func asString(v interface{}) string {
+	s, _ := v.(string)
+	return s
 }

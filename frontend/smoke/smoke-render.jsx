@@ -28,6 +28,7 @@ import VerifyDocument from '../src/pages/VerifyDocument.jsx'
 import KeyRegister from '../src/pages/KeyRegister.jsx'
 import Credentials from '../src/pages/Credentials.jsx'
 import Sandbox from '../src/pages/Sandbox.jsx'
+import Agents from '../src/pages/Agents.jsx'
 import Feeds from '../src/pages/Feeds.jsx'
 import Cards from '../src/pages/Cards.jsx'
 import ChainState from '../src/pages/ChainState.jsx'
@@ -72,6 +73,7 @@ const ROUTES = [
   ['/keys', <KeyRegister />],
   ['/credentials', <Credentials />],
   ['/sandbox', <Sandbox />],
+  ['/agents', <Agents />],
   ['/feeds', <Feeds />],
   ['/cards', <Cards />],
   ['/chainstate', <ChainState />],

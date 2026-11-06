@@ -23,3 +23,4 @@ chaincode/chaincode
 # Internal notes: runbooks, audits, plans and counts. Kept on disk for the
 # owner and for local tooling, deliberately not published to the repository.
 .internal-docs/
+.agent/

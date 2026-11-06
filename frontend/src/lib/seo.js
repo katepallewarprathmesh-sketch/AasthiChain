@@ -36,6 +36,11 @@ export const ROUTE_SEO = {
     description:
       'A draft cohort submission: the specific friction in Indian property, a scope contained to one city and one asset class, every failure mode with its symptom and what is built against it, and the two gaps that are still open.',
   },
+  '/agents': {
+    title: 'Agents, and How to Stop One | AasthiChain',
+    description:
+      'Every automated actor on the rail holds a pseudonymous passport and acts under a mandate: named actions, a rupee ceiling, an expiry. The spend, the acts and the standing shown here are the rail\u2019s record, not the agent\u2019s own account of itself, and a principal can stop their own agent in one step.',
+  },
   '/keys': {
     title: 'Key Register and Weak Key Screening | AasthiChain',
     description:

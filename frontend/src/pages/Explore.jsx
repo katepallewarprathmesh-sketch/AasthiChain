@@ -52,6 +52,7 @@ const SECTIONS = [
       { path: '/verify', title: 'Verify a document', what: 'Hash a file in your browser and see whether that hash is on the ledger.' },
       { path: '/trust', title: 'Trust', what: 'What is real, what is simulated, and what has not been built. Stated plainly.' },
       { path: '/sandbox', title: 'Sandbox submission', what: 'The draft cohort application: the friction, the contained scope, every failure mode with the symptom it produces and what is built against it, and the two gaps still open.' },
+      { path: '/agents', title: 'Agents', what: 'Every automated actor on the rail, the mandate it acts under, what it has spent against that ceiling, and a button that stops it. The figures are the rail\u2019s record, not the agent\u2019s own account of itself.' },
       { path: '/support', title: 'Support', what: 'How to get help, and what happens when something goes wrong.' },
     ],
   },
