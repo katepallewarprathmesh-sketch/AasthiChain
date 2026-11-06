@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "54c5883be2b833c09f295e52a6054062668845f71de5f1bad411d0c975c5268f",
+  "sourceDigest": "9c285ca1d67343c448599a5c34f66011a464f5fd3edf5a89bb1627f788a0aa04",
   "sections": [
     {
       "doc": "README",
@@ -79,7 +79,7 @@
       "doc": "README",
       "file": "README.md",
       "heading": "Features in depth (continued)",
-      "text": "I AGENT.md \n An autonomous agent, and a handle to stop it A real process in agent/ holds a pseudonymous passport and a mandate with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act. Its principal can revoke it in one request, with no supervisor and no custodian ceremony, and that makes every mandate it holds inert. Running it is what found three defects in the bounds. Nothing starts it automatically and no deployment runs it. docs/AGENT HARNESS.md \n Screening: list, case, report Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. docs/AML.md \n Grounded assistant Answers from the project's own docs and live rail state, fetches specific records by reference through ordinary code (no tool access), and says \"not documented\" when it has no source. Off if no key is configured. docs/AI AGENT.md \n Measured throughput About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. docs/THROUGHPUT.md \n\n---"
+      "text": "I AGENT.md \n An autonomous agent, and a handle to stop it A real Python process in agent/ holds a pseudonymous passport and a mandate with named actions, a rupee ceiling and an expiry, re-checked by the rail on every act. Its principal can revoke it in one request, with no supervisor and no custodian ceremony, and that makes every mandate it holds inert. Running it is what found three defects in the bounds. Nothing starts it automatically and no deployment runs it. docs/AGENT HARNESS.md \n Screening: list, case, report Fuzzy name matching against a loaded sanctions/PEP list, with published thresholds, case workflow and a hashed escalation document. The list is synthetic and nothing is filed with any authority. docs/AML.md \n Grounded assistant Answers from the project's own docs and live rail state, fetches specific records by reference through ordinary code (no tool access), and says \"not documented\" when it has no source. Off if no key is configured. docs/AI AGENT.md \n Measured throughput About 37,900 ns of engine time per settlement (~26,000/s in a tight loop; p50 0.027 ms, p99 0.131 ms) on a two-core dev box. That is not evidence of scale. Other money paths are timed separately. docs/THROUGHPUT.md \n\n---"
     },
     {
       "doc": "README",
@@ -145,7 +145,19 @@
       "doc": "AGENT_HARNESS",
       "file": "docs/AGENT_HARNESS.md",
       "heading": "Shape",
-      "text": "File What \n --- --- \n agent/policy.mjs every decision, as pure functions of a state snapshot. No I/O, no clock. \n agent/agent.mjs the runtime: observe, check the stop rule, dry-run each intent, act, record. \n agent/run.mjs the CLI: setup , once , watch , stop , start , log . \n .agent/ local state: config, an append-only JSONL run log, the stop file. Not tracked. \n\nThe split is the point. The interesting question about an autonomous agent is never whether it can\nmake a request, it is what it would decide and whether that decision can be checked without letting\nit loose on a live rail. So the judgements are pure and tests/agentharness.test.mjs feeds them\nhand-built states, including every state they must refuse to act on."
+      "text": "File What \n --- --- \n agent/policy.py every decision, as pure functions of a state snapshot. No I/O, no clock. \n agent/runtime.py the runtime: observe, check the stop rule, dry-run each intent, act, record. \n agent/run.py the CLI: setup , once , watch , stop , start , log . \n agent/tests/test policy.py the policy suite, 25 checks, most of them refusals. \n .agent/ local state: config, an append-only JSONL run log, the stop file. Not tracked."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "Why Python, and why nothing else",
+      "text": "Python because this is an agent harness, and that is what agent harnesses are\nwritten in: the people who will read it, extend it or point a model at it work\nin that language, and picking the language the rest of the repository happens\nto use would be choosing the author's convenience over the reader's.\n\nThe rail is Go because it holds money. The site is JavaScript because it runs\nin a browser. Neither of those facts says anything about what an agent should\nbe written in.\n\nThe standard library and nothing else, on purpose. urllib makes the handful\nof calls this needs and unittest runs the tests, so there is no lockfile, no\nvirtualenv and no package index between a reader and a running agent. A harness\nwith install instructions is a harness that does not get run.\n\nThe split is the point. The interesting question about an autonomous agent is never whether it can\nmake a request, it is what it would decide and whether that decision can be checked without letting\nit loose on a live rail. So the judgements are pure and agent/tests/test policy.py feeds them\nhand-built states, including every state they must refuse to act on."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "Why Python, and why nothing else (continued)",
+      "text": "Those tests run inside the one gate the repository has. tests/agentharness.test.mjs is a thin\nadapter that shells out to unittest , because make test-fresh walks tests/ .test.mjs and a\nsuite that only runs when somebody remembers a second command is a suite that rots. The adapter\nasserts nothing about behaviour itself; if it ever did, the behaviour would have two sources of\ntruth and they would drift."
     },
     {
       "doc": "AGENT_HARNESS",
@@ -157,7 +169,13 @@
       "doc": "AGENT_HARNESS",
       "file": "docs/AGENT_HARNESS.md",
       "heading": "What running it found",
-      "text": "Three defects, none of which reading the code had surfaced.\n\n The kill switch was wired to a name nothing used. MandateRegistry.Authorise checks standing\nagainst the name written on the mandate. The first version granted the mandate to a readable agent\nname while the passport lived under its generated pseudonym, so Standing reported the agent as\nunregistered, the withdrawal branch never fired, and revoking the passport stopped nothing. The\npassport's own mandateId field actively invites that ordering. The agent now refuses to start when\nthe two names disagree, rather than running unstoppably.\n\n A revoked agent kept running. The register publishes a status string, not a boolean. The runtime\nread passport.revoked , got undefined , and carried on. Found by revoking a real passport and\nwatching the next pass act anyway.\n\n A refusal named the wrong reason. See the section of the same name in\n docs/AGENT IDENTITY.md .\n\nA fourth thing was not a defect but a missing rule: an agent's own pseudonym is never a buyer, a\nseller or an asserter, so GET /umi/conditions returned it an empty book and the delegation was\nuseless. Presenting a valid mandate now widens what an agent may see to exactly what its principal\nmay see, and no further. Without that, an operator feeds the agent condition ids out of band or,\nworse, hands it a supervisor identity."
+      "text": "Three defects, none of which reading the code had surfaced.\n\n The kill switch was wired to a name nothing used. MandateRegistry.Authorise checks standing\nagainst the name written on the mandate. The first version granted the mandate to a readable agent\nname while the passport lived under its generated pseudonym, so Standing reported the agent as\nunregistered, the withdrawal branch never fired, and revoking the passport stopped nothing. The\npassport's own mandateId field actively invites that ordering. The agent now refuses to start when\nthe two names disagree, rather than running unstoppably.\n\n A revoked agent kept running. The register publishes a status string, not a boolean. The runtime\nread passport.revoked , got undefined , and carried on. Found by revoking a real passport and\nwatching the next pass act anyway.\n\n A refusal named the wrong reason. See the section of the same name in\n docs/AGENT IDENTITY.md .\n\nThe port to Python added a fourth, which is the language's rather than the rail's: the rail answers\nRFC3339 with a trailing Z , and datetime.fromisoformat rejected that before Python 3.11. A direct\ntransliteration would have raised on every pass on an older interpreter. Timestamps are now parsed\nthrough one helper that returns nothing rather than throwing, because a date the agent cannot read\nis a reason to be careful and never a reason to fall over."
+    },
+    {
+      "doc": "AGENT_HARNESS",
+      "file": "docs/AGENT_HARNESS.md",
+      "heading": "What running it found (continued)",
+      "text": "A fourth thing was not a defect but a missing rule: an agent's own pseudonym is never a buyer, a\nseller or an asserter, so GET /umi/conditions returned it an empty book and the delegation was\nuseless. Presenting a valid mandate now widens what an agent may see to exactly what its principal\nmay see, and no further. Without that, an operator feeds the agent condition ids out of band or,\nworse, hands it a supervisor identity."
     },
     {
       "doc": "AGENT_HARNESS",
@@ -206,6 +224,12 @@
       "file": "docs/AGENT_IDENTITY.md",
       "heading": "A refusal has to say which refusal it was",
       "text": "Every way an agent can fail to present a credential collapses into one sentinel,\n ERR UMI CONDITION NOT ASSERTER , because from the desk's point of view they are all \"you may not\nassert this\". That is a reasonable code and a useless answer: a withdrawn passport, a spent ceiling\nand a genuinely wrong agent are three different problems with three different fixes. The desk\ncomposed the real reason, wrote it to the block, and then returned the bare sentinel, so the only\ncopy of the answer was in a place the caller might not be able to read. The detail now travels back\nwith the error."
+    },
+    {
+      "doc": "AGENT_IDENTITY",
+      "file": "docs/AGENT_IDENTITY.md",
+      "heading": "Why there is an agent to stop",
+      "text": "An agent harness ships in agent/ , written in Python. It is a real process holding a real passport, and it found three\ndefects that no amount of reading the code had found, including this one. See\n docs/AGENT HARNESS.md ."
     },
     {
       "doc": "AGENT_IDENTITY",

@@ -95,14 +95,15 @@ export default function Agents({ user }) {
           A working harness ships in the repository. It registers a passport, takes a mandate from a named
           principal, and then releases conditional settlements whose credential has been issued and not
           revoked. It talks to this rail over the ordinary HTTP surface with no privileges any other caller
-          lacks, which is the only way its limits prove anything.
+          lacks, which is the only way its limits prove anything. Python, standard library only, so
+          there is nothing to install before running it.
         </p>
         <pre className="pg-mono" style={{
           margin: 0, fontSize: 12, lineHeight: 1.7, color: '#374151', background: '#F9FAFB',
           border: '1px solid ' + colour.line, borderRadius: 8, padding: '10px 12px', overflowX: 'auto',
-        }}>{`node agent/run.mjs setup --principal investor1 --limit 5000
-node agent/run.mjs watch --every 15
-node agent/run.mjs stop`}</pre>
+        }}>{`python3 agent/run.py setup --principal investor1 --limit 5000
+python3 agent/run.py watch --every 15
+python3 agent/run.py stop`}</pre>
       </Card>
 
       {agents.length === 0 && (

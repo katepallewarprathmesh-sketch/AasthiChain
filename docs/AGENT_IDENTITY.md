@@ -123,7 +123,7 @@ with the error.
 
 ## Why there is an agent to stop
 
-An agent harness ships in `agent/`. It is a real process holding a real passport, and it found three
+An agent harness ships in `agent/`, written in Python. It is a real process holding a real passport, and it found three
 defects that no amount of reading the code had found, including this one. See
 [`docs/AGENT_HARNESS.md`](AGENT_HARNESS.md).
 

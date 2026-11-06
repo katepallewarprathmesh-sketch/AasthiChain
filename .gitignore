@@ -24,3 +24,7 @@ chaincode/chaincode
 # owner and for local tooling, deliberately not published to the repository.
 .internal-docs/
 .agent/
+
+# Python bytecode from the agent harness
+__pycache__/
+*.py[cod]

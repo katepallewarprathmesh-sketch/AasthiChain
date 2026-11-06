@@ -24,21 +24,44 @@ seconds earlier than a person would have managed.
 
 | File | What |
 |---|---|
-| `agent/policy.mjs` | every decision, as pure functions of a state snapshot. No I/O, no clock. |
-| `agent/agent.mjs` | the runtime: observe, check the stop rule, dry-run each intent, act, record. |
-| `agent/run.mjs` | the CLI: `setup`, `once`, `watch`, `stop`, `start`, `log`. |
+| `agent/policy.py` | every decision, as pure functions of a state snapshot. No I/O, no clock. |
+| `agent/runtime.py` | the runtime: observe, check the stop rule, dry-run each intent, act, record. |
+| `agent/run.py` | the CLI: `setup`, `once`, `watch`, `stop`, `start`, `log`. |
+| `agent/tests/test_policy.py` | the policy suite, 25 checks, most of them refusals. |
 | `.agent/` | local state: config, an append-only JSONL run log, the stop file. Not tracked. |
+
+## Why Python, and why nothing else
+
+Python because this is an agent harness, and that is what agent harnesses are
+written in: the people who will read it, extend it or point a model at it work
+in that language, and picking the language the rest of the repository happens
+to use would be choosing the author's convenience over the reader's.
+
+The rail is Go because it holds money. The site is JavaScript because it runs
+in a browser. Neither of those facts says anything about what an agent should
+be written in.
+
+The standard library and nothing else, on purpose. `urllib` makes the handful
+of calls this needs and `unittest` runs the tests, so there is no lockfile, no
+virtualenv and no package index between a reader and a running agent. A harness
+with install instructions is a harness that does not get run.
 
 The split is the point. The interesting question about an autonomous agent is never whether it can
 make a request, it is what it would decide and whether that decision can be checked without letting
-it loose on a live rail. So the judgements are pure and `tests/agentharness.test.mjs` feeds them
+it loose on a live rail. So the judgements are pure and `agent/tests/test_policy.py` feeds them
 hand-built states, including every state they must refuse to act on.
 
+Those tests run inside the one gate the repository has. `tests/agentharness.test.mjs` is a thin
+adapter that shells out to `unittest`, because `make test-fresh` walks `tests/*.test.mjs` and a
+suite that only runs when somebody remembers a second command is a suite that rots. The adapter
+asserts nothing about behaviour itself; if it ever did, the behaviour would have two sources of
+truth and they would drift.
+
 ```
-node agent/run.mjs setup --principal investor1 --limit 5000
-node agent/run.mjs once
-node agent/run.mjs watch --every 15
-node agent/run.mjs stop
+python3 agent/run.py setup --principal investor1 --limit 5000
+python3 agent/run.py once
+python3 agent/run.py watch --every 15
+python3 agent/run.py stop
 ```
 
 ## How it is bounded
@@ -77,6 +100,12 @@ watching the next pass act anyway.
 
 **A refusal named the wrong reason.** See the section of the same name in
 [`docs/AGENT_IDENTITY.md`](AGENT_IDENTITY.md).
+
+The port to Python added a fourth, which is the language's rather than the rail's: the rail answers
+RFC3339 with a trailing `Z`, and `datetime.fromisoformat` rejected that before Python 3.11. A direct
+transliteration would have raised on every pass on an older interpreter. Timestamps are now parsed
+through one helper that returns nothing rather than throwing, because a date the agent cannot read
+is a reason to be careful and never a reason to fall over.
 
 A fourth thing was not a defect but a missing rule: an agent's own pseudonym is never a buyer, a
 seller or an asserter, so `GET /umi/conditions` returned it an empty book and the delegation was
