@@ -8,6 +8,7 @@
 
 import api from './api'
 import { needsIdentity, isSignedIn } from './railScopes'
+import { noteRailResponse, isRailThrottled, railRetryInSeconds } from './railThrottle'
 
 // Mutations must say so. umiFetch infers GET when there is no body, which is
 // right for reads and quietly wrong for an action that needs no arguments:
@@ -38,22 +39,52 @@ export async function umiFetch(path, options = {}) {
     }
   }
 
+  // An unattended poll into a rail that is already refusing is not sent.
+  //
+  // Pass { background: true } from anything on a timer. The rail sits behind
+  // a host that rate-limits inbound traffic, and the fastest way to stay
+  // rate-limited is to answer a 429 with another request. A person pressing a
+  // button is never held back by this; only the clockwork is.
+  if (options.background && isRailThrottled()) {
+    return {
+      ok: false,
+      status: 429,
+      skipped: true,
+      data: {
+        error: 'ERR_RAIL_THROTTLED',
+        message: `The rail is rate-limiting us. Holding off for about ${railRetryInSeconds()}s before trying again.`,
+        retryInSeconds: railRetryInSeconds(),
+      },
+    }
+  }
+
   const url = '/api/umi' + path
+  // Pulled out so it is not forwarded to fetch as a bogus init field.
+  const { background: _background, ...fetchOptions } = options
   const res = await fetch(url, {
     headers: { ...api.getAuthHeaders(), ...api.operatorHeaders(url) },
-    ...options,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    method: options.body ? (options.method || 'POST') : (options.method || 'GET'),
+    ...fetchOptions,
+    body: fetchOptions.body ? JSON.stringify(fetchOptions.body) : undefined,
+    method: fetchOptions.body ? (fetchOptions.method || 'POST') : (fetchOptions.method || 'GET'),
   })
   const text = await res.text()
   let data
   try { data = text ? JSON.parse(text) : {} } catch { data = { error: 'ERR_BAD_RESPONSE', message: text.slice(0, 200) } }
+  // The proxy reports a throttled upstream as its own status with the real
+  // one under upstreamStatus, so both are offered to the brake.
+  noteRailResponse({
+    status: res.status,
+    upstreamStatus: data && data.upstreamStatus,
+    retryAfter: res.headers.get('retry-after'),
+  })
   return { ok: res.ok, status: res.status, data }
 }
 
 // The rail answers in machine codes. People need a sentence that says what to
 // do next, so the mapping lives beside the caller rather than in each page.
 export const RAIL_ERRORS = {
+  ERR_RAIL_THROTTLED: 'The rail is turning requests away because too many have arrived at once. This clears itself in a minute or two. Nothing is broken and no money moved.',
+  ERR_DRUNIX_BAD_RESPONSE: 'The rail answered with something that was not JSON. If it says 429, the host is rate-limiting the service rather than the rail refusing the work.',
   ERR_UMI_SIGNIN_REQUIRED: 'Sign in to see this. It reads your own wallet, orders and instructions, which the rail will not show to an unnamed caller.',
   ERR_UMI_NO_IDENTITY: 'The rail could not tell who is asking. Sign in, then try again — this action is recorded against a named participant.',
   ERR_UMI_NOT_YOURS: 'That record belongs to another participant. Switch to their role, or ask as a regulator.',

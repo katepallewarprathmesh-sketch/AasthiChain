@@ -5864,6 +5864,29 @@ export default async function handler(req, res) {
         });
       }
       const suffix = path.replace(/^\/api\/umi/, '') || '/config';
+
+      // Absorb repeat reads before they reach the rail.
+      //
+      // The rail is hosted on a plan whose inbound rate limit is low, and the
+      // settlement page fans out to two dozen endpoints on every load. Most
+      // of those reads are the same for everybody and barely change: the rail
+      // configuration is effectively static, and the two metrics panels only
+      // need to be seconds-fresh. Serving them from the edge means a visitor
+      // refreshing the page costs the rail nothing, which is what stopped the
+      // 429 feeding on itself.
+      //
+      // Only identity-independent GETs may go on this list. Anything scoped
+      // to a caller must never be cached by a shared cache, or one
+      // participant would be served another's record.
+      const CACHEABLE_RAIL_READS = {
+        '/config': 300,
+        '/pathspeed': 10,
+        '/throughput': 10,
+      };
+      const cacheSeconds = method === 'GET' && !url.search
+        ? CACHEABLE_RAIL_READS[suffix]
+        : undefined;
+
       try {
         // Tell the rail who is asking. It decides what a given identity may
         // read — restricted documents are only served to their parties — and
@@ -5899,6 +5922,29 @@ export default async function handler(req, res) {
         for (const h of ['x-document-cid', 'x-document-sha256', 'x-document-status', 'cache-control', 'content-disposition']) {
           const v = upstream.headers.get(h);
           if (v) res.setHeader(h, v);
+        }
+        // Retry-After is the only thing a rate limiter tells us that is
+        // actually actionable, and dropping it left the browser guessing how
+        // long to wait. The client brake honours it when it is there.
+        const retryAfter = upstream.headers.get('retry-after');
+        if (retryAfter) res.setHeader('Retry-After', retryAfter);
+        // Let the edge answer the next identical read. stale-while-revalidate
+        // means a visitor is never made to wait for the rail just because the
+        // cached copy has aged out. Only a good answer is worth caching: a
+        // cached 429 would outlive the throttle that caused it.
+        //
+        // The edge caches; the browser does not. Putting
+        // stale-while-revalidate on Cache-Control made each poll cost TWO
+        // requests instead of one, because the browser served the cached copy
+        // and then fired its own background revalidation -- the opposite of
+        // the intent. CDN-Cache-Control is read by the edge and ignored by
+        // the browser, so the browser simply asks every time and the edge
+        // answers without troubling the rail.
+        if (cacheSeconds && upstream.ok) {
+          res.setHeader('CDN-Cache-Control', `public, s-maxage=${cacheSeconds}, stale-while-revalidate=60`);
+          res.setHeader('Cache-Control', 'no-store');
+        } else if (!upstream.ok) {
+          res.setHeader('Cache-Control', 'no-store');
         }
         const text = await upstream.text();
         // The Go gateway answers unknown routes with Go's default plain-text

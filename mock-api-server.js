@@ -3888,6 +3888,26 @@ async function umiProxy(req, res) {
     init.signal = ctrl.signal;
     const upstream = await fetch(target, init);
     clearTimeout(timer);
+    // Mirrors frontend/api/index.js. Identity-independent reads carry a short
+    // shared-cache lifetime so a page refresh is absorbed at the edge instead
+    // of reaching a rail whose host rate-limits inbound traffic. Only GETs
+    // with no query string and no caller scoping may appear here.
+    const CACHEABLE_RAIL_READS = { '/config': 300, '/pathspeed': 10, '/throughput': 10 };
+    const railPath = (req.path || '').replace(/^\/api\/umi/, '') || '/config';
+    const cacheSeconds = req.method === 'GET' && !Object.keys(req.query || {}).length
+      ? CACHEABLE_RAIL_READS[railPath]
+      : undefined;
+    const retryAfter = upstream.headers.get('retry-after');
+    if (retryAfter) res.set('Retry-After', retryAfter);
+    // CDN-Cache-Control is for the edge only. Setting stale-while-revalidate
+    // on Cache-Control instead made the browser fire a second background
+    // revalidation per poll, doubling the very traffic this is here to cut.
+    if (cacheSeconds && upstream.ok) {
+      res.set('CDN-Cache-Control', `public, s-maxage=${cacheSeconds}, stale-while-revalidate=60`);
+      res.set('Cache-Control', 'no-store');
+    } else if (!upstream.ok) {
+      res.set('Cache-Control', 'no-store');
+    }
     const text = await upstream.text();
     // Go answers unknown routes with plain-text "404 page not found". Sending
     // that under a JSON content type produced an opaque "Request failed 404"

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isRailThrottled } from './railThrottle'
 
 // Live ledger updates, with an honest fallback.
 //
@@ -43,6 +44,12 @@ export default function useLedgerStream({ onBlock, pollFn } = {}) {
       if (es) { es.close(); es = null }
       const tick = async () => {
         if (stopped || !pollRef.current) return
+        // Do not poll a tab nobody is looking at, and do not poll a rail that
+        // is already turning requests away. This hook runs in the nav on
+        // every page, so without these two guards every open tab bills the
+        // rail four times a minute whatever is happening.
+        if (typeof document !== 'undefined' && document.hidden) return
+        if (isRailThrottled()) return
         try {
           const h = await pollRef.current()
           if (typeof h === 'number') setHeight(h)

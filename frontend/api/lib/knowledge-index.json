@@ -1,7 +1,7 @@
 {
   "builtBy": "scripts/build-knowledge.mjs",
   "note": "Sections of this repository's own documentation, quoted as written. The assistant answers from these and names the document it used.",
-  "sourceDigest": "5ee868e052ebf80310fc8e85daec16c966f26a2bc1023adc20580e785026e60e",
+  "sourceDigest": "52b0acaee0cc2ec38185f32e84781e853c1f290df2798402f08bc571a1a2ea95",
   "sections": [
     {
       "doc": "README",

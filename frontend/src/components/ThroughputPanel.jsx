@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { umiFetch as umi } from '../lib/umiFetch'
+import usePoll from '../lib/usePoll'
 
 // Throughput, with the limitation attached.
 //
@@ -37,16 +38,19 @@ export default function ThroughputPanel() {
   const load = async () => {
     // umiFetch answers {ok, status, data}: the payload is under .data.
     try {
-      const r = await umi('/throughput')
-      if (r.ok && r.data && typeof r.data.measured === 'boolean') setD(r.data)
+      const r = await umi('/throughput', { background: true })
+      // A poll the brake declined to send is not a broken panel. Treating it
+      // as one hid this panel for good the first time the rail was busy,
+      // because err is never cleared again.
+      if (r.skipped) return
+      if (r.ok && r.data && typeof r.data.measured === 'boolean') { setD(r.data); setErr(false) }
       else setErr(true)
     } catch { setErr(true) }
   }
-  useEffect(() => {
-    load()
-    const t = setInterval(load, 10000)
-    return () => clearInterval(t)
-  }, [])
+  // Was a bare setInterval: it polled a hidden tab forever and kept polling
+  // at full rate while the rail was rate-limiting us. usePoll pauses when the
+  // tab is not visible and stands down while the rail is refusing.
+  usePoll(load, 10000)
 
   if (err || !d) return null
 

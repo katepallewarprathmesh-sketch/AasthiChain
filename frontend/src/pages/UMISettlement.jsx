@@ -17,6 +17,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { prettifyAssetId } from '../lib/assetNames.js'
 import { umiFetch as umi, umiPost } from '../lib/umiFetch'
+import { clearRailThrottle } from '../lib/railThrottle'
 // These five panels sit below the settlement forms, which is the reason
 // anyone opens this page. Loading them up front made the first paint wait
 // for code most visitors scroll past, so they are split out and fetched
@@ -431,14 +432,36 @@ export default function UMISettlement() {
   )
 
   if (railDown) {
+    // Why the rail did not answer changes what the visitor should do, so the
+    // page has to read the reason rather than print one message for all of
+    // them. A 429 is the host turning traffic away for a minute, not a rail
+    // that is down, and the local-development instructions that used to show
+    // here were useless advice to someone on the deployed site.
+    const throttled = railDown.upstreamStatus === 429 || railDown.error === 'ERR_RAIL_THROTTLED'
+    const unconfigured = railDown.error === 'ERR_UMI_RAIL_UNAVAILABLE'
+    const title = throttled ? 'Rail busy.' : unconfigured ? 'Rail not configured.' : 'Rail offline.'
     return (
       <div className="container pg pg-narrow">
         <h1 className="pg-title">Aasthi Settlement Interface</h1>
         <div style={{ background: C.warnBg, border: `1px solid ${C.warnLine}`, borderRadius: 12, padding: 18, color: C.warn }}>
-          <strong>Rail offline.</strong>
-          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#7C4A03' }}>{railDown.message || 'The Go UMI gateway is not reachable.'}</p>
-          <pre style={{ marginTop: 12, background: 'white', border: `1px solid ${C.warnLine}`, borderRadius: 8, padding: 12, fontSize: 12.5, overflowX: 'auto' }}>
+          <strong>{title}</strong>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#7C4A03' }}>
+            {throttled
+              ? 'The rail is hosted on a plan with a low limit on how many requests it will accept at once, and that limit has been reached. Nothing has broken and no settlement was affected. Wait about a minute and try again.'
+              : (railDown.message || 'The Go UMI gateway is not reachable.')}
+          </p>
+          {throttled && (
+            <p style={{ margin: '8px 0 0', fontSize: 12.5, color: '#7C4A03' }}>
+              Refreshing repeatedly makes this last longer, because every refresh counts against the same limit.
+            </p>
+          )}
+          <p style={{ margin: '10px 0 0', fontSize: 12.5 }}>
+            <button type="button" onClick={() => { clearRailThrottle(); refresh() }} style={btn(true)}>Try again</button>
+          </p>
+          {!throttled && (
+            <pre style={{ marginTop: 12, background: 'white', border: `1px solid ${C.warnLine}`, borderRadius: 8, padding: 12, fontSize: 12.5, overflowX: 'auto' }}>
 cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_GATEWAY_URL=http://127.0.0.1:21100 node mock-api-server.js</pre>
+          )}
           <p style={{ margin: '10px 0 0', fontSize: 12.5 }}>All other AasthiChain features keep working: this rail is additive.</p>
         </div>
       </div>
