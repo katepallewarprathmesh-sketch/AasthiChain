@@ -104,6 +104,13 @@ export default function Agents({ user }) {
         }}>{`python3 agent/run.py setup --principal investor1 --limit 5000
 python3 agent/run.py watch --every 15
 python3 agent/run.py stop`}</pre>
+        <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.7, color: '#6B7280' }}>
+          Two more harnesses exist because a well-behaved agent cannot tell a real control from a
+          politely observed convention. An adversarial one skips its own checks and makes eighteen
+          attempts to exceed its mandate; a concurrency one points many agents at one book at once.
+          The second found three money defects on its first run, including a condition that settled
+          five times and a ceiling spent three times over.
+        </p>
       </Card>
 
       {agents.length === 0 && (

@@ -144,6 +144,19 @@ type Condition struct {
 	Mode       string `json:"mode"`
 	Disclaimer string `json:"disclaimer"`
 	Boundary   string `json:"boundary"`
+
+	// settling is held by whichever caller is currently trying to satisfy
+	// this condition. Checking the status and then doing the work is two
+	// decisions, and between them every other caller also sees OPEN: a
+	// concurrency harness presenting one condition from twenty-four
+	// goroutines settled it five times and paid the seller five times out
+	// of a buyer who had locked the cash once.
+	//
+	// Unexported on purpose. This is an in-flight detail of one process,
+	// not a state of the agreement, so it must not appear on the wire or
+	// in the ledger. A reader seeing SETTLING would reasonably ask what it
+	// means for their money, and the answer is nothing.
+	settling bool
 }
 
 // ConditionDesk holds conditional settlements over the rail's own wallets.
@@ -349,8 +362,26 @@ func (d *ConditionDesk) Present(conditionID string, req PresentRequest, presente
 		d.mu.Unlock()
 		return nil, fmt.Errorf("%w: this condition is %s", ErrConditionClosed, c.Status)
 	}
+	if c.settling {
+		d.mu.Unlock()
+		return nil, fmt.Errorf("%w: another presentation is already being settled", ErrConditionClosed)
+	}
+	// Claimed. From here exactly one caller is working on this condition,
+	// and every other one is turned away at the door rather than racing it
+	// to the money.
+	c.settling = true
 	snapshot := *c
 	d.mu.Unlock()
+
+	// settled is the one flag that says the money actually moved. The
+	// deferred cleanups below read it to decide whether to hand back the
+	// claim on the condition and the headroom on the mandate.
+	settled := false
+	defer func() {
+		d.mu.Lock()
+		c.settling = false
+		d.mu.Unlock()
+	}()
 
 	refuse := func(err error, detail string) (*Condition, error) {
 		d.mu.Lock()
@@ -376,14 +407,19 @@ func (d *ConditionDesk) Present(conditionID string, req PresentRequest, presente
 	}
 
 	// Deadline first: an expired condition is refunded, not settled late.
-	if deadline, err := time.Parse(time.RFC3339, c.DeadlineAt); err == nil && d.now().After(deadline) {
+	// Read from the snapshot, not from c. Touching the live record outside
+	// the lock is a data race the race detector finds immediately, and it
+	// is also wrong: the decision should be made against the state that was
+	// claimed, not against whatever it has become since.
+	if deadline, err := time.Parse(time.RFC3339, snapshot.DeadlineAt); err == nil && d.now().After(deadline) {
 		d.expire(conditionID, "the deadline passed before the condition was met")
-		return nil, fmt.Errorf("%w: the deadline was %s, the money has been returned", ErrConditionExpired, c.DeadlineAt)
+		return nil, fmt.Errorf("%w: the deadline was %s, the money has been returned", ErrConditionExpired, snapshot.DeadlineAt)
 	}
 
 	// Authority. Either you are the named asserter, or you hold a mandate
 	// from the asserter that covers this action, this asset and this amount.
 	var mandateID string
+	commitMandate := func() {}
 	if !strings.EqualFold(presenter, snapshot.Asserter) {
 		if req.MandateID == "" {
 			return refuse(ErrConditionNotAsserter,
@@ -392,15 +428,28 @@ func (d *ConditionDesk) Present(conditionID string, req PresentRequest, presente
 		if d.grants == nil {
 			return refuse(ErrConditionNotAsserter, "no mandate registry is wired, so an agent cannot be checked")
 		}
-		m, err := d.grants.Authorise(req.MandateID, presenter, ActionReleaseCondition, snapshot.AssetID, snapshot.CashPaise)
+		// Reserve, not Authorise: the headroom is taken here, at the moment
+		// permission is given, and handed back below if the act does not
+		// complete. Asking whether there is room and spending it later are
+		// two decisions, and concurrent agents fit between them.
+		m, finish, err := d.grants.Reserve(req.MandateID, presenter, ActionReleaseCondition, snapshot.AssetID, snapshot.CashPaise)
 		if err != nil {
 			return refuse(ErrConditionNotAsserter, "mandate refused: "+err.Error())
 		}
+		// Any return from here on must settle the reservation. Committing
+		// happens explicitly once the money has moved; everything else
+		// releases it.
+		defer func() {
+			if !settled {
+				finish(false, snapshot.ConditionID)
+			}
+		}()
 		if !strings.EqualFold(m.Principal, snapshot.Asserter) {
 			return refuse(ErrConditionNotAsserter,
 				fmt.Sprintf("mandate %s was granted by %s, but the asserter here is %s", m.MandateID, m.Principal, snapshot.Asserter))
 		}
 		mandateID = m.MandateID
+		commitMandate = func() { finish(true, snapshot.ConditionID) }
 	}
 
 	// The credential itself.
@@ -445,10 +494,10 @@ func (d *ConditionDesk) Present(conditionID string, req PresentRequest, presente
 		return refuse(err, "the condition was met but settlement could not complete: "+err.Error())
 	}
 
-	// The mandate is only charged once the money has actually moved.
-	if mandateID != "" {
-		_ = d.grants.Consume(mandateID, ActionReleaseCondition, snapshot.AssetID, snapshot.ConditionID, snapshot.CashPaise)
-	}
+	// The money has moved, so the reservation becomes a recorded use. The
+	// spend was already taken; this is what puts it on the chain.
+	settled = true
+	commitMandate()
 
 	d.mu.Lock()
 	c.Status = ConditionReleased

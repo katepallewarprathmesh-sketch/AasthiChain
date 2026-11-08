@@ -27,6 +27,7 @@ seconds earlier than a person would have managed.
 | `agent/policy.py` | every decision, as pure functions of a state snapshot. No I/O, no clock. |
 | `agent/runtime.py` | the runtime: observe, check the stop rule, dry-run each intent, act, record. |
 | `agent/run.py` | the CLI: `setup`, `once`, `watch`, `stop`, `start`, `log`. |
+| `agent/adversary.py` | the adversarial harness: 18 attempts to exceed the mandate. |
 | `agent/tests/test_policy.py` | the policy suite, 25 checks, most of them refusals. |
 | `.agent/` | local state: config, an append-only JSONL run log, the stop file. Not tracked. |
 
@@ -112,6 +113,77 @@ seller or an asserter, so `GET /umi/conditions` returned it an empty book and th
 useless. Presenting a valid mandate now widens what an agent may see to exactly what its principal
 may see, and no further. Without that, an operator feeds the agent condition ids out of band or,
 worse, hands it a supervisor identity.
+
+## The other two harnesses
+
+One harness is not enough, because the caretaker is well behaved. It checks its own limits before
+acting, which makes it good evidence that the happy path works and almost no evidence for the claim
+the rail actually makes: that the rail enforces the bounds rather than the agent choosing to honour
+them. A well-behaved agent cannot tell a real control from a politely observed convention.
+
+### The adversary, `agent/adversary.py`
+
+Python and HTTP, for the same reason the caretaker is: the claim is about an outsider, and an
+in-process test can reach fields no caller can reach. This one holds nothing but an identity header,
+a mandate id and a socket.
+
+Eighteen attacks, each an attempt to move money the mandate does not cover: a single act over the
+ceiling, the ceiling in slices, the ceiling all at once, one condition presented by eight callers
+simultaneously, a replay of what already worked, an asset outside the allowlist, an action never
+granted, no mandate at all, somebody else's mandate, an invented mandate, an agent granting itself
+authority, an invented credential, reading a stranger's book and a stranger's wallet, and carrying
+on after being revoked.
+
+It reports `held` or `BREACHED` per attack and exits non-zero if anything got through.
+
+It also states what it cannot test. The rail trusts the `X-Fabric-Identity` header because
+authentication happens at the proxy in front of it, so anything that can reach the rail directly can
+claim any identity. That is a real property of the deployment, the control for it is network
+placement rather than the mandate layer, and a harness that quietly omitted it would be claiming
+more than it had earned.
+
+### The concurrency harness, `drunix-gateway/agentconcurrency_test.go`
+
+Go and in-process, and this is where "chosen per need" earns itself. The question here is not
+whether an outsider gets special treatment, it is whether the rail's own accounting survives
+simultaneous callers. HTTP is the wrong instrument for that twice over: a data race is invisible
+through a socket, and network jitter hides exactly the interleavings that break things. These run
+in-process so `go test -race` can see the memory.
+
+Five conservation laws: a condition settles exactly once however many agents present it at the same
+moment, a ceiling bounds the total rather than each request, separate agents keep separate budgets,
+a revocation is a fact rather than a race, and cash and tokens are conserved whatever the
+interleaving.
+
+```
+go test -tags real -race -run Concurrent ./...
+```
+
+## What the other two harnesses found
+
+The adversary found nothing, which is the result it should usually produce. The concurrency harness
+found three defects on its first run, all of them money.
+
+**A condition settled five times.** `Present` read `status == OPEN`, released the lock, did all its
+work, and only wrote `RELEASED` at the very end. Twenty-four callers all passed the gate and the
+seller was paid five times out of a buyer who had locked the cash once. A condition is now claimed
+under the lock that checks it, with an unexported in-flight marker: unexported because it is a
+detail of one process and not a state of the agreement, so it must never appear on the wire or in
+the ledger.
+
+**A ceiling of Rs 5,000 was spent three times over.** `Authorise` compared `SpentPaise` against the
+limit under a read lock and returned; `Consume` added the spend later under a write lock. Nothing
+held a lock across the pair, so every concurrent caller read the same unchanged figure and every one
+was told there was room. The limit bounded each request and did not bound the total, which is not
+what a limit is. There is now `Reserve`, which takes the money at the moment permission is given and
+returns a finaliser that either records the use or hands the headroom back. Charging first and
+refunding on failure is the only ordering that cannot overspend.
+
+**A data race, and a decision made against stale state.** The deadline check read the live record
+outside the lock rather than the snapshot it had just claimed.
+
+All three were in code that had shipped, been reviewed and been covered by tests. None of the
+existing tests called anything twice at once.
 
 ## What it is not
 

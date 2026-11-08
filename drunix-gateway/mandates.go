@@ -372,7 +372,85 @@ func (r *MandateRegistry) Authorise(id, agent, action, assetID string, amountPai
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.authoriseLocked(m, agent, action, assetID, amountPaise)
+}
 
+// Reserve is Authorise and the spend in one indivisible step.
+//
+// WHY THIS EXISTS
+// Authorise took a read lock, compared SpentPaise against the ceiling, and
+// returned; Consume added the spend later under a write lock. Nothing held a
+// lock across the pair, so every concurrent caller read the same unchanged
+// SpentPaise and every one of them was told there was room. A concurrency
+// harness pointed ten simultaneous releases at a Rs 5,000 mandate and spent
+// Rs 15,000. The ceiling bounded each request and did not bound the total,
+// which is not what a ceiling is.
+//
+// So the money is taken at the moment permission is given. The caller gets a
+// finaliser it must call exactly once: with true when the act completed, which
+// records the use on the chain, or with false when it did not, which hands the
+// headroom back. Charging first and refunding on failure is the only ordering
+// that cannot overspend, because the failure case costs a correction and the
+// success case costs nothing.
+func (r *MandateRegistry) Reserve(id, agent, action, assetID string, amountPaise int64) (*Mandate, func(bool, string), error) {
+	r.mu.Lock()
+	m, ok := r.byID[id]
+	if !ok {
+		r.mu.Unlock()
+		return nil, nil, ErrMandateNotFound
+	}
+	if _, err := r.authoriseLocked(m, agent, action, assetID, amountPaise); err != nil {
+		r.mu.Unlock()
+		return nil, nil, err
+	}
+	if amountPaise > 0 {
+		m.SpentPaise += amountPaise
+	}
+	out := *m
+	r.mu.Unlock()
+
+	var once sync.Once
+	finish := func(committed bool, reference string) {
+		once.Do(func() {
+			r.mu.Lock()
+			live, stillThere := r.byID[id]
+			if !stillThere {
+				r.mu.Unlock()
+				return
+			}
+			if !committed {
+				if amountPaise > 0 {
+					live.SpentPaise -= amountPaise
+				}
+				r.mu.Unlock()
+				return
+			}
+			live.Uses++
+			spent, uses, remaining := live.SpentPaise, live.Uses, live.RemainingPaise()
+			agentName, principal := live.Agent, live.Principal
+			r.mu.Unlock()
+
+			r.chain.Append(BlockMandateUsed, []map[string]interface{}{{
+				"mandateId":      id,
+				"agent":          agentName,
+				"principal":      principal,
+				"action":         action,
+				"assetId":        assetID,
+				"reference":      reference,
+				"amountPaise":    amountPaise,
+				"spentPaise":     spent,
+				"remainingPaise": remaining,
+				"uses":           uses,
+			}})
+		})
+	}
+	return &out, finish, nil
+}
+
+// authoriseLocked holds every bound a mandate imposes. The caller must hold
+// at least a read lock; Reserve holds a write lock so that the check and the
+// spend cannot be separated.
+func (r *MandateRegistry) authoriseLocked(m *Mandate, agent, action, assetID string, amountPaise int64) (*Mandate, error) {
 	if !strings.EqualFold(m.Agent, agent) {
 		return nil, fmt.Errorf("%w: this mandate was granted to %s", ErrMandateNotFound, m.Agent)
 	}
