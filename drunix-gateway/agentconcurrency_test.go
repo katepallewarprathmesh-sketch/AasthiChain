@@ -293,7 +293,15 @@ func TestConcurrentRevocationStopsEverythingAfterIt(t *testing.T) {
 
 	// Anything that started before the handle was pulled may legitimately
 	// have completed. Anything attempted afterwards must not.
-	_, err := desk.Present(conditions[0].ConditionID,
+	//
+	// The probe gets a condition of its own. Reusing conditions[0] made this
+	// test depend on the interleaving it was trying to test: the forty racing
+	// goroutines had usually released it already, so Present refused with
+	// ERR_UMI_CONDITION_CLOSED -- the right refusal for the wrong reason, and
+	// a failure whenever the race went the other way. Against a condition
+	// that is still open, revocation is the only thing left that can refuse.
+	fresh := openOne(t, desk, 1)
+	_, err := desk.Present(fresh.ConditionID,
 		PresentRequest{CredentialID: credID, MandateID: mandateID}, agentID, false)
 	if !errors.Is(err, ErrConditionNotAsserter) {
 		t.Fatalf("a revoked agent was not refused: %v", err)
