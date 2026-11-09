@@ -14,7 +14,7 @@
 // /api/umi/*, which the Node server reverse-proxies to the Go rail. If the rail
 // is not running the page says so plainly and nothing else in the app changes.
 
-import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { prettifyAssetId } from '../lib/assetNames.js'
 import { umiFetch as umi, umiPost } from '../lib/umiFetch'
 import { clearRailThrottle } from '../lib/railThrottle'
@@ -187,10 +187,29 @@ export default function UMISettlement() {
   ])
   const setLeg = (i, k, v) => setLegs(ls => ls.map((l, n) => (n === i ? { ...l, [k]: v } : l)))
 
+  // A cold start is cured by waiting, so the page waits once by itself. The
+  // ref both holds the latest refresh (so the retry is not a stale closure)
+  // and makes sure a rail that is genuinely down cannot put the page into a
+  // retry loop: one attempt, then the visitor decides.
+  const refreshRef = useRef(null)
+  const wakeRetried = useRef(false)
+
   const refresh = useCallback(async () => {
     const cfg = await umi('/config')
-    if (!cfg.ok) { setRailDown(cfg.data); return }
+    if (!cfg.ok) {
+      // Carry the HTTP status, not just the body. A rail that is waking, a
+      // rail being rate-limited and a rail that is genuinely absent all
+      // produced the same "Rail offline" screen, and only the status tells
+      // them apart.
+      setRailDown({ ...cfg.data, httpStatus: cfg.status })
+      if ([502, 503, 504, 408].includes(cfg.status) && !wakeRetried.current) {
+        wakeRetried.current = true
+        setTimeout(() => { if (refreshRef.current) refreshRef.current() }, 20000)
+      }
+      return
+    }
     setRailDown(null)
+    wakeRetried.current = false
     setConfig(cfg.data)
     const [w, i, r, s] = await Promise.all([umi('/wallets'), umi('/instructions?limit=25'), umi('/reconciliation'), umi('/isin')])
     setWallets(w.data.wallets || [])
@@ -206,6 +225,9 @@ export default function UMISettlement() {
       setProperties(list)
     } catch { /* pickers fall back to the ids already selected */ }
   }, [])
+  // Assigned in an effect, not during render: a ref must not be written
+  // while rendering, and the retry only ever fires after a commit anyway.
+  useEffect(() => { refreshRef.current = refresh }, [refresh])
 
   useEffect(() => { refresh() }, [refresh])
 
@@ -439,7 +461,17 @@ export default function UMISettlement() {
     // here were useless advice to someone on the deployed site.
     const throttled = railDown.upstreamStatus === 429 || railDown.error === 'ERR_RAIL_THROTTLED'
     const unconfigured = railDown.error === 'ERR_UMI_RAIL_UNAVAILABLE'
-    const title = throttled ? 'Rail busy.' : unconfigured ? 'Rail not configured.' : 'Rail offline.'
+    // The rail is hosted on a plan that stops the service after about
+    // fifteen idle minutes and starts it again on the next request, which
+    // takes roughly half a minute. During that window the request ahead of
+    // the wake-up gets a gateway timeout. That is a rail coming back, not a
+    // rail that is down, and saying "offline" to the person whose visit is
+    // currently starting it is simply wrong.
+    const waking = !throttled && !unconfigured
+      && [502, 503, 504, 408].includes(railDown.httpStatus)
+    const title = throttled ? 'Rail busy.'
+      : waking ? 'Rail is waking up.'
+        : unconfigured ? 'Rail not configured.' : 'Rail offline.'
     return (
       <div className="container pg pg-narrow">
         <h1 className="pg-title">Aasthi Settlement Interface</h1>
@@ -448,7 +480,9 @@ export default function UMISettlement() {
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#7C4A03' }}>
             {throttled
               ? 'The rail is hosted on a plan with a low limit on how many requests it will accept at once, and that limit has been reached. Nothing has broken and no settlement was affected. Wait about a minute and try again.'
-              : (railDown.message || 'The Go UMI gateway is not reachable.')}
+              : waking
+                ? 'The rail sleeps when nobody has used it for a quarter of an hour, and your visit has just started it again. This takes about thirty seconds, once. Nothing is broken and no settlement was affected.'
+                : (railDown.message || 'The Go UMI gateway is not reachable.')}
           </p>
           {throttled && (
             <p style={{ margin: '8px 0 0', fontSize: 12.5, color: '#7C4A03' }}>
@@ -458,7 +492,7 @@ export default function UMISettlement() {
           <p style={{ margin: '10px 0 0', fontSize: 12.5 }}>
             <button type="button" onClick={() => { clearRailThrottle(); refresh() }} style={btn(true)}>Try again</button>
           </p>
-          {!throttled && (
+          {!throttled && !waking && (
             <pre style={{ marginTop: 12, background: 'white', border: `1px solid ${C.warnLine}`, borderRadius: 8, padding: 12, fontSize: 12.5, overflowX: 'auto' }}>
 cd drunix-gateway && go run ./cmd/gateway   # :21100{'\n'}# then (optional) UMI_GATEWAY_URL=http://127.0.0.1:21100 node mock-api-server.js</pre>
           )}

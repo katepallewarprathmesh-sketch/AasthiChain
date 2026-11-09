@@ -85,7 +85,8 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "api/lib/knowledge-index.json"
+      "includeFiles": "api/lib/knowledge-index.json",
+      "maxDuration": 60
     }
   }
 }

@@ -12,7 +12,7 @@
 // pressing a button is still allowed through.
 
 import assert from 'node:assert'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -164,10 +164,46 @@ check('the page calls a 429 throttling, not an offline rail', () => {
   assert.ok(/Rail busy\./.test(uiSrc), 'a throttled rail must not be described as offline')
   // Telling a visitor on the deployed site to run the gateway locally is
   // advice they cannot act on and that does not address a rate limit.
-  const block = uiSrc.slice(uiSrc.indexOf('if (railDown)'), uiSrc.indexOf('if (railDown)') + 2600)
+  const block = uiSrc.slice(uiSrc.indexOf('if (railDown)'), uiSrc.indexOf('if (railDown)') + 4200)
   const goRun = block.indexOf('go run ./cmd/gateway')
   assert.ok(goRun > -1, 'expected the local instructions to still exist for a genuinely absent rail')
-  assert.ok(/\{!throttled && \(/.test(block), 'the local instructions must be hidden when the rail is merely throttled')
+  assert.ok(/\{!throttled && !waking && \(/.test(block), 'the local instructions must be hidden when the rail is merely throttled or waking')
+})
+
+check('a waking rail is not reported as an offline one', () => {
+  // The rail sleeps after a quarter-hour idle and takes ~30s to start. The
+  // visitor whose request is doing the waking was told the rail was offline,
+  // which is both wrong and discouraging at exactly the wrong moment.
+  assert.ok(/const waking =/.test(uiSrc), 'the page must recognise a waking rail')
+  assert.ok(/Rail is waking up\./.test(uiSrc), 'a waking rail needs its own message')
+  assert.ok(/\[502, 503, 504, 408\]/.test(uiSrc), 'a gateway timeout is what a cold start looks like from here')
+  assert.ok(/httpStatus: cfg\.status/.test(uiSrc), 'the status must reach the page, not just the body')
+  assert.ok(/!throttled && !waking && \(/.test(uiSrc), 'local go-run advice must stay hidden while the rail is waking')
+})
+
+check('a cold start retries itself exactly once', () => {
+  assert.ok(/wakeRetried/.test(uiSrc), 'the page must retry a cold start by itself')
+  // Once, not forever: a rail that is genuinely down must not be hammered.
+  assert.ok(/!wakeRetried\.current/.test(uiSrc), 'the retry must be guarded')
+  assert.ok(/wakeRetried\.current = false/.test(uiSrc), 'a success must re-arm the retry for the next sleep')
+})
+
+check('the Vercel function can outlive a cold start', () => {
+  // A 23s cold start under a 10s default function timeout can never
+  // complete, so the first visitor after a sleep got a gateway timeout no
+  // matter how patient they were.
+  const vercel = JSON.parse(readFileSync(join(root, 'frontend/vercel.json'), 'utf8'))
+  const fn = vercel.functions && vercel.functions['api/index.js']
+  assert.ok(fn, 'expected a function config for the API handler')
+  assert.ok(fn.maxDuration >= 60, `the proxy must be allowed to wait out a cold start, got ${fn.maxDuration}`)
+})
+
+check('no CI keepalive pings the rail', () => {
+  // Render fronts *.onrender.com with Cloudflare and throttles shared CI IP
+  // ranges, so this workflow could not reach the rail at all; it only
+  // produced failing runs and consumed ~720 of the 750 free instance-hours.
+  assert.ok(!existsSync(join(root, '.github/workflows/keepalive.yml')),
+    'the keepalive workflow is counterproductive on the free plan and must stay deleted')
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)
